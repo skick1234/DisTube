@@ -1,3 +1,9 @@
+<div align="center">
+  <p>
+    <a href="https://nodei.co/npm/distube/"><img src="https://nodei.co/npm/distube.png?downloads=true&downloadRank=true&stars=true"></a>
+  </p>
+</div>
+
 # DisTube
 A Node.js module to easily manage music commands and play Youtube song on Discord without any API key.
 
