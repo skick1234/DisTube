@@ -1,7 +1,7 @@
 {
   "name": "distube",
-  "version": "1.0.0",
-  "description": "",
+  "version": "1.0.1",
+  "description": "A Discord.js v12 module to easily manage music commands and play Youtube song on Discord without any API key.",
   "main": "index.js",
   "scripts": {
     "test": "node index.js",
