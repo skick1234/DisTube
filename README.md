@@ -52,7 +52,70 @@ Require [discord.js](discord.js.org) v12 and [FFMPEG](https://www.ffmpeg.org/dow
 | [searchCancel](https://skick1234.github.io/DisTube/DisTube.html#event:searchCancel) | Cancel selecting results (searchSongs = true)       |
 | [error](https://skick1234.github.io/DisTube/DisTube.html#event:error)               | An error encountered                                |
 
-See more definitions, properties and events details in the [Documentation page](https://skick1234.github.io/DisTube/).
+See more definitions, properties and events details in the [Documentation page](https://skick1234.github.io/DisTube/index.html).
 
 ## Example Bot
-- [DisTube-Bot](https://github.com/skick1234/DisTube-Bot)
+
+- [DisTube-Bot](https://github.com/skick1234/DisTube-Bot) - In development :>
+
+```javascript
+// DisTube example bot, definitions, properties and events details in the Documentation page.
+const Discord = require('discord.js'),
+    DisTube = require('distube'),
+    client = new Discord.Client(),
+    config = {
+        prefix: ".",
+        token: process.env.TOKEN || "Your Discord Bot Token"
+    };
+
+// Create a new DisTube and make it access easily
+client.DisTube = new DisTube(client, { searchSongs: true });
+
+client.on('ready', () => {
+    console.log(`Logged in as ${client.user.tag}!`);
+});
+
+client.on("message", async (message) => {
+    const args = message.content.slice(config.prefix.length).trim().split(/ +/g);
+    const command = args.shift();
+
+    if (command == "play")
+        client.DisTube.play(message, args.join(" "));
+
+    if (["repeat", "loop"].includes(command))
+        client.DisTube.setRepeatMode(message, parseInt(args[0]));
+
+    if (command == "stop")
+        client.DisTube.stop(message);
+});
+
+// Queue status template
+const status = (queue) => `Volume: \`${queue.volume}%\` | Loop: \`${queue.repeatMode ? queue.repeatMode == 2 ? "All Queue" : "This Song" : "Off"}\` | Autoplay: \`${queue.autoplay ? "On" : "Off"}\``;
+
+// DisTube event listeners (just example, more events in documentation page)
+client.DisTube.on("playSong", (message, queue, song) => message.channel.send(
+    `Playing \`${song.name}\` - \`${song.formattedDuration}\`\nRequested by: ${song.user}\n${status(queue)}`
+));
+
+client.DisTube.on("addSong", (message, queue, song) => message.channel.send(
+    `Added ${song.name} - \`${song.formattedDuration}\` to the queue by ${song.user}`
+));
+
+client.DisTube.on("playList", (message, queue, playlist, song) => message.channel.send(
+    `Play \`${playlist.title}\` playlist (${playlist.total_items} songs).\nRequested by: ${song.user}\nNow playing \`${song.name}\` - \`${song.formattedDuration}\`\n${status(queue)}`
+));
+// DisTubeOptions.searchSongs = true
+client.DisTube.on("searchResult", (message, result) => {
+    let i = 0;
+    message.channel.send(`**Choose an option from below**\n${result.map(song => `**${++i}**. ${song.title} - \`${song.duration}\``).join("\n")}\n*Enter anything else or wait 60 seconds to cancel*`);
+});
+
+// DisTubeOptions.searchSongs = true
+client.DisTube.on("searchCancel", (message) => message.channel.send(`Searching canceled`));
+
+client.DisTube.on("error", (message, err) => message.channel.send(
+    "An error encountered: " + err
+));
+
+client.login(config.token);
+```
