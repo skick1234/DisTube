@@ -1,0 +1,27 @@
+{
+    "source": {
+        "include": ["index.js", "README.md", "src"],
+        "includePattern": ".js$",
+        "excludePattern": "(node_modules/|docs)"
+    },
+    "plugins": [
+        "plugins/markdown"
+    ],
+    "templates": {
+        "better-docs": {
+            "name": "DisTube"
+        },
+        "default": {
+            "outputSourceFiles": false,
+            "includeDate": false
+        }
+    },
+    "opts": {
+        "destination": "docs/",
+        "readme": "readme.md",
+        "encoding": "utf8",
+        "private": true,
+        "recurse": true,
+        "template": "node_modules/better-docs"
+    }
+}

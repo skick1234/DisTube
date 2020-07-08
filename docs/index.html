@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title> Home</title>
+
+  <script src="https://cdn.jsdelivr.net/gh/google/code-prettify@master/loader/run_prettify.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="./build/entry.js"></script>
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+  <!--[if lt IE 9]>
+    <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+  <![endif]-->
+  <link href="https://fonts.googleapis.com/css?family=Roboto:100,400,700|Inconsolata,700" rel="stylesheet">
+  <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.6.3/css/all.css" integrity="sha384-UHRtZLI+pbxtHCWp1t77Bi1L4ZtiqrqD80Kn4Z8NTSRyMA2Fd33n5dQ8lWUE00s/" crossorigin="anonymous">
+  <link type="text/css" rel="stylesheet" href="https://jmblog.github.io/color-themes-for-google-code-prettify/themes/tomorrow-night.min.css">
+  <link type="text/css" rel="stylesheet" href="styles/app.min.css">
+  <link type="text/css" rel="stylesheet" href="styles/iframe.css">
+  <link type="text/css" rel="stylesheet" href="">
+  <script async defer src="https://buttons.github.io/buttons.js"></script>
+
+  
+</head>
+
+
+
+<body class="layout small-header">
+    <div id="stickyNavbarOverlay"></div>
+    
+
+<div class="top-nav">
+    <div class="inner">
+        <a id="hamburger" role="button" class="navbar-burger" aria-label="menu" aria-expanded="false">
+            <span aria-hidden="true"></span>
+            <span aria-hidden="true"></span>
+            <span aria-hidden="true"></span>
+        </a>
+        <div class="logo">
+            
+             
+                <a href="index.html">
+                    <h1 class="navbar-item">DisTube</h1>
+                </a>
+            
+        </div>
+        <div class="menu">
+            
+            <div class="navigation">
+                <a
+                    href="index.html"
+                    class="link"
+                >
+                    API Documentation
+                </a>
+                
+                
+                
+            </div>
+        </div>
+    </div>
+</div>
+    <div id="main">
+        <div
+            class="sidebar "
+            id="sidebarNav"
+        >
+            
+            <nav>
+                
+                    <h2><a href="index.html">Documentation</a></h2><div class="category"><h3>Classes</h3><ul><li><a href="DisTube.html">DisTube</a></li><li><a href="Queue.html">Queue</a></li><li><a href="Song.html">Song</a></li></ul><h3>Events</h3><ul><li><a href="DisTube.html#event:addList">addList</a></li><li><a href="DisTube.html#event:addSong">addSong</a></li><li><a href="DisTube.html#event:empty">empty</a></li><li><a href="DisTube.html#event:error">error</a></li><li><a href="DisTube.html#event:finish">finish</a></li><li><a href="DisTube.html#event:noRelated">noRelated</a></li><li><a href="DisTube.html#event:playList">playList</a></li><li><a href="DisTube.html#event:playSong">playSong</a></li><li><a href="DisTube.html#event:searchCancel">searchCancel</a></li><li><a href="DisTube.html#event:searchResult">searchResult</a></li><li><a href="DisTube.html#event:stop">stop</a></li></ul><h3><a href="global.html">Global</a></h3></div>
+                
+            </nav>
+        </div>
+        <div class="core" id="main-content-wrapper">
+            <div class="content">
+                <header class="page-title">
+                    <p></p>
+                    <h1>Home</h1>
+                </header>
+                
+
+
+
+    
+
+
+    <h3> </h3>
+
+
+
+
+
+
+
+
+
+
+    
+
+
+
+
+    <section>
+        <article><h1>DisTube</h1>
+<p>A Node.js module to easily manage music commands and play Youtube song on Discord without any API key.</p>
+<h2>Features</h2>
+<ul>
+<li>Build on discord.js v12</li>
+<li>Easily to use and customize</li>
+<li>Work on multiple servers</li>
+</ul>
+<h2>Installation</h2>
+<pre class="prettyprint source lang-npm"><code>npm install distube @discord/opus --save
+</code></pre>
+<p>Require <a href="discord.js.org">discord.js</a> v12 and <a href="https://www.ffmpeg.org/download.html">FFMPEG</a>.</p>
+<h2>Documentation</h2>
+<h3>DisTube</h3>
+<ul>
+<li>play(<code>message, string</code>): play / add video(s) from video url or playlist url. Search for a video if <code>string</code> is invalid url.</li>
+</ul>
+<h5>Song management</h5>
+<ul>
+<li>stop(<code>message</code>): Stop the playing song and clear the queue.</li>
+<li>jump(<code>message, num</code>): Jump to the song number in the queue.</li>
+<li>skip(<code>message</code>): Skip the current song.</li>
+<li>pause(<code>message</code>): Pause the playing song.</li>
+<li>resume(<code>message</code>): Resume the paused song.</li>
+</ul>
+<h5>Queue management</h5>
+<ul>
+<li>shuffle(<code>message</code>): Shuffle the server queue.</li>
+<li>setVolume(<code>message, percent</code>): Set server volume in percentage.</li>
+<li>setRepeatMode(<code>message, type</code>): Set repeat mode of server <code>(disabled, repeat a song, repeat all the queue)</code>.</li>
+<li>toggleAutoplay(<code>message</code>): toggle server's auto-play mode.</li>
+<li>getQueue(<code>message</code>): get the server queue.</li>
+<li>isPaused(<code>message</code>): Whether or not the server queue is paused.</li>
+<li>isPlaying(<code>message</code>): Whether or not the bot is playing music in the server.</li>
+</ul>
+<h5>Events</h5>
+<table>
+<thead>
+<tr>
+<th>Event Name</th>
+<th>Emitted When</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>playSong</td>
+<td>Play a new song</td>
+</tr>
+<tr>
+<td>playList</td>
+<td>Play a new playlist</td>
+</tr>
+<tr>
+<td>addSong</td>
+<td>Add new song to server queue</td>
+</tr>
+<tr>
+<td>addList</td>
+<td>Add playlist to server queue</td>
+</tr>
+<tr>
+<td>empty</td>
+<td>There is no user in VoiceChannel</td>
+</tr>
+<tr>
+<td>finish</td>
+<td>There is no more music in the queue</td>
+</tr>
+<tr>
+<td>stop</td>
+<td>The queue is stopped by stop() method</td>
+</tr>
+<tr>
+<td>noRelated</td>
+<td>DisTube cannot find related songs to play</td>
+</tr>
+<tr>
+<td>searchResult</td>
+<td>Return results after searching (searchSongs = true)</td>
+</tr>
+<tr>
+<td>searchCancel</td>
+<td>Cancel selecting results (searchSongs = true)</td>
+</tr>
+<tr>
+<td>error</td>
+<td>An error encountered</td>
+</tr>
+</tbody>
+</table>
+<p>See more definitions, properties and events details in the Documentation.</p>
+<h2>Example Bot</h2>
+<ul>
+<li><a href="https://github.com/skick1234/DisTube-Bot">DisTube-Bot</a></li>
+</ul></article>
+    </section>
+
+
+
+
+
+
+            </div>
+            
+            <footer class="footer">
+                <div class="content has-text-centered">
+                    <p>Documentation generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc 3.6.4</a></p>
+                    <p class="sidebar-created-by">
+                        <a href="https://github.com/SoftwareBrothers/better-docs" target="_blank">BetterDocs theme</a> provided with <i class="fas fa-heart"></i> by 
+                        <a href="http://softwarebrothers.co" target="_blank">SoftwareBrothers - JavaScript Development Agency</a>
+                    </p>
+                </div>
+            </footer>
+            
+        </div>
+        <div id="side-nav" class="side-nav">
+        </div>
+    </div>
+<script src="scripts/app.min.js"></script>
+<script>PR.prettyPrint();</script>
+<script src="scripts/linenumber.js"> </script>
+
+</body>
+</html>

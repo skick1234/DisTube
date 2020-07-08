@@ -1,0 +1,51 @@
+{
+  "name": "distube",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "node index.js",
+    "docs": "jsdoc -c jsdoc.json"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/skick1234/distube.git"
+  },
+  "keywords": [
+    "youtube",
+    "music",
+    "discord",
+    "discordjs",
+    "bot",
+    "distube",
+    "queue",
+    "search",
+    "loop",
+    "repeat",
+    "musicbot",
+    "module",
+    "nodejs",
+    "discord-music-bot",
+    "music-bot",
+    "discord-js"
+  ],
+  "author": "skick1234",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/skick1234/distube/issues"
+  },
+  "homepage": "https://github.com/skick1234/distube#readme",
+  "dependencies": {
+    "discord-ytdl-core": "^4.0.4",
+    "moment": "^2.27.0",
+    "ytpl": "^0.1.22",
+    "ytsr": "^0.1.15"
+  },
+  "devDependencies": {
+    "@discordjs/opus": "^0.3.2",
+    "better-docs": "^2.3.0",
+    "discord.js": "^12.2.0",
+    "eslint": "^7.4.0",
+    "jsdoc": "^3.6.4"
+  }
+}
