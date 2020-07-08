@@ -119,25 +119,25 @@
 <h2>Documentation</h2>
 <h3>DisTube</h3>
 <ul>
-<li>play(<code>message, string</code>): play / add video(s) from video url or playlist url. Search for a video if <code>string</code> is invalid url.</li>
+<li><a href="https://skick1234.github.io/DisTube/DisTube.html#play">play(<code>message, string</code>)</a>: play / add video(s) from video url or playlist url. Search for a video if <code>string</code> is invalid url.</li>
 </ul>
 <h5>Song management</h5>
 <ul>
-<li>stop(<code>message</code>): Stop the playing song and clear the queue.</li>
-<li>jump(<code>message, num</code>): Jump to the song number in the queue.</li>
-<li>skip(<code>message</code>): Skip the current song.</li>
-<li>pause(<code>message</code>): Pause the playing song.</li>
-<li>resume(<code>message</code>): Resume the paused song.</li>
+<li><a href="https://skick1234.github.io/DisTube/DisTube.html#stop">stop(<code>message</code>)</a>: Stop the playing song and clear the queue.</li>
+<li><a href="https://skick1234.github.io/DisTube/DisTube.html#jump">jump(<code>message, num</code>)</a>: Jump to the song number in the queue.</li>
+<li><a href="https://skick1234.github.io/DisTube/DisTube.html#skip">skip(<code>message</code>)</a>: Skip the current song.</li>
+<li><a href="https://skick1234.github.io/DisTube/DisTube.html#pause">pause(<code>message</code>)</a>: Pause the playing song.</li>
+<li><a href="https://skick1234.github.io/DisTube/DisTube.html#resume">resume(<code>message</code>)</a>: Resume the paused song.</li>
 </ul>
 <h5>Queue management</h5>
 <ul>
-<li>shuffle(<code>message</code>): Shuffle the server queue.</li>
-<li>setVolume(<code>message, percent</code>): Set server volume in percentage.</li>
-<li>setRepeatMode(<code>message, type</code>): Set repeat mode of server <code>(disabled, repeat a song, repeat all the queue)</code>.</li>
-<li>toggleAutoplay(<code>message</code>): toggle server's auto-play mode.</li>
-<li>getQueue(<code>message</code>): get the server queue.</li>
-<li>isPaused(<code>message</code>): Whether or not the server queue is paused.</li>
-<li>isPlaying(<code>message</code>): Whether or not the bot is playing music in the server.</li>
+<li><a href="https://skick1234.github.io/DisTube/DisTube.html#shuffle">shuffle(<code>message</code>)</a>: Shuffle the server queue.</li>
+<li><a href="https://skick1234.github.io/DisTube/DisTube.html#setVolume">setVolume(<code>message, percent</code>)</a>: Set server volume in percentage.</li>
+<li><a href="https://skick1234.github.io/DisTube/DisTube.html#setRepeatMode">setRepeatMode(<code>message, type</code>)</a>: Set repeat mode of server <code>(disabled, repeat a song, repeat all the queue)</code>.</li>
+<li><a href="https://skick1234.github.io/DisTube/DisTube.html#toggleAutoplay">toggleAutoplay(<code>message</code>)</a>: toggle server's auto-play mode.</li>
+<li><a href="https://skick1234.github.io/DisTube/DisTube.html#getQueue">getQueue(<code>message</code>)</a>: get the server queue.</li>
+<li><a href="https://skick1234.github.io/DisTube/DisTube.html#isPaused">isPaused(<code>message</code>)</a>: Whether or not the server queue is paused.</li>
+<li><a href="https://skick1234.github.io/DisTube/DisTube.html#isPlaying">isPlaying(<code>message</code>)</a>: Whether or not the bot is playing music in the server.</li>
 </ul>
 <h5>Events</h5>
 <table>
@@ -149,52 +149,52 @@
 </thead>
 <tbody>
 <tr>
-<td>playSong</td>
+<td><a href="https://skick1234.github.io/DisTube/DisTube.html#event:playSong">playSong</a></td>
 <td>Play a new song</td>
 </tr>
 <tr>
-<td>playList</td>
+<td><a href="https://skick1234.github.io/DisTube/DisTube.html#event:playList">playList</a></td>
 <td>Play a new playlist</td>
 </tr>
 <tr>
-<td>addSong</td>
+<td><a href="https://skick1234.github.io/DisTube/DisTube.html#event:addSong">addSong</a></td>
 <td>Add new song to server queue</td>
 </tr>
 <tr>
-<td>addList</td>
+<td><a href="https://skick1234.github.io/DisTube/DisTube.html#event:addList">addList</a></td>
 <td>Add playlist to server queue</td>
 </tr>
 <tr>
-<td>empty</td>
+<td><a href="https://skick1234.github.io/DisTube/DisTube.html#event:empty">empty</a></td>
 <td>There is no user in VoiceChannel</td>
 </tr>
 <tr>
-<td>finish</td>
+<td><a href="https://skick1234.github.io/DisTube/DisTube.html#event:finish">finish</a></td>
 <td>There is no more music in the queue</td>
 </tr>
 <tr>
-<td>stop</td>
+<td><a href="https://skick1234.github.io/DisTube/DisTube.html#event:stop">stop</a></td>
 <td>The queue is stopped by stop() method</td>
 </tr>
 <tr>
-<td>noRelated</td>
+<td><a href="https://skick1234.github.io/DisTube/DisTube.html#event:noRelated">noRelated</a></td>
 <td>DisTube cannot find related songs to play</td>
 </tr>
 <tr>
-<td>searchResult</td>
+<td><a href="https://skick1234.github.io/DisTube/DisTube.html#event:searchResult">searchResult</a></td>
 <td>Return results after searching (searchSongs = true)</td>
 </tr>
 <tr>
-<td>searchCancel</td>
+<td><a href="https://skick1234.github.io/DisTube/DisTube.html#event:searchCancel">searchCancel</a></td>
 <td>Cancel selecting results (searchSongs = true)</td>
 </tr>
 <tr>
-<td>error</td>
+<td><a href="https://skick1234.github.io/DisTube/DisTube.html#event:error">error</a></td>
 <td>An error encountered</td>
 </tr>
 </tbody>
 </table>
-<p>See more definitions, properties and events details in the Documentation.</p>
+<p>See more definitions, properties and events details in the <a href="https://skick1234.github.io/DisTube/">Documentation page</a>.</p>
 <h2>Example Bot</h2>
 <ul>
 <li><a href="https://github.com/skick1234/DisTube-Bot">DisTube-Bot</a></li>
