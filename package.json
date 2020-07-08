@@ -34,6 +34,9 @@
   "bugs": {
     "url": "https://github.com/skick1234/distube/issues"
   },
+  "publishConfig": {
+    "registry":"https://npm.pkg.github.com/@skick1234"
+  },
   "homepage": "https://skick1234.github.io/DisTube/index.html",
   "dependencies": {
     "discord-ytdl-core": "^4.0.4",
