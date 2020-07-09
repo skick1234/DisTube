@@ -4,7 +4,7 @@ declare const DisTube_base: any;
 /**
  * DisTube options.
  * @typedef {Object} DisTubeOptions
- * @prop {boolean} [emitNewSongOnly=false] If `true`, {@link DisTube#event:playSong} is not emitted when looping a song or next song is the same as the previous one
+ * @prop {boolean} [emitNewSongOnly=false] `@1.3.0`. If `true`, {@link DisTube#event:playSong} is not emitted when looping a song or next song is the same as the previous one
  * @prop {boolean} [leaveOnEmpty=true] Whether or not leaving voice channel if it is empty.
  * @prop {boolean} [leaveOnFinish=false] Whether or not leaving voice channel when the queue ends.
  * @prop {boolean} [leaveOnStop=true] Whether or not leaving voice channel after using DisTube.stop() function.
@@ -24,8 +24,9 @@ declare class DisTube extends DisTube_base {
      * const Discord = require('discord.js'),
      *     DisTube = require('distube'),
      *     client = new Discord.Client(),
-     * // Create a new DisTube and make it access easily
-     * client.DisTube = new DisTube(client, { searchSongs: true });
+     * // Create a new DisTube
+     * const distube = new DisTube(client, { searchSongs: true });
+     * // client.DisTube = distube // make it access easily
      */
     constructor(client: import("discord.js").Client, options?: DisTubeOptions);
     /**
@@ -61,7 +62,7 @@ declare class DisTube extends DisTube_base {
      *     const args = message.content.slice(config.prefix.length).trim().split(/ +/g);
      *     const command = args.shift();
      *     if (command == "play")
-     *         client.DisTube.play(message, args.join(" "));
+     *         distube.play(message, args.join(" "));
      * });
      */
     play(message: import("discord.js").Message, string: string): Promise<void>;
@@ -116,7 +117,7 @@ declare class DisTube extends DisTube_base {
      *     const args = message.content.slice(config.prefix.length).trim().split(/ +/g);
      *     const command = args.shift();
      *     if (command == "queue") {
-     *         let queue = client.DisTube.getQueue(message);
+     *         let queue = distube.getQueue(message);
      *         message.channel.send('Current queue:\n' + queue.songs.map((song, id) =>
      *             `**${id+1}**. [${song.name}](${song.url}) - \`${song.formattedDuration}\``
      *         ).join("\n"));
@@ -168,7 +169,7 @@ declare class DisTube extends DisTube_base {
      *     const args = message.content.slice(config.prefix.length).trim().split(/ +/g);
      *     const command = args.shift();
      *     if (command == "stop")
-     *         client.DisTube.stop(message);
+     *         distube.stop(message);
      * });
      */
     stop(message: import("discord.js").Message): void;
@@ -183,7 +184,7 @@ declare class DisTube extends DisTube_base {
      *     const args = message.content.slice(config.prefix.length).trim().split(/ +/g);
      *     const command = args.shift();
      *     if (command == "volume")
-     *         client.DisTube.setVolume(message, args[0]);
+     *         distube.setVolume(message, args[0]);
      * });
      */
     setVolume(message: import("discord.js").Message, percent: number): import("./Queue");
@@ -199,7 +200,7 @@ declare class DisTube extends DisTube_base {
      *     const args = message.content.slice(config.prefix.length).trim().split(/ +/g);
      *     const command = args.shift();
      *     if (command == "skip")
-     *         client.DisTube.skip(message);
+     *         distube.skip(message);
      * });
      */
     skip(message: import("discord.js").Message): import("./Queue");
@@ -212,7 +213,7 @@ declare class DisTube extends DisTube_base {
      *     const args = message.content.slice(config.prefix.length).trim().split(/ +/g);
      *     const command = args.shift();
      *     if (command == "shuffle")
-     *         client.DisTube.shuffle(message);
+     *         distube.shuffle(message);
      * });
      */
     shuffle(message: import("discord.js").Message): import("./Queue");
@@ -228,7 +229,7 @@ declare class DisTube extends DisTube_base {
      *     const args = message.content.slice(config.prefix.length).trim().split(/ +/g);
      *     const command = args.shift();
      *     if (command == "jump")
-     *         client.DisTube.jump(message, parseInt(args[0]))
+     *         distube.jump(message, parseInt(args[0]))
      *             .catch(err => message.channel.send("Invalid song number."));
      * });
      */
@@ -247,7 +248,7 @@ declare class DisTube extends DisTube_base {
      *     const args = message.content.slice(config.prefix.length).trim().split(/ +/g);
      *     const command = args.shift();
      *     if (command == "repeat") {
-     *         let mode = client.DisTube.setRepeatMode(message, parseInt(args[0]));
+     *         let mode = distube.setRepeatMode(message, parseInt(args[0]));
      *         mode = mode ? mode == 2 ? "Repeat queue" : "Repeat song" : "Off";
      *         message.channel.send("Set repeat mode to `" + mode + "`");
      *     }
@@ -264,7 +265,7 @@ declare class DisTube extends DisTube_base {
      *     const args = message.content.slice(config.prefix.length).trim().split(/ +/g);
      *     const command = args.shift();
      *     if (command == "autoplay") {
-     *         let mode = client.DisTube.toggleAutoplay(message);
+     *         let mode = distube.toggleAutoplay(message);
      *         message.channel.send("Set autoplay mode to `" + mode ? "On" : "Off" + "`");
      *     }
      * });
@@ -322,7 +323,7 @@ declare namespace DisTube {
  */
 type DisTubeOptions = {
     /**
-     * If `true`, {@link DisTube#event:playSong} is not emitted when looping a song or next song is the same as the previous one
+     * `@1.3.0`. If `true`, {@link DisTube#event:playSong} is not emitted when looping a song or next song is the same as the previous one
      */
     emitNewSongOnly?: boolean;
     /**
