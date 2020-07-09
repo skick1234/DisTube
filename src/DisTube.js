@@ -119,6 +119,7 @@ class DisTube extends EventEmitter {
         return h * 60 * 60 + m * 60 + s;
       };
       let playlist = await ytpl(url);
+      playlist.user = message.user;
       let videos = playlist.items.map(vid => {
         return {
           ...vid,
@@ -526,6 +527,7 @@ class DisTube extends EventEmitter {
 /**
  * Youtube playlist info
  * @typedef {Object} ytpl_result
+ * @prop {Discord.User} user `@1.1.1` Requested user
  * @prop {string} id Playlist id
  * @prop {string} url Playlist url
  * @prop {string} title Playlist title
