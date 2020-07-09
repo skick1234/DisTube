@@ -126,7 +126,7 @@ class DisTube extends EventEmitter {
           duration: toSecond(vid.duration)
         }
       });
-      if (this.isPlaying()) {
+      if (this.isPlaying(message)) {
         let queue = this.addVideosToQueue(message, videos);
         this.emit("addList", message, queue, playlist);
       } else {
