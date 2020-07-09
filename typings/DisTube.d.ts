@@ -4,6 +4,7 @@ declare const DisTube_base: any;
 /**
  * DisTube options.
  * @typedef {Object} DisTubeOptions
+ * @prop {boolean} [emitNewSongOnly=false] If `true`, {@link DisTube#event:playSong} is not emitted when looping a song or next song is the same as the previous one
  * @prop {boolean} [leaveOnEmpty=true] Whether or not leaving voice channel if it is empty.
  * @prop {boolean} [leaveOnFinish=false] Whether or not leaving voice channel when the queue ends.
  * @prop {boolean} [leaveOnStop=true] Whether or not leaving voice channel after using DisTube.stop() function.
@@ -118,7 +119,7 @@ declare class DisTube extends DisTube_base {
      *         let queue = client.DisTube.getQueue(message);
      *         message.channel.send('Current queue:\n' + queue.songs.map((song, id) =>
      *             `**${id+1}**. [${song.name}](${song.url}) - \`${song.formattedDuration}\``
-     *         ));
+     *         ).join("\n"));
      *     }
      * });
      */
@@ -320,6 +321,10 @@ declare namespace DisTube {
  * DisTube options.
  */
 type DisTubeOptions = {
+    /**
+     * If `true`, {@link DisTube#event:playSong} is not emitted when looping a song or next song is the same as the previous one
+     */
+    emitNewSongOnly?: boolean;
     /**
      * Whether or not leaving voice channel if it is empty.
      */

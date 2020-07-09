@@ -2,8 +2,8 @@
   "name": "distube",
   "version": "1.2.0",
   "description": "A Discord.js v12 module to easily manage music commands and play Youtube song on Discord without any API key.",
-  "main": "index.js",
-  "typings": "typings/index.d.ts",
+  "main": "src/DisTube.js",
+  "typings": "typings/DisTube.d.ts",
   "scripts": {
     "types": "tsc -p .",
     "docs": "jsdoc -c jsdoc.json"
