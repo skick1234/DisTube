@@ -579,6 +579,7 @@ class DisTube extends EventEmitter {
  * @param {Discord.Message} message The message from guild channel
  * @param {Queue} queue The guild queue
  * @param {ytpl_result} playlist Playlist info
+ * @since 1.1.0
  * @example
  * const status = (queue) => `Volume: \`${queue.volume}%\` | Loop: \`${queue.repeatMode ? queue.repeatMode == 2 ? "Server Queue" : "This Song" : "Off"}\` | Autoplay: \`${queue.autoplay ? "On" : "Off"}\``;
  * client.DisTube.on("addList", (message, queue, playlist) => message.channel.send(
