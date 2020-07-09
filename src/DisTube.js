@@ -126,8 +126,8 @@ class DisTube extends EventEmitter {
         }
       });
       if (this.isPlaying()) {
-        this.addVideosToQueue(message, videos);
-        this.emit("addList", message, playlist);
+        let queue = this.addVideosToQueue(message, videos);
+        this.emit("addList", message, queue, playlist);
       } else {
         let queue = await this.newQueue(message, videos.shift()).catch((e) => this.emit("error", message, e));
         this.addVideosToQueue(message, videos);
@@ -144,7 +144,7 @@ class DisTube extends EventEmitter {
         limit: 12
       });
       let videos = search.items.filter(val => val.duration || val.type == 'video');
-      if (videos.length == 0) throw new Error("NotFound");
+      if (videos.length == 0) return this.emit("error", message, "Cannot find any results");
       let song = videos[0];
       if (this.options.searchSongs) {
         this.emit("searchResult", message, videos);
@@ -577,7 +577,13 @@ class DisTube extends EventEmitter {
  *
  * @event DisTube#addList
  * @param {Discord.Message} message The message from guild channel
+ * @param {Queue} queue The guild queue
  * @param {ytpl_result} playlist Playlist info
+ * @example
+ * const status = (queue) => `Volume: \`${queue.volume}%\` | Loop: \`${queue.repeatMode ? queue.repeatMode == 2 ? "Server Queue" : "This Song" : "Off"}\` | Autoplay: \`${queue.autoplay ? "On" : "Off"}\``;
+ * client.DisTube.on("addList", (message, queue, playlist) => message.channel.send(
+ *     `Added \`${playlist.title}\` playlist (${playlist.total_items} songs) to queue\n${status(queue)}`
+ * ));
  */
 
 /**
