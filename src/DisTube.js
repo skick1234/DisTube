@@ -9,6 +9,7 @@ const ytdl = require("discord-ytdl-core"),
 /**
  * DisTube options.
  * @typedef {Object} DisTubeOptions
+ * @prop {boolean} [emitNewSongOnly=false] If `true`, {@link DisTube#event:playSong} is not emitted when looping a song or next song is the same as the previous one
  * @prop {boolean} [leaveOnEmpty=true] Whether or not leaving voice channel if it is empty.
  * @prop {boolean} [leaveOnFinish=false] Whether or not leaving voice channel when the queue ends.
  * @prop {boolean} [leaveOnStop=true] Whether or not leaving voice channel after using DisTube.stop() function.
@@ -52,6 +53,7 @@ class DisTube extends EventEmitter {
      * @type {DisTubeOptions}
      */
     this.options = {
+      emitNewSongOnly: false,
       leaveOnEmpty: true,
       leaveOnFinish: false,
       leaveOnStop: true,
@@ -240,7 +242,7 @@ class DisTube extends EventEmitter {
    *         let queue = client.DisTube.getQueue(message);
    *         message.channel.send('Current queue:\n' + queue.songs.map((song, id) =>
    *             `**${id+1}**. [${song.name}](${song.url}) - \`${song.formattedDuration}\``
-   *         ));
+   *         ).join("\n"));
    *     }
    * });
    */
@@ -597,9 +599,19 @@ class DisTube extends EventEmitter {
           }
         }
         queue.skipped = false;
-        if (queue.repeatMode != 1) queue.removeFirstSong();
+
+        if (
+          !this.options.emitNewSongOnly || // emitNewSongOnly == false -> emit playSong
+          (
+            queue.repeatMode != 1 && // Not loop a song
+            queue.songs[0].url !== queue.songs[1].url // Not same song
+          )
+        )
+          this.emit("playSong", message, queue, queue.songs[1]);
+
+        if (queue.repeatMode != 1)
+          queue.removeFirstSong();
         else queue.updateDuration();
-        this.emit("playSong", message, queue, queue.songs[0]);
         return this.playSong(message);
       })
       .on("error", () => {
@@ -673,7 +685,8 @@ class DisTube extends EventEmitter {
  */
 
 /**
- *  Emitted when DisTube play a new song
+ * Emitted when DisTube play a song.
+ * If `{@link DisTubeOptions}.emitNewSongOnly` is `true`, event is not emitted when looping a song or next song is the previous one
  *
  * @event DisTube#playSong
  * @param {Discord.Message} message The message from guild channel

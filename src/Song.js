@@ -34,7 +34,7 @@ class Song {
      * Video URL.
      * @type {string}
      */
-    this.url = video.url || video.videoDetails.video_url || "https://www.youtube.com/watch?v=" + video.id;
+    this.url = video.id ? "https://www.youtube.com/watch?v=" + video.id : "https://www.youtube.com/watch?v=" + video.videoDetails.videoId;
     /**
      * Video thumbnail.
      * @type {string}
