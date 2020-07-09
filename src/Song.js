@@ -1,11 +1,14 @@
-const duration = require("./duration");
+const duration = require("./duration"),
+  Discord = require("discord.js"),
+  ytdl = require("ytdl-core");
 
-/**
- * Represents a song.
- * @param {ytdl.videoInfo} video Youtube video info
- * @param {Snowflake} userID The ID of the user requested video
- */
+/** Class representing a song. */
 class Song {
+  /**
+   * Create a song.
+   * @param {ytdl.videoInfo} video Youtube video info
+   * @param {Discord.User} user Requested user
+   */
   constructor(video, user) {
     /**
      * User requested

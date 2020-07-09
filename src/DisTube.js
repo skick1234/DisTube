@@ -3,7 +3,8 @@ const ytdl = require("discord-ytdl-core"),
   ytpl = require("ytpl"),
   { EventEmitter } = require("events"),
   Queue = require("./Queue"),
-  Song = require("./Song");
+  Song = require("./Song"),
+  Discord = require("discord.js");
 
 /**
  * DisTube options.
@@ -13,6 +14,7 @@ const ytdl = require("discord-ytdl-core"),
  * @prop {boolean} [leaveOnStop=true] Whether or not leaving voice channel after using DisTube.stop() function.
  * @prop {boolean} [searchSongs=false] Whether or not searching for multiple songs to select manually, DisTube will play the first result if `false`
  */
+
 /**
  * Class representing a DisTube.
  * @extends EventEmitter
@@ -63,7 +65,7 @@ class DisTube extends EventEmitter {
    * Play / add a song from Youtube video url or playlist from Youtube playlist url. Search and play a song if it is not a valid url.
    * @async
    * @param {Discord.Message} message The message from guild channel
-   * @param {string} song `Youtube video url`|`Youtube playlist url`|`The string to search for`
+   * @param {string} string `Youtube video url`|`Youtube playlist url`|`The string to search for`
    * @throws {NotInVoice} if user not in a voice channel
    * @fires DisTube#event:playSong
    * @fires DisTube#event:addSong
@@ -80,14 +82,15 @@ class DisTube extends EventEmitter {
    *         client.DisTube.play(message, args.join(" "));
    * });
    */
-  async play(message, song) {
-    if (!song) return;
-    if (ytpl.validateURL(song))
-      this.fetchPlaylist(message, song);
+  async play(message, string) {
+    if (!string) return;
+    if (ytpl.validateURL(string))
+      this.playlistHandler(message, string);
     else {
-      if (!ytdl.validateURL(song))
-        song = await this.searchSong(message, song).catch((e) => this.emit("error", message, e));
-      else song = await ytdl.getBasicInfo(song);
+      let song;
+      if (!ytdl.validateURL(string))
+        song = await this.searchSong(message, string).catch((e) => this.emit("error", message, e));
+      else song = await ytdl.getBasicInfo(string);
       if (!song) return;
       if (this.isPlaying(message)) {
         let queue = this.addToQueue(message, song);
@@ -99,7 +102,16 @@ class DisTube extends EventEmitter {
     }
   }
 
-  async fetchPlaylist(message, url) {
+  /**
+   * PLay / add a playlist
+   * @async
+   * @private
+   * @param {Discord.Message} message The message from guild channel
+   * @param {string} url Youtube playlist url
+   * @fires DisTube#event:playList
+   * @fires DisTube#event:addList
+   */
+  async playlistHandler(message, url) {
     try {
       let toSecond = (string) => {
         let h = 0,
@@ -139,6 +151,17 @@ class DisTube extends EventEmitter {
     }
   }
 
+  /**
+   * Search for a song
+   * @async
+   * @private
+   * @param {Discord.Message} message The message from guild channel
+   * @param {string} name The string search for
+   * @throws {NotFound} if result is empty
+   * @fires DisTube#event:searchResult
+   * @fires DisTube#event:searchCancel
+   * @returns {ytdl.videoInfo} Song info
+   */
   async searchSong(message, name) {
     try {
       let search = await ytsr(name, {
@@ -170,6 +193,15 @@ class DisTube extends EventEmitter {
     }
   }
 
+  /**
+   * Create a new guild queue
+   * @async
+   * @private
+   * @param {Discord.Message} message The message from guild channel
+   * @param {ytdl.videoInfo} video Song to play
+   * @throws {NotInVoice} if user not in a voice channel
+   * @returns {Queue}
+   */
   async newQueue(message, video) {
     let queue = new Queue(message.guild.id);
     this.guilds.push(queue);
@@ -183,8 +215,13 @@ class DisTube extends EventEmitter {
     return queue;
   }
 
+  /**
+   * Delete a guild queue
+   * @private
+   * @param {Discord.Message} message The message from guild channel
+   */
   deleteQueue(message) {
-    return this.guilds = this.guilds.filter(guild => guild.id !== message.guild.id);
+    this.guilds = this.guilds.filter(guild => guild.id !== message.guild.id);
   }
 
   /**
@@ -198,7 +235,7 @@ class DisTube extends EventEmitter {
    *     if (command == "queue") {
    *         let queue = client.DisTube.getQueue(message);
    *         message.channel.send('Current queue:\n' + queue.songs.map((song, id) =>
-   *             `**${id+1}**. [${song.name}](${song.url}) - \`${song.formattedDuration}\``;
+   *             `**${id+1}**. [${song.name}](${song.url}) - \`${song.formattedDuration}\``
    *         ));
    *     }
    * });
@@ -208,6 +245,15 @@ class DisTube extends EventEmitter {
     return queue;
   }
 
+  /**
+   * Add a video to queue
+   * @async
+   * @private
+   * @param {Discord.Message} message The message from guild channel
+   * @param {ytdl.videoInfo} video Song to add
+   * @throws {NotInVoice} if result is empty
+   * @returns {Queue}
+   */
   addToQueue(message, video) {
     let queue = this.getQueue(message);
     if (!queue) throw new Error("NotPlaying");
@@ -218,6 +264,14 @@ class DisTube extends EventEmitter {
     return queue;
   }
 
+  /**
+   * Add a array of videos to queue
+   * @async
+   * @private
+   * @param {Discord.Message} message The message from guild channel
+   * @param {ytdl.videoInfo[]} videos Array of song to add
+   * @returns {Queue}
+   */
   addVideosToQueue(message, videos) {
     let queue = this.getQueue(message);
     if (!queue) throw new Error("NotPlaying");
@@ -277,7 +331,7 @@ class DisTube extends EventEmitter {
     queue.stopped = true;
     queue.dispatcher.end();
     if (this.options.leaveOnStop) queue.connection.channel.leave();
-    this.guilds = this.guilds.filter(guild => guild.id !== message.guild.id);
+    this.deleteQueue(message);
   }
 
   /**
@@ -445,12 +499,27 @@ class DisTube extends EventEmitter {
     return this.guilds.some(guild => guild.id === message.guild.id && guild.pause);
   }
 
+  /**
+   * Whether or not the queue's voice channel is empty
+   * @private
+   * @param {Queue} queue The guild queue
+   * @returns {boolean} No user in voice channel return `true`
+   */
   isVoiceChannelEmpty(queue) {
     let voiceChannel = queue.connection.channel;
     let members = voiceChannel.members.filter(m => !m.user.bot);
     return !members.size;
   }
 
+  /**
+   * Play related song
+   * @private
+   * @async
+   * @param {Discord.Message} message The message from guild channel
+   * @fires DisTube#event:playSong
+   * @fires DisTube#event:noRelated
+   * @returns {Queue} The guild queue
+   */
   async runAutoplay(message) {
     let queue = this.getQueue(message);
     if (!queue) throw new Error("NotPlaying");
@@ -473,6 +542,16 @@ class DisTube extends EventEmitter {
     return queue;
   }
 
+  /**
+   * Play related song
+   * @private
+   * @param {Discord.Message} message The message from guild channel
+   * @fires DisTube#event:empty
+   * @fires DisTube#event:noRelated
+   * @fires DisTube#event:stop
+   * @fires DisTube#event:finish
+   * @fires DisTube#event:error
+   */
   async playSong(message) {
     let queue = this.getQueue(message);
     let song = queue.songs[0];
@@ -526,15 +605,38 @@ class DisTube extends EventEmitter {
 }
 
 /**
+ * Youtube playlist author
+ * @typedef {Object} ytpl_author
+ * @prop {string} id Channel id
+ * @prop {string} name Channel name
+ * @prop {string} avatar Channel avatar
+ * @prop {string} channel_url Channel url
+ * @prop {string} user User id
+ * @prop {string} user_url User url
+ */
+
+/**
+ * Youtube playlist item
+ * @typedef {Object} ytpl_item
+ * @prop {string} id Video id
+ * @prop {string} url Video url
+ * @prop {string} url_simple Video shorten url
+ * @prop {string} title Video title
+ * @prop {string} thumbnail Video thumbnail url
+ * @prop {string} duration Video duration (mm:ss)
+ * @prop {ytpl_author} author Video channel
+ */
+
+/**
  * Youtube playlist info
  * @typedef {Object} ytpl_result
- * @prop {Discord.User} user `@1.1.1` Requested user
+ * @prop {Discord.User} user `@1.2.0` Requested user
  * @prop {string} id Playlist id
  * @prop {string} url Playlist url
  * @prop {string} title Playlist title
  * @prop {number} total_items The number of videos in the playlist
- * @prop {Object} author The playlist creator
- * @prop {Object[]} items Array of videos
+ * @prop {ytpl_author} author The playlist creator
+ * @prop {ytpl_item[]} items Array of videos
  */
 
 /**

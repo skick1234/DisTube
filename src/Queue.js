@@ -1,10 +1,15 @@
-const duration = require("./duration");
+const duration = require("./duration"),
+  Song = require("./Song"),
+  Discord = require("discord.js");
 
 /**
  * Represents a queue.
- * @param {Discord.Snowflake} guildID The discord guild ID.
  */
 class Queue {
+  /**
+  * Create a queue.
+  * @param {Discord.Snowflake} guildID The discord guild ID.
+  */
   constructor(guildID) {
     /**
      * The guild ID.
@@ -13,12 +18,12 @@ class Queue {
     this.id = guildID;
     /**
      * Stream dispatcher.
-     * @type {StreamDispatcher}
+     * @type {Discord.StreamDispatcher}
      */
     this.dispatcher = null;
     /**
      * Voice connection.
-     * @type {VoiceConnection}
+     * @type {Discord.VoiceConnection}
      */
     this.connection = null;
     /**
