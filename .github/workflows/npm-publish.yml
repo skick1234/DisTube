@@ -1,8 +1,7 @@
 name: DisTube
 on:
-  push:
-    branches:
-      - master
+  release:
+    types: [created]
 jobs:
   build:
     runs-on: ubuntu-latest
