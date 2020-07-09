@@ -43,9 +43,8 @@
   },
   "devDependencies": {
     "@discordjs/opus": "^0.3.2",
-    "better-docs": "^2.3.0",
+    "clean-jsdoc-theme": "^2.2.11",
     "discord.js": "^12.2.0",
-    "eslint": "^7.4.0",
     "jsdoc": "^3.6.4"
   }
 }
