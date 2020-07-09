@@ -68,6 +68,7 @@ declare class DisTube extends DisTube_base {
      * PLay / add a playlist
      * @async
      * @private
+     * @ignore
      * @param {Discord.Message} message The message from guild channel
      * @param {string} url Youtube playlist url
      * @fires DisTube#event:playList
@@ -78,6 +79,7 @@ declare class DisTube extends DisTube_base {
      * Search for a song
      * @async
      * @private
+     * @ignore
      * @param {Discord.Message} message The message from guild channel
      * @param {string} name The string search for
      * @throws {NotFound} if result is empty
@@ -90,6 +92,7 @@ declare class DisTube extends DisTube_base {
      * Create a new guild queue
      * @async
      * @private
+     * @ignore
      * @param {Discord.Message} message The message from guild channel
      * @param {ytdl.videoInfo} video Song to play
      * @throws {NotInVoice} if user not in a voice channel
@@ -99,6 +102,7 @@ declare class DisTube extends DisTube_base {
     /**
      * Delete a guild queue
      * @private
+     * @ignore
      * @param {Discord.Message} message The message from guild channel
      */
     private deleteQueue;
@@ -123,6 +127,7 @@ declare class DisTube extends DisTube_base {
      * Add a video to queue
      * @async
      * @private
+     * @ignore
      * @param {Discord.Message} message The message from guild channel
      * @param {ytdl.videoInfo} video Song to add
      * @throws {NotInVoice} if result is empty
@@ -133,6 +138,7 @@ declare class DisTube extends DisTube_base {
      * Add a array of videos to queue
      * @async
      * @private
+     * @ignore
      * @param {Discord.Message} message The message from guild channel
      * @param {ytdl.videoInfo[]} videos Array of song to add
      * @returns {Queue}
@@ -278,6 +284,7 @@ declare class DisTube extends DisTube_base {
     /**
      * Whether or not the queue's voice channel is empty
      * @private
+     * @ignore
      * @param {Queue} queue The guild queue
      * @returns {boolean} No user in voice channel return `true`
      */
@@ -285,6 +292,7 @@ declare class DisTube extends DisTube_base {
     /**
      * Play related song
      * @private
+     * @ignore
      * @async
      * @param {Discord.Message} message The message from guild channel
      * @fires DisTube#event:playSong
@@ -295,6 +303,7 @@ declare class DisTube extends DisTube_base {
     /**
      * Play related song
      * @private
+     * @ignore
      * @param {Discord.Message} message The message from guild channel
      * @fires DisTube#event:empty
      * @fires DisTube#event:noRelated

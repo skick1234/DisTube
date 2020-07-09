@@ -106,6 +106,7 @@ class DisTube extends EventEmitter {
    * PLay / add a playlist
    * @async
    * @private
+   * @ignore
    * @param {Discord.Message} message The message from guild channel
    * @param {string} url Youtube playlist url
    * @fires DisTube#event:playList
@@ -155,6 +156,7 @@ class DisTube extends EventEmitter {
    * Search for a song
    * @async
    * @private
+   * @ignore
    * @param {Discord.Message} message The message from guild channel
    * @param {string} name The string search for
    * @throws {NotFound} if result is empty
@@ -197,6 +199,7 @@ class DisTube extends EventEmitter {
    * Create a new guild queue
    * @async
    * @private
+   * @ignore
    * @param {Discord.Message} message The message from guild channel
    * @param {ytdl.videoInfo} video Song to play
    * @throws {NotInVoice} if user not in a voice channel
@@ -218,6 +221,7 @@ class DisTube extends EventEmitter {
   /**
    * Delete a guild queue
    * @private
+   * @ignore
    * @param {Discord.Message} message The message from guild channel
    */
   deleteQueue(message) {
@@ -249,6 +253,7 @@ class DisTube extends EventEmitter {
    * Add a video to queue
    * @async
    * @private
+   * @ignore
    * @param {Discord.Message} message The message from guild channel
    * @param {ytdl.videoInfo} video Song to add
    * @throws {NotInVoice} if result is empty
@@ -268,6 +273,7 @@ class DisTube extends EventEmitter {
    * Add a array of videos to queue
    * @async
    * @private
+   * @ignore
    * @param {Discord.Message} message The message from guild channel
    * @param {ytdl.videoInfo[]} videos Array of song to add
    * @returns {Queue}
@@ -502,6 +508,7 @@ class DisTube extends EventEmitter {
   /**
    * Whether or not the queue's voice channel is empty
    * @private
+   * @ignore
    * @param {Queue} queue The guild queue
    * @returns {boolean} No user in voice channel return `true`
    */
@@ -514,6 +521,7 @@ class DisTube extends EventEmitter {
   /**
    * Play related song
    * @private
+   * @ignore
    * @async
    * @param {Discord.Message} message The message from guild channel
    * @fires DisTube#event:playSong
@@ -545,6 +553,7 @@ class DisTube extends EventEmitter {
   /**
    * Play related song
    * @private
+   * @ignore
    * @param {Discord.Message} message The message from guild channel
    * @fires DisTube#event:empty
    * @fires DisTube#event:noRelated
