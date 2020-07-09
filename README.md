@@ -19,7 +19,7 @@ A Node.js module to easily manage music commands and play Youtube song on Discor
 npm install distube @discord/opus --save
 ```
 
-Require [discord.js](discord.js.org) v12 and [FFMPEG](https://www.ffmpeg.org/download.html).
+Require [discord.js](https://discord.js.org) v12 and [FFMPEG](https://www.ffmpeg.org/download.html).
 
 ## Documentation
 
@@ -98,7 +98,7 @@ client.on("message", async (message) => {
 // Queue status template
 const status = (queue) => `Volume: \`${queue.volume}%\` | Loop: \`${queue.repeatMode ? queue.repeatMode == 2 ? "All Queue" : "This Song" : "Off"}\` | Autoplay: \`${queue.autoplay ? "On" : "Off"}\``;
 
-// DisTube event listeners (just example, more events in documentation page)
+// DisTube event listeners, more in the documentation page
 client.DisTube.on("playSong", (message, queue, song) => message.channel.send(
     `Playing \`${song.name}\` - \`${song.formattedDuration}\`\nRequested by: ${song.user}\n${status(queue)}`
 ));
@@ -110,6 +110,11 @@ client.DisTube.on("addSong", (message, queue, song) => message.channel.send(
 client.DisTube.on("playList", (message, queue, playlist, song) => message.channel.send(
     `Play \`${playlist.title}\` playlist (${playlist.total_items} songs).\nRequested by: ${song.user}\nNow playing \`${song.name}\` - \`${song.formattedDuration}\`\n${status(queue)}`
 ));
+
+client.DisTube.on("addList", (message, queue, playlist) => message.channel.send(
+    `Added \`${playlist.title}\` playlist (${playlist.total_items} songs) to queue\n${status(queue)}`
+));
+
 // DisTubeOptions.searchSongs = true
 client.DisTube.on("searchResult", (message, result) => {
     let i = 0;
