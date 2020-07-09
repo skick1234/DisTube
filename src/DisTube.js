@@ -9,7 +9,7 @@ const ytdl = require("discord-ytdl-core"),
 /**
  * DisTube options.
  * @typedef {Object} DisTubeOptions
- * @prop {boolean} [emitNewSongOnly=false] If `true`, {@link DisTube#event:playSong} is not emitted when looping a song or next song is the same as the previous one
+ * @prop {boolean} [emitNewSongOnly=false] `@1.3.0`. If `true`, {@link DisTube#event:playSong} is not emitted when looping a song or next song is the same as the previous one
  * @prop {boolean} [leaveOnEmpty=true] Whether or not leaving voice channel if it is empty.
  * @prop {boolean} [leaveOnFinish=false] Whether or not leaving voice channel when the queue ends.
  * @prop {boolean} [leaveOnStop=true] Whether or not leaving voice channel after using DisTube.stop() function.
