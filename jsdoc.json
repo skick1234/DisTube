@@ -43,7 +43,7 @@
                 "<meta name=\"description\" content=\"A Discord.js v12 module to easily manage music commands and play Youtube song on Discord without any API key.\">"
             ],
             "search": true,
-            "footer": "Powered by <a href='https://jsdoc.app/' target='_blank'>JSDoc</a>, <a href='https://github.com/ankitskvmdam/clean-jsdoc-theme' target='_blank'>clean-jsdoc-theme</a>, <a href='js.org' target='_blank'>js.org</a> and Love"
+            "footer": "Powered by <a href='https://jsdoc.app/' target='_blank'>JSDoc</a>, <a href='https://github.com/ankitskvmdam/clean-jsdoc-theme' target='_blank'>clean-jsdoc-theme</a>, <a href='https://js.org' target='_blank'>js.org</a> and Love"
         }
     }
 }
