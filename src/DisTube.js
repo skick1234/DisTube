@@ -379,7 +379,7 @@ class DisTube extends EventEmitter {
   /**
    * Set the repeat mode of the guild queue.
    * Turn off if repeat mode is the same value as type.
-   * Toogle mode: `type = null` `(0 -> 1 -> 2 -> 0...)`
+   * Toggle mode: `type = null` `(0 -> 1 -> 2 -> 0...)`
    * 
    * @param {Discord.Message} message The message from guild channel
    * @param {number} mode The type of repeat mode `(0: disabled, 1: Repeat a song, 2: Repeat all the queue)`
@@ -399,7 +399,8 @@ class DisTube extends EventEmitter {
   setRepeatMode(message, mode = null) {
     let queue = this.getQueue(message);
     if (!queue) throw new Error("NotPlaying");
-    if (queue.repeatMode == mode) queue.repeatMode = 0;
+    if (!mode) queue.repeatMode = (queue.repeatMode + 1) % 3;
+    else if (queue.repeatMode == mode) queue.repeatMode = 0;
     else queue.repeatMode = mode;
     return queue.repeatMode;
   }
