@@ -17,5 +17,5 @@ module.exports = (milliseconds) => {
   if (minutes > 0) {
     return `${formatInt(minutes)}:${formatInt(seconds)}`;
   }
-  return `${formatInt(seconds)}`;
+  return `00:${formatInt(seconds)}`;
 };
