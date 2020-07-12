@@ -462,14 +462,14 @@ class DisTube extends EventEmitter {
   setRepeatMode(message, mode = null) {
     let queue = this.getQueue(message);
     if (!queue) throw new Error("NotPlaying");
-    if (!mode) queue.repeatMode = (queue.repeatMode + 1) % 3;
+    if (mode == null) queue.repeatMode = (queue.repeatMode + 1) % 3;
     else if (queue.repeatMode == mode) queue.repeatMode = 0;
     else queue.repeatMode = mode;
     return queue.repeatMode;
   }
 
   /**
-   * Toggle autoplay Mode
+   * Toggle autoplay mode
    * @param {Discord.Message} message The message from guild channel
    * @returns {boolean} Autoplay mode state
    * @throws {NotPlaying} No playing queue
@@ -522,9 +522,7 @@ class DisTube extends EventEmitter {
   }
 
   /**
-   * Play related song
-   * @private
-   * @ignore
+   * Add related song to the queue
    * @async
    * @param {Discord.Message} message The message from guild channel
    * @fires DisTube#event:playSong
@@ -554,7 +552,7 @@ class DisTube extends EventEmitter {
   }
 
   /**
-   * Play related song
+   * Play a song on voice connection
    * @private
    * @ignore
    * @param {Discord.Message} message The message from guild channel
