@@ -236,12 +236,12 @@ declare class DisTube extends DisTube_base {
     jump(message: import("discord.js").Message, num: number): import("./Queue");
     /**
      * Set the repeat mode of the guild queue.
-     * Turn off if repeat mode is the same value as type.
-     * Toggle mode: `type = null` `(0 -> 1 -> 2 -> 0...)`
+     * Turn off if repeat mode is the same value as new mode.
+     * Toggle mode: `mode = null` `(0 -> 1 -> 2 -> 0...)`
      *
      * @param {Discord.Message} message The message from guild channel
-     * @param {number} mode The type of repeat mode `(0: disabled, 1: Repeat a song, 2: Repeat all the queue)`
-     * @returns {number} Type of repeat mode
+     * @param {number} mode The repeat modes `(0: disabled, 1: Repeat a song, 2: Repeat all the queue)`
+     * @returns {number} The new repeat mode
      *
      * @example
      * client.on('message', (message) => {
