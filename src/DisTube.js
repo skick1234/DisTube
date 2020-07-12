@@ -209,16 +209,21 @@ class DisTube extends EventEmitter {
    * @returns {Queue}
    */
   async newQueue(message, video) {
-    let queue = new Queue(message.guild.id);
-    this.guilds.push(queue);
-    let voice = message.member.voice.channel;
-    if (!voice) throw new Error("NotInVoice");
-    queue.connection = await voice.join();
-    let song = new Song(video, message.author);
-    queue.songs.push(song);
-    queue.updateDuration();
-    this.playSong(message);
-    return queue;
+    try {
+      let queue = new Queue(message.guild.id);
+      this.guilds.push(queue);
+      let voice = message.member.voice.channel;
+      if (!voice) throw new Error("NotInVoice");
+      queue.connection = await voice.join();
+      let song = new Song(video, message.author);
+      queue.songs.push(song);
+      queue.updateDuration();
+      this.playSong(message);
+      return queue;
+    } catch(err) {
+      console.error(err);
+      this.deleteQueue(message);
+    }
   }
 
   /**
