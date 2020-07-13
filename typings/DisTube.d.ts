@@ -256,7 +256,7 @@ declare class DisTube extends DisTube_base {
      */
     setRepeatMode(message: import("discord.js").Message, mode?: number): number;
     /**
-     * Toggle autoplay Mode
+     * Toggle autoplay mode
      * @param {Discord.Message} message The message from guild channel
      * @returns {boolean} Autoplay mode state
      * @throws {NotPlaying} No playing queue
@@ -292,18 +292,16 @@ declare class DisTube extends DisTube_base {
      */
     private isVoiceChannelEmpty;
     /**
-     * Play related song
-     * @private
-     * @ignore
+     * Add related song to the queue
      * @async
      * @param {Discord.Message} message The message from guild channel
      * @fires DisTube#event:playSong
      * @fires DisTube#event:noRelated
      * @returns {Queue} The guild queue
      */
-    private runAutoplay;
+    runAutoplay(message: import("discord.js").Message): import("./Queue");
     /**
-     * Play related song
+     * Play a song on voice connection
      * @private
      * @ignore
      * @param {Discord.Message} message The message from guild channel
@@ -397,7 +395,11 @@ type ytpl_item = {
      */
     thumbnail: string;
     /**
-     * Video duration (mm:ss)
+     * Video duration `hh:mm:ss`
+     */
+    fomattedDuration: string;
+    /**
+     * Video duration in seconds
      */
     duration: string;
     /**
@@ -425,6 +427,14 @@ type ytpl_result = {
      * Playlist title
      */
     title: string;
+    /**
+     * Playlist duration `hh:mm:ss`
+     */
+    fomattedDuration: string;
+    /**
+     * Playlist duration in seconds
+     */
+    duration: string;
     /**
      * The number of videos in the playlist
      */
@@ -459,7 +469,7 @@ type ytsr_result = {
      */
     description: string;
     /**
-     * Video duration
+     * Video duration `hh:mm:ss`
      */
     duration: string;
 };
