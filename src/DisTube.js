@@ -607,19 +607,19 @@ class DisTube extends EventEmitter {
           }
         }
         queue.skipped = false;
-
+        let playSongEmit = false;
         if (
           !this.options.emitNewSongOnly || // emitNewSongOnly == false -> emit playSong
           (
             queue.repeatMode != 1 && // Not loop a song
             queue.songs[0].url !== queue.songs[1].url // Not same song
           )
-        )
-          this.emit("playSong", message, queue, queue.songs[1]);
+        ) playSongEmit = true;
 
         if (queue.repeatMode != 1)
           queue.removeFirstSong();
         else queue.updateDuration();
+        if (playSongEmit) this.emit("playSong", message, queue, queue.songs[0]);
         return this.playSong(message);
       })
       .on("error", () => {
