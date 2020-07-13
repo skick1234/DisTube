@@ -553,7 +553,9 @@ class DisTube extends EventEmitter {
       related = related.related_videos;
     }
     message.autoplay = true;
+    related = related.filter(v => v.length_seconds != 'undefined')
     if (related && related[0]) {
+
       let nextSong = await ytdl.getBasicInfo(related[0].id);
       this.addToQueue(message, nextSong);
     } else {
