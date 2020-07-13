@@ -90,17 +90,21 @@ class DisTube extends EventEmitter {
     if (ytpl.validateURL(string))
       this.playlistHandler(message, string);
     else {
-      let song;
-      if (!ytdl.validateURL(string))
-        song = await this.searchSong(message, string).catch((e) => this.emit("error", message, e));
-      else song = await ytdl.getBasicInfo(string);
-      if (!song) return;
-      if (this.isPlaying(message)) {
-        let queue = this.addToQueue(message, song);
-        this.emit("addSong", message, queue, queue.songs[queue.songs.length - 1]);
-      } else {
-        let queue = await this.newQueue(message, song).catch((e) => this.emit("error", message, e));
-        this.emit("playSong", message, queue, queue.songs[0]);
+      try {
+        let song;
+        if (!ytdl.validateURL(string))
+          song = await this.searchSong(message, string);
+        else song = await ytdl.getBasicInfo(string);
+        if (!song) return;
+        if (this.isPlaying(message)) {
+          let queue = this.addToQueue(message, song);
+          this.emit("addSong", message, queue, queue.songs[queue.songs.length - 1]);
+        } else {
+          let queue = await this.newQueue(message, song);
+          this.emit("playSong", message, queue, queue.songs[0]);
+        }
+      } catch (e) {
+        this.emit("error", message, e);
       }
     }
   }
@@ -220,7 +224,7 @@ class DisTube extends EventEmitter {
       queue.updateDuration();
       this.playSong(message);
       return queue;
-    } catch(err) {
+    } catch (err) {
       console.error(err);
       this.deleteQueue(message);
     }
