@@ -4,7 +4,26 @@ const ytdl = require("discord-ytdl-core"),
   { EventEmitter } = require("events"),
   Queue = require("./Queue"),
   Song = require("./Song"),
+  duration = require("./duration"),
   Discord = require("discord.js");
+
+const toSecond = (string) => {
+  let h = 0,
+    m = 0,
+    s = 0;
+  if (string.match(/:/g)) {
+    let time = string.split(":");
+    if (time.length == 2) {
+      m = parseInt(time[0]);
+      s = parseInt(time[1]);
+    } else if (time.length == 3) {
+      h = parseInt(time[0]);
+      m = parseInt(time[1]);
+      s = parseInt(time[2]);
+    }
+  } else s = parseInt(string);
+  return h * 60 * 60 + m * 60 + s;
+};
 
 /**
  * DisTube options.
@@ -121,31 +140,17 @@ class DisTube extends EventEmitter {
    */
   async playlistHandler(message, url) {
     try {
-      let toSecond = (string) => {
-        let h = 0,
-          m = 0,
-          s = 0;
-        if (string.match(/:/g)) {
-          let time = string.split(":");
-          if (time.length == 2) {
-            m = parseInt(time[0]);
-            s = parseInt(time[1]);
-          } else if (time.length == 3) {
-            h = parseInt(time[0]);
-            m = parseInt(time[1]);
-            s = parseInt(time[2]);
-          }
-        } else s = parseInt(string);
-        return h * 60 * 60 + m * 60 + s;
-      };
       let playlist = await ytpl(url);
       playlist.user = message.user;
       let videos = playlist.items.map(vid => {
         return {
           ...vid,
+          formatedDuration: vid.duration,
           duration: toSecond(vid.duration)
         }
       });
+      playlist.duration = videos.reduce((prev, next) => prev + next.duration, 0);
+      playlist.formatedDuration = duration(playlist.duration * 1000);
       if (this.isPlaying(message)) {
         let queue = this.addVideosToQueue(message, videos);
         this.emit("addList", message, queue, playlist);
@@ -652,7 +657,8 @@ class DisTube extends EventEmitter {
  * @prop {string} url_simple Video shorten url
  * @prop {string} title Video title
  * @prop {string} thumbnail Video thumbnail url
- * @prop {string} duration Video duration (mm:ss)
+ * @prop {string} fomattedDuration Video duration `hh:mm:ss`
+ * @prop {string} duration Video duration in seconds
  * @prop {ytpl_author} author Video channel
  */
 
@@ -663,6 +669,8 @@ class DisTube extends EventEmitter {
  * @prop {string} id Playlist id
  * @prop {string} url Playlist url
  * @prop {string} title Playlist title
+ * @prop {string} fomattedDuration Playlist duration `hh:mm:ss`
+ * @prop {string} duration Playlist duration in seconds
  * @prop {number} total_items The number of videos in the playlist
  * @prop {ytpl_author} author The playlist creator
  * @prop {ytpl_item[]} items Array of videos
@@ -675,7 +683,7 @@ class DisTube extends EventEmitter {
  * @prop {string} link Video url
  * @prop {string} thumbnail Video thumbnail url
  * @prop {string} description Video description
- * @prop {string} duration Video duration
+ * @prop {string} duration Video duration `hh:mm:ss`
  */
 
 /**
