@@ -422,7 +422,7 @@ type ytpl_item = {
     /**
      * Video duration `hh:mm:ss`
      */
-    fomattedDuration: string;
+    formattedDuration: string;
     /**
      * Video duration in seconds
      */
@@ -455,7 +455,7 @@ type ytpl_result = {
     /**
      * Playlist duration `hh:mm:ss`
      */
-    fomattedDuration: string;
+    formattedDuration: string;
     /**
      * Playlist duration in seconds
      */

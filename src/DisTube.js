@@ -145,12 +145,13 @@ class DisTube extends EventEmitter {
       let videos = playlist.items.map(vid => {
         return {
           ...vid,
-          formatedDuration: vid.duration,
+          formattedDuration: vid.duration,
           duration: toSecond(vid.duration)
         }
       });
       playlist.duration = videos.reduce((prev, next) => prev + next.duration, 0);
-      playlist.formatedDuration = duration(playlist.duration * 1000);
+      playlist.formattedDuration = duration(playlist.duration * 1000);
+      console.log(playlist);
       if (this.isPlaying(message)) {
         let queue = this.addVideosToQueue(message, videos);
         this.emit("addList", message, queue, playlist);
@@ -674,7 +675,7 @@ module.exports = DisTube;
  * @prop {string} url_simple Video shorten url
  * @prop {string} title Video title
  * @prop {string} thumbnail Video thumbnail url
- * @prop {string} fomattedDuration Video duration `hh:mm:ss`
+ * @prop {string} formattedDuration Video duration `hh:mm:ss`
  * @prop {string} duration Video duration in seconds
  * @prop {ytpl_author} author Video channel
  */
@@ -686,7 +687,7 @@ module.exports = DisTube;
  * @prop {string} id Playlist id
  * @prop {string} url Playlist url
  * @prop {string} title Playlist title
- * @prop {string} fomattedDuration Playlist duration `hh:mm:ss`
+ * @prop {string} formattedDuration Playlist duration `hh:mm:ss`
  * @prop {string} duration Playlist duration in seconds
  * @prop {number} total_items The number of videos in the playlist
  * @prop {ytpl_author} author The playlist creator
