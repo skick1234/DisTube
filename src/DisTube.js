@@ -29,7 +29,7 @@ const toSecond = (string) => {
  * DisTube options.
  * @typedef {Object} DisTubeOptions
  * @prop {boolean} [emitNewSongOnly=false] `@1.3.0`. If `true`, {@link DisTube#event:playSong} is not emitted when looping a song or next song is the same as the previous one
- * @prop {boolean} [leaveOnEmpty=true] Whether or not leaving voice channel if it is empty.
+ * @prop {boolean} [leaveOnEmpty=true] Whether or not leaving voice channel if channel is empty when finish the current song. (Avoid accident leaving)
  * @prop {boolean} [leaveOnFinish=false] Whether or not leaving voice channel when the queue ends.
  * @prop {boolean} [leaveOnStop=true] Whether or not leaving voice channel after using DisTube.stop() function.
  * @prop {boolean} [searchSongs=false] Whether or not searching for multiple songs to select manually, DisTube will play the first result if `false`
@@ -182,7 +182,10 @@ class DisTube extends EventEmitter {
         limit: 12
       });
       let videos = search.items.filter(val => val.duration || val.type == 'video');
-      if (videos.length == 0) return this.emit("error", message, "Cannot find any results");
+      if (videos.length == 0) {
+        this.emit("error", message, "Cannot find any results");
+        return;
+      }
       let song = videos[0];
       if (this.options.searchSongs) {
         this.emit("searchResult", message, videos);
@@ -191,13 +194,13 @@ class DisTube extends EventEmitter {
           time: 60000,
           errors: ["time"]
         }).catch(() => {
-          this.emit("searchCancel", message)
-          return null;
+          this.emit("searchCancel", message);
+          return;
         });
         let index = parseInt(answers.first().content, 10);
         if (isNaN(index) || index > videos.length || index < 1) {
           this.emit("searchCancel", message);
-          return null;
+          return;
         }
         song = await ytdl.getBasicInfo(videos[index - 1].link);
       }
@@ -595,12 +598,12 @@ class DisTube extends EventEmitter {
     dispatcher.setVolume(queue.volume / 100);
     dispatcher
       .on("finish", async () => {
+        if (queue.stopped) return this.emit("stop", message);
         if (this.isVoiceChannelEmpty(queue) && this.options.leaveOnEmpty) {
           this.guilds = this.guilds.filter(guild => guild.id !== message.guild.id);
           queue.connection.channel.leave();
           return this.emit("empty", message);
         }
-        if (queue.stopped) return this.emit("stop", message);
         if (queue.repeatMode == 2 && !queue.skipped) queue.songs.push(queue.songs[0]);
         if (queue.songs.length <= 1) {
           if (queue.autoplay) await this.runAutoplay(message);
@@ -640,6 +643,18 @@ class DisTube extends EventEmitter {
   }
 }
 
+module.exports = DisTube;
+
+/**
+ * Youtube search result
+ * @typedef {Object} ytsr_result
+ * @prop {string} title Video title
+ * @prop {string} link Video url
+ * @prop {string} thumbnail Video thumbnail url
+ * @prop {string} description Video description
+ * @prop {string} duration Video duration `hh:mm:ss`
+ */
+
 /**
  * Youtube playlist author
  * @typedef {Object} ytpl_author
@@ -676,16 +691,6 @@ class DisTube extends EventEmitter {
  * @prop {number} total_items The number of videos in the playlist
  * @prop {ytpl_author} author The playlist creator
  * @prop {ytpl_item[]} items Array of videos
- */
-
-/**
- * Youtube search result
- * @typedef {Object} ytsr_result
- * @prop {string} title Video title
- * @prop {string} link Video url
- * @prop {string} thumbnail Video thumbnail url
- * @prop {string} description Video description
- * @prop {string} duration Video duration `hh:mm:ss`
  */
 
 /**
@@ -824,5 +829,3 @@ class DisTube extends EventEmitter {
  *     "An error encountered: " + err
  * ));
  */
-
-module.exports = DisTube;

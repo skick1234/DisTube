@@ -5,7 +5,7 @@ declare const DisTube_base: any;
  * DisTube options.
  * @typedef {Object} DisTubeOptions
  * @prop {boolean} [emitNewSongOnly=false] `@1.3.0`. If `true`, {@link DisTube#event:playSong} is not emitted when looping a song or next song is the same as the previous one
- * @prop {boolean} [leaveOnEmpty=true] Whether or not leaving voice channel if it is empty.
+ * @prop {boolean} [leaveOnEmpty=true] Whether or not leaving voice channel if channel is empty when finish the current song. (Avoid accident leaving)
  * @prop {boolean} [leaveOnFinish=false] Whether or not leaving voice channel when the queue ends.
  * @prop {boolean} [leaveOnStop=true] Whether or not leaving voice channel after using DisTube.stop() function.
  * @prop {boolean} [searchSongs=false] Whether or not searching for multiple songs to select manually, DisTube will play the first result if `false`
@@ -314,7 +314,7 @@ declare class DisTube extends DisTube_base {
     private playSong;
 }
 declare namespace DisTube {
-    export { DisTubeOptions, ytpl_author, ytpl_item, ytpl_result, ytsr_result };
+    export { DisTubeOptions, ytsr_result, ytpl_author, ytpl_item, ytpl_result };
 }
 /**
  * DisTube options.
@@ -325,7 +325,7 @@ type DisTubeOptions = {
      */
     emitNewSongOnly?: boolean;
     /**
-     * Whether or not leaving voice channel if it is empty.
+     * Whether or not leaving voice channel if channel is empty when finish the current song. (Avoid accident leaving)
      */
     leaveOnEmpty?: boolean;
     /**
@@ -340,6 +340,31 @@ type DisTubeOptions = {
      * Whether or not searching for multiple songs to select manually, DisTube will play the first result if `false`
      */
     searchSongs?: boolean;
+};
+/**
+ * Youtube search result
+ */
+type ytsr_result = {
+    /**
+     * Video title
+     */
+    title: string;
+    /**
+     * Video url
+     */
+    link: string;
+    /**
+     * Video thumbnail url
+     */
+    thumbnail: string;
+    /**
+     * Video description
+     */
+    description: string;
+    /**
+     * Video duration `hh:mm:ss`
+     */
+    duration: string;
 };
 /**
  * Youtube playlist author
@@ -447,29 +472,4 @@ type ytpl_result = {
      * Array of videos
      */
     items: ytpl_item[];
-};
-/**
- * Youtube search result
- */
-type ytsr_result = {
-    /**
-     * Video title
-     */
-    title: string;
-    /**
-     * Video url
-     */
-    link: string;
-    /**
-     * Video thumbnail url
-     */
-    thumbnail: string;
-    /**
-     * Video description
-     */
-    description: string;
-    /**
-     * Video duration `hh:mm:ss`
-     */
-    duration: string;
 };
