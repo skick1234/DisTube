@@ -151,7 +151,6 @@ class DisTube extends EventEmitter {
       });
       playlist.duration = videos.reduce((prev, next) => prev + next.duration, 0);
       playlist.formattedDuration = duration(playlist.duration * 1000);
-      console.log(playlist);
       if (this.isPlaying(message)) {
         let queue = this.addVideosToQueue(message, videos);
         this.emit("addList", message, queue, playlist);
