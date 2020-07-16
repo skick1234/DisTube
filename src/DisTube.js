@@ -139,6 +139,51 @@ class DisTube extends EventEmitter {
   }
 
   /**
+   * Skip the playing song and play a song or a playlist
+   * @async
+   * @param {Discord.Message} message The message from guild channel
+   * @param {string} string `Youtube video url`|`Youtube playlist url`|`The string to search for`
+   * @throws {NotInVoice} if user not in a voice channel
+   * @fires DisTube#event:playSong
+   * @fires DisTube#event:addSong
+   * @fires DisTube#event:playList
+   * @fires DisTube#event:addList
+   * @throws {NotFound} if result is empty
+   * @fires DisTube#event:searchResult
+   * @fires DisTube#event:searchCancel
+   * @example
+   * client.on('message', (message) => {
+   *     const args = message.content.slice(config.prefix.length).trim().split(/ +/g);
+   *     const command = args.shift();
+   *     if (command == "playSkip")
+   *         distube.playSkip(message, args.join(" "));
+   * });
+   */
+  async playSkip(message, string) {
+    if (!string) return;
+    if (ytpl.validateURL(string))
+      this.playlistHandler(message, string, true);
+    else {
+      try {
+        let song;
+        if (!ytdl.validateURL(string))
+          song = await this.searchSong(message, string);
+        else song = await ytdl.getBasicInfo(string);
+        if (!song) return;
+        if (this.isPlaying(message)) {
+          this.addToQueue(message, song, true);
+          this.skip(message);
+        } else {
+          let queue = await this.newQueue(message, song);
+          this.emit("playSong", message, queue, queue.songs[0]);
+        }
+      } catch (e) {
+        this.emit("error", message, e);
+      }
+    }
+  }
+
+  /**
    * PLay / add a playlist
    * @async
    * @private
@@ -148,7 +193,7 @@ class DisTube extends EventEmitter {
    * @fires DisTube#event:playList
    * @fires DisTube#event:addList
    */
-  async playlistHandler(message, url) {
+  async playlistHandler(message, url, unshift = false) {
     try {
       let playlist = await ytpl(url);
       playlist.user = message.user;
@@ -162,8 +207,9 @@ class DisTube extends EventEmitter {
       playlist.duration = videos.reduce((prev, next) => prev + next.duration, 0);
       playlist.formattedDuration = duration(playlist.duration * 1000);
       if (this.isPlaying(message)) {
-        let queue = this.addVideosToQueue(message, videos);
-        this.emit("addList", message, queue, playlist);
+        let queue = this.addVideosToQueue(message, videos, unshift);
+        if (unshift) this.skip(message);
+        else this.emit("addList", message, queue, playlist);
       } else {
         let queue = await this.newQueue(message, videos.shift()).catch((e) => this.emit("error", message, e));
         this.addVideosToQueue(message, videos);
@@ -275,6 +321,7 @@ class DisTube extends EventEmitter {
    * });
    */
   getQueue(message) {
+    if (!message || !message.guild) throw Error("InvalidDiscordMessage");
     let queue = this.guilds.find(guild => guild.id === message.guild.id);
     return queue;
   }
@@ -289,12 +336,13 @@ class DisTube extends EventEmitter {
    * @throws {NotInVoice} if result is empty
    * @returns {Queue}
    */
-  addToQueue(message, video) {
+  addToQueue(message, video, unshift = false) {
     let queue = this.getQueue(message);
     if (!queue) throw new Error("NotPlaying");
     if (!video) throw new Error("NoSong");
     let song = new Song(video, (message.autoplay ? this.client.user.toString() + " - `Autoplay`" : message.author));
-    queue.songs.push(song);
+    if (unshift) queue.songs.unshift(song)
+    else queue.songs.push(song);
     queue.updateDuration();
     return queue;
   }
@@ -308,12 +356,13 @@ class DisTube extends EventEmitter {
    * @param {ytdl.videoInfo[]} videos Array of song to add
    * @returns {Queue}
    */
-  addVideosToQueue(message, videos) {
+  addVideosToQueue(message, videos, unshift = false) {
     let queue = this.getQueue(message);
     if (!queue) throw new Error("NotPlaying");
     videos.forEach(video => {
       let song = new Song(video, message.author);
-      queue.songs.push(song);
+      if (unshift) queue.songs.unshift(song)
+      else queue.songs.push(song);
     });
     queue.updateDuration();
     return queue;
