@@ -34,6 +34,22 @@ const toSecond = (string) => {
  * @prop {boolean} [leaveOnStop=true] Whether or not leaving voice channel after using DisTube.stop() function.
  * @prop {boolean} [searchSongs=false] Whether or not searching for multiple songs to select manually, DisTube will play the first result if `false`
  */
+const DisTubeOptions = {
+  emitNewSongOnly: false,
+  leaveOnEmpty: true,
+  leaveOnFinish: false,
+  leaveOnStop: true,
+  searchSongs: false,
+};
+
+const ffmpegFilters = {
+  bassboost: 'equalizer=f=40:width_type=h:width=50:g=10,dynaudnorm=f=150',
+  vaporwave: "asetrate=44100*0.8,aresample=44100,atempo=1.1",
+  nightcore: "asetrate=44100*1.6,aresample=44100,equalizer=f=40:width_type=h:width=50:g=10",
+  karaoke: "stereotools=mlev=0.015625",
+  echo: "aecho=0.6:0.3:1000:0.5",
+  surrounding: 'surround=chl_out=5.1'
+}
 
 /**
  * Class representing a DisTube.
@@ -72,13 +88,7 @@ class DisTube extends EventEmitter {
      * DisTube options
      * @type {DisTubeOptions}
      */
-    this.options = {
-      emitNewSongOnly: false,
-      leaveOnEmpty: true,
-      leaveOnFinish: false,
-      leaveOnStop: true,
-      searchSongs: false,
-    };
+    this.options = DisTubeOptions;
     for (let key in options)
       this.options[key] = options[key];
   }
@@ -571,6 +581,33 @@ class DisTube extends EventEmitter {
   }
 
   /**
+   * Toggle a filter
+   * 
+   * @param {Discord.Message} message The message from guild channel
+   * @param {Filter} filter A filter name
+   * @returns {Filter[]} Array of enabled filters.
+   * 
+   * @example
+   * client.on('message', (message) => {
+   *     const args = message.content.slice(config.prefix.length).trim().split(/ +/g);
+   *     const command = args.shift();
+   *     if (command == "bassboost") {
+   *         let filters = distube.toggleFilter(message, "bassboost");
+   *         message.channel.send("Enabled filters: " + filters.map(f => "`" + f + "`").join(", "));
+   *     }
+   * });
+   */
+  setFilter(message, filter) {
+    let queue = this.getQueue(message);
+    if (Object.prototype.hasOwnProperty.call(ffmpegFilters, filter)) throw TypeError("filter must be a Filter (https://DisTube.js.org/global.html#Filter).");
+    if (queue.filters.includes(filter))
+      queue.filters = queue.filters.filter(f => f != filter);
+    else
+      queue.filters.push(filter);
+    return queue.filters;
+  }
+
+  /**
    * Play a song on voice connection
    * @private
    * @ignore
@@ -584,11 +621,14 @@ class DisTube extends EventEmitter {
   async playSong(message) {
     let queue = this.getQueue(message);
     let song = queue.songs[0];
+    let encoderArgs = queue.filter ? ["-af", ffmpegFilters[queue.filter]] : null;
     let dispatcher = queue.connection.play(ytdl(song.url, {
       opusEncoded: true,
       filter: 'audioonly',
       quality: 'highestaudio',
-      highWaterMark: 1 << 25
+      highWaterMark: 1 << 25,
+      // encoderArgs: ['-af', filters.map(filter => ffmpegFilters[filter]).join(",")]
+      encoderArgs
     }), {
       highWaterMark: 1,
       type: 'opus',
