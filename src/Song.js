@@ -1,12 +1,15 @@
+/* eslint no-unused-vars: "off" */
+
 const duration = require("./duration"),
   Discord = require("discord.js"),
-  ytdl = require("ytdl-core");
+  ytdl = require("ytdl-core"),
+  DisTube = require("./DisTube");
 
 /** Class representing a song. */
 class Song {
   /**
    * Create a song.
-   * @param {ytdl.videoInfo} video Youtube video info
+   * @param {(ytdl.videoInfo|DisTube.ytpl_item)} video Youtube video info
    * @param {Discord.User} user Requested user
    */
   constructor(video, user) {
@@ -24,7 +27,7 @@ class Song {
      * Song duration.
      * @type {number}
      */
-    this.duration = video.duration || parseInt(video.videoDetails.lengthSeconds);
+    this.duration = video.duration || parseInt(video.videoDetails.lengthSeconds) || 0;
     /**
      * Formatted duration string `hh:mm:ss`.
      * @type {string}
@@ -34,7 +37,7 @@ class Song {
      * Video URL.
      * @type {string}
      */
-    this.url = video.id ? "https://www.youtube.com/watch?v=" + video.id : "https://www.youtube.com/watch?v=" + video.videoDetails.videoId;
+    this.url = video.id ? ("https://www.youtube.com/watch?v=" + video.id) : ("https://www.youtube.com/watch?v=" + video.videoDetails.videoId);
     /**
      * Video thumbnail.
      * @type {string}
