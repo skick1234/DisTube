@@ -215,7 +215,26 @@ module.exports = class DisTube extends EventEmitter {
   }
 
   /**
-   * Search for a song
+   * Search for a song. You can customize how user answers instead of send a number
+   * (default of `{@link DisTube#play}()` search when `searchSongs` is `true`).
+   * Then use `{@link DisTube#play}(message, aResultToPlay)` or `{@link DisTube#playSkip}()` to play it.
+   * @async
+   * @param {string} string The string search for
+   * @throws {NotFound} If not found
+   * @returns {Song[]} Array of results
+   */
+  async search(string) {
+    let search = await ytsr(string, { limit: 12 });
+    let videos = search.items.filter(val => val.duration || val.type == 'video');
+    if (videos.length == 0) throw Error("NotFound");
+    videos = videos.map(video => ytdl.getBasicInfo(video.link));
+    videos = await Promise.all(videos);
+    let songs = videos.map(video => new Song(video, null));
+    return songs;
+  }
+
+  /**
+   * Search for a song, fire {@link DisTube#event:error} if not found.
    * @async
    * @private
    * @ignore
