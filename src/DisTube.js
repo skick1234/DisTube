@@ -1,6 +1,7 @@
 const ytdl = require("discord-ytdl-core"),
   ytsr = require("ytsr"),
-  ytpl = require("ytpl"),
+  // ytpl = require("ytpl"),
+  ytpl = require("../node-ytpl"), // ytpl quick fixes before author update it.
   { EventEmitter } = require("events"),
   Queue = require("./Queue"),
   Song = require("./Song"),
