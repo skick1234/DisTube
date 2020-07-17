@@ -1,17 +1,15 @@
 {
-    "include": [
-        "src/**/*", "index.js"
-    ],
+    "files": ["src/DisTube.js"],
     "exclude": [
         "node_modules"
     ],
     "compilerOptions": {
-        "outDir": "./typings",
+        "outFile": "typings/DisTube.d.ts",
+        "moduleResolution": "node",
         "allowJs": true,
         "declaration": true,
-        "sourceMap": true,
-        "noEmit": false,
         "skipLibCheck": true,
-        "emitDeclarationOnly": true
+        "emitDeclarationOnly": true,
+        "skipDefaultLibCheck": true
     }
 }
