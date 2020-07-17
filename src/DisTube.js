@@ -677,10 +677,12 @@ module.exports = class DisTube extends EventEmitter {
     queue.dispatcher = dispatcher;
     dispatcher
       .on("finish", async () => {
-        if (queue.stopped) return this.emit("stop", message);
-        if (this.isVoiceChannelEmpty(queue) && this.options.leaveOnEmpty) {
-          this.guilds = this.guilds.filter(guild => guild.id !== message.guild.id);
-          queue.connection.channel.leave();
+        if (queue.stopped) return;
+        if (this._isVoiceChannelEmpty(queue)) {
+          if (this.options.leaveOnEmpty) {
+            this.guilds = this.guilds.filter(guild => guild.id !== message.guild.id);
+            queue.connection.channel.leave();
+          }
           return this.emit("empty", message);
         }
         if (queue.repeatMode == 2 && !queue.skipped) queue.songs.push(queue.songs[0]);
