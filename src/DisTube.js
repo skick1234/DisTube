@@ -56,7 +56,7 @@ const ffmpegFilters = {
  * Class representing a DisTube.
  * @extends EventEmitter
  */
-module.exports = class DisTube extends EventEmitter {
+class DisTube extends EventEmitter {
   /**
    * Create new DisTube.
    * @param {Discord.Client} client Discord.JS client
@@ -137,7 +137,7 @@ module.exports = class DisTube extends EventEmitter {
   }
 
   /**
-   * Skip the playing song and play a song or a playlist
+   * `@2.0.0` Skip the playing song and play a song or a playlist
    * @async
    * @param {Discord.Message} message The message from guild channel
    * @param {(string|Song)} song `Youtube url`|`Search string`|`{@link DisTube#Song}`
@@ -215,7 +215,7 @@ module.exports = class DisTube extends EventEmitter {
   }
 
   /**
-   * Search for a song. You can customize how user answers instead of send a number
+   * `@2.0.0` Search for a song. You can customize how user answers instead of send a number
    * (default of `{@link DisTube#play}()` search when `searchSongs` is `true`).
    * Then use `{@link DisTube#play}(message, aResultToPlay)` or `{@link DisTube#playSkip}()` to play it.
    * @async
@@ -639,12 +639,12 @@ module.exports = class DisTube extends EventEmitter {
   }
 
   /**
-   * Enable or disable a filter of the queue, replay playing song. Available filters: `3d`, `bassboost`, `echo`, `karaoke`, `nightcore`, `vaporwave`
+   * `@2.0.0` Enable or disable a filter of the queue, replay the playing song.
+   * Available filters: `3d`, `bassboost`, `echo`, `karaoke`, `nightcore`, `vaporwave`
    * 
    * @param {Discord.Message} message The message from guild channel
    * @param {string} filter A filter name
    * @returns {string} Array of enabled filters.
-   * 
    * @example
    * client.on('message', (message) => {
    *     const args = message.content.slice(config.prefix.length).trim().split(/ +/g);
@@ -742,6 +742,8 @@ module.exports = class DisTube extends EventEmitter {
       });
   }
 }
+
+module.exports = DisTube;
 
 /**
  * Youtube playlist author
