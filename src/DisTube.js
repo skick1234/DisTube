@@ -98,15 +98,7 @@ module.exports = class DisTube extends EventEmitter {
    * Play / add a song from Youtube video url or playlist from Youtube playlist url. Search and play a song if it is not a valid url.
    * @async
    * @param {Discord.Message} message The message from guild channel
-   * @param {string} string `Youtube video url`|`Youtube playlist url`|`The string to search for`
-   * @throws {NotInVoice} if user not in a voice channel
-   * @fires DisTube#event:playSong
-   * @fires DisTube#event:addSong
-   * @fires DisTube#event:playList
-   * @fires DisTube#event:addList
-   * @throws {NotFound} if result is empty
-   * @fires DisTube#event:searchResult
-   * @fires DisTube#event:searchCancel
+   * @param {(string|Song)} song `Youtube url`|`Search string`|`{@link DisTube#Song}`
    * @example
    * client.on('message', (message) => {
    *     const args = message.content.slice(config.prefix.length).trim().split(/ +/g);
@@ -115,22 +107,27 @@ module.exports = class DisTube extends EventEmitter {
    *         distube.play(message, args.join(" "));
    * });
    */
-  async play(message, string) {
-    if (!string) return;
-    if (ytpl.validateURL(string))
-      this.playlistHandler(message, string);
+  async play(message, song) {
+    if (!song) return;
+    if (ytpl.validateURL(song))
+      this._playlistHandler(message, song);
     else {
       try {
-        let song;
-        if (!ytdl.validateURL(string))
-          song = await this.searchSong(message, string);
-        else song = await ytdl.getBasicInfo(string);
-        if (!song) return;
+        let resolvedSong;
+        if (!ytdl.validateURL(song))
+          resolvedSong = await this._searchSong(message, song);
+        else if (typeof song === "object") {
+          song.user = message.author;
+          resolvedSong = song;
+        } else {
+          let info = await ytdl.getBasicInfo(song);
+          resolvedSong = new Song(info, message.author);
+        }
         if (this.isPlaying(message)) {
-          let queue = this.addToQueue(message, song);
+          let queue = this._addToQueue(message, resolvedSong);
           this.emit("addSong", message, queue, queue.songs[queue.songs.length - 1]);
         } else {
-          let queue = await this.newQueue(message, song);
+          let queue = await this._newQueue(message, resolvedSong);
           this.emit("playSong", message, queue, queue.songs[0]);
         }
       } catch (e) {
@@ -143,15 +140,7 @@ module.exports = class DisTube extends EventEmitter {
    * Skip the playing song and play a song or a playlist
    * @async
    * @param {Discord.Message} message The message from guild channel
-   * @param {string} string `Youtube video url`|`Youtube playlist url`|`The string to search for`
-   * @throws {NotInVoice} if user not in a voice channel
-   * @fires DisTube#event:playSong
-   * @fires DisTube#event:addSong
-   * @fires DisTube#event:playList
-   * @fires DisTube#event:addList
-   * @throws {NotFound} if result is empty
-   * @fires DisTube#event:searchResult
-   * @fires DisTube#event:searchCancel
+   * @param {(string|Song)} song `Youtube url`|`Search string`|`{@link DisTube#Song}`
    * @example
    * client.on('message', (message) => {
    *     const args = message.content.slice(config.prefix.length).trim().split(/ +/g);
@@ -160,22 +149,27 @@ module.exports = class DisTube extends EventEmitter {
    *         distube.playSkip(message, args.join(" "));
    * });
    */
-  async playSkip(message, string) {
-    if (!string) return;
-    if (ytpl.validateURL(string))
-      this.playlistHandler(message, string, true);
+  async playSkip(message, song) {
+    if (!song) return;
+    if (ytpl.validateURL(song))
+      this._playlistHandler(message, song, true);
     else {
       try {
-        let song;
-        if (!ytdl.validateURL(string))
-          song = await this.searchSong(message, string);
-        else song = await ytdl.getBasicInfo(string);
-        if (!song) return;
+        let resolvedSong;
+        if (!ytdl.validateURL(song))
+          resolvedSong = await this._searchSong(message, song);
+        else if (typeof song === "object") {
+          song.user = message.author;
+          resolvedSong = song;
+        } else {
+          let info = await ytdl.getBasicInfo(song);
+          resolvedSong = new Song(info, message.author);
+        }
         if (this.isPlaying(message)) {
-          this.addToQueue(message, song, true);
+          this._addToQueue(message, resolvedSong, true);
           this.skip(message);
         } else {
-          let queue = await this.newQueue(message, song);
+          let queue = await this._newQueue(message, resolvedSong);
           this.emit("playSong", message, queue, queue.songs[0]);
         }
       } catch (e) {
@@ -191,10 +185,8 @@ module.exports = class DisTube extends EventEmitter {
    * @ignore
    * @param {Discord.Message} message The message from guild channel
    * @param {string} url Youtube playlist url
-   * @fires DisTube#event:playList
-   * @fires DisTube#event:addList
    */
-  async playlistHandler(message, url, unshift = false) {
+  async _playlistHandler(message, url, unshift = false) {
     try {
       let playlist = await ytpl(url);
       playlist.user = message.user;
@@ -208,12 +200,13 @@ module.exports = class DisTube extends EventEmitter {
       playlist.duration = videos.reduce((prev, next) => prev + next.duration, 0);
       playlist.formattedDuration = duration(playlist.duration * 1000);
       if (this.isPlaying(message)) {
-        let queue = this.addVideosToQueue(message, videos, unshift);
+        let queue = this._addVideosToQueue(message, videos, unshift);
         if (unshift) this.skip(message);
         else this.emit("addList", message, queue, playlist);
       } else {
-        let queue = await this.newQueue(message, videos.shift()).catch((e) => this.emit("error", message, e));
-        this.addVideosToQueue(message, videos);
+        let resolvedSong = new Song(videos.shift(), message.author);
+        let queue = await this._newQueue(message, resolvedSong).catch((e) => this.emit("error", message, e));
+        this._addVideosToQueue(message, videos);
         this.emit("playList", message, queue, playlist, queue.songs[0]);
       }
     } catch (err) {
@@ -329,17 +322,18 @@ module.exports = class DisTube extends EventEmitter {
    * @private
    * @ignore
    * @param {Discord.Message} message The message from guild channel
-   * @param {ytdl.videoInfo} video Song to add
+   * @param {Song} song Song to add
    * @throws {NotInVoice} if result is empty
    * @returns {Queue}
    */
-  addToQueue(message, video, unshift = false) {
+  _addToQueue(message, song, unshift = false) {
     let queue = this.getQueue(message);
     if (!queue) throw new Error("NotPlaying");
-    if (!video) throw new Error("NoSong");
-    let song = new Song(video, (message.autoplay ? this.client.user.toString() + " - `Autoplay`" : message.author));
-    if (unshift) queue.songs.unshift(song)
-    else queue.songs.push(song);
+    if (!song) throw new Error("NoSong");
+    if (unshift) {
+      let playing = queue.songs.shift();
+      queue.songs.unshift(playing, song);
+    } else queue.songs.push(song);
     queue.updateDuration();
     return queue;
   }
@@ -352,14 +346,14 @@ module.exports = class DisTube extends EventEmitter {
    * @param {ytdl.videoInfo[]} videos Array of song to add
    * @returns {Queue}
    */
-  addVideosToQueue(message, videos, unshift = false) {
+  _addVideosToQueue(message, videos, unshift = false) {
     let queue = this.getQueue(message);
     if (!queue) throw new Error("NotPlaying");
-    videos.forEach(video => {
-      let song = new Song(video, message.author);
-      if (unshift) queue.songs.unshift(song)
-      else queue.songs.push(song);
-    });
+    let songs = videos.map(v => new Song(v, message.author));
+    if (unshift) {
+      let playing = queue.songs.shift;
+      queue.songs.unshift(playing, ...songs);
+    } else queue.songs.push(...songs);
     queue.updateDuration();
     return queue;
   }
