@@ -67,7 +67,7 @@ class Queue {
      */
     this.pause = false;
     /**
-     * Type of repeat mode (0 is disaled, 1 is repeating a song, 2 is repeating all the playlist)
+     * Type of repeat mode (0 is disabled, 1 is repeating a song, 2 is repeating all the playlist)
      * @type {number}
      */
     this.repeatMode = 0;
@@ -76,6 +76,12 @@ class Queue {
      * @type {boolean}
      */
     this.autoplay = true;
+    /**
+     * Queue audio filter.
+     * Available filters: `3d`, `bassboost`, `echo`, `karaoke`, `nightcore`, `vaporwave`
+     * @type {string}
+     */
+    this.filter = null;
   }
 
   removeFirstSong() {

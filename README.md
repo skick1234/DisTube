@@ -27,17 +27,19 @@ Require [discord.js](https://discord.js.org) v12 and [FFMPEG](https://www.ffmpeg
 - [play(`message, string`)](https://distube.js.org/DisTube.html#play): play / add video(s) from video url or playlist url. Search for a video if `string` is invalid url.
 
 ##### Song management
+- [playSkip(`message, string`)](https://distube.js.org/DisTube.html#play): same as [play()](https://distube.js.org/DisTube.html#play) but it will add new song(s) to the beginning of the queue and skip the playing song.
 - [stop(`message`)](https://distube.js.org/DisTube.html#stop): Stop the playing song and clear the queue.
-- [jump(`message, num`)](https://distube.js.org/DisTube.html#jump): Jump to the song number in the queue.
 - [skip(`message`)](https://distube.js.org/DisTube.html#skip): Skip the current song.
+- [jump(`message, num`)](https://distube.js.org/DisTube.html#jump): Jump to the song number in the queue.
 - [pause(`message`)](https://distube.js.org/DisTube.html#pause): Pause the playing song.
 - [resume(`message`)](https://distube.js.org/DisTube.html#resume): Resume the paused song.
 
 ##### Queue management
+- [setFilter(`message`, `filter`)](https://distube.js.org/DisTube.html#setFilter) Toggle a filter of the queue, replay playing song. Available filters: `3d`, `bassboost`, `echo`, `karaoke`, `nightcore`, `vaporwave`
 - [shuffle(`message`)](https://distube.js.org/DisTube.html#shuffle): Shuffle the server queue.
 - [setVolume(`message, percent`)](https://distube.js.org/DisTube.html#setVolume): Set server volume in percentage.
 - [setRepeatMode(`message, type`)](https://distube.js.org/DisTube.html#setRepeatMode): Set repeat mode of server `(disabled, repeat a song, repeat all the queue)`.
-- [toggleAutoplay(`message`)](https://distube.js.org/DisTube.html#toggleAutoplay): toggle server's auto-play mode.
+- [toggleAutoplay(`message`)](https://distube.js.org/DisTube.html#toggleAutoplay): Toggle server's auto-play mode.
 - [getQueue(`message`)](https://distube.js.org/DisTube.html#getQueue): get the server queue.
 - [isPaused(`message`)](https://distube.js.org/DisTube.html#isPaused): Whether or not the server queue is paused.
 - [isPlaying(`message`)](https://distube.js.org/DisTube.html#isPlaying): Whether or not the bot is playing music in the server.
@@ -52,7 +54,6 @@ Require [discord.js](https://discord.js.org) v12 and [FFMPEG](https://www.ffmpeg
 | [addList](https://distube.js.org/DisTube.html#event:addList)           | Add playlist to server queue                        |
 | [empty](https://distube.js.org/DisTube.html#event:empty)               | There is no user in VoiceChannel                    |
 | [finish](https://distube.js.org/DisTube.html#event:finish)             | There is no more music in the queue                 |
-| [stop](https://distube.js.org/DisTube.html#event:stop)                 | The queue is stopped by stop() method               |
 | [noRelated](https://distube.js.org/DisTube.html#event:noRelated)       | DisTube cannot find related songs to play           |
 | [searchResult](https://distube.js.org/DisTube.html#event:searchResult) | Return results after searching (searchSongs = true) |
 | [searchCancel](https://distube.js.org/DisTube.html#event:searchCancel) | Cancel selecting results (searchSongs = true)       |
@@ -91,8 +92,10 @@ client.on("message", async (message) => {
     if (["repeat", "loop"].includes(command))
         distube.setRepeatMode(message, parseInt(args[0]));
 
-    if (command == "stop")
+    if (command == "stop") {
         distube.stop(message);
+        message.channel.send("Stopped the music!");
+    }
 
     if (command == "queue") {
         let queue = distube.getQueue(message);
@@ -100,10 +103,15 @@ client.on("message", async (message) => {
             `**${id + 1}**. ${song.name} - \`${song.formattedDuration}\``
         ).join("\n"));
     }
+
+    if ([`3d`, `bassboost`, `echo`, `karaoke`, `nightcore`, `vaporwave`].includes(command)) {
+        let filter = distube.setFilter(message, command);
+        message.channel.send("Current queue filter: " + (filter || "Off"));
+    }
 });
 
 // Queue status template
-const status = (queue) => `Volume: \`${queue.volume}%\` | Loop: \`${queue.repeatMode ? queue.repeatMode == 2 ? "All Queue" : "This Song" : "Off"}\` | Autoplay: \`${queue.autoplay ? "On" : "Off"}\``;
+const status = (queue) => `Volume: \`${queue.volume}%\` | Filter: \`${queue.filter || "Off"}\` | Loop: \`${queue.repeatMode ? queue.repeatMode == 2 ? "All Queue" : "This Song" : "Off"}\` | Autoplay: \`${queue.autoplay ? "On" : "Off"}\``;
 
 // DisTube event listeners, more in the documentation page
 distube
