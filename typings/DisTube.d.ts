@@ -139,6 +139,10 @@ declare module "Queue" {
 declare module "DisTube" {
     export = DisTube;
     const DisTube_base: typeof import("events").EventEmitter;
+    /**
+     * Class representing a DisTube.
+     * @extends EventEmitter
+     */
     class DisTube extends DisTube_base {
         /**
          * Create new DisTube.
@@ -175,6 +179,7 @@ declare module "DisTube" {
          * @param {(string|Song)} song `Youtube url`|`Search string`|`{@link DisTube#Song}`
          * @example
          * client.on('message', (message) => {
+         *     if (!message.content.startsWith(config.prefix)) return;
          *     const args = message.content.slice(config.prefix.length).trim().split(/ +/g);
          *     const command = args.shift();
          *     if (command == "play")
@@ -183,12 +188,13 @@ declare module "DisTube" {
          */
         play(message: import("discord.js").Message, song: (string | import("Song"))): Promise<void>;
         /**
-         * `@v2.0.0` Skip the playing song and play a song or a playlist
+         * `@2.0.0` Skip the playing song and play a song or a playlist
          * @async
          * @param {Discord.Message} message The message from guild channel
          * @param {(string|Song)} song `Youtube url`|`Search string`|`{@link DisTube#Song}`
          * @example
          * client.on('message', (message) => {
+         *     if (!message.content.startsWith(config.prefix)) return;
          *     const args = message.content.slice(config.prefix.length).trim().split(/ +/g);
          *     const command = args.shift();
          *     if (command == "playSkip")
@@ -206,7 +212,7 @@ declare module "DisTube" {
          */
         private _playlistHandler;
         /**
-         * `@v2.0.0` Search for a song. You can customize how user answers instead of send a number
+         * `@2.0.0` Search for a song. You can customize how user answers instead of send a number
          * (default of `{@link DisTube#play}()` search when `searchSongs` is `true`).
          * Then use `{@link DisTube#play}(message, aResultToPlay)` or `{@link DisTube#playSkip}()` to play it.
          * @async
@@ -249,6 +255,7 @@ declare module "DisTube" {
          * @returns {Queue} The guild queue
          * @example
          * client.on('message', (message) => {
+         *     if (!message.content.startsWith(config.prefix)) return;
          *     const args = message.content.slice(config.prefix.length).trim().split(/ +/g);
          *     const command = args.shift();
          *     if (command == "queue") {
@@ -299,6 +306,7 @@ declare module "DisTube" {
          * @throws {NotPlaying} No playing queue
          * @example
          * client.on('message', (message) => {
+         *     if (!message.content.startsWith(config.prefix)) return;
          *     const args = message.content.slice(config.prefix.length).trim().split(/ +/g);
          *     const command = args.shift();
          *     if (command == "stop") {
@@ -316,6 +324,7 @@ declare module "DisTube" {
          * @throws {NotPlaying} No playing queue
          * @example
          * client.on('message', (message) => {
+         *     if (!message.content.startsWith(config.prefix)) return;
          *     const args = message.content.slice(config.prefix.length).trim().split(/ +/g);
          *     const command = args.shift();
          *     if (command == "volume")
@@ -332,6 +341,7 @@ declare module "DisTube" {
          * @throws {NoSong} if there is no song in queue
          * @example
          * client.on('message', (message) => {
+         *     if (!message.content.startsWith(config.prefix)) return;
          *     const args = message.content.slice(config.prefix.length).trim().split(/ +/g);
          *     const command = args.shift();
          *     if (command == "skip")
@@ -345,6 +355,7 @@ declare module "DisTube" {
          * @returns {Queue} The guild queue
          * @example
          * client.on('message', (message) => {
+         *     if (!message.content.startsWith(config.prefix)) return;
          *     const args = message.content.slice(config.prefix.length).trim().split(/ +/g);
          *     const command = args.shift();
          *     if (command == "shuffle")
@@ -361,6 +372,7 @@ declare module "DisTube" {
          * @throws {InvalidSong} if `num` is invalid number `(0 < num < {@link Queue#songs}.length)`
          * @example
          * client.on('message', (message) => {
+         *     if (!message.content.startsWith(config.prefix)) return;
          *     const args = message.content.slice(config.prefix.length).trim().split(/ +/g);
          *     const command = args.shift();
          *     if (command == "jump")
@@ -380,6 +392,7 @@ declare module "DisTube" {
          *
          * @example
          * client.on('message', (message) => {
+         *     if (!message.content.startsWith(config.prefix)) return;
          *     const args = message.content.slice(config.prefix.length).trim().split(/ +/g);
          *     const command = args.shift();
          *     if (command == "repeat") {
@@ -397,6 +410,7 @@ declare module "DisTube" {
          * @throws {NotPlaying} No playing queue
          * @example
          * client.on('message', (message) => {
+         *     if (!message.content.startsWith(config.prefix)) return;
          *     const args = message.content.slice(config.prefix.length).trim().split(/ +/g);
          *     const command = args.shift();
          *     if (command == "autoplay") {
@@ -434,15 +448,15 @@ declare module "DisTube" {
          */
         runAutoplay(message: import("discord.js").Message): import("Queue");
         /**
-         * `@v2.0.0` Enable or disable a filter of the queue, replay playing song.
+         * `@2.0.0` Enable or disable a filter of the queue, replay the playing song.
          * Available filters: `3d`, `bassboost`, `echo`, `karaoke`, `nightcore`, `vaporwave`
          *
          * @param {Discord.Message} message The message from guild channel
          * @param {string} filter A filter name
          * @returns {string} Array of enabled filters.
-         *
          * @example
          * client.on('message', (message) => {
+         *     if (!message.content.startsWith(config.prefix)) return;
          *     const args = message.content.slice(config.prefix.length).trim().split(/ +/g);
          *     const command = args.shift();
          *     if ([`3d`, `bassboost`, `echo`, `karaoke`, `nightcore`, `vaporwave`].includes(command)) {

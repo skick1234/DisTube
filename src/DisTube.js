@@ -101,6 +101,7 @@ class DisTube extends EventEmitter {
    * @param {(string|Song)} song `Youtube url`|`Search string`|`{@link DisTube#Song}`
    * @example
    * client.on('message', (message) => {
+   *     if (!message.content.startsWith(config.prefix)) return;
    *     const args = message.content.slice(config.prefix.length).trim().split(/ +/g);
    *     const command = args.shift();
    *     if (command == "play")
@@ -143,6 +144,7 @@ class DisTube extends EventEmitter {
    * @param {(string|Song)} song `Youtube url`|`Search string`|`{@link DisTube#Song}`
    * @example
    * client.on('message', (message) => {
+   *     if (!message.content.startsWith(config.prefix)) return;
    *     const args = message.content.slice(config.prefix.length).trim().split(/ +/g);
    *     const command = args.shift();
    *     if (command == "playSkip")
@@ -320,6 +322,7 @@ class DisTube extends EventEmitter {
    * @returns {Queue} The guild queue
    * @example
    * client.on('message', (message) => {
+   *     if (!message.content.startsWith(config.prefix)) return;
    *     const args = message.content.slice(config.prefix.length).trim().split(/ +/g);
    *     const command = args.shift();
    *     if (command == "queue") {
@@ -413,6 +416,7 @@ class DisTube extends EventEmitter {
    * @throws {NotPlaying} No playing queue
    * @example
    * client.on('message', (message) => {
+   *     if (!message.content.startsWith(config.prefix)) return;
    *     const args = message.content.slice(config.prefix.length).trim().split(/ +/g);
    *     const command = args.shift();
    *     if (command == "stop") {
@@ -438,6 +442,7 @@ class DisTube extends EventEmitter {
    * @throws {NotPlaying} No playing queue
    * @example
    * client.on('message', (message) => {
+   *     if (!message.content.startsWith(config.prefix)) return;
    *     const args = message.content.slice(config.prefix.length).trim().split(/ +/g);
    *     const command = args.shift();
    *     if (command == "volume")
@@ -461,6 +466,7 @@ class DisTube extends EventEmitter {
    * @throws {NoSong} if there is no song in queue
    * @example
    * client.on('message', (message) => {
+   *     if (!message.content.startsWith(config.prefix)) return;
    *     const args = message.content.slice(config.prefix.length).trim().split(/ +/g);
    *     const command = args.shift();
    *     if (command == "skip")
@@ -482,6 +488,7 @@ class DisTube extends EventEmitter {
    * @returns {Queue} The guild queue
    * @example
    * client.on('message', (message) => {
+   *     if (!message.content.startsWith(config.prefix)) return;
    *     const args = message.content.slice(config.prefix.length).trim().split(/ +/g);
    *     const command = args.shift();
    *     if (command == "shuffle")
@@ -509,6 +516,7 @@ class DisTube extends EventEmitter {
    * @throws {InvalidSong} if `num` is invalid number `(0 < num < {@link Queue#songs}.length)`
    * @example
    * client.on('message', (message) => {
+   *     if (!message.content.startsWith(config.prefix)) return;
    *     const args = message.content.slice(config.prefix.length).trim().split(/ +/g);
    *     const command = args.shift();
    *     if (command == "jump")
@@ -537,6 +545,7 @@ class DisTube extends EventEmitter {
    * 
    * @example
    * client.on('message', (message) => {
+   *     if (!message.content.startsWith(config.prefix)) return;
    *     const args = message.content.slice(config.prefix.length).trim().split(/ +/g);
    *     const command = args.shift();
    *     if (command == "repeat") {
@@ -562,6 +571,7 @@ class DisTube extends EventEmitter {
    * @throws {NotPlaying} No playing queue
    * @example
    * client.on('message', (message) => {
+   *     if (!message.content.startsWith(config.prefix)) return;
    *     const args = message.content.slice(config.prefix.length).trim().split(/ +/g);
    *     const command = args.shift();
    *     if (command == "autoplay") {
@@ -647,6 +657,7 @@ class DisTube extends EventEmitter {
    * @returns {string} Array of enabled filters.
    * @example
    * client.on('message', (message) => {
+   *     if (!message.content.startsWith(config.prefix)) return;
    *     const args = message.content.slice(config.prefix.length).trim().split(/ +/g);
    *     const command = args.shift();
    *     if ([`3d`, `bassboost`, `echo`, `karaoke`, `nightcore`, `vaporwave`].includes(command)) {
