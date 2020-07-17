@@ -102,3 +102,6 @@ dist
 
 package-lock.json
 docs
+
+.vscode
+typings/DisTube.js
