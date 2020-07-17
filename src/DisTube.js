@@ -6,7 +6,7 @@ const ytdl = require("discord-ytdl-core"),
   Queue = require("./Queue"),
   Song = require("./Song"),
   duration = require("./duration"),
-  Discord = require("discord.js");
+  Discord = require("discord.js"); // eslint-disable-line
 
 const toSecond = (string) => {
   let h = 0,
@@ -44,9 +44,6 @@ const DisTubeOptions = {
 };
 
 const ffmpegFilters = {
-  bassboost: 'equalizer=f=40:width_type=h:width=50:g=10,dynaudnorm=f=150',
-  vaporwave: "asetrate=44100*0.8,aresample=44100,atempo=1.1",
-  nightcore: "asetrate=44100*1.6,aresample=44100,equalizer=f=40:width_type=h:width=50:g=10",
   karaoke: "stereotools=mlev=0.015625",
   echo: "aecho=0.6:0.3:1000:0.5",
   surrounding: 'surround=chl_out=5.1'
