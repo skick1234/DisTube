@@ -44,9 +44,12 @@ const DisTubeOptions = {
 };
 
 const ffmpegFilters = {
+  "3d": "apulsator=hz=0.125",
+  bassboost: 'bass=g=10',
+  echo: "aecho=0.8:0.9:1000:0.3",
   karaoke: "stereotools=mlev=0.015625",
-  echo: "aecho=0.6:0.3:1000:0.5",
-  surrounding: 'surround=chl_out=5.1'
+  nightcore: "asetrate=44100*1.6,aresample=44100,bass=g=10",
+  vaporwave: "asetrate=44100*0.8,aresample=44100,atempo=1.1"
 }
 
 /**
@@ -623,30 +626,36 @@ module.exports = class DisTube extends EventEmitter {
   }
 
   /**
-   * Toggle a filter
+   * Enable or disable a filter of the queue, replay playing song. Available filters: `3d`, `bassboost`, `echo`, `karaoke`, `nightcore`, `vaporwave`
    * 
    * @param {Discord.Message} message The message from guild channel
-   * @param {Filter} filter A filter name
-   * @returns {Filter[]} Array of enabled filters.
+   * @param {string} filter A filter name
+   * @returns {string} Array of enabled filters.
    * 
    * @example
    * client.on('message', (message) => {
    *     const args = message.content.slice(config.prefix.length).trim().split(/ +/g);
    *     const command = args.shift();
-   *     if (command == "bassboost") {
-   *         let filters = distube.toggleFilter(message, "bassboost");
-   *         message.channel.send("Enabled filters: " + filters.map(f => "`" + f + "`").join(", "));
+   *     if ([`3d`, `bassboost`, `echo`, `karaoke`, `nightcore`, `vaporwave`].includes(command)) {
+   *         let filter = distube.setFilter(message, command);
+   *         message.channel.send("Current queue filter: " + (filter || "Off"));
    *     }
    * });
    */
   setFilter(message, filter) {
     let queue = this.getQueue(message);
-    if (Object.prototype.hasOwnProperty.call(ffmpegFilters, filter)) throw TypeError("filter must be a Filter (https://DisTube.js.org/global.html#Filter).");
-    if (queue.filters.includes(filter))
-      queue.filters = queue.filters.filter(f => f != filter);
-    else
-      queue.filters.push(filter);
-    return queue.filters;
+    if (!queue) throw new Error("NotPlaying");
+    if (!Object.prototype.hasOwnProperty.call(ffmpegFilters, filter)) throw TypeError("filter must be a Filter (https://DisTube.js.org/global.html#Filter).");
+    // Multiple filters
+    // if (queue.filters.includes(filter))
+    //   queue.filters = queue.filters.filter(f => f != filter);
+    // else
+    //   queue.filters.push(filter);
+    if (queue.filter == filter) queue.filter = null;
+    else queue.filter = filter;
+    this._playSong(message);
+    if (!this.options.emitNewSongOnly) this.emit("playSong", message, queue, queue.songs[0]);
+    return queue.filter;
   }
 
   /**
@@ -822,6 +831,7 @@ module.exports = class DisTube extends EventEmitter {
  * Emitted when `{@link Queue#autoplay}` is `true`, the `{@link Queue#songs}` is empty and
  * DisTube cannot find related songs to play
  *
+ * @event DisTube#noRelated
  * @param {Discord.Message} message The message from guild channel
  * @example
  * distube.on("noRelated", message => message.channel.send("Can't find related video to play. Stop playing music."));
