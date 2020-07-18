@@ -29,9 +29,9 @@ declare class DisTube extends EventEmitter {
     client: Discord.Client;
     /**
      * Collection of guild queues
-     * @type {Discord.Collection<string, Queue>}
+     * @type {Map<string, Queue>}
      */
-    guildQueues: Discord.Collection<string, Queue>;
+    guildQueues: Map<string, Queue>;
     /**
      * DisTube options
      * @type {DisTubeOptions}

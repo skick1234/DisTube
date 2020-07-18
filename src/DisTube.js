@@ -81,9 +81,9 @@ class DisTube extends EventEmitter {
 
     /**
      * Collection of guild queues
-     * @type {Discord.Collection<string, Queue>}
+     * @type {Map<string, Queue>}
      */
-    this.guildQueues = new Discord.Collection();
+    this.guildQueues = new Map();
 
     /**
      * DisTube options
