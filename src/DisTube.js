@@ -115,12 +115,12 @@ class DisTube extends EventEmitter {
     else {
       try {
         let resolvedSong;
-        if (!ytdl.validateURL(song))
-          resolvedSong = await this._searchSong(message, song);
-        else if (typeof song === "object") {
+        if (typeof song === "object") {
           song.user = message.author;
           resolvedSong = song;
-        } else {
+        } else if (!ytdl.validateURL(song))
+          resolvedSong = await this._searchSong(message, song);
+        else {
           let info = await ytdl.getBasicInfo(song);
           resolvedSong = new Song(info, message.author);
         }
