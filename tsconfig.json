@@ -4,7 +4,16 @@
         "node_modules"
     ],
     "compilerOptions": {
-        "outFile": "typings/DisTube.d.ts",
+        "module": "commonjs",
+        "target": "esnext",
+        "lib": [
+            "esnext",
+            "esnext.array",
+            "esnext.asynciterable",
+            "esnext.intl",
+            "esnext.symbol"
+        ],
+        "outDir": "typings/",
         "moduleResolution": "node",
         "allowJs": true,
         "declaration": true,
