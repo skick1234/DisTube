@@ -595,7 +595,7 @@ class DisTube extends EventEmitter {
   isPlaying(message) {
     if (!message || !message.guild) throw Error("InvalidDiscordMessage");
     let queue = this.guildQueues.get(message.guild.id);
-    return (queue.playing || !queue.pause);
+    return queue ? (queue.playing || !queue.pause) : false;
   }
 
   /**
@@ -606,7 +606,7 @@ class DisTube extends EventEmitter {
   isPaused(message) {
     if (!message || !message.guild) throw Error("InvalidDiscordMessage");
     let queue = this.guildQueues.get(message.guild.id);
-    return queue.pause;
+    return queue ? queue.pause : false;
   }
 
   /**
