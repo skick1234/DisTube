@@ -654,7 +654,7 @@ class DisTube extends EventEmitter {
    * 
    * @param {Discord.Message} message The message from guild channel
    * @param {string} filter A filter name
-   * @returns {string} Array of enabled filters.
+   * @returns {string} Current queue's filter name.
    * @example
    * client.on('message', (message) => {
    *     if (!message.content.startsWith(config.prefix)) return;
