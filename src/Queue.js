@@ -8,14 +8,8 @@ const duration = require("./duration"),
 class Queue {
   /**
   * Create a queue.
-  * @param {Discord.Snowflake} guildID The discord guild ID.
   */
-  constructor(guildID) {
-    /**
-     * The guild ID.
-     * @type {Discord.Snowflake}
-     */
-    this.id = guildID;
+  constructor() {
     /**
      * Stream dispatcher.
      * @type {Discord.StreamDispatcher}

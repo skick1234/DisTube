@@ -80,10 +80,10 @@ class DisTube extends EventEmitter {
     this.client = client;
 
     /**
-     * List of guild queues
-     * @type {Queue[]}
+     * Collection of guild queues
+     * @type {Discord.Collection<string, Queue>}
      */
-    this.guilds = [];
+    this.guildQueues = new Discord.Collection();
 
     /**
      * DisTube options
@@ -291,8 +291,8 @@ class DisTube extends EventEmitter {
    */
   async _newQueue(message, song) {
     try {
-      let queue = new Queue(message.guild.id);
-      this.guilds.push(queue);
+      let queue = new Queue();
+      this.guildQueues.set(message.guild.id, queue);
       let voice = message.member.voice.channel;
       if (!voice) throw new Error("NotInVoice");
       queue.connection = await voice.join();
@@ -313,7 +313,7 @@ class DisTube extends EventEmitter {
    * @param {Discord.Message} message The message from guild channel
    */
   _deleteQueue(message) {
-    this.guilds = this.guilds.filter(guild => guild.id !== message.guild.id);
+    this.guildQueues.delete(message.guild.id);
   }
 
   /**
@@ -335,7 +335,7 @@ class DisTube extends EventEmitter {
    */
   getQueue(message) {
     if (!message || !message.guild) throw Error("InvalidDiscordMessage");
-    let queue = this.guilds.find(guild => guild.id === message.guild.id);
+    let queue = this.guildQueues.get(message.guild.id);
     return queue;
   }
 
@@ -588,12 +588,14 @@ class DisTube extends EventEmitter {
   }
 
   /**
-   * Whether or not a guild is playing song(s)
+   * Whether or not a guild is playing or paused music.
    * @param {Discord.Message} message The message from guild channel to check
    * @returns {boolean} Whether or not the guild is playing song(s)
    */
   isPlaying(message) {
-    return this.guilds.some(guild => guild.id === message.guild.id && (guild.playing || !guild.pause));
+    if (!message || !message.guild) throw Error("InvalidDiscordMessage");
+    let queue = this.guildQueues.get(message.guild.id);
+    return (queue.playing || !queue.pause);
   }
 
   /**
@@ -602,7 +604,9 @@ class DisTube extends EventEmitter {
    * @returns {boolean} Whether or not the guild queue is paused
    */
   isPaused(message) {
-    return this.guilds.some(guild => guild.id === message.guild.id && guild.pause);
+    if (!message || !message.guild) throw Error("InvalidDiscordMessage");
+    let queue = this.guildQueues.get(message.guild.id);
+    return queue.pause;
   }
 
   /**
@@ -641,7 +645,7 @@ class DisTube extends EventEmitter {
       this._addToQueue(message, nextSong);
     } else {
       queue.playing = false;
-      this.guilds = this.guilds.filter(guild => guild.id !== message.guild.id);
+      this.guildQueues.delete(message.guild.id);
       queue.connection.channel.leave();
       this.emit("noRelated", message);
     }
@@ -710,7 +714,7 @@ class DisTube extends EventEmitter {
         if (queue.stopped) return;
         if (this._isVoiceChannelEmpty(queue)) {
           if (this.options.leaveOnEmpty) {
-            this.guilds = this.guilds.filter(guild => guild.id !== message.guild.id);
+            this.guildQueues.delete(message.guild.id);
             queue.connection.channel.leave();
           }
           return this.emit("empty", message);
@@ -721,7 +725,7 @@ class DisTube extends EventEmitter {
           else {
             queue.playing = false;
             if (this.options.leaveOnFinish && !queue.stopped) {
-              this.guilds = this.guilds.filter(guild => guild.id !== message.guild.id);
+              this.guildQueues.delete(message.guild.id);
               queue.connection.channel.leave();
             }
             return this.emit("finish", message);
