@@ -28,6 +28,7 @@ Require [discord.js](https://discord.js.org) v12 and [FFMPEG](https://www.ffmpeg
 
 ##### Song management
 - [playSkip(`message, string`)](https://distube.js.org/DisTube.html#play): same as [play()](https://distube.js.org/DisTube.html#play) but it will add new song(s) to the beginning of the queue and skip the playing song.
+- [playCustomPlaylist(`message, urls`)](https://distube.js.org/DisTube.html#playCustomPlaylist): Play or add to the queue a list of Youtube video url.
 - [stop(`message`)](https://distube.js.org/DisTube.html#stop): Stop the playing song and clear the queue.
 - [skip(`message`)](https://distube.js.org/DisTube.html#skip): Skip the current song.
 - [jump(`message, num`)](https://distube.js.org/DisTube.html#jump): Jump to the song number in the queue.
