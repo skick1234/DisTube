@@ -66,7 +66,7 @@ declare class Queue {
      */
     autoplay: boolean;
     /**
-     * `@v2.0.0` Queue audio filter.
+     * `@2.0.0` Queue audio filter.
      * Available filters: `3d`, `bassboost`, `echo`, `karaoke`, `nightcore`, `vaporwave`
      * @type {string}
      */

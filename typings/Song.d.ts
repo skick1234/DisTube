@@ -16,7 +16,7 @@ declare class Song {
      */
     user: Discord.User;
     /**
-     * Youtube video id
+     * `@2.1.4` Youtube video id
      * @type {string}
      */
     id: string;
