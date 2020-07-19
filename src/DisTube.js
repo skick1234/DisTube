@@ -762,7 +762,7 @@ class DisTube extends EventEmitter {
           return this.emit("empty", message);
         }
         if (queue.repeatMode == 2 && !queue.skipped) queue.songs.push(queue.songs[0]);
-        if (queue.songs.length <= 1) {
+        if (queue.songs.length <= 1 && (queue.skipped || !queue.repeatMode)) {
           if (queue.autoplay) await this.runAutoplay(message);
           else {
             queue.playing = false;
