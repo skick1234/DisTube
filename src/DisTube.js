@@ -781,7 +781,7 @@ class DisTube extends EventEmitter {
           )
         ) playSongEmit = true;
 
-        if (queue.repeatMode != 1)
+        if (queue.repeatMode != 1 || queue.skipped)
           queue.removeFirstSong();
         else queue.updateDuration();
         if (playSongEmit) this.emit("playSong", message, queue, queue.songs[0]);
