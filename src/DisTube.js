@@ -310,6 +310,7 @@ class DisTube extends EventEmitter {
           song = videos[index - 1];
         } catch {
           this.emit("searchCancel", message);
+          return;
         }
       }
       song = await ytdl.getBasicInfo(song.link)
