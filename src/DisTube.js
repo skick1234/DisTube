@@ -5,7 +5,7 @@ const ytdl = require("discord-ytdl-core"),
   { EventEmitter } = require("events"),
   Queue = require("./Queue"),
   Song = require("./Song"),
-  duration = require("./duration"),
+  formatDuration = require("./duration"),
   Discord = require("discord.js"); // eslint-disable-line
 
 const toSecond = (string) => {
@@ -28,7 +28,7 @@ const toSecond = (string) => {
 
 /**
  * DisTube options.
- * @typedef {Object} DisTubeOptions
+ * @typedef {object} DisTubeOptions
  * @prop {boolean} [emitNewSongOnly=false] `@1.3.0`. If `true`, {@link DisTube#event:playSong} is not emitted when looping a song or next song is the same as the previous one
  * @prop {boolean} [leaveOnEmpty=true] Whether or not leaving voice channel if channel is empty when finish the current song. (Avoid accident leaving)
  * @prop {boolean} [leaveOnFinish=false] Whether or not leaving voice channel when the queue ends.
@@ -181,26 +181,66 @@ class DisTube extends EventEmitter {
   }
 
   /**
+   * `@2.1.0` Play or add array of Youtube video urls.
+   * `{@link DisTube#event:playList}` and `{@link DisTube#event:addList}` will be emitted
+   * with `playlist`'s properties include `properties` parameter's properties,
+   * `user`, `items`, `total_items`, `duration`, `formattedDuration`, `thumbnail` like `{@link ytpl_result}`
+   * @async
+   * @param {Discord.Message} message The message from guild channel
+   * @param {string[]} urls Array of Youtube url
+   * @param {object} [properties={}] Additional properties such as `title`
+   * @param {boolean} [playSkip=false] Weather or not play this playlist instantly
+   * @example
+   *     let songs = ["https://www.youtube.com/watch?v=xxx", "https://www.youtube.com/watch?v=yyy"];
+   *     distube.playCustomPlaylist(message, songs, { title: "My playlist name" });
+   */
+  async playCustomPlaylist(message, urls, properties = {}, playSkip = false) {
+    if (!urls.length) return;
+    let songs = urls.map(song => ytdl.getBasicInfo(song));
+    songs = await Promise.all(songs);
+    let resolvedSongs = songs.filter(song => song);
+    let duration = resolvedSongs.reduce((prev, next) => prev + parseInt(next.videoDetails.lengthSeconds), 0);
+    let thumbnails = resolvedSongs[0].videoDetails.thumbnail.thumbnails;
+    let playlist = {
+      thumbnail: thumbnails[thumbnails.length - 1].url,
+      ...properties,
+      user: message.author,
+      items: resolvedSongs,
+      total_items: resolvedSongs.length,
+      duration: duration,
+      formattedDuration: formatDuration(duration * 1000)
+    };
+    this._playlistHandler(message, playlist, playSkip);
+  }
+
+  /**
    * PLay / add a playlist
    * @async
    * @private
    * @ignore
    * @param {Discord.Message} message The message from guild channel
-   * @param {string} url Youtube playlist url
+   * @param {(string|object)} arg2 Youtube playlist url
    */
-  async _playlistHandler(message, url, unshift = false) {
+  async _playlistHandler(message, arg2, unshift = false) {
     try {
-      let playlist = await ytpl(url);
-      playlist.user = message.user;
-      let videos = playlist.items.map(vid => {
-        return {
-          ...vid,
-          formattedDuration: vid.duration,
-          duration: toSecond(vid.duration)
-        }
-      });
-      playlist.duration = videos.reduce((prev, next) => prev + next.duration, 0);
-      playlist.formattedDuration = duration(playlist.duration * 1000);
+      let playlist = null
+      if (typeof arg2 == "string") {
+        playlist = await ytpl(arg2);
+        playlist.items = playlist.items.map(vid => {
+          return {
+            ...vid,
+            formattedDuration: vid.duration,
+            duration: toSecond(vid.duration)
+          }
+        });
+        playlist.user = message.author;
+        playlist.duration = playlist.items.reduce((prev, next) => prev + next.duration, 0);
+        playlist.formattedDuration = formatDuration(playlist.duration * 1000);
+        playlist.thumbnail = playlist.items[0].thumbnail;
+      } else if (typeof arg2 == "object")
+        playlist = arg2;
+      if (!playlist) throw Error("PlaylistError");
+      let videos = [...playlist.items];
       if (this.isPlaying(message)) {
         let queue = this._addVideosToQueue(message, videos, unshift);
         if (unshift) this.skip(message);
@@ -373,7 +413,7 @@ class DisTube extends EventEmitter {
     if (!queue) throw new Error("NotPlaying");
     let songs = videos.map(v => new Song(v, message.author));
     if (unshift) {
-      let playing = queue.songs.shift;
+      let playing = queue.songs.shift();
       queue.songs.unshift(playing, ...songs);
     } else queue.songs.push(...songs);
     queue.updateDuration();
@@ -762,7 +802,7 @@ module.exports = DisTube;
 
 /**
  * Youtube playlist author
- * @typedef {Object} ytpl_author
+ * @typedef {object} ytpl_author
  * @prop {string} id Channel id
  * @prop {string} name Channel name
  * @prop {string} avatar Channel avatar
@@ -773,26 +813,27 @@ module.exports = DisTube;
 
 /**
  * Youtube playlist item
- * @typedef {Object} ytpl_item
+ * @typedef {object} ytpl_item
  * @prop {string} id Video id
  * @prop {string} url Video url
  * @prop {string} url_simple Video shorten url
  * @prop {string} title Video title
  * @prop {string} thumbnail Video thumbnail url
  * @prop {string} formattedDuration Video duration `hh:mm:ss`
- * @prop {string} duration Video duration in seconds
+ * @prop {number} duration Video duration in seconds
  * @prop {ytpl_author} author Video channel
  */
 
 /**
  * Youtube playlist info
- * @typedef {Object} ytpl_result
+ * @typedef {object} ytpl_result
  * @prop {Discord.User} user `@1.2.0` Requested user
  * @prop {string} id Playlist id
  * @prop {string} url Playlist url
  * @prop {string} title Playlist title
+ * @prop {string} thumbnail `@2.1.0` Playlist thumbnail url
  * @prop {string} formattedDuration Playlist duration `hh:mm:ss`
- * @prop {string} duration Playlist duration in seconds
+ * @prop {number} duration Playlist duration in seconds
  * @prop {number} total_items The number of videos in the playlist
  * @prop {ytpl_author} author The playlist creator
  * @prop {ytpl_item[]} items Array of videos

@@ -68,12 +68,27 @@ declare class DisTube extends EventEmitter {
      */
     playSkip(message: Discord.Message, song: (string | Song)): Promise<void>;
     /**
+     * `@2.1.0` Play or add array of Youtube video urls.
+     * `DisTube#event:playList` and `DisTube#event:addList` will be emitted
+     * with `playlist`'s properties include `properties` parameter's properties,
+     * `user`, `items`, `total_items`, `duration`, `formattedDuration` like `ytpl_result`
+     * @async
+     * @param {Discord.Message} message The message from guild channel
+     * @param {string[]} urls Array of Youtube url
+     * @param {object} [properties={}] Additional properties such as `title`
+     * @param {boolean} [playSkip=false] Weather or not play this playlist instantly
+     * @example
+     *     let songs = ["https://www.youtube.com/watch?v=xxx", "https://www.youtube.com/watch?v=yyy"];
+     *     distube.playCustomPlaylist(message, songs, { title: "My playlist name" });
+     */
+    playCustomPlaylist(message: Discord.Message, urls: string[], properties?: object, playSkip?: boolean): Promise<void>;
+    /**
      * PLay / add a playlist
      * @async
      * @private
      * @ignore
      * @param {Discord.Message} message The message from guild channel
-     * @param {string} url Youtube playlist url
+     * @param {(string|object)} arg2 Youtube playlist url
      */
     private _playlistHandler;
     /**
