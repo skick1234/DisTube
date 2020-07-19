@@ -19,6 +19,11 @@ class Song {
      */
     this.user = user;
     /**
+     * Youtube video id
+     * @type {string}
+     */
+    this.id = video.videoDetails ? video.videoDetails.videoId : video.id;
+    /**
      * Song name aka video title.
      * @type {string}
      */
@@ -37,12 +42,12 @@ class Song {
      * Video URL.
      * @type {string}
      */
-    this.url = video.id ? ("https://www.youtube.com/watch?v=" + video.id) : ("https://www.youtube.com/watch?v=" + video.videoDetails.videoId);
+    this.url = "https://www.youtube.com/watch?v=" + this.id;
     /**
      * Video thumbnail.
      * @type {string}
      */
-    this.thumbnail = video.thumbnail || video.video_thumbnail || video.videoDetails.thumbnail.thumbnails[video.videoDetails.thumbnail.thumbnails.length - 1].url;
+    this.thumbnail = "https://img.youtube.com/vi/" + this.id + "/maxresdefault.jpg";
     /**
      * Related videos (for autoplay mode) 
      * @type {ytdl.relatedVideo[]}
