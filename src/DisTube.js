@@ -124,6 +124,7 @@ class DisTube extends EventEmitter {
           let info = await ytdl.getBasicInfo(song);
           resolvedSong = new Song(info, message.author);
         }
+        if (!resolvedSong) return;
         if (this.isPlaying(message)) {
           let queue = this._addToQueue(message, resolvedSong);
           this.emit("addSong", message, queue, queue.songs[queue.songs.length - 1]);
