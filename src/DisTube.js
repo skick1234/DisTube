@@ -45,7 +45,7 @@ const DisTubeOptions = {
 
 const ffmpegFilters = {
   "3d": "apulsator=hz=0.125",
-  bassboost: 'equalizer=f=40:width_type=h:width=50:g=10,dynaudnorm=f=150:g=15',
+  bassboost: 'dynaudnorm=f=150:g=15,equalizer=f=40:width_type=h:width=50:g=10',
   echo: "aecho=0.8:0.9:1000:0.3",
   karaoke: "stereotools=mlev=0.015625",
   nightcore: "asetrate=44100*1.25,aresample=44100,equalizer=f=40:width_type=h:width=50:g=10",
