@@ -332,20 +332,19 @@ class DisTube extends EventEmitter {
    * @returns {Queue}
    */
   async _newQueue(message, song) {
-    try {
-      let queue = new Queue();
-      this.guildQueues.set(message.guild.id, queue);
-      let voice = message.member.voice.channel;
-      if (!voice) throw new Error("NotInVoice");
-      queue.connection = await voice.join();
-      queue.songs.push(song);
-      queue.updateDuration();
-      this._playSong(message);
-      return queue;
-    } catch (err) {
+    let queue = new Queue();
+    this.guildQueues.set(message.guild.id, queue);
+    let voice = message.member.voice.channel;
+    if (!voice) throw new Error("NotInVoice");
+    queue.connection = await voice.join().catch(err => {
       console.error(err);
       this._deleteQueue(message);
-    }
+      throw Error("CanNotJoinVoiceChannel");
+    });
+    queue.songs.push(song);
+    queue.updateDuration();
+    this._playSong(message);
+    return queue;
   }
 
   /**
@@ -686,9 +685,6 @@ class DisTube extends EventEmitter {
       let nextSong = new Song(song, this.client.user);
       this._addToQueue(message, nextSong);
     } else {
-      queue.playing = false;
-      this.guildQueues.delete(message.guild.id);
-      queue.connection.channel.leave();
       this.emit("noRelated", message);
     }
     return queue;
@@ -756,7 +752,7 @@ class DisTube extends EventEmitter {
         if (queue.stopped) return;
         if (this._isVoiceChannelEmpty(queue)) {
           if (this.options.leaveOnEmpty) {
-            this.guildQueues.delete(message.guild.id);
+            this._deleteQueue(message);
             queue.connection.channel.leave();
           }
           return this.emit("empty", message);
@@ -764,13 +760,11 @@ class DisTube extends EventEmitter {
         if (queue.repeatMode == 2 && !queue.skipped) queue.songs.push(queue.songs[0]);
         if (queue.songs.length <= 1 && (queue.skipped || !queue.repeatMode)) {
           if (queue.autoplay) await this.runAutoplay(message);
-          else {
-            queue.playing = false;
-            if (this.options.leaveOnFinish && !queue.stopped) {
-              this.guildQueues.delete(message.guild.id);
+          if (queue.songs.length <= 1) {
+            this._deleteQueue(message);
+            if (this.options.leaveOnFinish && !queue.stopped)
               queue.connection.channel.leave();
-            }
-            return this.emit("finish", message);
+            if (!queue.autoplay) return this.emit("finish", message);
           }
         }
         queue.skipped = false;
