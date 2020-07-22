@@ -133,6 +133,7 @@ class DisTube extends EventEmitter {
           this.emit("playSong", message, queue, queue.songs[0]);
         }
       } catch (e) {
+        console.error(song + " play encountered an error: " + e);
         this.emit("error", message, e);
       }
     }
@@ -176,6 +177,7 @@ class DisTube extends EventEmitter {
           this.emit("playSong", message, queue, queue.songs[0]);
         }
       } catch (e) {
+        console.error(song + " playSkip encountered an error: " + e);
         this.emit("error", message, e);
       }
     }
@@ -196,22 +198,27 @@ class DisTube extends EventEmitter {
    *     distube.playCustomPlaylist(message, songs, { title: "My playlist name" });
    */
   async playCustomPlaylist(message, urls, properties = {}, playSkip = false) {
-    if (!urls.length) return;
-    let songs = urls.map(song => ytdl.getBasicInfo(song));
-    songs = await Promise.all(songs);
-    let resolvedSongs = songs.filter(song => song);
-    let duration = resolvedSongs.reduce((prev, next) => prev + parseInt(next.videoDetails.lengthSeconds), 0);
-    let thumbnails = resolvedSongs[0].videoDetails.thumbnail.thumbnails;
-    let playlist = {
-      thumbnail: thumbnails[thumbnails.length - 1].url,
-      ...properties,
-      user: message.author,
-      items: resolvedSongs,
-      total_items: resolvedSongs.length,
-      duration: duration,
-      formattedDuration: formatDuration(duration * 1000)
-    };
-    this._playlistHandler(message, playlist, playSkip);
+    try {
+      if (!urls.length) return;
+      let songs = urls.map(song => ytdl.getBasicInfo(song).catch(e => { throw Error(song + " encountered an error: " + e) }));
+      songs = await Promise.all(songs);
+      let resolvedSongs = songs.filter(song => song);
+      let duration = resolvedSongs.reduce((prev, next) => prev + parseInt(next.videoDetails.lengthSeconds), 0);
+      let thumbnails = resolvedSongs[0].videoDetails.thumbnail.thumbnails;
+      let playlist = {
+        thumbnail: thumbnails[thumbnails.length - 1].url,
+        ...properties,
+        user: message.author,
+        items: resolvedSongs,
+        total_items: resolvedSongs.length,
+        duration: duration,
+        formattedDuration: formatDuration(duration * 1000)
+      };
+      this._playlistHandler(message, playlist, playSkip);
+    } catch (e) {
+      console.error(e);
+      this.emit("error", message, e);
+    }
   }
 
   /**
@@ -223,37 +230,33 @@ class DisTube extends EventEmitter {
    * @param {(string|object)} arg2 Youtube playlist url
    */
   async _playlistHandler(message, arg2, unshift = false) {
-    try {
-      let playlist = null
-      if (typeof arg2 == "string") {
-        playlist = await ytpl(arg2);
-        playlist.items = playlist.items.map(vid => {
-          return {
-            ...vid,
-            formattedDuration: vid.duration,
-            duration: toSecond(vid.duration)
-          }
-        });
-        playlist.user = message.author;
-        playlist.duration = playlist.items.reduce((prev, next) => prev + next.duration, 0);
-        playlist.formattedDuration = formatDuration(playlist.duration * 1000);
-        playlist.thumbnail = playlist.items[0].thumbnail;
-      } else if (typeof arg2 == "object")
-        playlist = arg2;
-      if (!playlist) throw Error("PlaylistError");
-      let videos = [...playlist.items];
-      if (this.isPlaying(message)) {
-        let queue = this._addVideosToQueue(message, videos, unshift);
-        if (unshift) this.skip(message);
-        else this.emit("addList", message, queue, playlist);
-      } else {
-        let resolvedSong = new Song(videos.shift(), message.author);
-        let queue = await this._newQueue(message, resolvedSong).catch((e) => this.emit("error", message, e));
-        this._addVideosToQueue(message, videos);
-        this.emit("playList", message, queue, playlist, queue.songs[0]);
-      }
-    } catch (err) {
-      this.emit("error", message, err);
+    let playlist = null
+    if (typeof arg2 == "string") {
+      playlist = await ytpl(arg2);
+      playlist.items = playlist.items.map(vid => {
+        return {
+          ...vid,
+          formattedDuration: vid.duration,
+          duration: toSecond(vid.duration)
+        }
+      });
+      playlist.user = message.author;
+      playlist.duration = playlist.items.reduce((prev, next) => prev + next.duration, 0);
+      playlist.formattedDuration = formatDuration(playlist.duration * 1000);
+      playlist.thumbnail = playlist.items[0].thumbnail;
+    } else if (typeof arg2 == "object")
+      playlist = arg2;
+    if (!playlist) throw Error("PlaylistNotFound");
+    let videos = [...playlist.items];
+    if (this.isPlaying(message)) {
+      let queue = this._addVideosToQueue(message, videos, unshift);
+      if (unshift) this.skip(message);
+      else this.emit("addList", message, queue, playlist);
+    } else {
+      let resolvedSong = new Song(videos.shift(), message.author);
+      let queue = await this._newQueue(message, resolvedSong).catch((e) => this.emit("error", message, e));
+      this._addVideosToQueue(message, videos);
+      this.emit("playList", message, queue, playlist, queue.songs[0]);
     }
   }
 
@@ -270,7 +273,7 @@ class DisTube extends EventEmitter {
     let search = await ytsr(string, { limit: 12 });
     let videos = search.items.filter(val => val.duration || val.type == 'video');
     if (videos.length == 0) throw Error("NotFound");
-    videos = videos.map(video => ytdl.getBasicInfo(video.link));
+    videos = videos.map(video => ytdl.getBasicInfo(video.link).catch(e => { throw Error(video.link + " encountered an error: " + e) }));
     videos = await Promise.all(videos);
     let songs = videos.map(video => new Song(video, null));
     return songs;
@@ -283,42 +286,36 @@ class DisTube extends EventEmitter {
    * @ignore
    * @param {Discord.Message} message The message from guild channel
    * @param {string} name The string search for
+   * @throws {Error}
    * @returns {Song} Song info
    */
   async _searchSong(message, name) {
-    try {
-      let search = await ytsr(name, { limit: 12 });
-      let videos = search.items.filter(val => val.duration || val.type == 'video');
-      if (videos.length == 0) {
-        this.emit("error", message, "Not found!");
-        return;
-      }
-      let song = videos[0];
-      if (this.options.searchSongs) {
-        try {
-          this.emit("searchResult", message, videos);
-          let answers = await message.channel.awaitMessages(m => m.author.id === message.author.id, {
-            max: 1,
-            time: 60000,
-            errors: ["time"]
-          })
-          if (!answers.first()) throw Error();
-          let index = parseInt(answers.first().content, 10);
-          if (isNaN(index) || index > videos.length || index < 1) {
-            this.emit("searchCancel", message);
-            return;
-          }
-          song = videos[index - 1];
-        } catch {
+    let search = await ytsr(name, { limit: 12 });
+    let videos = search.items.filter(val => val.duration || val.type == 'video');
+    if (videos.length == 0) throw "SearchNotFound";
+    let song = videos[0];
+    if (this.options.searchSongs) {
+      try {
+        this.emit("searchResult", message, videos);
+        let answers = await message.channel.awaitMessages(m => m.author.id === message.author.id, {
+          max: 1,
+          time: 60000,
+          errors: ["time"]
+        })
+        if (!answers.first()) throw Error();
+        let index = parseInt(answers.first().content, 10);
+        if (isNaN(index) || index > videos.length || index < 1) {
           this.emit("searchCancel", message);
           return;
         }
+        song = videos[index - 1];
+      } catch {
+        this.emit("searchCancel", message);
+        return;
       }
-      song = await ytdl.getBasicInfo(song.link)
-      return new Song(song, message.author);
-    } catch (e) {
-      this.emit("error", message, e);
     }
+    song = await ytdl.getBasicInfo(song.link)
+    return new Song(song, message.author);
   }
 
   /**
@@ -734,63 +731,69 @@ class DisTube extends EventEmitter {
     let queue = this.getQueue(message);
     if (!queue) return;
     let encoderArgs = queue.filter ? ["-af", ffmpegFilters[queue.filter]] : null;
-    let dispatcher = queue.connection.play(ytdl(queue.songs[0].url, {
-      opusEncoded: true,
-      filter: 'audioonly',
-      quality: 'highestaudio',
-      highWaterMark: 1 << 25,
-      // encoderArgs: ['-af', filters.map(filter => ffmpegFilters[filter]).join(",")]
-      encoderArgs
-    }), {
-      highWaterMark: 1,
-      type: 'opus',
-      volume: queue.volume / 100
-    });
-    queue.dispatcher = dispatcher;
-    dispatcher
-      .on("finish", async () => {
-        if (queue.stopped) return;
-        if (this._isVoiceChannelEmpty(queue)) {
-          if (this.options.leaveOnEmpty) {
-            this._deleteQueue(message);
-            queue.connection.channel.leave();
-          }
-          return this.emit("empty", message);
-        }
-        if (queue.repeatMode == 2 && !queue.skipped) queue.songs.push(queue.songs[0]);
-        if (queue.songs.length <= 1 && (queue.skipped || !queue.repeatMode)) {
-          if (queue.autoplay) await this.runAutoplay(message);
-          if (queue.songs.length <= 1) {
-            this._deleteQueue(message);
-            if (this.options.leaveOnFinish && !queue.stopped)
-              queue.connection.channel.leave();
-            if (!queue.autoplay) return this.emit("finish", message);
-          }
-        }
-        queue.skipped = false;
-        let playSongEmit = false;
-        if (
-          !this.options.emitNewSongOnly || // emitNewSongOnly == false -> emit playSong
-          (
-            queue.repeatMode != 1 && // Not loop a song
-            queue.songs[0].url !== queue.songs[1].url // Not same song
-          )
-        ) playSongEmit = true;
-
-        if (queue.repeatMode != 1 || queue.skipped)
-          queue.removeFirstSong();
-        else queue.updateDuration();
-        if (playSongEmit) this.emit("playSong", message, queue, queue.songs[0]);
-        return this._playSong(message);
-      })
-      .on("error", () => {
-        this.emit("error", message, "NextSong");
-        queue.removeFirstSong();
-        if (queue.songs.length > 0) {
-          this.emit("playSong", message, queue, queue.songs[0]);
-          this._playSong(message);
-        }
+    try {
+      let dispatcher = queue.connection.play(ytdl(queue.songs[0].url, {
+        opusEncoded: true,
+        filter: 'audioonly',
+        quality: 'highestaudio',
+        highWaterMark: 1 << 25,
+        // encoderArgs: ['-af', filters.map(filter => ffmpegFilters[filter]).join(",")]
+        encoderArgs
+      }), {
+        highWaterMark: 1,
+        type: 'opus',
+        volume: queue.volume / 100
       });
+      queue.dispatcher = dispatcher;
+      dispatcher
+        .on("finish", async () => {
+          if (queue.stopped) return;
+          if (this._isVoiceChannelEmpty(queue)) {
+            if (this.options.leaveOnEmpty) {
+              this._deleteQueue(message);
+              queue.connection.channel.leave();
+            }
+            return this.emit("empty", message);
+          }
+          if (queue.repeatMode == 2 && !queue.skipped) queue.songs.push(queue.songs[0]);
+          if (queue.songs.length <= 1 && (queue.skipped || !queue.repeatMode)) {
+            if (queue.autoplay) await this.runAutoplay(message);
+            if (queue.songs.length <= 1) {
+              this._deleteQueue(message);
+              if (this.options.leaveOnFinish && !queue.stopped)
+                queue.connection.channel.leave();
+              if (!queue.autoplay) return this.emit("finish", message);
+            }
+          }
+          queue.skipped = false;
+          let playSongEmit = false;
+          if (
+            !this.options.emitNewSongOnly || // emitNewSongOnly == false -> emit playSong
+            (
+              queue.repeatMode != 1 && // Not loop a song
+              queue.songs[0].url !== queue.songs[1].url // Not same song
+            )
+          ) playSongEmit = true;
+
+          if (queue.repeatMode != 1 || queue.skipped)
+            queue.removeFirstSong();
+          else queue.updateDuration();
+          if (playSongEmit) this.emit("playSong", message, queue, queue.songs[0]);
+          return this._playSong(message);
+        })
+        .on("error", e => {
+          console.error(e);
+          this.emit("error", message, "ErrorWhenPlayingSong");
+          queue.removeFirstSong();
+          if (queue.songs.length > 0) {
+            this.emit("playSong", message, queue, queue.songs[0]);
+            this._playSong(message);
+          }
+        });
+    } catch (e) {
+      console.error(queue.songs[0].id + " video encountered: " + e);
+      this.emit("error", message, `Cannot play \`${queue.songs[0].id}\`. Error: \`${e}\``);
+    }
   }
 }
 
