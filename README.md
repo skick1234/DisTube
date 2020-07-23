@@ -17,7 +17,7 @@ Discord support server: https://discord.gg/feaDd9h
 ## Installation
 
 ```npm
-npm install distube @discord/opus --save
+npm install distube @discordjs/opus --save
 ```
 
 Require [discord.js](https://discord.js.org) v12 and [FFMPEG](https://www.ffmpeg.org/download.html).
