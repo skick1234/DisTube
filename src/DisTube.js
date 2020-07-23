@@ -34,7 +34,7 @@ const toSecond = (string) => {
  * @prop {boolean} [leaveOnFinish=false] Whether or not leaving voice channel when the queue ends.
  * @prop {boolean} [leaveOnStop=true] Whether or not leaving voice channel after using DisTube.stop() function.
  * @prop {boolean} [searchSongs=false] Whether or not searching for multiple songs to select manually, DisTube will play the first result if `false`
- * @prop {number} [highWaterMark=1<<24] ytdl's highWaterMark option.
+ * @prop {number} [highWaterMark=1<<24] `@v2.2.0` ytdl's highWaterMark option.
  */
 const DisTubeOptions = {
   emitNewSongOnly: false,
