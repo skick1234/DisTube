@@ -1,9 +1,9 @@
+/// <reference types="node" />
 export = DisTube;
 import { EventEmitter } from "events";
+import Discord from "discord.js";
 import Queue from "./Queue";
 import Song from "./Song";
-import Discord from "discord.js";
-
 /**
  * Class representing a DisTube.
  * @extends EventEmitter
@@ -42,6 +42,7 @@ declare class DisTube extends EventEmitter {
      * @async
      * @param {Discord.Message} message The message from guild channel
      * @param {(string|Song)} song `Youtube url`|`Search string`|`DisTube#Song`
+     * @throws {Error} If an error encountered
      * @example
      * client.on('message', (message) => {
      *     if (!message.content.startsWith(config.prefix)) return;
@@ -57,6 +58,7 @@ declare class DisTube extends EventEmitter {
      * @async
      * @param {Discord.Message} message The message from guild channel
      * @param {(string|Song)} song `Youtube url`|`Search string`|`DisTube#Song`
+     * @throws {Error} If an error encountered
      * @example
      * client.on('message', (message) => {
      *     if (!message.content.startsWith(config.prefix)) return;
@@ -71,12 +73,13 @@ declare class DisTube extends EventEmitter {
      * `@2.1.0` Play or add array of Youtube video urls.
      * `DisTube#event:playList` and `DisTube#event:addList` will be emitted
      * with `playlist`'s properties include `properties` parameter's properties,
-     * `user`, `items`, `total_items`, `duration`, `formattedDuration` like `ytpl_result`
+     * `user`, `items`, `total_items`, `duration`, `formattedDuration`, `thumbnail` like `ytpl_result`
      * @async
      * @param {Discord.Message} message The message from guild channel
      * @param {string[]} urls Array of Youtube url
      * @param {object} [properties={}] Additional properties such as `title`
      * @param {boolean} [playSkip=false] Weather or not play this playlist instantly
+     * @throws {Error} If an error encountered
      * @example
      *     let songs = ["https://www.youtube.com/watch?v=xxx", "https://www.youtube.com/watch?v=yyy"];
      *     distube.playCustomPlaylist(message, songs, { title: "My playlist name" });
@@ -98,16 +101,18 @@ declare class DisTube extends EventEmitter {
      * @async
      * @param {string} string The string search for
      * @throws {NotFound} If not found
+     * @throws {Error} If an error encountered
      * @returns {Song[]} Array of results
      */
     search(string: string): Song[];
     /**
-     * Search for a song, fire DisTube#event:error if not found.
+     * Search for a song, fire `DisTube#event:error` if not found.
      * @async
      * @private
      * @ignore
      * @param {Discord.Message} message The message from guild channel
      * @param {string} name The string search for
+     * @throws {Error}
      * @returns {Song} Song info
      */
     private _searchSong;
@@ -353,7 +358,6 @@ declare class DisTube extends EventEmitter {
      * @param {Discord.Message} message The message from guild channel
      */
     private _playSong;
-
     /**
      *  Emitted after DisTube add playlist to guild queue
      *
@@ -460,13 +464,14 @@ declare namespace DisTubeOptions {
     export const leaveOnFinish: boolean;
     export const leaveOnStop: boolean;
     export const searchSongs: boolean;
+    export const highWaterMark: number;
 }
 /**
  * DisTube options.
  */
 type DisTubeOptions = {
     /**
-     * `@1.3.0`. If `true`, DisTube#event:playSong is not emitted when looping a song or next song is the same as the previous one
+     * `@1.3.0`. If `true`, `DisTube#event:playSong` is not emitted when looping a song or next song is the same as the previous one
      */
     emitNewSongOnly?: boolean;
     /**
@@ -485,6 +490,10 @@ type DisTubeOptions = {
      * Whether or not searching for multiple songs to select manually, DisTube will play the first result if `false`
      */
     searchSongs?: boolean;
+    /**
+     * ytdl's highWaterMark option.
+     */
+    highWaterMark?: number;
 };
 /**
  * Youtube playlist author
@@ -546,7 +555,7 @@ type ytpl_item = {
     /**
      * Video duration in seconds
      */
-    duration: string;
+    duration: number;
     /**
      * Video channel
      */
@@ -573,13 +582,17 @@ type ytpl_result = {
      */
     title: string;
     /**
+     * `@2.1.0` Playlist thumbnail url
+     */
+    thumbnail: string;
+    /**
      * Playlist duration `hh:mm:ss`
      */
     formattedDuration: string;
     /**
      * Playlist duration in seconds
      */
-    duration: string;
+    duration: number;
     /**
      * The number of videos in the playlist
      */

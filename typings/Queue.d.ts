@@ -1,10 +1,13 @@
 export = Queue;
-import Discord from "discord.js";
-import Song from "./Song";
+import Discord from "discord.js"
 /**
  * Represents a queue.
  */
 declare class Queue {
+    /**
+    * Create a queue.
+    */
+    constructor(message: any);
     /**
      * Stream dispatcher.
      * @type {Discord.StreamDispatcher}
@@ -24,7 +27,7 @@ declare class Queue {
      * List of songs
      * @type {Song[]}
      */
-    songs: Song[];
+    songs: import("./Song")[];
     /**
      * Queue's duration.
      * @type {Number}
@@ -71,6 +74,11 @@ declare class Queue {
      * @type {string}
      */
     filter: string;
+    /**
+     * `@2.2.0` Message which initialize the queue
+     * @type {Discord.Message}
+     */
+    initMessage: Discord.Message;
     removeFirstSong(): void;
     updateDuration(): void;
 }

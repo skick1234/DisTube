@@ -1,6 +1,5 @@
 export = Song;
 import ytdl from "ytdl-core";
-import DisTube from "./DisTube";
 import Discord from "discord.js";
 /** Class representing a song. */
 declare class Song {
@@ -9,7 +8,7 @@ declare class Song {
      * @param {(ytdl.videoInfo|DisTube.ytpl_item)} video Youtube video info
      * @param {Discord.User} user Requested user
      */
-    constructor(video: (ytdl.videoInfo | DisTube.ytpl_item), user: Discord.User);
+    constructor(video: (ytdl.videoInfo | import("./DisTube").ytpl_item), user: Discord.User);
     /**
      * User requested
      * @type {Discord.User}
