@@ -85,7 +85,7 @@ class DisTube extends EventEmitter {
      * Collection of guild queues
      * @type {Map<string, Queue>}
      */
-    this.guildQueues = new Map();
+    this.guildQueues = new Discord.Collection();
 
     /**
      * DisTube options
@@ -94,13 +94,30 @@ class DisTube extends EventEmitter {
     this.options = DisTubeOptions;
     for (let key in otp)
       this.options[key] = otp[key];
+
+
+    if (this.options.leaveOnEmpty) client.on("voiceStateUpdate", (oldState, newState) => {
+      if (!oldState.channel) return;
+      let queue = this.guildQueues.find((gQueue) => gQueue.connection && gQueue.connection.channel.id == oldState.channelID);
+      if (queue && this._isVoiceChannelEmpty(queue)) {
+        setTimeout((queue) => {
+          let guildID = queue.connection.channel.guild.id;
+          if (this._isVoiceChannelEmpty(queue) && this.guildQueues.has(guildID)) {
+            queue.connection.channel.leave();
+            this.emit("empty", queue.initMessage);
+            this.guildQueues.delete(guildID);
+          }
+        }, 60000, queue)
+      }
+    })
   }
 
   /**
    * Play / add a song from Youtube video url or playlist from Youtube playlist url. Search and play a song if it is not a valid url.
    * @async
    * @param {Discord.Message} message The message from guild channel
-   * @param {(string|Song)} song `Youtube url`|`Search string`|`{@link DisTube#Song}`
+   * @param {(string|Song)} song `Youtube url`|`Search string`|`{@link DisTube#Song}
+   * @throws {Error} If an error encountered
    * @example
    * client.on('message', (message) => {
    *     if (!message.content.startsWith(config.prefix)) return;
@@ -135,8 +152,9 @@ class DisTube extends EventEmitter {
           this.emit("playSong", message, queue, queue.songs[0]);
         }
       } catch (e) {
-        console.error(song + " play encountered an error: " + e);
-        this.emit("error", message, e);
+        let err = Error(`play(${song}) encountered: ${e}`);
+        this.emit("error", message, err);
+        throw err;
       }
     }
   }
@@ -146,6 +164,7 @@ class DisTube extends EventEmitter {
    * @async
    * @param {Discord.Message} message The message from guild channel
    * @param {(string|Song)} song `Youtube url`|`Search string`|`{@link DisTube#Song}`
+   * @throws {Error} If an error encountered
    * @example
    * client.on('message', (message) => {
    *     if (!message.content.startsWith(config.prefix)) return;
@@ -179,8 +198,9 @@ class DisTube extends EventEmitter {
           this.emit("playSong", message, queue, queue.songs[0]);
         }
       } catch (e) {
-        console.error(song + " playSkip encountered an error: " + e);
-        this.emit("error", message, e);
+        let err = Error(`playSkip(${song}) encountered: ${e}`);
+        this.emit("error", message, err);
+        throw err;
       }
     }
   }
@@ -195,6 +215,7 @@ class DisTube extends EventEmitter {
    * @param {string[]} urls Array of Youtube url
    * @param {object} [properties={}] Additional properties such as `title`
    * @param {boolean} [playSkip=false] Weather or not play this playlist instantly
+   * @throws {Error} If an error encountered
    * @example
    *     let songs = ["https://www.youtube.com/watch?v=xxx", "https://www.youtube.com/watch?v=yyy"];
    *     distube.playCustomPlaylist(message, songs, { title: "My playlist name" });
@@ -218,8 +239,8 @@ class DisTube extends EventEmitter {
       };
       this._playlistHandler(message, playlist, playSkip);
     } catch (e) {
-      console.error(e);
       this.emit("error", message, e);
+      throw e;
     }
   }
 
@@ -269,6 +290,7 @@ class DisTube extends EventEmitter {
    * @async
    * @param {string} string The string search for
    * @throws {NotFound} If not found
+   * @throws {Error} If an error encountered
    * @returns {Song[]} Array of results
    */
   async search(string) {
@@ -331,14 +353,13 @@ class DisTube extends EventEmitter {
    * @returns {Queue}
    */
   async _newQueue(message, song) {
-    let queue = new Queue();
+    let queue = new Queue(message);
     this.guildQueues.set(message.guild.id, queue);
     let voice = message.member.voice.channel;
     if (!voice) throw new Error("NotInVoice");
     queue.connection = await voice.join().catch(err => {
-      console.error(err);
       this._deleteQueue(message);
-      throw Error("CanNotJoinVoiceChannel");
+      throw Error("DisTubeCanNotJoinVChannel: " + err);
     });
     queue.songs.push(song);
     queue.updateDuration();
@@ -750,11 +771,9 @@ class DisTube extends EventEmitter {
       dispatcher
         .on("finish", async () => {
           if (queue.stopped) return;
-          if (this._isVoiceChannelEmpty(queue)) {
-            if (this.options.leaveOnEmpty) {
-              this._deleteQueue(message);
-              queue.connection.channel.leave();
-            }
+          if (this.options.leaveOnEmpty && this._isVoiceChannelEmpty(queue)) {
+            this._deleteQueue(message);
+            queue.connection.channel.leave();
             return this.emit("empty", message);
           }
           if (queue.repeatMode == 2 && !queue.skipped) queue.songs.push(queue.songs[0]);
@@ -773,7 +792,7 @@ class DisTube extends EventEmitter {
             !this.options.emitNewSongOnly || // emitNewSongOnly == false -> emit playSong
             (
               queue.repeatMode != 1 && // Not loop a song
-              queue.songs[0].url !== queue.songs[1].url // Not same song
+              (!queue.songs[1] || queue.songs[0].id !== queue.songs[1].id) // Not same song
             )
           ) playSongEmit = true;
 
@@ -785,7 +804,7 @@ class DisTube extends EventEmitter {
         })
         .on("error", e => {
           console.error(e);
-          this.emit("error", message, "ErrorWhenPlayingSong");
+          this.emit("error", message, "DispatcherErrorWhenPlayingSong");
           queue.removeFirstSong();
           if (queue.songs.length > 0) {
             this.emit("playSong", message, queue, queue.songs[0]);
@@ -793,7 +812,6 @@ class DisTube extends EventEmitter {
           }
         });
     } catch (e) {
-      console.error(queue.songs[0].id + " video encountered: " + e);
       this.emit("error", message, `Cannot play \`${queue.songs[0].id}\`. Error: \`${e}\``);
     }
   }
@@ -870,8 +888,7 @@ module.exports = DisTube;
  */
 
 /**
- * Emitted when there is no user in VoiceChannel.
- * DisTube will leave voice channel if `{@link DisTubeOptions}.leaveOnEmpty` is `true`
+ * Emitted when there is no user in VoiceChannel and `{@link DisTubeOptions}.leaveOnEmpty` is `true`.
  *
  * @event DisTube#empty
  * @param {Discord.Message} message The message from guild channel
