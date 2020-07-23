@@ -40,7 +40,7 @@
     "discord-ytdl-core": "^4.0.5",
     "moment": "^2.27.0",
     "ytpl": "^0.1.22",
-    "ytsr": "^0.1.16"
+    "ytsr": "^0.1.18"
   },
   "devDependencies": {
     "@discordjs/opus": "^0.3.2",
