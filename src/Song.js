@@ -19,7 +19,7 @@ class Song {
      */
     this.user = user;
     /**
-     * `@2.1.4`Youtube video id
+     * `@2.1.4` Youtube video id
      * @type {string}
      */
     this.id = video.videoDetails ? video.videoDetails.videoId : video.id;
