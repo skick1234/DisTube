@@ -9,7 +9,7 @@ class Queue {
   /**
   * Create a queue.
   */
-  constructor() {
+  constructor(message) {
     /**
      * Stream dispatcher.
      * @type {Discord.StreamDispatcher}
@@ -76,6 +76,11 @@ class Queue {
      * @type {string}
      */
     this.filter = null;
+    /**
+     * `@2.2.0` Message which initialize the queue
+     * @type {Discord.Message}
+     */
+    this.initMessage = message;
   }
 
   removeFirstSong() {
