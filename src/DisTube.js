@@ -34,6 +34,7 @@ const toSecond = (string) => {
  * @prop {boolean} [leaveOnFinish=false] Whether or not leaving voice channel when the queue ends.
  * @prop {boolean} [leaveOnStop=true] Whether or not leaving voice channel after using DisTube.stop() function.
  * @prop {boolean} [searchSongs=false] Whether or not searching for multiple songs to select manually, DisTube will play the first result if `false`
+ * @prop {number} [highWaterMark=1<<24] ytdl's highWaterMark option.
  */
 const DisTubeOptions = {
   emitNewSongOnly: false,
@@ -41,6 +42,7 @@ const DisTubeOptions = {
   leaveOnFinish: false,
   leaveOnStop: true,
   searchSongs: false,
+  highWaterMark: 1 << 24
 };
 
 const ffmpegFilters = {
@@ -736,7 +738,7 @@ class DisTube extends EventEmitter {
         opusEncoded: true,
         filter: 'audioonly',
         quality: 'highestaudio',
-        highWaterMark: 1 << 25,
+        highWaterMark: this.options.highWaterMark,
         // encoderArgs: ['-af', filters.map(filter => ffmpegFilters[filter]).join(",")]
         encoderArgs
       }), {

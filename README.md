@@ -78,7 +78,7 @@ const Discord = require('discord.js'),
     };
 
 // Create a new DisTube
-const distube = new DisTube(client, { searchSongs: true, emitNewSongOnly: true });
+const distube = new DisTube(client, { searchSongs: true, emitNewSongOnly: true, highWaterMark: 1 << 25 });
 
 client.on('ready', () => {
     console.log(`Logged in as ${client.user.tag}!`);
