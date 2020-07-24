@@ -67,7 +67,8 @@ See more definitions, properties and events details in the [Documentation page](
 
 ## Example Bot
 
-- [DisTube-Bot](https://github.com/skick1234/DisTube-Bot) - [Invite Bot](https://discord.com/api/oauth2/authorize?client_id=730011243041128478&permissions=3238976&scope=bot)
+- [DisTube-Bot](https://botsfordiscord.com/bot/730011243041128478) - A music bot with reaction controller, filters, DJ mode, and voting.
+- [DisTube-Example](https://github.com/skick1234/DisTube-Example) - Example bot with simple command handler.
 
 ```javascript
 // DisTube example bot, definitions, properties and events details in the Documentation page.
