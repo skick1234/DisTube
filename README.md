@@ -5,8 +5,10 @@
 </div>
 
 # DisTube
+
 A Node.js module to easily manage music commands and play Youtube song on Discord without any API key.
-Discord support server: https://discord.gg/feaDd9h
+
+[DisTube Support Server](https://discord.gg/feaDd9h)
 
 ## Features
 
