@@ -300,7 +300,7 @@ declare class DisTube extends EventEmitter {
      *     const command = args.shift();
      *     if (command == "autoplay") {
      *         let mode = distube.toggleAutoplay(message);
-     *         message.channel.send("Set autoplay mode to `" + mode ? "On" : "Off" + "`");
+     *         message.channel.send("Set autoplay mode to `" + (mode ? "On" : "Off") + "`");
      *     }
      * });
      */
