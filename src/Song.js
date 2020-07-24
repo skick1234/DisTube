@@ -47,7 +47,7 @@ class Song {
      * Video thumbnail.
      * @type {string}
      */
-    this.thumbnail = "https://img.youtube.com/vi/" + this.id + "/maxresdefault.jpg";
+    this.thumbnail = video.videoDetails ? video.videoDetails.thumbnail.thumbnails[video.videoDetails.thumbnail.thumbnails.length - 1].url : video.thumbnail;
     /**
      * Related videos (for autoplay mode) 
      * @type {ytdl.relatedVideo[]}
