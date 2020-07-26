@@ -783,7 +783,8 @@ class DisTube extends EventEmitter {
               this._deleteQueue(message);
               if (this.options.leaveOnFinish && !queue.stopped)
                 queue.connection.channel.leave();
-              if (!queue.autoplay) return this.emit("finish", message);
+              if (!queue.autoplay) this.emit("finish", message);
+              return;
             }
           }
           queue.skipped = false;
