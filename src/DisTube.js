@@ -619,7 +619,8 @@ class DisTube extends EventEmitter {
   setRepeatMode(message, mode = null) {
     let queue = this.getQueue(message);
     if (!queue) throw new Error("NotPlaying");
-    if (mode == null) queue.repeatMode = (queue.repeatMode + 1) % 3;
+    mode = parseInt(mode);
+    if (!mode && mode != 0) queue.repeatMode = (queue.repeatMode + 1) % 3;
     else if (queue.repeatMode == mode) queue.repeatMode = 0;
     else queue.repeatMode = mode;
     return queue.repeatMode;
