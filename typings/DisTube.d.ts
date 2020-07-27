@@ -10,6 +10,10 @@ import Song from "./Song";
  */
 declare class DisTube extends EventEmitter {
     /**
+     * `@2.2.4` DisTube's current version.
+     */
+    static get version(): string;
+    /**
      * Create new DisTube.
      * @param {Discord.Client} client Discord.JS client
      * @param {DisTubeOptions} [otp={}] Custom DisTube options

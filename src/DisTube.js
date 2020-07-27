@@ -60,6 +60,11 @@ const ffmpegFilters = {
  */
 class DisTube extends EventEmitter {
   /**
+   * `@2.2.4` DisTube's current version.
+   * @returns {string}
+   */
+  static get version() { return require("../package.json").version }
+  /**
    * Create new DisTube.
    * @param {Discord.Client} client Discord.JS client
    * @param {DisTubeOptions} [otp={}] Custom DisTube options
