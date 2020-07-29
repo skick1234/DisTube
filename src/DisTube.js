@@ -358,6 +358,7 @@ class DisTube extends EventEmitter {
    */
   async _newQueue(message, song) {
     let queue = new Queue(message);
+    this.emit("initQueue", queue);
     this.guildQueues.set(message.guild.id, queue);
     let voice = message.member.voice.channel;
     if (!voice) throw new Error("NotInVoice");
@@ -922,6 +923,18 @@ module.exports = DisTube;
  * @param {Discord.Message} message The message from guild channel
  * @example
  * distube.on("finish", message => message.channel.send("No more song in queue"));
+ */
+
+/**
+ * Emitted when DisTube initialize a queue to change queue default properties.
+ *
+ * @event DisTube#initQueue
+ * @param {Queue} queue The guild queue
+ * @example
+ * distube.on("initQueue", queue => {
+ *     queue.autoplay = false;
+ *     queue.volume = 100;
+ * });
  */
 
 /**

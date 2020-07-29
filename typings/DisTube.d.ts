@@ -408,6 +408,19 @@ declare class DisTube extends EventEmitter {
     on(event: "error", listener: (message: Discord.Message, error: Error) => void): this;
 
     /**
+     * Emitted when DisTube initialize a queue to change queue default properties.
+     *
+     * @event DisTube#initQueue
+     * @param {Queue} queue The guild queue
+     * @example
+     * distube.on("initQueue", queue => {
+     *     queue.autoplay = false;
+     *     queue.volume = 100;
+     * });
+     */
+    on(event: "initQueue", listener: (queue: Queue) => void): this;
+
+    /**
      * Emitted after DisTube play the first song of the playlist
      * and add the rest to the guild queue
      *
