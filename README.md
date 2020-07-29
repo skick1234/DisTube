@@ -67,7 +67,7 @@ See more definitions, properties and events details in the [Documentation page](
 
 ## Example Bot
 
-- [DisTube-Bot](https://botsfordiscord.com/bot/730011243041128478) - A music bot with reaction controller, filters, DJ mode, and voting.
+- [DisTube-Bot](https://skick.xyz/DisTube) - A music bot with reaction controller, filters, DJ mode, user's custom playlist and voting.
 - [DisTube-Example](https://github.com/skick1234/DisTube-Example) - Example bot with simple command handler.
 
 ```javascript

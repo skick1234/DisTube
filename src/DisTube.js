@@ -1,7 +1,6 @@
 const ytdl = require("discord-ytdl-core"),
   ytsr = require("ytsr"),
-  // ytpl = require("ytpl"),
-  ytpl = require("../node-ytpl"), // ytpl quick fixes before author update it.
+  ytpl = require("ytpl"),
   { EventEmitter } = require("events"),
   Queue = require("./Queue"),
   Song = require("./Song"),
@@ -212,7 +211,7 @@ class DisTube extends EventEmitter {
 
   /**
    * `@2.1.0` Play or add array of Youtube video urls.
-   * `{@link DisTube#event:playList}` and `{@link DisTube#event:addList}` will be emitted
+   * `{@link DisTube#event:playList}` or `{@link DisTube#event:addList}` will be emitted
    * with `playlist`'s properties include `properties` parameter's properties,
    * `user`, `items`, `total_items`, `duration`, `formattedDuration`, `thumbnail` like `{@link ytpl_result}`
    * @async
