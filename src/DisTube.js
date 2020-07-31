@@ -29,19 +29,21 @@ const toSecond = (string) => {
  * DisTube options.
  * @typedef {object} DisTubeOptions
  * @prop {boolean} [emitNewSongOnly=false] `@1.3.0`. If `true`, {@link DisTube#event:playSong} is not emitted when looping a song or next song is the same as the previous one
+ * @prop {number} [highWaterMark=1<<24] `@2.2.0` ytdl's highWaterMark option.
  * @prop {boolean} [leaveOnEmpty=true] Whether or not leaving voice channel if channel is empty when finish the current song. (Avoid accident leaving)
  * @prop {boolean} [leaveOnFinish=false] Whether or not leaving voice channel when the queue ends.
  * @prop {boolean} [leaveOnStop=true] Whether or not leaving voice channel after using DisTube.stop() function.
  * @prop {boolean} [searchSongs=false] Whether or not searching for multiple songs to select manually, DisTube will play the first result if `false`
- * @prop {number} [highWaterMark=1<<24] `@v2.2.0` ytdl's highWaterMark option.
+ * @prop {string} [youtubeCookie=null] `@2.4.0` Youtube cookie to prevent rate limit (Error 429). You can get your YouTube cookie by navigating to YouTube in a web browser, opening up dev tools, and typing "document.cookie" in the console
  */
 const DisTubeOptions = {
+  highWaterMark: 1 << 24,
   emitNewSongOnly: false,
   leaveOnEmpty: true,
   leaveOnFinish: false,
   leaveOnStop: true,
   searchSongs: false,
-  highWaterMark: 1 << 24
+  youtubeCookie: null,
 };
 
 const ffmpegFilters = {
@@ -760,12 +762,14 @@ class DisTube extends EventEmitter {
     let queue = this.getQueue(message);
     if (!queue) return;
     let encoderArgs = queue.filter ? ["-af", ffmpegFilters[queue.filter]] : null;
+    let requestOptions = this.options.youtubeCookie ? { headers: { cookie: this.options.youtubeCookie } } : null;
     try {
       let dispatcher = queue.connection.play(ytdl(queue.songs[0].url, {
         opusEncoded: true,
         filter: 'audioonly',
         quality: 'highestaudio',
         highWaterMark: this.options.highWaterMark,
+        requestOptions,
         // encoderArgs: ['-af', filters.map(filter => ffmpegFilters[filter]).join(",")]
         encoderArgs
       }), {
@@ -926,7 +930,7 @@ module.exports = DisTube;
  */
 
 /**
- * Emitted when DisTube initialize a queue to change queue default properties.
+ * `@2.3.0` Emitted when DisTube initialize a queue to change queue default properties.
  *
  * @event DisTube#initQueue
  * @param {Queue} queue The guild queue
