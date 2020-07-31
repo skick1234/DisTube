@@ -46,13 +46,31 @@ const DisTubeOptions = {
   youtubeCookie: null,
 };
 
+/**
+ * DisTube audio filters.
+ * @typedef {string} Filter
+ * @prop {string} 3d `@2.0.0`
+ * @prop {string} bassboost `@2.0.0`
+ * @prop {string} echo `@2.0.0` 
+ * @prop {string} flanger `@2.4.0`
+ * @prop {string} gate `@2.4.0`
+ * @prop {string} haas `@2.4.0`
+ * @prop {string} karaoke `@2.0.0` 
+ * @prop {string} nightcore `@2.0.0`
+ * @prop {string} reverse `@2.4.0`
+ * @prop {string} vaporwave `@2.0.0`
+ */
 const ffmpegFilters = {
   "3d": "apulsator=hz=0.125",
   bassboost: 'dynaudnorm=f=150:g=15,equalizer=f=40:width_type=h:width=50:g=10',
   echo: "aecho=0.8:0.9:1000:0.3",
-  karaoke: "stereotools=mlev=0.015625",
-  nightcore: "asetrate=44100*1.25,aresample=44100,equalizer=f=40:width_type=h:width=50:g=10",
-  vaporwave: "asetrate=44100*0.8,aresample=44100,atempo=1.1"
+  flanger: 'flanger',
+  gate: 'agate',
+  haas: 'haas',
+  karaoke: "stereotools=mlev=0.1",
+  nightcore: "asetrate=48000*1.25,aresample=48000,equalizer=f=40:width_type=h:width=50:g=10",
+  reverse: 'areverse',
+  vaporwave: "asetrate=48000*0.8,aresample=48000,atempo=1.1",
 }
 
 /**
@@ -720,10 +738,10 @@ class DisTube extends EventEmitter {
 
   /**
    * `@2.0.0` Enable or disable a filter of the queue, replay the playing song.
-   * Available filters: `3d`, `bassboost`, `echo`, `karaoke`, `nightcore`, `vaporwave`
+   * Available filters: {@link Filter}
    * 
    * @param {Discord.Message} message The message from guild channel
-   * @param {string} filter A filter name
+   * @param {Filter} filter A filter name
    * @returns {string} Current queue's filter name.
    * @example
    * client.on('message', (message) => {
