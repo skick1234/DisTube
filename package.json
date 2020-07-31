@@ -37,10 +37,10 @@
   },
   "homepage": "https://distube.js.org/",
   "dependencies": {
-    "discord-ytdl-core": "^4.0.5",
+    "discord-ytdl-core": "^4.0.6",
     "moment": "^2.27.0",
-    "ytpl": "^0.2.2",
-    "ytsr": "^0.1.19"
+    "ytpl": "^0.2.3",
+    "ytsr": "^0.1.20"
   },
   "devDependencies": {
     "@discordjs/opus": "^0.3.2",
