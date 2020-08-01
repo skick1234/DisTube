@@ -125,7 +125,7 @@ class DisTube extends EventEmitter {
     this.requestOptions = null;
 
     if (this.options.leaveOnEmpty) client.on("voiceStateUpdate", (oldState, newState) => {
-      if (!oldState.channel) return;
+      if (!oldState || !oldState.channel) return;
       let queue = this.guildQueues.find((gQueue) => gQueue.connection && gQueue.connection.channel.id == oldState.channelID);
       if (queue && this._isVoiceChannelEmpty(queue)) {
         setTimeout((queue) => {
