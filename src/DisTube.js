@@ -34,7 +34,8 @@ const toSecond = (string) => {
  * @prop {boolean} [leaveOnFinish=false] Whether or not leaving voice channel when the queue ends.
  * @prop {boolean} [leaveOnStop=true] Whether or not leaving voice channel after using DisTube.stop() function.
  * @prop {boolean} [searchSongs=false] Whether or not searching for multiple songs to select manually, DisTube will play the first result if `false`
- * @prop {string} [youtubeCookie=null] `@2.4.0` Youtube cookie to prevent rate limit (Error 429). You can get your YouTube cookie by navigating to YouTube in a web browser, opening up dev tools, and typing "document.cookie" in the console
+ * @prop {string} [youtubeCookie=null] `@2.4.0` Youtube cookie to prevent rate limit (Error 429). You must fill `youtubeIdentityToken` if you use this. You can get your YouTube cookie by navigating to YouTube in a web browser, opening up dev tools, and typing "document.cookie" in the console
+ * @prop {string} [youtubeIdentityToken=null] `@2.4.0` 
  */
 const DisTubeOptions = {
   highWaterMark: 1 << 24,
@@ -44,6 +45,7 @@ const DisTubeOptions = {
   leaveOnStop: true,
   searchSongs: false,
   youtubeCookie: null,
+  youtubeIdentityToken: null
 };
 
 /**
@@ -119,6 +121,8 @@ class DisTube extends EventEmitter {
     for (let key in otp)
       this.options[key] = otp[key];
 
+    // this.requestOptions = this.options.youtubeIdentityToken ? { headers: { cookie: this.options.youtubeCookie, 'x-youtube-identity-token': this.options.youtubeIdentityToken } } : null;
+    this.requestOptions = null;
 
     if (this.options.leaveOnEmpty) client.on("voiceStateUpdate", (oldState, newState) => {
       if (!oldState.channel) return;
@@ -134,6 +138,7 @@ class DisTube extends EventEmitter {
         }, 60000, queue)
       }
     })
+
   }
 
   /**
@@ -164,7 +169,7 @@ class DisTube extends EventEmitter {
         } else if (!ytdl.validateURL(song))
           resolvedSong = await this._searchSong(message, song);
         else {
-          let info = await ytdl.getBasicInfo(song);
+          let info = await ytdl.getBasicInfo(song, { requestOptions: this.requestOptions });
           resolvedSong = new Song(info, message.author);
         }
         if (!resolvedSong) return;
@@ -211,7 +216,7 @@ class DisTube extends EventEmitter {
           song.user = message.author;
           resolvedSong = song;
         } else {
-          let info = await ytdl.getBasicInfo(song);
+          let info = await ytdl.getBasicInfo(song, { requestOptions: this.requestOptions });
           resolvedSong = new Song(info, message.author);
         }
         if (this.isPlaying(message)) {
@@ -247,7 +252,7 @@ class DisTube extends EventEmitter {
   async playCustomPlaylist(message, urls, properties = {}, playSkip = false) {
     try {
       if (!urls.length) return;
-      let songs = urls.map(song => ytdl.getBasicInfo(song).catch(e => { throw Error(song + " encountered an error: " + e) }));
+      let songs = urls.map(song => ytdl.getBasicInfo(song, { requestOptions: this.requestOptions }).catch(e => { throw Error(song + " encountered an error: " + e) }));
       songs = await Promise.all(songs);
       let resolvedSongs = songs.filter(song => song);
       let duration = resolvedSongs.reduce((prev, next) => prev + parseInt(next.videoDetails.lengthSeconds), 0);
@@ -321,7 +326,7 @@ class DisTube extends EventEmitter {
     let search = await ytsr(string, { limit: 12 });
     let videos = search.items.filter(val => val.duration || val.type == 'video');
     if (videos.length == 0) throw Error("NotFound");
-    videos = videos.map(video => ytdl.getBasicInfo(video.link).catch(e => { throw Error(video.link + " encountered an error: " + e) }));
+    videos = videos.map(video => ytdl.getBasicInfo(video.link, { requestOptions: this.requestOptions }).catch(e => { throw Error(video.link + " encountered an error: " + e) }));
     videos = await Promise.all(videos);
     let songs = videos.map(video => new Song(video, null));
     return songs;
@@ -362,7 +367,7 @@ class DisTube extends EventEmitter {
         return;
       }
     }
-    song = await ytdl.getBasicInfo(song.link)
+    song = await ytdl.getBasicInfo(song.link, { requestOptions: this.requestOptions })
     return new Song(song, message.author);
   }
 
@@ -721,13 +726,13 @@ class DisTube extends EventEmitter {
     let song = queue.songs[0];
     let related = song.related;
     if (!related) {
-      related = await ytdl.getBasicInfo(song.url);
+      related = await ytdl.getBasicInfo(song.url, { requestOptions: this.requestOptions });
       related = related.related_videos;
     }
     message.autoplay = true;
     related = related.filter(v => v.length_seconds != 'undefined')
     if (related && related[0]) {
-      let song = await ytdl.getBasicInfo(related[0].id);
+      let song = await ytdl.getBasicInfo(related[0].id, { requestOptions: this.requestOptions });
       let nextSong = new Song(song, this.client.user);
       this._addToQueue(message, nextSong);
     } else {
@@ -780,16 +785,15 @@ class DisTube extends EventEmitter {
     let queue = this.getQueue(message);
     if (!queue) return;
     let encoderArgs = queue.filter ? ["-af", ffmpegFilters[queue.filter]] : null;
-    let requestOptions = this.options.youtubeCookie ? { headers: { cookie: this.options.youtubeCookie } } : null;
     try {
       let dispatcher = queue.connection.play(ytdl(queue.songs[0].url, {
         opusEncoded: true,
         filter: 'audioonly',
         quality: 'highestaudio',
         highWaterMark: this.options.highWaterMark,
-        requestOptions,
+        requestOptions: this.requestOptions,
         // encoderArgs: ['-af', filters.map(filter => ffmpegFilters[filter]).join(",")]
-        encoderArgs
+        encoderArgs,
       }), {
         highWaterMark: 1,
         type: 'opus',
