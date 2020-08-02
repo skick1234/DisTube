@@ -32,7 +32,7 @@ class Song {
      * Song duration.
      * @type {number}
      */
-    this.duration = video.duration || parseInt(video.videoDetails.lengthSeconds) || 0;
+    this.duration = video.duration || parseInt(video.videoDetails.lengthSeconds, 10) || 0;
     /**
      * Formatted duration string `hh:mm:ss`.
      * @type {string}

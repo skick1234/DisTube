@@ -97,7 +97,7 @@ declare class DisTube extends EventEmitter {
      * @param {Discord.Message} message The message from guild channel
      * @param {(string|object)} arg2 Youtube playlist url
      */
-    private _playlistHandler;
+    private _handlePlaylist;
     /**
      * `@2.0.0` Search for a song. You can customize how user answers instead of send a number
      * (default of `DisTube#play()` search when `searchSongs` is `true`).
@@ -106,9 +106,9 @@ declare class DisTube extends EventEmitter {
      * @param {string} string The string search for
      * @throws {NotFound} If not found
      * @throws {Error} If an error encountered
-     * @returns {Song[]} Array of results
+     * @returns {Promise<Song[]>} Array of results
      */
-    search(string: string): Song[];
+    search(string: string): Promise<Song[]>;
     /**
      * Search for a song, fire `DisTube#event:error` if not found.
      * @async
@@ -128,7 +128,7 @@ declare class DisTube extends EventEmitter {
      * @param {Discord.Message} message The message from guild channel
      * @param {ytdl.videoInfo} video Song to play
      * @throws {NotInVoice} if user not in a voice channel
-     * @returns {Queue}
+     * @returns {Promise<Queue>}
      */
     private _newQueue;
     /**
@@ -333,9 +333,9 @@ declare class DisTube extends EventEmitter {
      * Add related song to the queue
      * @async
      * @param {Discord.Message} message The message from guild channel
-     * @returns {Queue} The guild queue
+     * @returns {Promise<Queue>} The guild queue
      */
-    runAutoplay(message: Discord.Message): Queue;
+    runAutoplay(message: Discord.Message): Promise<Queue>;
     /**
      * `@2.0.0` Enable or disable a filter of the queue, replay the playing song.
      * Available filters: `3d`, `bassboost`, `echo`, `karaoke`, `nightcore`, `vaporwave`
