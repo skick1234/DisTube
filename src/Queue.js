@@ -1,6 +1,4 @@
-const duration = require("./duration"),
-  Song = require("./Song"),
-  Discord = require("discord.js");
+const duration = require("./duration");
 
 /**
  * Represents a queue.
