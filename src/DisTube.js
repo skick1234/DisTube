@@ -124,7 +124,7 @@ class DisTube extends EventEmitter {
     // this.requestOptions = this.options.youtubeIdentityToken ? { headers: { cookie: this.options.youtubeCookie, 'x-youtube-identity-token': this.options.youtubeIdentityToken } } : null;
     this.requestOptions = null;
 
-    if (this.options.leaveOnEmpty) client.on("voiceStateUpdate", (oldState, newState) => {
+    if (this.options.leaveOnEmpty) client.on("voiceStateUpdate", (oldState) => {
       if (!oldState || !oldState.channel) return;
       let queue = this.guildQueues.find((gQueue) => gQueue.connection && gQueue.connection.channel.id == oldState.channelID);
       if (queue && this._isVoiceChannelEmpty(queue)) {
@@ -145,8 +145,7 @@ class DisTube extends EventEmitter {
    * Play / add a song from Youtube video url or playlist from Youtube playlist url. Search and play a song if it is not a valid url.
    * @async
    * @param {Discord.Message} message The message from guild channel
-   * @param {(string|Song)} song `Youtube url`|`Search string`|`{@link DisTube#Song}
-   * @throws {Error} If an error encountered
+   * @param {(string|Song)} song `Youtube url`|`Search string`|`{@link DisTube#Song}`
    * @example
    * client.on('message', (message) => {
    *     if (!message.content.startsWith(config.prefix)) return;
@@ -158,10 +157,10 @@ class DisTube extends EventEmitter {
    */
   async play(message, song) {
     if (!song) return;
-    if (ytpl.validateURL(song))
-      this._playlistHandler(message, song);
-    else {
-      try {
+    try {
+      if (ytpl.validateURL(song))
+        await this._playlistHandler(message, song);
+      else {
         let resolvedSong;
         if (typeof song === "object") {
           song.user = message.author;
@@ -180,11 +179,9 @@ class DisTube extends EventEmitter {
           let queue = await this._newQueue(message, resolvedSong);
           this.emit("playSong", message, queue, queue.songs[0]);
         }
-      } catch (e) {
-        let err = Error(`play(${song}) encountered: ${e}`);
-        this.emit("error", message, err);
-        throw err;
       }
+    } catch (e) {
+      this.emit("error", message, Error(`play(${song}) encountered: ${e}`));
     }
   }
 
@@ -205,10 +202,10 @@ class DisTube extends EventEmitter {
    */
   async playSkip(message, song) {
     if (!song) return;
-    if (ytpl.validateURL(song))
-      this._playlistHandler(message, song, true);
-    else {
-      try {
+    try {
+      if (ytpl.validateURL(song))
+        await this._playlistHandler(message, song, true);
+      else {
         let resolvedSong;
         if (!ytdl.validateURL(song))
           resolvedSong = await this._searchSong(message, song);
@@ -226,11 +223,9 @@ class DisTube extends EventEmitter {
           let queue = await this._newQueue(message, resolvedSong);
           this.emit("playSong", message, queue, queue.songs[0]);
         }
-      } catch (e) {
-        let err = Error(`playSkip(${song}) encountered: ${e}`);
-        this.emit("error", message, err);
-        throw err;
       }
+    } catch (e) {
+      this.emit("error", message, Error(`play(${song}) encountered: ${e}`));
     }
   }
 
@@ -266,10 +261,9 @@ class DisTube extends EventEmitter {
         duration: duration,
         formattedDuration: formatDuration(duration * 1000)
       };
-      this._playlistHandler(message, playlist, playSkip);
+      await this._playlistHandler(message, playlist, playSkip);
     } catch (e) {
       this.emit("error", message, e);
-      throw e;
     }
   }
 
@@ -326,9 +320,9 @@ class DisTube extends EventEmitter {
     let search = await ytsr(string, { limit: 12 });
     let videos = search.items.filter(val => val.duration || val.type == 'video');
     if (videos.length == 0) throw Error("NotFound");
-    videos = videos.map(video => ytdl.getBasicInfo(video.link, { requestOptions: this.requestOptions }).catch(e => { throw Error(video.link + " encountered an error: " + e) }));
+    videos = videos.map(video => ytdl.getBasicInfo(video.link, { requestOptions: this.requestOptions }).catch(() => null));
     videos = await Promise.all(videos);
-    let songs = videos.map(video => new Song(video, null));
+    let songs = videos.filter(v => v).map(video => new Song(video, null));
     return songs;
   }
 
