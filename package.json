@@ -6,7 +6,8 @@
   "typings": "typings/DisTube.d.ts",
   "scripts": {
     "types": "tsc -p .",
-    "docs": "jsdoc -c jsdoc.json"
+    "docs": "jsdoc -c jsdoc.json",
+    "djs/docgen": "npx docgen --source src --output docs/master.json"
   },
   "repository": {
     "type": "git",
@@ -35,6 +36,9 @@
   "bugs": {
     "url": "https://github.com/skick1234/distube/issues"
   },
+  "funding": {
+    "url": "https://patreon.com/DisTube"
+  },
   "homepage": "https://distube.js.org/",
   "dependencies": {
     "discord-ytdl-core": "^4.0.6",
@@ -47,6 +51,7 @@
     "@types/node": "^14.0.27",
     "clean-jsdoc-theme": "^2.2.11",
     "discord.js": "^12.2.0",
+    "discord.js-docgen": "github:skick1234/docgen",
     "jsdoc": "^3.6.5",
     "typescript": "^3.9.6"
   }
