@@ -145,7 +145,7 @@ class DisTube extends EventEmitter {
    * Resolve a Song
    * @async
    * @param {Discord.Message} message The message from guild channel
-   * @param {(string|Song)} song `Youtube url`|`Search string`|`{@link DisTube#Song}`
+   * @param {(string|Song)} song Youtube url | Search string | {@link DisTube#Song}
    * @private
    * @ignore
    * @returns {Promise<Song>} Resolved Song
@@ -177,7 +177,7 @@ class DisTube extends EventEmitter {
    * Play / add a song from Youtube video url or playlist from Youtube playlist url. Search and play a song if it is not a valid url.
    * @async
    * @param {Discord.Message} message The message from guild channel
-   * @param {(string|Song)} song `Youtube url`|`Search string`|`{@link DisTube#Song}`
+   * @param {(string|Song)} song Youtube url | Search string | {@link DisTube#Song}
    * @example
    * client.on('message', (message) => {
    *     if (!message.content.startsWith(config.prefix)) return;
@@ -203,7 +203,7 @@ class DisTube extends EventEmitter {
    * `@2.0.0` Skip the playing song and play a song or a playlist
    * @async
    * @param {Discord.Message} message The message from guild channel
-   * @param {(string|Song)} song `Youtube url`|`Search string`|`{@link DisTube#Song}`
+   * @param {(string|Song)} song Youtube url | Search string | {@link DisTube#Song}
    * @throws {Error} If an error encountered
    * @example
    * client.on('message', (message) => {
@@ -228,9 +228,9 @@ class DisTube extends EventEmitter {
 
   /**
    * `@2.1.0` Play or add array of Youtube video urls.
-   * `{@link DisTube#event:playList}` or `{@link DisTube#event:addList}` will be emitted
+   * {@link DisTube#event:playList} or {@link DisTube#event:addList} will be emitted
    * with `playlist`'s properties include `properties` parameter's properties,
-   * `user`, `items`, `total_items`, `duration`, `formattedDuration`, `thumbnail` like `{@link ytpl_result}`
+   * `user`, `items`, `total_items`, `duration`, `formattedDuration`, `thumbnail` like {@link ytpl_result}
    * @async
    * @param {Discord.Message} message The message from guild channel
    * @param {string[]} urls Array of Youtube url
@@ -305,8 +305,8 @@ class DisTube extends EventEmitter {
 
   /**
    * `@2.0.0` Search for a song. You can customize how user answers instead of send a number
-   * (default of `{@link DisTube#play}()` search when `searchSongs` is `true`).
-   * Then use `{@link DisTube#play}(message, aResultToPlay)` or `{@link DisTube#playSkip}()` to play it.
+   * (default of {@link DisTube#play}() search when `searchSongs` is `true`).
+   * Then use {@link DisTube#play}(message, aResultToPlay) or {@link DisTube#playSkip}() to play it.
    * @async
    * @param {string} string The string search for
    * @throws {NotFound} If not found
@@ -595,7 +595,7 @@ class DisTube extends EventEmitter {
    * @param {Discord.Message} message The message from guild channel
    * @param {number} num The song number to play
    * @returns {Queue} The guild queue
-   * @throws {InvalidSong} if `num` is invalid number `(0 < num < {@link Queue#songs}.length)`
+   * @throws {InvalidSong} if `num` is invalid number (0 < num < {@link Queue#songs}.length)
    * @example
    * client.on('message', (message) => {
    *     if (!message.content.startsWith(config.prefix)) return;
@@ -913,7 +913,7 @@ module.exports = DisTube;
  */
 
 /**
- * Emitted when there is no user in VoiceChannel and `{@link DisTubeOptions}.leaveOnEmpty` is `true`.
+ * Emitted when there is no user in VoiceChannel and {@link DisTubeOptions}.leaveOnEmpty is `true`.
  *
  * @event DisTube#empty
  * @param {Discord.Message} message The message from guild channel
@@ -922,7 +922,7 @@ module.exports = DisTube;
  */
 
 /**
- * Emitted when `{@link DisTube}` encounters an error.
+ * Emitted when {@link DisTube} encounters an error.
  *
  * @event DisTube#error
  * @param {Discord.Message} message The message from guild channel
@@ -935,7 +935,7 @@ module.exports = DisTube;
 
 /**
  * Emitted when there is no more song in the queue and {@link Queue#autoplay} is `false`.
- * DisTube will leave voice channel if `{@link DisTubeOptions}.leaveOnFinish` is `true`
+ * DisTube will leave voice channel if {@link DisTubeOptions}.leaveOnFinish is `true`
  *
  * @event DisTube#finish
  * @param {Discord.Message} message The message from guild channel
@@ -956,7 +956,7 @@ module.exports = DisTube;
  */
 
 /**
- * Emitted when `{@link Queue#autoplay}` is `true`, the `{@link Queue#songs}` is empty and
+ * Emitted when {@link Queue#autoplay} is `true`, the {@link Queue#songs} is empty and
  * DisTube cannot find related songs to play
  *
  * @event DisTube#noRelated
@@ -983,7 +983,7 @@ module.exports = DisTube;
 
 /**
  * Emitted when DisTube play a song.
- * If `{@link DisTubeOptions}.emitNewSongOnly` is `true`, event is not emitted when looping a song or next song is the previous one
+ * If {@link DisTubeOptions}.emitNewSongOnly is `true`, event is not emitted when looping a song or next song is the previous one
  *
  * @event DisTube#playSong
  * @param {Discord.Message} message The message from guild channel
@@ -997,7 +997,7 @@ module.exports = DisTube;
  */
 
 /**
- * Emitted when `{@link DisTubeOptions}.searchSongs` is `true`.
+ * Emitted when {@link DisTubeOptions}.searchSongs is `true`.
  * Search will be canceled if user's next message is invalid number or timeout (60s)
  *
  * @event DisTube#searchCancel
@@ -1008,7 +1008,7 @@ module.exports = DisTube;
  */
 
 /**
- * Emitted when `{@link DisTubeOptions}.searchSongs` is `true`.
+ * Emitted when {@link DisTubeOptions}.searchSongs is `true`.
  * DisTube will wait for user's next message to choose song manually
  * if song param of {@link DisTube#play}() is invalid url
  *
