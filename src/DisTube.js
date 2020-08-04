@@ -82,7 +82,8 @@ const ffmpegFilters = {
 class DisTube extends EventEmitter {
   /**
    * `@2.2.4` DisTube's current version.
-   * @returns {string}
+   * @type {string}
+   * @readonly
    */
   static get version() { return require("../package.json").version }
   /**
@@ -194,7 +195,7 @@ class DisTube extends EventEmitter {
       else
         await this._handleSong(message, await this._resolveSong(message, song));
     } catch (e) {
-      this.emit("error", message, Error(`play(${song}) encountered: ${e}`));
+      this.emit("error", message, `play(${song}) encountered: ${e}`);
     }
   }
 
@@ -221,7 +222,7 @@ class DisTube extends EventEmitter {
       else
         await this._handleSong(message, await this._resolveSong(message, song), true);
     } catch (e) {
-      this.emit("error", message, Error(`playSkip(${song}) encountered: ${e}`));
+      this.emit("error", message, `playSkip(${song}) encountered: ${e}`);
     }
   }
 
