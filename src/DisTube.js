@@ -163,6 +163,7 @@ class DisTube extends EventEmitter {
   }
 
   async _handleSong(message, song, skip = false) {
+    if (!song) return;
     if (this.isPlaying(message)) {
       let queue = this._addToQueue(message, song, skip);
       if (skip) this.skip(message);
