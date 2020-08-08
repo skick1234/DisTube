@@ -80,6 +80,7 @@ const ffmpegFilters = {
  * @extends EventEmitter
  */
 class DisTube extends EventEmitter {
+  get version() { return require("../package.json").version }
   /**
    * `@2.2.4` DisTube's current version.
    * @type {string}

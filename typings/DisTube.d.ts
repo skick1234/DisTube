@@ -10,7 +10,15 @@ import Song from "./Song";
  */
 declare class DisTube extends EventEmitter {
     /**
+     * `@2.3.5` DisTube's current version.
+     * @type {string}
+     * @readonly
+     */
+    get version(): string;
+    /**
      * `@2.2.4` DisTube's current version.
+     * @type {string}
+     * @readonly
      */
     static get version(): string;
     /**
