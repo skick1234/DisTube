@@ -2,14 +2,13 @@
 
 const duration = require("./duration"),
   Discord = require("discord.js"),
-  ytdl = require("ytdl-core"),
-  DisTube = require("./DisTube");
+  ytdl = require("ytdl-core");
 
 /** Class representing a song. */
 class Song {
   /**
    * Create a song.
-   * @param {(ytdl.videoInfo|DisTube.ytpl_item)} video Youtube video info
+   * @param {(ytdl.videoInfo|ytpl_item)} video Youtube video info
    * @param {Discord.User} user Requested user
    */
   constructor(video, user) {
