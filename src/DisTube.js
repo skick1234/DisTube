@@ -93,10 +93,11 @@ class DisTube extends EventEmitter {
    * @example
    * const Discord = require('discord.js'),
    *     DisTube = require('distube'),
-   *     client = new Discord.Client(), 
+   *     client = new Discord.Client();
    * // Create a new DisTube
    * const distube = new DisTube(client, { searchSongs: true });
    * // client.DisTube = distube // make it access easily
+   * client.login("Your Discord Bot Token")
    */
   constructor(client, otp = {}) {
     super();
