@@ -34,8 +34,8 @@ const toSecond = (string) => {
  * @prop {boolean} [leaveOnFinish=false] Whether or not leaving voice channel when the queue ends.
  * @prop {boolean} [leaveOnStop=true] Whether or not leaving voice channel after using {@link DisTube#stop()} function.
  * @prop {boolean} [searchSongs=false] Whether or not searching for multiple songs to select manually, DisTube will play the first result if `false`
- * @prop {string} [youtubeCookie=null] `@2.4.0` Youtube cookie to prevent rate limit (Error 429). You must fill `youtubeIdentityToken` if you use this. You can get your YouTube cookie by navigating to YouTube in a web browser, opening up dev tools, and typing "document.cookie" in the console
- * @prop {string} [youtubeIdentityToken=null] `@2.4.0` 
+ * @prop {string} [youtubeCookie=null] `@2.4.0` Youtube cookie to prevent rate limit (Error 429).
+ * @prop {string} [youtubeIdentityToken=null] `@2.4.0`
  */
 const DisTubeOptions = {
   highWaterMark: 1 << 24,
@@ -124,8 +124,7 @@ class DisTube extends EventEmitter {
     for (let key in otp)
       this.options[key] = otp[key];
 
-    // this.requestOptions = this.options.youtubeIdentityToken ? { headers: { cookie: this.options.youtubeCookie, 'x-youtube-identity-token': this.options.youtubeIdentityToken } } : null;
-    this.requestOptions = null;
+    this.requestOptions = this.options.youtubeCookie ? { headers: { cookie: this.options.youtubeCookie, 'x-youtube-identity-token': this.options.youtubeIdentityToken } } : null;
 
     if (this.options.leaveOnEmpty) client.on("voiceStateUpdate", (oldState) => {
       if (!oldState || !oldState.channel) return;
@@ -207,7 +206,6 @@ class DisTube extends EventEmitter {
    * @async
    * @param {Discord.Message} message The message from guild channel
    * @param {(string|Song)} song Youtube url | Search string | {@link Song}
-   * @throws {Error} If an error encountered
    * @example
    * client.on('message', (message) => {
    *     if (!message.content.startsWith(config.prefix)) return;
@@ -239,7 +237,6 @@ class DisTube extends EventEmitter {
    * @param {string[]} urls Array of Youtube url
    * @param {object} [properties={}] Additional properties such as `title`
    * @param {boolean} [playSkip=false] Weather or not play this playlist instantly
-   * @throws {Error} If an error encountered
    * @example
    *     let songs = ["https://www.youtube.com/watch?v=xxx", "https://www.youtube.com/watch?v=yyy"];
    *     distube.playCustomPlaylist(message, songs, { title: "My playlist name" });
@@ -371,7 +368,7 @@ class DisTube extends EventEmitter {
    * @private
    * @ignore
    * @param {Discord.Message} message The message from guild channel
-   * @param {ytdl.videoInfo} video Song to play
+   * @param {Song} song Song to play
    * @throws {NotInVoice} if user not in a voice channel
    * @returns {Promise<Queue>}
    */
@@ -756,7 +753,7 @@ class DisTube extends EventEmitter {
   setFilter(message, filter) {
     let queue = this.getQueue(message);
     if (!queue) throw new Error("NotPlaying");
-    if (!Object.prototype.hasOwnProperty.call(ffmpegFilters, filter)) throw TypeError("filter must be a Filter (https://DisTube.js.org/DisTube.html#setFilter).");
+    if (!Object.prototype.hasOwnProperty.call(ffmpegFilters, filter)) throw TypeError("filter must be a Filter (https://DisTube.js.org/global.html#Filter).");
     // Multiple filters
     // if (queue.filters.includes(filter))
     //   queue.filters = queue.filters.filter(f => f != filter);

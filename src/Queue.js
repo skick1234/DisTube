@@ -70,7 +70,7 @@ class Queue {
     this.autoplay = true;
     /**
      * `@2.0.0` Queue audio filter.
-     * Available filters: `3d`, `bassboost`, `echo`, `karaoke`, `nightcore`, `vaporwave`
+     * Available filters: {@link Filter}
      * @type {string}
      */
     this.filter = null;
