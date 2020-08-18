@@ -155,7 +155,7 @@ class DisTube extends EventEmitter {
     if (typeof song === "object") {
       song.user = message.author;
       return song;
-    } else if (!ytdl.validateURL(song))
+    } else if (!ytdl.validateID(song))
       return await this._searchSong(message, song);
     else {
       let info = await ytdl.getBasicInfo(song, { requestOptions: this.requestOptions });
@@ -192,7 +192,7 @@ class DisTube extends EventEmitter {
   async play(message, song) {
     if (!song) return;
     try {
-      if (ytpl.validateURL(song))
+      if (ytpl.validateID(song))
         await this._handlePlaylist(message, song);
       else
         await this._handleSong(message, await this._resolveSong(message, song));
@@ -218,7 +218,7 @@ class DisTube extends EventEmitter {
   async playSkip(message, song) {
     if (!song) return;
     try {
-      if (ytpl.validateURL(song))
+      if (ytpl.validateID(song))
         await this._handlePlaylist(message, song, true);
       else
         await this._handleSong(message, await this._resolveSong(message, song), true);
