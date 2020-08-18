@@ -511,8 +511,8 @@ class DisTube extends EventEmitter {
     let queue = this.getQueue(message);
     if (!queue) throw new Error("NotPlaying");
     queue.stopped = true;
-    queue.dispatcher.end();
-    if (this.options.leaveOnStop) queue.connection.channel.leave();
+    if (queue.dispatcher) queue.dispatcher.end();
+    if (this.options.leaveOnStop && queue.connection) queue.connection.channel.leave();
     this._deleteQueue(message);
   }
 
