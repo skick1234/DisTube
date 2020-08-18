@@ -34,8 +34,8 @@ const toSecond = (string) => {
  * @prop {boolean} [leaveOnFinish=false] Whether or not leaving voice channel when the queue ends.
  * @prop {boolean} [leaveOnStop=true] Whether or not leaving voice channel after using {@link DisTube#stop()} function.
  * @prop {boolean} [searchSongs=false] Whether or not searching for multiple songs to select manually, DisTube will play the first result if `false`
- * @prop {string} [youtubeCookie=null] `@2.4.0` Youtube cookie to prevent rate limit (Error 429).
- * @prop {string} [youtubeIdentityToken=null] `@2.4.0`
+ * @prop {string} [youtubeCookie=null] `@2.4.0` You can get your YouTube cookie by navigating to YouTube in a web browser, opening up dev tools, and typing "document.cookie" in the console
+ * @prop {string} [youtubeIdentityToken=null] `@2.4.0` If not given, ytdl-core will try to find it. You can find this by going to a video's watch page, viewing the source, and searching for "ID_TOKEN".
  */
 const DisTubeOptions = {
   highWaterMark: 1 << 24,
