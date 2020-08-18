@@ -290,7 +290,7 @@ class DisTube extends EventEmitter {
     } else if (typeof arg2 == "object")
       playlist = arg2;
     if (!playlist) throw Error("PlaylistNotFound");
-    if (!playlist.length) throw Error("NoValidVideoInPlaylist");
+    if (!playlist.items.length) throw Error("NoValidVideoInPlaylist");
     let videos = [...playlist.items];
     if (this.isPlaying(message)) {
       let queue = this._addVideosToQueue(message, videos, skip);
