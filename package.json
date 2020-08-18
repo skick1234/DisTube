@@ -41,17 +41,17 @@
   },
   "homepage": "https://distube.js.org/",
   "dependencies": {
-    "discord-ytdl-core": "^4.0.6",
+    "discord-ytdl-core": "^4.0.7",
     "moment": "^2.27.0",
-    "ytdl-core": "^3.2.1",
-    "ytpl": "^0.2.4",
-    "ytsr": "^0.1.21"
+    "ytdl-core": ">=3.2.1",
+    "ytpl": "^0.3.0",
+    "ytsr": ">=0.1.21"
   },
   "devDependencies": {
     "@discordjs/opus": "^0.3.2",
-    "@types/node": "^14.0.27",
+    "@types/node": "^14.6.0",
     "clean-jsdoc-theme": "^2.2.11",
-    "discord.js": "^12.2.0",
+    "discord.js": "^12.3.1",
     "discord.js-docgen": "github:skick1234/docgen",
     "jsdoc": "^3.6.5",
     "typescript": "^3.9.6"
