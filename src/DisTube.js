@@ -273,10 +273,10 @@ class DisTube extends EventEmitter {
    * @param {(string|object)} arg2 Youtube playlist url
    */
   async _handlePlaylist(message, arg2, skip = false) {
-    let playlist = null
+    let playlist;
     if (typeof arg2 == "string") {
       playlist = await ytpl(arg2);
-      playlist.items = playlist.items.map(vid => {
+      playlist.items = playlist.items.filter(v => !v.thumbnail.includes("no_thumbnail")).map(vid => {
         return {
           ...vid,
           formattedDuration: vid.duration,
@@ -290,6 +290,7 @@ class DisTube extends EventEmitter {
     } else if (typeof arg2 == "object")
       playlist = arg2;
     if (!playlist) throw Error("PlaylistNotFound");
+    if (!playlist.length) throw Error("NoValidVideoInPlaylist");
     let videos = [...playlist.items];
     if (this.isPlaying(message)) {
       let queue = this._addVideosToQueue(message, videos, skip);
