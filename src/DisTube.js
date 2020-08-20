@@ -316,12 +316,22 @@ class DisTube extends EventEmitter {
    */
   async search(string) {
     let search = await ytsr(string, { limit: 12 });
-    let videos = search.items.filter(val => val.duration || val.type == 'video');
+    let videos = search.items.filter(val => val.duration || val.type == 'video').map(vid => {
+      return {
+        ...vid,
+        name: vid.title,
+        url: vid.link,
+        id: vid.link.match(/^.*((youtu.be\/)|(v\/)|(\/u\/\w\/)|(embed\/)|(watch\?))\??v?=?([^#&?]*).*/)[7],
+        formattedDuration: vid.duration,
+        duration: toSecond(vid.duration)
+      }
+    });
     if (videos.length === 0) throw Error("NotFound");
-    videos = videos.map(video => ytdl.getBasicInfo(video.link, { requestOptions: this.requestOptions }).catch(() => null));
-    videos = await Promise.all(videos);
-    let songs = videos.filter(v => v).map(video => new Song(video, null));
-    return songs;
+    // videos = videos.map(video => ytdl.getBasicInfo(video.link, { requestOptions: this.requestOptions }).catch(() => null));
+    // videos = await Promise.all(videos);
+    // let songs = videos.filter(v => v).map(video => new Song(video, null));
+    // return songs;
+    return videos;
   }
 
   /**
@@ -336,8 +346,17 @@ class DisTube extends EventEmitter {
    */
   async _searchSong(message, name) {
     let search = await ytsr(name, { limit: 12 });
-    let videos = search.items.filter(val => val.duration || val.type == 'video');
-    if (videos.length === 0) throw "SearchNotFound";
+    let videos = search.items.filter(val => val.duration || val.type == 'video').map(vid => {
+      return {
+        ...vid,
+        name: vid.title,
+        url: vid.link,
+        id: vid.link.match(/^.*((youtu.be\/)|(v\/)|(\/u\/\w\/)|(embed\/)|(watch\?))\??v?=?([^#&?]*).*/)[7],
+        formattedDuration: vid.duration,
+        duration: toSecond(vid.duration)
+      }
+    });
+    if (videos.length === 0) throw Error("NoResult!");
     let song = videos[0];
     if (this.options.searchSongs) {
       try {
@@ -1020,6 +1039,6 @@ module.exports = DisTube;
  * // DisTubeOptions.searchSongs = true
  * distube.on("searchResult", (message, result) => {
  *     let i = 0;
- *     message.channel.send(`**Choose an option from below**\n${result.map(song => `**${++i}**. ${song.title} - \`${song.duration}\``).join("\n")}\n*Enter anything else or wait 60 seconds to cancel*`);
+ *     message.channel.send(`**Choose an option from below**\n${result.map(song => `**${++i}**. ${song.name} - \`${song.formattedDuration}\``).join("\n")}\n*Enter anything else or wait 60 seconds to cancel*`);
  * });
  */
