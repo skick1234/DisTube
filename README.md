@@ -2,6 +2,12 @@
   <p>
     <a href="https://nodei.co/npm/distube/"><img src="https://nodei.co/npm/distube.png?downloads=true&downloadRank=true&stars=true"></a>
   </p>
+  <br/>
+  <p>
+    <img alt="npm" src="https://img.shields.io/npm/dt/distube">
+    <img alt="Codacy Grade" src="https://img.shields.io/codacy/grade/79c8b7d7d026410f8e1b7e9d326167a7">
+    <img alt="CodeFactor Grade" src="https://img.shields.io/codefactor/grade/github/skick1234/DisTube">
+  </p>
 </div>
 
 # DisTube

@@ -135,7 +135,7 @@ class DisTube extends EventEmitter {
           if (this.guildQueues.has(guildID) && this._isVoiceChannelEmpty(queue)) {
             queue.connection.channel.leave();
             this.emit("empty", queue.initMessage);
-            this.guildQueues.delete(guildID);
+            this._deleteQueue(queue.initMessage);
           }
         }, 60000, queue)
       }
@@ -274,7 +274,7 @@ class DisTube extends EventEmitter {
    */
   async _handlePlaylist(message, arg2, skip = false) {
     let playlist;
-    if (typeof arg2 == "string") {
+    if (typeof arg2 === "string") {
       playlist = await ytpl(arg2);
       playlist.items = playlist.items.filter(v => !v.thumbnail.includes("no_thumbnail")).map(vid => {
         return {
@@ -287,10 +287,10 @@ class DisTube extends EventEmitter {
       playlist.duration = playlist.items.reduce((prev, next) => prev + next.duration, 0);
       playlist.formattedDuration = formatDuration(playlist.duration * 1000);
       playlist.thumbnail = playlist.items[0].thumbnail;
-    } else if (typeof arg2 == "object")
+    } else if (typeof arg2 === "object")
       playlist = arg2;
-    if (!playlist) throw Error("PlaylistNotFound");
-    if (!playlist.items.length) throw Error("NoValidVideoInPlaylist");
+    if (!playlist) throw Error("Playlist not found");
+    if (!playlist.items.length) throw Error("No valid video in the playlist");
     let videos = [...playlist.items];
     if (this.isPlaying(message)) {
       let queue = this._addVideosToQueue(message, videos, skip);
@@ -316,7 +316,7 @@ class DisTube extends EventEmitter {
    */
   async search(string) {
     let search = await ytsr(string, { limit: 12 });
-    let videos = search.items.filter(val => val.duration || val.type == 'video').map(vid => {
+    let videos = search.items.filter(val => val.duration || val.type === 'video').map(vid => {
       return {
         ...vid,
         name: vid.title,
@@ -326,7 +326,7 @@ class DisTube extends EventEmitter {
         duration: toSecond(vid.duration)
       }
     });
-    if (videos.length === 0) throw Error("NotFound");
+    if (videos.length === 0) throw Error("No result!");
     // videos = videos.map(video => ytdl.getBasicInfo(video.link, { requestOptions: this.requestOptions }).catch(() => null));
     // videos = await Promise.all(videos);
     // let songs = videos.filter(v => v).map(video => new Song(video, null));
@@ -346,7 +346,7 @@ class DisTube extends EventEmitter {
    */
   async _searchSong(message, name) {
     let search = await ytsr(name, { limit: 12 });
-    let videos = search.items.filter(val => val.duration || val.type == 'video').map(vid => {
+    let videos = search.items.filter(val => val.duration || val.type === 'video').map(vid => {
       return {
         ...vid,
         name: vid.title,
@@ -356,7 +356,7 @@ class DisTube extends EventEmitter {
         duration: toSecond(vid.duration)
       }
     });
-    if (videos.length === 0) throw Error("NoResult!");
+    if (videos.length === 0) throw Error("No result!");
     let song = videos[0];
     if (this.options.searchSongs) {
       try {
@@ -397,10 +397,10 @@ class DisTube extends EventEmitter {
     this.emit("initQueue", queue);
     this.guildQueues.set(message.guild.id, queue);
     let voice = message.member.voice.channel;
-    if (!voice) throw new Error("NotInVoice");
+    if (!voice) throw new Error("User is not in the voice channel.");
     queue.connection = await voice.join().catch(err => {
       this._deleteQueue(message);
-      throw Error("DisTubeCanNotJoinVChannel: " + err);
+      throw Error("DisTube cannot join the voice channel: " + err);
     });
     queue.songs.push(song);
     queue.updateDuration();
@@ -536,7 +536,8 @@ class DisTube extends EventEmitter {
     if (!queue) throw new Error("NotPlaying");
     queue.stopped = true;
     if (queue.dispatcher) queue.dispatcher.end();
-    if (this.options.leaveOnStop && queue.connection) queue.connection.channel.leave();
+    if (this.options.leaveOnStop && queue.connection)
+      try { queue.connection.channel.leave() } catch { } // eslint-disable-line no-empty
     this._deleteQueue(message);
   }
 
@@ -666,7 +667,7 @@ class DisTube extends EventEmitter {
     if (!queue) throw new Error("NotPlaying");
     mode = parseInt(mode, 10);
     if (!mode && mode !== 0) queue.repeatMode = (queue.repeatMode + 1) % 3;
-    else if (queue.repeatMode == mode) queue.repeatMode = 0;
+    else if (queue.repeatMode === mode) queue.repeatMode = 0;
     else queue.repeatMode = mode;
     return queue.repeatMode;
   }
@@ -794,7 +795,7 @@ class DisTube extends EventEmitter {
     if (
       !this.options.emitNewSongOnly ||
       (
-        queue.repeatMode != 1 &&
+        queue.repeatMode !== 1 &&
         (!queue.songs[1] || queue.songs[0].id !== queue.songs[1].id)
       )
     ) return true;
@@ -812,55 +813,51 @@ class DisTube extends EventEmitter {
     if (!queue) return;
     let encoderArgs = queue.filter ? ["-af", ffmpegFilters[queue.filter]] : null;
     try {
-      let dispatcher = queue.connection.play(ytdl(queue.songs[0].url, {
+      queue.stream = ytdl(queue.songs[0].url, {
         opusEncoded: true,
         filter: (queue.songs[0].isLive ? "audioandvideo" : "audioonly"),
         quality: "highestaudio",
         highWaterMark: this.options.highWaterMark,
         requestOptions: this.requestOptions,
-        // encoderArgs: ['-af', filters.map(filter => ffmpegFilters[filter]).join(",")]
-        encoderArgs,
-      }), {
+        encoderArgs
+      }).on("error", e => this.emit("error", message, `There is a problem while playing \`${queue.songs[0].id}\` song. Error: \`${e}\``))
+      queue.dispatcher = queue.connection.play(queue.stream, {
         highWaterMark: 1,
         type: 'opus',
         volume: queue.volume / 100
-      });
-      queue.dispatcher = dispatcher;
-      dispatcher
-        .on("finish", async () => {
-          if (queue.stopped) return;
-          if (this.options.leaveOnEmpty && this._isVoiceChannelEmpty(queue)) {
+      }).on("finish", async () => {
+        if (queue.stopped) return;
+        if (this.options.leaveOnEmpty && this._isVoiceChannelEmpty(queue)) {
+          this._deleteQueue(message);
+          queue.connection.channel.leave();
+          return this.emit("empty", message);
+        }
+        if (queue.repeatMode === 2 && !queue.skipped) queue.songs.push(queue.songs[0]);
+        if (queue.songs.length <= 1 && (queue.skipped || !queue.repeatMode)) {
+          if (queue.autoplay) await this.runAutoplay(message);
+          if (queue.songs.length <= 1) {
             this._deleteQueue(message);
-            queue.connection.channel.leave();
-            return this.emit("empty", message);
+            if (this.options.leaveOnFinish && !queue.stopped)
+              queue.connection.channel.leave();
+            if (!queue.autoplay) this.emit("finish", message);
+            return;
           }
-          if (queue.repeatMode == 2 && !queue.skipped) queue.songs.push(queue.songs[0]);
-          if (queue.songs.length <= 1 && (queue.skipped || !queue.repeatMode)) {
-            if (queue.autoplay) await this.runAutoplay(message);
-            if (queue.songs.length <= 1) {
-              this._deleteQueue(message);
-              if (this.options.leaveOnFinish && !queue.stopped)
-                queue.connection.channel.leave();
-              if (!queue.autoplay) this.emit("finish", message);
-              return;
-            }
-          }
-          queue.skipped = false;
-          if (queue.repeatMode != 1 || queue.skipped) queue.removeFirstSong();
-          else queue.updateDuration();
-          if (this._emitPlaySong(queue)) this.emit("playSong", message, queue, queue.songs[0]);
-          return this._playSong(message);
-        })
-        .on("error", e => {
-          console.error(e);
-          this.emit("error", message, "DispatcherErrorWhenPlayingSong");
-          queue.removeFirstSong();
-          if (queue.songs.length > 0) {
-            this.emit("playSong", message, queue, queue.songs[0]);
-            this._playSong(message);
-          }
-        });
+        }
+        queue.skipped = false;
+        if (queue.repeatMode !== 1 || queue.skipped) queue.removeFirstSong();
+        else queue.updateDuration();
+        if (this._emitPlaySong(queue)) this.emit("playSong", message, queue, queue.songs[0]);
         if (queue.stream) queue.stream.destroy();
+        return this._playSong(message);
+      }).on("error", e => {
+        console.error(e);
+        this.emit("error", message, "There is a problem while playing song. Skip!");
+        queue.removeFirstSong();
+        if (queue.songs.length > 0) {
+          this.emit("playSong", message, queue, queue.songs[0]);
+          this._playSong(message);
+        }
+      });
     } catch (e) {
       this.emit("error", message, `Cannot play \`${queue.songs[0].id}\`. Error: \`${e}\``);
     }
