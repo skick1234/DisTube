@@ -415,13 +415,16 @@ class DisTube extends EventEmitter {
    * @param {Discord.Message} message The message from guild channel
    */
   _deleteQueue(message) {
-    this.guildQueues.delete(message.guild.id);
+    let queue = this.getQueue(message);
+    if (!queue) return;
     if (queue.stream) queue.stream.destroy();
+    if (typeof message === "string") this.guildQueues.delete(message);
+    else if (message && message.guild) this.guildQueues.delete(message.guild.id);
   }
 
   /**
    * Get the guild queue
-   * @param {Discord.Message} message The message from guild channel5643
+   * @param {string|Discord.Message} message The guild ID or message from guild channel.
    * @returns {Queue} The guild queue
    * @example
    * client.on('message', (message) => {
@@ -437,9 +440,9 @@ class DisTube extends EventEmitter {
    * });
    */
   getQueue(message) {
-    if (!message || !message.guild) throw Error("InvalidDiscordMessage");
-    let queue = this.guildQueues.get(message.guild.id);
-    return queue;
+    if (typeof message === "string") return this.guildQueues.get(message);
+    if (!message || !message.guild) throw TypeError("Parameter should be Discord.Message or server ID!");
+    return this.guildQueues.get(message.guild.id);
   }
 
   /**
