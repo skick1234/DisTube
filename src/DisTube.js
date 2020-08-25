@@ -416,6 +416,7 @@ class DisTube extends EventEmitter {
    */
   _deleteQueue(message) {
     this.guildQueues.delete(message.guild.id);
+    if (queue.stream) queue.stream.destroy();
   }
 
   /**
@@ -856,6 +857,7 @@ class DisTube extends EventEmitter {
             this._playSong(message);
           }
         });
+        if (queue.stream) queue.stream.destroy();
     } catch (e) {
       this.emit("error", message, `Cannot play \`${queue.songs[0].id}\`. Error: \`${e}\``);
     }
