@@ -6,6 +6,8 @@
 
 # DisTube
 
+[![Codacy Badge](https://api.codacy.com/project/badge/Grade/f80cb42e97a148c7b85a4694d06bb05d)](https://app.codacy.com/manual/skick1234/DisTube?utm_source=github.com&utm_medium=referral&utm_content=skick1234/DisTube&utm_campaign=Badge_Grade_Dashboard)
+
 A Node.js module to easily manage music commands and play Youtube song on Discord without any API key.
 
 [DisTube Support Server](https://discord.gg/feaDd9h)
