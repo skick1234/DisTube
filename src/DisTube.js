@@ -810,8 +810,8 @@ class DisTube extends EventEmitter {
     try {
       let dispatcher = queue.connection.play(ytdl(queue.songs[0].url, {
         opusEncoded: true,
-        filter: 'audioonly',
-        quality: 'highestaudio',
+        filter: (queue.songs[0].isLive ? "audioandvideo" : "audioonly"),
+        quality: "highestaudio",
         highWaterMark: this.options.highWaterMark,
         requestOptions: this.requestOptions,
         // encoderArgs: ['-af', filters.map(filter => ffmpegFilters[filter]).join(",")]
