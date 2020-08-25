@@ -38,12 +38,12 @@ class Song {
      */
     this.formattedDuration = duration(this.duration * 1000);
     /**
-     * Video URL.
+     * Song URL.
      * @type {string}
      */
     this.url = "https://www.youtube.com/watch?v=" + this.id;
     /**
-     * Video thumbnail.
+     * Song thumbnail.
      * @type {string}
      */
     this.thumbnail = video.videoDetails ? video.videoDetails.thumbnail.thumbnails[video.videoDetails.thumbnail.thumbnails.length - 1].url : video.thumbnail;
@@ -52,6 +52,11 @@ class Song {
      * @type {ytdl.relatedVideo[]}
      */
     this.related = video.related_videos;
+    /**
+     * Indicates if the video is an active live.
+     * @type {boolean}
+     */
+    this.isLive = video.videoDetails ? video.videoDetails.isLiveContent : !this.duration;
   }
 }
 
