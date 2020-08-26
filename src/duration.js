@@ -8,6 +8,7 @@ const formatInt = (int) => {
 };
 
 module.exports = (milliseconds) => {
+  if (!milliseconds || !parseInt(milliseconds)) return "00:00";
   const seconds = moment.duration(milliseconds).seconds();
   const minutes = moment.duration(milliseconds).minutes();
   const hours = moment.duration(milliseconds).hours();

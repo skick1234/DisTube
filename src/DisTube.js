@@ -8,6 +8,7 @@ const ytdl = require("discord-ytdl-core"),
   Discord = require("discord.js"); // eslint-disable-line
 
 const toSecond = (string) => {
+  if (!string) return 0;
   let h = 0,
     m = 0,
     s = 0;
@@ -316,21 +317,18 @@ class DisTube extends EventEmitter {
    */
   async search(string) {
     let search = await ytsr(string, { limit: 12 });
-    let videos = search.items.filter(val => val.duration || val.type === 'video').map(vid => {
+    let videos = search.items.filter(val => val.type === 'video' && val.link).map(vid => {
       return {
         ...vid,
         name: vid.title,
         url: vid.link,
         id: vid.link.match(/^.*((youtu.be\/)|(v\/)|(\/u\/\w\/)|(embed\/)|(watch\?))\??v?=?([^#&?]*).*/)[7],
-        formattedDuration: vid.duration,
+        isLive: vid.live,
+        formattedDuration: vid.duration || "00:00",
         duration: toSecond(vid.duration)
       }
     });
     if (videos.length === 0) throw Error("No result!");
-    // videos = videos.map(video => ytdl.getBasicInfo(video.link, { requestOptions: this.requestOptions }).catch(() => null));
-    // videos = await Promise.all(videos);
-    // let songs = videos.filter(v => v).map(video => new Song(video, null));
-    // return songs;
     return videos;
   }
 
@@ -345,18 +343,7 @@ class DisTube extends EventEmitter {
    * @returns {Song} Song info
    */
   async _searchSong(message, name) {
-    let search = await ytsr(name, { limit: 12 });
-    let videos = search.items.filter(val => val.duration || val.type === 'video').map(vid => {
-      return {
-        ...vid,
-        name: vid.title,
-        url: vid.link,
-        id: vid.link.match(/^.*((youtu.be\/)|(v\/)|(\/u\/\w\/)|(embed\/)|(watch\?))\??v?=?([^#&?]*).*/)[7],
-        formattedDuration: vid.duration,
-        duration: toSecond(vid.duration)
-      }
-    });
-    if (videos.length === 0) throw Error("No result!");
+    let videos = await this.search(name);
     let song = videos[0];
     if (this.options.searchSongs) {
       try {

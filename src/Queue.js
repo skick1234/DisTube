@@ -37,7 +37,7 @@ class Queue {
      * Formatted duration string.
      * @type {string}
      */
-    this.formattedDuration = duration(this.duration * 1000);
+    this.formattedDuration = "00:00";
     /**
      * Whether stream is currently stopped.
      * @type {boolean}
