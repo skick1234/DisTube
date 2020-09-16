@@ -276,7 +276,7 @@ class DisTube extends EventEmitter {
   async _handlePlaylist(message, arg2, skip = false) {
     let playlist;
     if (typeof arg2 === "string") {
-      playlist = await ytpl(arg2);
+      playlist = await ytpl(arg2, { limit: Infinity });
       playlist.items = playlist.items.filter(v => !v.thumbnail.includes("no_thumbnail")).map(vid => {
         return {
           ...vid,
