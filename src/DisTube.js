@@ -76,6 +76,11 @@ const ffmpegFilters = {
   vaporwave: "asetrate=48000*0.8,aresample=48000,atempo=1.1",
 }
 
+function isURL(string) {
+  try { new URL(string) } catch { return false }
+  return true;
+}
+
 /**
  * Class representing a DisTube.
  * @extends EventEmitter
@@ -156,9 +161,10 @@ class DisTube extends EventEmitter {
     if (typeof song === "object") {
       song.user = message.author;
       return song;
-    } else if (!ytdl.validateURL(song) && !ytdl.validateID(song))
+    } else if (!ytdl.validateURL(song) && !ytdl.validateID(song)) {
+      if (isURL(song)) throw TypeError("This URL is not supported!");
       return await this._searchSong(message, song);
-    else {
+    } else {
       let info = await ytdl.getBasicInfo(song, { requestOptions: this.requestOptions });
       return new Song(info, message.author);
     }
