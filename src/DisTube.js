@@ -161,7 +161,7 @@ class DisTube extends EventEmitter {
     if (typeof song === "object") {
       song.user = message.author;
       return song;
-    } else if (!ytdl.validateURL(song) && !ytdl.validateID(song)) {
+    } else if (!ytdl.validateURL(song)) {
       if (isURL(song)) throw TypeError("This URL is not supported!");
       return await this._searchSong(message, song);
     } else {
