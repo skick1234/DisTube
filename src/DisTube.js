@@ -6,6 +6,7 @@ const ytdl = require("discord-ytdl-core"),
   Song = require("./Song"),
   formatDuration = require("./duration"),
   Discord = require("discord.js"); // eslint-disable-line
+  Playlist = require("./Playlist"),
   youtube_dl = require('youtube-dl'),
   util = require('util'),
   youtube_dlOptions = ["--no-warnings", "--force-ipv4"];
@@ -263,20 +264,9 @@ class DisTube extends EventEmitter {
   async playCustomPlaylist(message, urls, properties = {}, playSkip = false) {
     if (!urls.length) return;
     try {
-      let songs = urls.map(song => ytdl.getBasicInfo(song, { requestOptions: this.requestOptions }).catch(e => { throw Error(song + " encountered an error: " + e) }));
-      songs = await Promise.all(songs);
-      let resolvedSongs = songs.filter(song => song);
-      let duration = resolvedSongs.reduce((prev, next) => prev + parseInt(next.videoDetails.lengthSeconds, 10), 0);
-      let thumbnails = resolvedSongs[0].videoDetails.thumbnail.thumbnails;
-      let playlist = {
-        thumbnail: thumbnails[thumbnails.length - 1].url,
-        ...properties,
-        user: message.author,
-        items: resolvedSongs,
-        total_items: resolvedSongs.length,
-        duration: duration,
-        formattedDuration: formatDuration(duration * 1000)
-      };
+      let songs = urls.filter(url => isURL(url)).map(url => this._resolveSong(message, url).catch(() => { }));
+      songs = (await Promise.all(songs)).filter(song => song);
+      let playlist = new Playlist(songs, message.author, properties);
       await this._handlePlaylist(message, playlist, playSkip);
     } catch (e) {
       this._emitError(message, e);
@@ -293,24 +283,15 @@ class DisTube extends EventEmitter {
    */
   async _handlePlaylist(message, arg2, skip = false) {
     let playlist;
-    if (typeof arg2 === "string") {
+    if (typeof arg2 === "object") playlist = arg2; // Song[] or Playlist
+    else if (typeof arg2 === "string") {
       playlist = await ytpl(arg2, { limit: Infinity });
-      playlist.items = playlist.items.filter(v => !v.thumbnail.includes("no_thumbnail")).map(vid => {
-        return {
-          ...vid,
-          formattedDuration: vid.duration,
-          duration: toSecond(vid.duration)
-        }
-      });
-      playlist.user = message.author;
-      playlist.duration = playlist.items.reduce((prev, next) => prev + next.duration, 0);
-      playlist.formattedDuration = formatDuration(playlist.duration * 1000);
-      playlist.thumbnail = playlist.items[0].thumbnail;
-    } else if (typeof arg2 === "object")
-      playlist = arg2;
-    if (!playlist) throw Error("Playlist not found");
-    if (!playlist.items.length) throw Error("No valid video in the playlist");
-    let videos = [...playlist.items];
+      playlist.items = playlist.items.filter(v => !v.thumbnail.includes("no_thumbnail")).map(v => new Song(v, message.author, true));
+    }
+    if (!(playlist instanceof Playlist)) try { playlist = new Playlist(playlist, message.author) } catch { playlist = null }
+    if (!playlist) throw Error("Invalid Playlist");
+    if (!playlist.songs.length) throw Error("No valid video in the playlist");
+    let songs = playlist.songs;
     if (this.isPlaying(message)) {
       let queue = this._addVideosToQueue(message, videos, skip);
       if (skip) this.skip(message);
