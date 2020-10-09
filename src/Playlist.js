@@ -35,7 +35,7 @@ class Playlist {
      */
     this.user = user || playlist.user;
     /**
-     * PLaylist songs.
+     * Playlist songs.
      * @type {Song[]}
      */
     this.songs = Array.isArray(playlist) ? playlist : playlist.items;
@@ -45,12 +45,12 @@ class Playlist {
      */
     this.name = playlist.name || playlist.title || this.songs[0].playlist_title || `${this.songs[0].name} and ${this.songs.length - 1} more songs.`;
     /**
-     * PLaylist URL.
+     * Playlist URL.
      * @type {string}
      */
     this.url = playlist.url;
     /**
-     * PLaylist thumbnail.
+     * Playlist thumbnail.
      * @type {string}
      */
     this.thumbnail = playlist.thumbnail || this.songs[0].thumbnail;
@@ -80,9 +80,9 @@ class Playlist {
     this.id = playlist.id || "";
     /**
      * @deprecated 
-     * @type {string}
+     * @type {object}
     */
-    this.author = playlist.author || "";
+    this.author = playlist.author || {};
     for (let [oldProp, newProp] of Object.entries(deprecateProps))
       deprecate(this, oldProp, this[newProp], newProp);
     for (let prop of ["id", "author", "total_items"])
