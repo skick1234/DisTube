@@ -204,7 +204,8 @@ class DisTube extends EventEmitter {
       else
         await this._handleSong(message, await this._resolveSong(message, song));
     } catch (e) {
-      this.emit("error", message, `play(${song}) encountered: ${e}`);
+      e.message = `play(${song}) encountered: ${e.message}`;
+      this._emitError(message, e);
     }
   }
 
@@ -230,7 +231,8 @@ class DisTube extends EventEmitter {
       else
         await this._handleSong(message, await this._resolveSong(message, song), true);
     } catch (e) {
-      this.emit("error", message, `playSkip(${song}) encountered: ${e}`);
+      e.message = `playSkip(${song}) encountered: ${e.message}`;
+      this._emitError(message, e);
     }
   }
 
@@ -267,7 +269,7 @@ class DisTube extends EventEmitter {
       };
       await this._handlePlaylist(message, playlist, playSkip);
     } catch (e) {
-      this.emit("error", message, e);
+      this._emitError(message, e);
     }
   }
 
@@ -390,11 +392,19 @@ class DisTube extends EventEmitter {
     this.emit("initQueue", queue);
     this.guildQueues.set(message.guild.id, queue);
     let voice = message.member.voice.channel;
-    if (!voice) throw new Error("User is not in the voice channel.");
+    if (!voice) {
+      this._deleteQueue(message);
+      throw new Error("User is not in the voice channel.");
+    }
     queue.connection = await voice.join().catch(err => {
       this._deleteQueue(message);
       throw Error("DisTube cannot join the voice channel: " + err);
     });
+    queue.connection.on("error", e => {
+      e.message = "There is a problem with Discord Voice Connection.\nPlease try again! Sorry for the interruption!\nReason: " + e.message;
+      this._emitError(message, e);
+      this._deleteQueue(message);
+    })
     queue.songs.push(song);
     queue.updateDuration();
     this._playSong(message);
@@ -449,7 +459,7 @@ class DisTube extends EventEmitter {
    */
   _addToQueue(message, song, unshift = false) {
     let queue = this.getQueue(message);
-    if (!queue) throw new Error("NotPlaying");
+    if (!queue) return;
     if (!song) throw new Error("NoSong");
     if (unshift) {
       let playing = queue.songs.shift();
@@ -784,6 +794,23 @@ class DisTube extends EventEmitter {
     return queue.filter;
   }
 
+  /**
+   * Emit error event
+   * @private
+   * @ignore
+   */
+  _emitError(message, error) {
+    if (this.listeners("error").length)
+      this.emit("error", message, error);
+    else
+      this.emit("error", error);
+  }
+
+  /**
+   * Whether or not emit playSong event
+   * @private
+   * @ignore
+   */
   _emitPlaySong(queue) {
     if (
       !this.options.emitNewSongOnly ||
@@ -852,7 +879,8 @@ class DisTube extends EventEmitter {
         }
       });
     } catch (e) {
-      this.emit("error", message, `Cannot play \`${queue.songs[0].id}\`. Error: \`${e}\``);
+      e.message = `Cannot play \`${queue.songs[0].id}\`: \`${e.message}\``;
+      this._emitError(message, e);
     }
   }
 }
