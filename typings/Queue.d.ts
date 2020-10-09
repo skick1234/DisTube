@@ -1,5 +1,5 @@
 export = Queue;
-import Discord from "discord.js"
+import Discord from "discord.js";
 /**
  * Represents a queue.
  */
@@ -27,17 +27,7 @@ declare class Queue {
      * List of songs
      * @type {Song[]}
      */
-    songs: import("./Song")[];
-    /**
-     * Queue's duration.
-     * @type {Number}
-     */
-    duration: number;
-    /**
-     * Formatted duration string.
-     * @type {string}
-     */
-    formattedDuration: string;
+    songs: any[];
     /**
      * Whether stream is currently stopped.
      * @type {boolean}
@@ -70,7 +60,7 @@ declare class Queue {
     autoplay: boolean;
     /**
      * `@2.0.0` Queue audio filter.
-     * Available filters: `3d`, `bassboost`, `echo`, `karaoke`, `nightcore`, `vaporwave`
+     * Available filters: {@link Filter}
      * @type {string}
      */
     filter: string;
@@ -79,6 +69,19 @@ declare class Queue {
      * @type {Discord.Message}
      */
     initMessage: Discord.Message;
-    removeFirstSong(): void;
-    updateDuration(): void;
+    /**
+     * `@2.5.0` ytdl stream
+     * @type {Readable}
+     */
+    stream: any;
+    /**
+     * Formatted duration string.
+     * @type {string}
+     */
+    get formattedDuration(): string;
+    /**
+     * Queue's duration.
+     * @type {Number}
+     */
+    get duration(): number;
 }

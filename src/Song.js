@@ -7,10 +7,15 @@ const { formatDuration, toSecond } = require("./duration"),
 class Song {
   /**
    * Create a song.
-   * @param {(ytdl.videoInfo|ytpl_item)} video Youtube video info
+   * @param {ytdl.videoInfo|object} info Video info
    * @param {Discord.User} user Requested user
+   * @param {boolean} [youtube=false] Weather or not the video is a Youtube video.
    */
   constructor(info, user, youtube = false) {
+    /**
+     * `@2.6.0`
+     * @type {boolean}
+     */
     this.youtube = info.youtube || youtube;
     /**
      * User requested
@@ -43,6 +48,10 @@ class Song {
      */
     this.url = this.youtube ? ("https://www.youtube.com/watch?v=" + this.id) : info.webpage_url;
     !this.youtube && (
+      /**
+       * `@2.6.0` Stream / Download URL. (Not available with YouTube video)
+       * @type {?string}
+       */
       this.streamURL = info.url
     );
     /**
@@ -51,18 +60,34 @@ class Song {
      */
     this.thumbnail = info.videoDetails ? info.videoDetails.thumbnail.thumbnails[info.videoDetails.thumbnail.thumbnails.length - 1].url : info.thumbnail;
     /**
-     * Related videos (for autoplay mode) 
-     * @type {ytdl.relatedVideo[]}
+     * Related videos (Only available with YouTube video) 
+     * @type {?ytdl.relatedVideo[]}
      */
     this.related = info.related_videos;
     /**
-     * Indicates if the video is an active live.
+     * `@2.5.0` Indicates if the video is an active live.
      * @type {boolean}
      */
     this.isLive = info.videoDetails ? info.videoDetails.isLive : info.is_live || info.live;
+    /**
+     * `@2.6.0` Song play count
+     * @type {?number}
+     */
     this.plays = info.videoDetails ? info.videoDetails.viewCount : info.view_count || 0;
+    /**
+     * `@2.6.0` Song like count
+     * @type {?number}
+     */
     this.likes = info.videoDetails ? info.videoDetails.likes : info.like_count || 0;
+    /**
+     * `@2.6.0` Song dislike count
+     * @type {?number}
+     */
     this.dislikes = info.videoDetails ? info.videoDetails.dislikes : info.dislike_count || 0;
+    /**
+     * `@2.6.0` Song repost count
+     * @type {?number}
+     */
     this.reposts = info.repost_count || 0;
   }
 }

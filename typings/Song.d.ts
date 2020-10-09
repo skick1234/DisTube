@@ -1,14 +1,20 @@
 export = Song;
-import ytdl from "ytdl-core";
 import Discord from "discord.js";
+import ytdl from "ytdl-core"
 /** Class representing a song. */
 declare class Song {
     /**
      * Create a song.
-     * @param {(ytdl.videoInfo|DisTube.ytpl_item)} video Youtube video info
+     * @param {ytdl.videoInfo|object} info Video info
      * @param {Discord.User} user Requested user
+     * @param {boolean} [youtube=false] Weather or not the video is a Youtube video.
      */
-    constructor(video: (ytdl.videoInfo | import("./DisTube").ytpl_item), user: Discord.User);
+    constructor(info: ytdl.videoInfo | object, user: Discord.User, youtube?: boolean);
+    /**
+     * `@2.6.0`
+     * @type {boolean}
+     */
+    youtube: boolean;
     /**
      * User requested
      * @type {Discord.User}
@@ -35,18 +41,48 @@ declare class Song {
      */
     formattedDuration: string;
     /**
-     * Video URL.
+     * Song URL.
      * @type {string}
      */
     url: string;
     /**
-     * Video thumbnail.
+     * `@2.6.0` Stream / Download URL. (Not available with YouTube video)
+     * @type {?string}
+     */
+    streamURL: any;
+    /**
+     * Song thumbnail.
      * @type {string}
      */
     thumbnail: string;
     /**
-     * Related videos (for autoplay mode)
-     * @type {ytdl.relatedVideo[]}
+     * Related videos (Only available with YouTube video)
+     * @type {?ytdl.relatedVideo[]}
      */
-    related: ytdl.relatedVideo[];
+    related: ytdl.relatedVideo[] | null;
+    /**
+     * `@2.5.0` Indicates if the video is an active live.
+     * @type {boolean}
+     */
+    isLive: boolean;
+    /**
+     * `@2.6.0` Song play count
+     * @type {?number}
+     */
+    plays: number | null;
+    /**
+     * `@2.6.0` Song like count
+     * @type {?number}
+     */
+    likes: number | null;
+    /**
+     * `@2.6.0` Song dislike count
+     * @type {?number}
+     */
+    dislikes: number | null;
+    /**
+     * `@2.6.0` Song repost count
+     * @type {?number}
+     */
+    reposts: number | null;
 }

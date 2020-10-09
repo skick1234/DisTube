@@ -1,4 +1,6 @@
-const duration = require("./duration");
+/* eslint no-unused-vars: "off" */
+const { formatDuration } = require("./duration"),
+  Discord = require("discord.js");
 
 /**
  * Represents a queue.
@@ -28,16 +30,6 @@ class Queue {
      * @type {Song[]}
      */
     this.songs = [];
-    /**
-     * Queue's duration.
-     * @type {Number}
-     */
-    this.duration = 0;
-    /**
-     * Formatted duration string.
-     * @type {string}
-     */
-    this.formattedDuration = "00:00";
     /**
      * Whether stream is currently stopped.
      * @type {boolean}
@@ -79,16 +71,26 @@ class Queue {
      * @type {Discord.Message}
      */
     this.initMessage = message;
+    /**
+     * `@2.5.0` ytdl stream
+     * @type {Readable}
+     */
+    this.stream = null;
   }
 
-  removeFirstSong() {
-    this.songs.shift();
-    this.updateDuration();
+  /**
+   * Formatted duration string.
+   * @type {string}
+   */
+  get formattedDuration() {
+    return formatDuration(this.duration * 1000)
   }
-
-  updateDuration() {
-    this.duration = this.songs.reduce((prev, next) => prev + next.duration, 0);
-    this.formattedDuration = duration(this.duration * 1000);
+  /**
+   * Queue's duration.
+   * @type {Number}
+   */
+  get duration() {
+    return this.songs.reduce((prev, next) => prev + next.duration, 0)
   }
 }
 

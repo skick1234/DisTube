@@ -1,2 +1,2 @@
-declare function _exports(milliseconds: any): string;
-export = _exports;
+export function formatDuration(milliseconds: any): string;
+export function toSecond(string: any): number;
