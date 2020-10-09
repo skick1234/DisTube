@@ -1,6 +1,5 @@
 /* eslint no-unused-vars: "off" */
-
-const duration = require("./duration"),
+const { formatDuration, toSecond } = require("./duration"),
   Discord = require("discord.js"),
   ytdl = require("ytdl-core");
 
@@ -11,7 +10,8 @@ class Song {
    * @param {(ytdl.videoInfo|ytpl_item)} video Youtube video info
    * @param {Discord.User} user Requested user
    */
-  constructor(video, user) {
+  constructor(info, user, youtube = false) {
+    this.youtube = info.youtube || youtube;
     /**
      * User requested
      * @type {Discord.User}
@@ -21,42 +21,49 @@ class Song {
      * `@2.1.4` Youtube video id
      * @type {string}
      */
-    this.id = video.videoDetails ? video.videoDetails.videoId : video.id;
+    this.id = info.videoDetails ? info.videoDetails.videoId : info.id;
     /**
      * Song name aka video title.
      * @type {string}
      */
-    this.name = video.videoDetails ? video.videoDetails.title : video.title;
+    this.name = info.videoDetails ? info.videoDetails.title : info.title;
     /**
      * Song duration.
      * @type {number}
      */
-    this.duration = video.duration || (video.videoDetails ? (parseInt(video.videoDetails.lengthSeconds, 10) || 0) : 0);
+    this.duration = toSecond(info.videoDetails ? parseInt(info.videoDetails.lengthSeconds, 10) : info._duration_raw || info.duration || 0);
     /**
      * Formatted duration string `hh:mm:ss`.
      * @type {string}
      */
-    this.formattedDuration = duration(this.duration * 1000);
+    this.formattedDuration = formatDuration(this.duration * 1000)
     /**
      * Song URL.
      * @type {string}
      */
-    this.url = "https://www.youtube.com/watch?v=" + this.id;
+    this.url = this.youtube ? ("https://www.youtube.com/watch?v=" + this.id) : info.webpage_url;
+    !this.youtube && (
+      this.streamURL = info.url
+    );
     /**
      * Song thumbnail.
      * @type {string}
      */
-    this.thumbnail = video.videoDetails ? video.videoDetails.thumbnail.thumbnails[video.videoDetails.thumbnail.thumbnails.length - 1].url : video.thumbnail;
+    this.thumbnail = info.videoDetails ? info.videoDetails.thumbnail.thumbnails[info.videoDetails.thumbnail.thumbnails.length - 1].url : info.thumbnail;
     /**
      * Related videos (for autoplay mode) 
      * @type {ytdl.relatedVideo[]}
      */
-    this.related = video.related_videos;
+    this.related = info.related_videos;
     /**
      * Indicates if the video is an active live.
      * @type {boolean}
      */
-    this.isLive = video.videoDetails ? video.videoDetails.isLiveContent : !this.duration;
+    this.isLive = info.videoDetails ? info.videoDetails.isLive : info.is_live || info.live;
+    this.plays = info.videoDetails ? info.videoDetails.viewCount : info.view_count || 0;
+    this.likes = info.videoDetails ? info.videoDetails.likes : info.like_count || 0;
+    this.dislikes = info.videoDetails ? info.videoDetails.dislikes : info.dislike_count || 0;
+    this.reposts = info.repost_count || 0;
   }
 }
 

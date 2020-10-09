@@ -6,6 +6,10 @@ const ytdl = require("discord-ytdl-core"),
   Song = require("./Song"),
   formatDuration = require("./duration"),
   Discord = require("discord.js"); // eslint-disable-line
+  youtube_dl = require('youtube-dl'),
+  util = require('util'),
+  youtube_dlOptions = ["--no-warnings", "--force-ipv4"];
+youtube_dl.getInfo = util.promisify(youtube_dl.getInfo);
 
 const toSecond = (string) => {
   if (!string) return 0;
@@ -158,20 +162,26 @@ class DisTube extends EventEmitter {
    * @returns {Promise<Song>} Resolved Song
    */
   async _resolveSong(message, song) {
-    if (typeof song === "object") {
+    if (song instanceof Song) {
       song.user = message.author;
       return song;
-    } else if (!ytdl.validateURL(song)) {
-      if (isURL(song)) throw TypeError("This URL is not supported!");
-      return await this._searchSong(message, song);
-    } else {
-      let info = await ytdl.getBasicInfo(song, { requestOptions: this.requestOptions });
-      return new Song(info, message.author);
     }
+    if (typeof song === "object")
+      return new Song(song, message.author)
+    if (ytdl.validateURL(song))
+      return new Song(await ytdl.getBasicInfo(song, { requestOptions: this.requestOptions }), message.author, true);
+    if (isURL(song)) {
+      let info = await youtube_dl.getInfo(song, youtube_dlOptions).catch(e => { throw new Error(e.stderr) })
+      if (Array.isArray(info) && info.length > 0) return info.map(i => new Song(i, message.author));
+      return new Song(info, message.author)
+    }
+    return await this._searchSong(message, song);
   }
 
   async _handleSong(message, song, skip = false) {
     if (!song) return;
+    if (Array.isArray(song))
+      return this._handlePlaylist(message, song, skip);
     if (this.isPlaying(message)) {
       let queue = this._addToQueue(message, song, skip);
       if (skip) this.skip(message);
@@ -743,18 +753,21 @@ class DisTube extends EventEmitter {
     let queue = this.getQueue(message);
     if (!queue) throw new Error("NotPlaying");
     let song = queue.songs[0];
+    if (!song.youtube) {
+      this.emit("noRelated", message);
+      return queue;
+    }
     let related = song.related;
     if (!related) {
       related = await ytdl.getBasicInfo(song.url, { requestOptions: this.requestOptions });
       related = related.related_videos;
     }
-    message.autoplay = true;
     related = related.filter(v => v.length_seconds != 'undefined')
-    if (related && related[0]) {
-      let song = await ytdl.getBasicInfo(related[0].id, { requestOptions: this.requestOptions });
-      let nextSong = new Song(song, this.client.user);
-      this._addToQueue(message, nextSong);
-    } else {
+    if (related && related[0])
+      try {
+        this._addToQueue(message, new Song(await ytdl.getBasicInfo(related[0].id, { requestOptions: this.requestOptions }), this.client.user, true));
+      } catch { this.emit("noRelated", message) }
+    else
       this.emit("noRelated", message);
     }
     return queue;
@@ -823,6 +836,26 @@ class DisTube extends EventEmitter {
   }
 
   /**
+   * Create a ytdl stream
+   * @private
+   * @ignore
+   */
+  _createStream(queue) {
+    let song = queue.songs[0];
+    let encoderArgs = queue.filter ? ["-af", ffmpegFilters[queue.filter]] : null;
+    let streamOptions = {
+      opusEncoded: true,
+      filter: (song.isLive ? "audioandvideo" : "audioonly"),
+      quality: "highestaudio",
+      highWaterMark: this.options.highWaterMark,
+      requestOptions: this.requestOptions,
+      encoderArgs,
+    };
+    if (song.youtube) return ytdl(song.url, streamOptions);
+    return ytdl.arbitraryStream(song.streamURL, streamOptions);
+  }
+
+  /**
    * Play a song on voice connection
    * @private
    * @ignore
@@ -831,16 +864,8 @@ class DisTube extends EventEmitter {
   async _playSong(message) {
     let queue = this.getQueue(message);
     if (!queue) return;
-    let encoderArgs = queue.filter ? ["-af", ffmpegFilters[queue.filter]] : null;
     try {
-      queue.stream = ytdl(queue.songs[0].url, {
-        opusEncoded: true,
-        filter: (queue.songs[0].isLive ? "audioandvideo" : "audioonly"),
-        quality: "highestaudio",
-        highWaterMark: this.options.highWaterMark,
-        requestOptions: this.requestOptions,
-        encoderArgs
-      }).on("error", e => this.emit("error", message, `There is a problem while playing \`${queue.songs[0].id}\` song. Error: \`${e}\``))
+      queue.stream = this._createStream(queue).on("error", e => this._handlePlayingError(e, message, queue));
       queue.dispatcher = queue.connection.play(queue.stream, {
         highWaterMark: 1,
         type: 'opus',
