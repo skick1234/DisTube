@@ -41,15 +41,17 @@
   },
   "homepage": "https://distube.js.org/",
   "dependencies": {
-    "discord-ytdl-core": "^4.0.8",
-    "moment": "^2.29.0",
+    "discord-ytdl-core": "^4.0.9",
+    "moment": "^2.29.1",
+    "youtube-dl": "^3.0.2",
     "ytdl-core": "^3.3.0",
     "ytpl": "^1.0.1",
-    "ytsr": "^1.0.1"
+    "ytsr": "^1.0.4"
   },
   "devDependencies": {
     "@discordjs/opus": "^0.3.2",
-    "@types/node": "^14.11.2",
+    "@types/node": "^14.11.7",
+    "@types/youtube-dl": "^1.12.2",
     "clean-jsdoc-theme": "^2.2.11",
     "discord.js": "^12.3.1",
     "discord.js-docgen": "github:skick1234/docgen",
