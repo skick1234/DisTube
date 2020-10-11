@@ -85,4 +85,14 @@ declare class Song {
      * @type {?number}
      */
     reposts: number | null;
+    /**
+     * @deprecated use `Song.name` instead
+     * @type {string}
+     */
+    title: string;
+    /**
+     * @deprecated use `Song.url` instead
+     * @type {string}
+     */
+    link: string;
 }

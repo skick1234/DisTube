@@ -3,6 +3,22 @@ const { formatDuration, toSecond } = require("./duration"),
   Discord = require("discord.js"),
   ytdl = require("ytdl-core");
 
+const deprecate = (obj, oldProp, value, newProp = null) => {
+  Object.defineProperty(obj, oldProp, {
+    get: () => {
+      if (newProp)
+        console.warn(`\`song.${oldProp}\` will be removed in the next major release, use \`song.${newProp}\` instead.`);
+      else
+        console.warn(`\`song.${oldProp}\` will be removed completely in the next major release.`)
+      return value;
+    },
+  });
+};
+
+const deprecateProps = {
+  "title": "name",
+  "link": "url"
+};
 /** Class representing a song. */
 class Song {
   /**
@@ -13,7 +29,7 @@ class Song {
    */
   constructor(info, user, youtube = false) {
     /**
-     * `@2.6.0`
+     * `@2.6.0` Weather or not the video is a Youtube video.
      * @type {boolean}
      */
     this.youtube = info.youtube || youtube;
@@ -89,6 +105,19 @@ class Song {
      * @type {?number}
      */
     this.reposts = info.repost_count || 0;
+
+    /**
+     * @deprecated use `Song.name` instead 
+     * @type {string}
+     */
+    this.title = "";
+    /**
+     * @deprecated use `Song.url` instead
+     * @type {string}
+     */
+    this.link = "";
+    for (let [oldProp, newProp] of Object.entries(deprecateProps))
+      deprecate(this, oldProp, this[newProp], newProp);
   }
 }
 
