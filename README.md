@@ -31,44 +31,7 @@ Require [discord.js](https://discord.js.org) v12 and [FFMPEG](https://www.ffmpeg
 
 ## Documentation
 
-### DisTube
-- [play(`message, string`)](https://distube.js.org/DisTube.html#play): play / add video(s) from video url or playlist url. Search for a video if `string` is invalid url.
-
-##### Song management
-- [playSkip(`message, string`)](https://distube.js.org/DisTube.html#play): same as [play()](https://distube.js.org/DisTube.html#play) but it will add new song(s) to the beginning of the queue and skip the playing song.
-- [playCustomPlaylist(`message, urls`)](https://distube.js.org/DisTube.html#playCustomPlaylist): Play or add to the queue a list of Youtube video url.
-- [stop(`message`)](https://distube.js.org/DisTube.html#stop): Stop the playing song and clear the queue.
-- [skip(`message`)](https://distube.js.org/DisTube.html#skip): Skip the current song.
-- [jump(`message, num`)](https://distube.js.org/DisTube.html#jump): Jump to the song number in the queue.
-- [pause(`message`)](https://distube.js.org/DisTube.html#pause): Pause the playing song.
-- [resume(`message`)](https://distube.js.org/DisTube.html#resume): Resume the paused song.
-
-##### Queue management
-- [setFilter(`message`, `filter`)](https://distube.js.org/DisTube.html#setFilter) Toggle a filter of the queue, replay playing song. Available filters: `3d`, `bassboost`, `echo`, `karaoke`, `nightcore`, `vaporwave`
-- [shuffle(`message`)](https://distube.js.org/DisTube.html#shuffle): Shuffle the server queue.
-- [setVolume(`message, percent`)](https://distube.js.org/DisTube.html#setVolume): Set server volume in percentage.
-- [setRepeatMode(`message, type`)](https://distube.js.org/DisTube.html#setRepeatMode): Set repeat mode of server `(disabled, repeat a song, repeat all the queue)`.
-- [toggleAutoplay(`message`)](https://distube.js.org/DisTube.html#toggleAutoplay): Toggle server's auto-play mode.
-- [getQueue(`message`)](https://distube.js.org/DisTube.html#getQueue): get the server queue.
-- [isPaused(`message`)](https://distube.js.org/DisTube.html#isPaused): Whether or not the server queue is paused.
-- [isPlaying(`message`)](https://distube.js.org/DisTube.html#isPlaying): Whether or not the bot is playing music in the server.
-
-##### Events
-
-| Event Name                                                             | Emitted When                                        |
-|------------------------------------------------------------------------|-----------------------------------------------------|
-| [playSong](https://distube.js.org/DisTube.html#event:playSong)         | Play a new song                                     |
-| [playList](https://distube.js.org/DisTube.html#event:playList)         | Play a new playlist                                 |
-| [addSong](https://distube.js.org/DisTube.html#event:addSong)           | Add new song to server queue                        |
-| [addList](https://distube.js.org/DisTube.html#event:addList)           | Add playlist to server queue                        |
-| [empty](https://distube.js.org/DisTube.html#event:empty)               | There is no user in VoiceChannel                    |
-| [finish](https://distube.js.org/DisTube.html#event:finish)             | There is no more music in the queue                 |
-| [noRelated](https://distube.js.org/DisTube.html#event:noRelated)       | DisTube cannot find related songs to play           |
-| [searchResult](https://distube.js.org/DisTube.html#event:searchResult) | Return results after searching (searchSongs = true) |
-| [searchCancel](https://distube.js.org/DisTube.html#event:searchCancel) | Cancel selecting results (searchSongs = true)       |
-| [error](https://distube.js.org/DisTube.html#event:error)               | An error encountered                                |
-
-See more definitions, properties and events details in the [Documentation page](https://distube.js.org/).
+Read DisTube's definitions, properties and events details in the [Documentation page](https://distube.js.org/).
 
 ## Example Bot
 
