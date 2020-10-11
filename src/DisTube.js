@@ -7,9 +7,9 @@ const ytdl = require("discord-ytdl-core"),
   Playlist = require("./Playlist"),
   Discord = require("discord.js"),
   youtube_dl = require('youtube-dl'),
-  util = require('util'),
+  { promisify } = require('util'),
   youtube_dlOptions = ["--no-warnings", "--force-ipv4"];
-youtube_dl.getInfo = util.promisify(youtube_dl.getInfo);
+youtube_dl.getInfo = promisify(youtube_dl.getInfo);
 
 const isURL = (string) => {
   try { new URL(string) } catch { return false }
@@ -115,7 +115,7 @@ class DisTube extends EventEmitter {
     for (let key in otp)
       this.options[key] = otp[key];
 
-    this.requestOptions = { headers: { cookie: this.options.youtubeCookie, 'x-youtube-identity-token': this.options.youtubeIdentityToken } };
+    this.requestOptions = this.options.youtubeCookie ? { headers: { cookie: this.options.youtubeCookie, 'x-youtube-identity-token': this.options.youtubeIdentityToken } } : undefined;
 
     client.on("voiceStateUpdate", (oldState, newState) => {
       if (newState.id == client.user.id && !newState.channelID) {
@@ -375,18 +375,16 @@ class DisTube extends EventEmitter {
    * @returns {Promise<Queue>}
    */
   async _newQueue(message, song) {
+    let voice = message.member.voice.channel;
+    if (!voice) throw new Error("User is not in the voice channel.");
     let queue = new Queue(message);
     this.emit("initQueue", queue);
     this.guildQueues.set(message.guild.id, queue);
-    let voice = message.member.voice.channel;
-    if (!voice) {
-      this._deleteQueue(message);
-      throw new Error("User is not in the voice channel.");
-    }
     queue.connection = await voice.join().catch(err => {
       this._deleteQueue(message);
       throw Error("DisTube cannot join the voice channel: " + err);
     });
+    if (!queue.connection) return;
     queue.connection.on("error", e => {
       e.message = "There is a problem with Discord Voice Connection.\nPlease try again! Sorry for the interruption!\nReason: " + e.message;
       this._emitError(message, e);
