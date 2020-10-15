@@ -682,7 +682,7 @@ class DisTube extends EventEmitter {
   }
 
   /**
-   * Whether or not a guild is playing or paused music.
+   * Whether or not a guild is playing music.
    * @param {Discord.Snowflake|Discord.Message} message The message from guild channel to check
    * @returns {boolean} Whether or not the guild is playing song(s)
    */
