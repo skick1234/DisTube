@@ -118,7 +118,7 @@ class DisTube extends EventEmitter {
     this.requestOptions = this.options.youtubeCookie ? { headers: { cookie: this.options.youtubeCookie, 'x-youtube-identity-token': this.options.youtubeIdentityToken } } : undefined;
 
     client.on("voiceStateUpdate", (oldState, newState) => {
-      if (newState.id == client.user.id && !newState.channelID) {
+      if (newState && newState.id == client.user.id && !newState.channelID) {
         let queue = this.guildQueues.find((gQueue) => gQueue.connection && gQueue.connection.channel.id == oldState.channelID);
         if (!queue) return;
         let guildID = queue.connection.channel.guild.id;
@@ -183,7 +183,7 @@ class DisTube extends EventEmitter {
     if (!song) return;
     if (Array.isArray(song))
       return this._handlePlaylist(message, song, skip);
-    if (this.isPlaying(message)) {
+    if (this.getQueue(message)) {
       let queue = this._addToQueue(message, song, skip);
       if (skip) this.skip(message);
       else this.emit("addSong", message, queue, song);
@@ -292,12 +292,13 @@ class DisTube extends EventEmitter {
     if (!playlist) throw Error("Invalid Playlist");
     if (!playlist.songs.length) throw Error("No valid video in the playlist");
     let songs = playlist.songs;
-    if (this.isPlaying(message)) {
-      let queue = this._addSongsToQueue(message, songs, skip);
+    let queue = this.getQueue(message);
+    if (queue) {
+      this._addSongsToQueue(message, songs, skip);
       if (skip) this.skip(message);
       else this.emit("addList", message, queue, playlist);
     } else {
-      let queue = await this._newQueue(message, songs.shift()).catch((e) => this._emitError(message, e));
+      await this._newQueue(message, songs.shift());
       this._addSongsToQueue(message, songs);
       this.emit("playList", message, queue, playlist, queue.songs[0]);
     }
