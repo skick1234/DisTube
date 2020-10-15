@@ -41,7 +41,7 @@
   },
   "homepage": "https://distube.js.org/",
   "dependencies": {
-    "discord-ytdl-core": "^4.0.9",
+    "discord-ytdl-core": "github:skick1234/discord-ytdl-core",
     "moment": "^2.29.1",
     "youtube-dl": "^3.0.2",
     "ytdl-core": "^3.3.0",
