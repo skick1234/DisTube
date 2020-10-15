@@ -837,7 +837,7 @@ class DisTube extends EventEmitter {
         type: 'opus',
         volume: queue.volume / 100
       }).on("finish", () => this._handleSongFinish(message, queue))
-        .on("error", e => this._handlePlayingError(e, message, queue));
+        .on("error", () => { });
     } catch (e) {
       e.message = `Cannot play \`${queue.songs[0].id}\`: \`${e.message}\``;
       this._emitError(message, e);
@@ -886,7 +886,7 @@ class DisTube extends EventEmitter {
     if (queue.songs.length > 0) {
       this.emit("playSong", message, queue, queue.songs[0]);
       this._playSong(message);
-    }
+    } else try { this.stop(message) } catch { this._deleteQueue(message) }
   }
 }
 
