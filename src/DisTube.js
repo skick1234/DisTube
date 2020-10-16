@@ -298,7 +298,7 @@ class DisTube extends EventEmitter {
       if (skip) this.skip(message);
       else this.emit("addList", message, queue, playlist);
     } else {
-      await this._newQueue(message, songs.shift());
+      queue = await this._newQueue(message, songs.shift());
       this._addSongsToQueue(message, songs);
       this.emit("playList", message, queue, playlist, queue.songs[0]);
     }
@@ -828,15 +828,17 @@ class DisTube extends EventEmitter {
    * @ignore
    * @param {Discord.Message} message The message from guild channel
    */
-  async _playSong(message) {
+  _playSong(message) {
     let queue = this.getQueue(message);
     if (!queue) return;
+    if (!queue.songs.length) return this._deleteQueue(message);
     try {
       queue.stream = this._createStream(queue).on("error", e => this._handlePlayingError(e, message, queue));
       queue.dispatcher = queue.connection.play(queue.stream, {
         highWaterMark: 1,
         type: 'opus',
-        volume: queue.volume / 100
+        volume: queue.volume / 100,
+        bitrate: 'auto'
       }).on("finish", () => this._handleSongFinish(message, queue))
         .on("error", () => { });
     } catch (e) {
