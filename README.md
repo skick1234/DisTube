@@ -11,12 +11,13 @@
 
 # DisTube
 
-A Node.js module to easily manage music commands and play Youtube song on Discord without any API key.
+A Discord.js module to manage music commands and play songs on Discord without any API key.
 
-[DisTube Support Server](https://discord.gg/feaDd9h)
+[DisTube Support Server](https://discord.gg/feaDd9h) - [Frequently Asked Questions](https://github.com/skick1234/DisTube/wiki/Frequently-Asked-Questions)
 
 ## Features
 
+- Support YouTube, SoundCloud, Facebook, and [700+ more sites](https://ytdl-org.github.io/youtube-dl/supportedsites.html).
 - Build on discord.js v12
 - Easily to use and customize
 - Work on multiple servers
@@ -24,10 +25,13 @@ A Node.js module to easily manage music commands and play Youtube song on Discor
 ## Installation
 
 ```npm
-npm install distube @discordjs/opus --save
+npm install distube
 ```
 
-Require [discord.js](https://discord.js.org) v12 and [FFMPEG](https://www.ffmpeg.org/download.html).
+#### Requirement
+- [discord.js](https://discord.js.org) v12
+- [FFmpeg](https://www.ffmpeg.org/download.html) - `npm install ffmpeg-static`
+- [@discordjs/opus](https://github.com/discordjs/opus) - `npm install @discordjs/opus`
 
 ## Documentation
 
