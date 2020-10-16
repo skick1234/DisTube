@@ -313,7 +313,7 @@ class DisTube extends EventEmitter {
    * @throws {Error} If an error encountered
    * @returns {Promise<Song[]>} Array of results
    */
-  async search(string, retried = false) {
+  async search(string, retried = 0) {
     try {
       let search = await ytsr(string, { limit: 12 });
       let videos = search.items.filter(val => val.type === 'video' && val.link).map(vid => new Song({
@@ -323,8 +323,9 @@ class DisTube extends EventEmitter {
       if (videos.length === 0) throw Error("No result!");
       return videos;
     } catch (e) {
-      if (retried) throw e;
-      else await this.search(string, true);
+      if (retried > 3) throw Error("No result!");
+      await new Promise(r => setTimeout(r, 1000));
+      return await this.search(string, ++retried);
     }
   }
 
@@ -335,7 +336,6 @@ class DisTube extends EventEmitter {
    * @ignore
    * @param {Discord.Message} message The message from guild channel
    * @param {string} name The string search for
-   * @throws {Error}
    * @returns {Song} Song info
    */
   async _searchSong(message, name) {
