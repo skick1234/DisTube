@@ -363,7 +363,7 @@ class DisTube extends EventEmitter {
         return;
       }
     }
-    song.author = message.author;
+    song.user = message.author;
     return song;
   }
 
