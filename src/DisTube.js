@@ -194,7 +194,7 @@ class DisTube extends EventEmitter {
   }
 
   /**
-   * Play / add a song from Youtube video url or playlist from Youtube playlist url. Search and play a song if it is not a valid url.
+   * Play / add a song or playlist from url. Search and play a song if it is not a valid url.
    * @async
    * @param {Discord.Message} message The message from guild channel
    * @param {string|Song} song Youtube url | Search string | {@link Song}
@@ -221,7 +221,7 @@ class DisTube extends EventEmitter {
   }
 
   /**
-   * `@2.0.0` Skip the playing song and play a song or a playlist
+   * `@2.0.0` Skip the playing song and play a song or playlist
    * @async
    * @param {Discord.Message} message The message from guild channel
    * @param {string|Song} song Youtube url | Search string | {@link Song}
