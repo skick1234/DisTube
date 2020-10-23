@@ -1,4 +1,4 @@
-const ytdl = require("discord-ytdl-core"),
+const ytdl = require("@skick/discord-ytdl-core"),
   ytsr = require("ytsr"),
   ytpl = require("ytpl"),
   { EventEmitter } = require("events"),
