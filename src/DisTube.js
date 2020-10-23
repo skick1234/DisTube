@@ -317,15 +317,16 @@ class DisTube extends EventEmitter {
    */
   async search(string, retried = 0) {
     try {
-      let search = await ytsr(string, { limit: 12 });
+      let search = await ytsr(string, { limit: 15 });
       let videos = search.items.filter(val => val.type === 'video' && val.link).map(vid => new Song({
         ...vid,
         id: vid.link.match(/^.*((youtu.be\/)|(v\/)|(\/u\/\w\/)|(embed\/)|(watch\?))\??v?=?([^#&?]*).*/)[7],
       }, null, true));
+      videos.splice(15);
       if (videos.length === 0) throw Error("No result!");
       return videos;
     } catch (e) {
-      if (retried > 3) throw Error("No result!");
+      if (retried > 3) throw Error("No result! Please try again.");
       await new Promise(r => setTimeout(r, 1000));
       return await this.search(string, ++retried);
     }

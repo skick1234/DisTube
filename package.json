@@ -46,7 +46,7 @@
     "youtube-dl": "^3.0.2",
     "ytdl-core": "^3.4.1",
     "ytpl": "^1.0.1",
-    "ytsr": "^1.0.4"
+    "ytsr": "github:skick1234/node-ytsr"
   },
   "devDependencies": {
     "@discordjs/opus": "^0.3.2",
