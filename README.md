@@ -28,10 +28,11 @@ A Discord.js module to manage music commands and play songs on Discord without a
 npm install distube
 ```
 
-#### Requirement
+### Requirement
 - [discord.js](https://discord.js.org) v12
 - [FFmpeg](https://www.ffmpeg.org/download.html) - `npm install ffmpeg-static`
 - [@discordjs/opus](https://github.com/discordjs/opus) - `npm install @discordjs/opus`
+- [python](https://www.python.org/) *(For [`youtube-dl`](http://ytdl-org.github.io/youtube-dl/) to support [700+ more sites](https://ytdl-org.github.io/youtube-dl/supportedsites.html).)*
 
 ## Documentation
 
