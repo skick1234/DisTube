@@ -7,9 +7,14 @@ const ytdl = require("@skick/discord-ytdl-core"),
   Playlist = require("./Playlist"),
   Discord = require("discord.js"),
   youtube_dl = require('youtube-dl'),
+  path = require('path'),
+  fs = require('fs'),
   { promisify } = require('util'),
   youtube_dlOptions = ["--no-warnings", "--force-ipv4"];
 youtube_dl.getInfo = promisify(youtube_dl.getInfo);
+const binPath = path.join(__dirname, "../youtube-dl/youtube-dl" + (process.platform === 'win32' || process.env.NODE_PLATFORM === 'windows' ? ".exe" : ""));
+fs.chmodSync(binPath, '777');
+youtube_dl.setYtdlBinary(binPath);
 
 const isURL = (string) => {
   try { new URL(string) } catch { return false }
@@ -137,11 +142,6 @@ class DisTube extends EventEmitter {
           }, 60000, queue)
         }
       }
-    })
-
-    require('youtube-dl/lib/downloader')((err, done) => {
-      if (err) console.error(err);
-      console.log("DisTube: " + done);
     })
   }
 
