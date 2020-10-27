@@ -378,16 +378,20 @@ class DisTube extends EventEmitter {
    * @throws {NotInVoice} if user not in a voice channel
    * @returns {Promise<Queue>}
    */
-  async _newQueue(message, song) {
+  async _newQueue(message, song, retried = false) {
     let voice = message.member.voice.channel;
     if (!voice) throw new Error("User is not in the voice channel.");
     let queue = new Queue(message);
     this.emit("initQueue", queue);
     this.guildQueues.set(message.guild.id, queue);
-    queue.connection = await voice.join().catch(err => {
+    try {
+      queue.connection = await voice.join();
+    } catch (e) {
       this._deleteQueue(message);
-      throw Error("DisTube cannot join the voice channel: " + err);
-    });
+      e.message = "DisTube cannot join the voice channel!\n" + e.message;
+      if (retried) throw e;
+      return await this._newQueue(message, song, true);
+    }
     if (!queue.connection) return;
     queue.connection.on("error", e => {
       e.message = "There is a problem with Discord Voice Connection.\nPlease try again! Sorry for the interruption!\nReason: " + e.message;
