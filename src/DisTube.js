@@ -30,8 +30,9 @@ const isURL = (string) => {
  * @prop {boolean} [leaveOnFinish=false] Whether or not leaving voice channel when the queue ends.
  * @prop {boolean} [leaveOnStop=true] Whether or not leaving voice channel after using {@link DisTube#stop|stop()} function.
  * @prop {boolean} [searchSongs=false] Whether or not searching for multiple songs to select manually, DisTube will play the first result if `false`
- * @prop {string} [youtubeCookie=null] `@2.4.0` YouTube cookies. How to get it: {@link https://github.com/fent/node-ytdl-core/blob/784c04eaf9f3cfac0fe0933155adffe0e2e0848a/example/cookies.js#L6-L12|YTDL's Example}
- * @prop {string} [youtubeIdentityToken=null] `@2.4.0` If not given, ytdl-core will try to find it. You can find this by going to a video's watch page, viewing the source, and searching for "ID_TOKEN".
+ * @prop {?string} [youtubeCookie] `@2.4.0` YouTube cookies. How to get it: {@link https://github.com/fent/node-ytdl-core/blob/784c04eaf9f3cfac0fe0933155adffe0e2e0848a/example/cookies.js#L6-L12|YTDL's Example}
+ * @prop {?string} [youtubeIdentityToken] `@2.4.0` If not given, ytdl-core will try to find it. You can find this by going to a video's watch page, viewing the source, and searching for "ID_TOKEN".
+ * @prop {Object.<string, string>} [customFilters] `@2.7.0` Override or add more ffmpeg filters. Key is filter name and value is ffmpeg audio filter.
  */
 const DisTubeOptions = {
   highWaterMark: 1 << 24,
@@ -40,8 +41,7 @@ const DisTubeOptions = {
   leaveOnFinish: false,
   leaveOnStop: true,
   searchSongs: false,
-  youtubeCookie: null,
-  youtubeIdentityToken: null,
+  customFilters: {}
 };
 
 /**
@@ -129,6 +129,15 @@ class DisTube extends EventEmitter {
     this.options = DisTubeOptions;
     for (let key in otp)
       this.options[key] = otp[key];
+
+    /**
+     * DisTube filters
+     * @type {Filter}
+     */
+    this.filters = ffmpegFilters;
+    if (typeof otp.customFilters === "object")
+      for (let key in otp.customFilters)
+        this.filters[key] = otp.customFilters[key];
 
     this.requestOptions = this.options.youtubeCookie ? { headers: { cookie: this.options.youtubeCookie, 'x-youtube-identity-token': this.options.youtubeIdentityToken } } : undefined;
 
@@ -783,7 +792,7 @@ class DisTube extends EventEmitter {
   setFilter(message, filter) {
     let queue = this.getQueue(message);
     if (!queue) throw new Error("NotPlaying");
-    if (!Object.prototype.hasOwnProperty.call(ffmpegFilters, filter)) throw TypeError(filter + " is not a Filter (https://DisTube.js.org/global.html#Filter).");
+    if (!Object.prototype.hasOwnProperty.call(this.filters, filter)) throw TypeError(filter + " is not a Filter (https://DisTube.js.org/global.html#Filter).");
     if (queue.filter == filter) queue.filter = null;
     else queue.filter = filter;
     this._playSong(message);
@@ -826,7 +835,7 @@ class DisTube extends EventEmitter {
    */
   _createStream(queue) {
     let song = queue.songs[0];
-    let encoderArgs = queue.filter ? ["-af", ffmpegFilters[queue.filter]] : null;
+    let encoderArgs = queue.filter ? ["-af", this.filters[queue.filter]] : null;
     let streamOptions = {
       opusEncoded: true,
       filter: (song.isLive ? "audioandvideo" : "audioonly"),
