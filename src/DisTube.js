@@ -735,12 +735,23 @@ class DisTube extends EventEmitter {
   }
 
   /**
+   * TODO: Remove this
+   * @deprecated use {@link DisTube#addRelatedVideo} instead
+   * @param {DisTube.Message} message Message
+   * @returns {Promise<Queue>}
+   */
+  runAutoplay(message) {
+    console.warn(`\`DisTube#runAutoplay\` is deprecated, use \`DisTube#addRelatedVideo\` instead.`);
+    return this.addRelatedVideo(message);
+  }
+
+  /**
    * Add related song to the queue
    * @async
    * @param {Discord.Snowflake|Discord.Message} message The message from guild channel
    * @returns {Promise<Queue>} The guild queue
    */
-  async runAutoplay(message) {
+  async addRelatedVideo(message) {
     let queue = this.getQueue(message);
     if (!queue) throw new Error("NotPlaying");
     let song = queue.songs[0];
@@ -749,18 +760,9 @@ class DisTube extends EventEmitter {
       return queue;
     }
     let related = song.related;
-    if (!related) {
-      related = await ytdl.getBasicInfo(song.url, { requestOptions: this.requestOptions });
-      related = related.related_videos;
-    }
-    related = related.filter(v => v.length_seconds != 'undefined')
-    if (related && related[0])
-      try {
-        this._addToQueue(message, new Song(await ytdl.getBasicInfo(related[0].id, { requestOptions: this.requestOptions }), this.client.user, true));
-      } catch { this.emit("noRelated", message) }
-    else
-      this.emit("noRelated", message);
-
+    if (!related) related = (await ytdl.getBasicInfo(song.url, { requestOptions: this.requestOptions })).related_videos;
+    if (related && related[0]) this._addToQueue(message, new Song(await ytdl.getInfo(related[0].id), this.client.user, true));
+    else this.emit("noRelated", message);
     return queue;
   }
 
@@ -897,7 +899,7 @@ class DisTube extends EventEmitter {
     }
     if (queue.repeatMode === 2 && !queue.skipped) queue.songs.push(queue.songs[0]);
     if (queue.songs.length <= 1 && (queue.skipped || !queue.repeatMode)) {
-      if (queue.autoplay) await this.runAutoplay(message);
+      if (queue.autoplay) await this.addRelatedVideo(message);
       if (queue.songs.length <= 1) {
         this._deleteQueue(message);
         if (this.options.leaveOnFinish && !queue.stopped)
