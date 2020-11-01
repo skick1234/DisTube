@@ -1,32 +1,31 @@
 /* eslint no-unused-vars: "off" */
 const { formatDuration } = require("./duration"),
   Discord = require("discord.js"),
-  Song = require("./Song");
+  Song = require("./Song"),
+  ytpl = require("ytpl");
 
 const deprecate = (obj, oldProp, value, newProp = null) => {
   Object.defineProperty(obj, oldProp, {
     get: () => {
-      if (newProp)
-        console.warn(`\`playlist.${oldProp}\` will be removed in the next major release, use \`playlist.${newProp}\` instead.`);
-      else
-        console.warn(`\`playlist.${oldProp}\` will be removed completely in the next major release.`)
+      if (newProp) console.warn(`\`playlist.${oldProp}\` will be removed in the next major release, use \`playlist.${newProp}\` instead.`);
+      else console.warn(`\`playlist.${oldProp}\` will be removed completely in the next major release.`);
       return value;
     },
   });
 };
 
 const deprecateProps = {
-  "title": "name",
-  "items": "songs"
+  title: "name",
+  items: "songs",
 };
 
 /** Class representing a playlist. */
 class Playlist {
   /**
    * Create a playlist
-   * @param {object|Song[]} playlist Playlist
+   * @param {ytpl.result|Song[]} playlist Playlist
    * @param {Discord.User} user Requested user
-   * @param {object} properties Custom properties
+   * @param {Object} properties Custom properties
    */
   constructor(playlist, user, properties = {}) {
     /**
@@ -54,12 +53,11 @@ class Playlist {
      * @type {string}
      */
     this.thumbnail = playlist.thumbnail || this.songs[0].thumbnail;
-    for (let [key, value] of Object.entries(properties))
-      this[key] = value;
+    for (let [key, value] of Object.entries(properties)) this[key] = value;
 
     // Old version compatible
     /**
-     * @deprecated use `Playlist.name` instead 
+     * @deprecated use `Playlist.name` instead
      * @type {string}
      */
     this.title = "";
@@ -79,14 +77,12 @@ class Playlist {
      */
     this.id = playlist.id || "";
     /**
-     * @deprecated 
+     * @deprecated
      * @type {object}
     */
     this.author = playlist.author || {};
-    for (let [oldProp, newProp] of Object.entries(deprecateProps))
-      deprecate(this, oldProp, this[newProp], newProp);
-    for (let prop of ["id", "author", "total_items"])
-      deprecate(this, prop, this[prop]);
+    for (let [oldProp, newProp] of Object.entries(deprecateProps)) deprecate(this, oldProp, this[newProp], newProp);
+    for (let prop of ["id", "author", "total_items"]) deprecate(this, prop, this[prop]);
   }
 
   /**

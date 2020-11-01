@@ -106,4 +106,3 @@ docs
 .vscode
 typings/DisTube.js
 .npmignore
-jsdoc.json

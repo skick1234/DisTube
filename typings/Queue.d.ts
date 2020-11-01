@@ -81,7 +81,7 @@ declare class Queue {
     get formattedDuration(): string;
     /**
      * Queue's duration.
-     * @type {Number}
+     * @type {number}
      */
     get duration(): number;
 }

@@ -5,18 +5,18 @@ import Song from "./Song";
 declare class Playlist {
     /**
      * Create a playlist
-     * @param {object|Song[]} playlist Playlist
+     * @param {ytpl.result|Song[]} playlist Playlist
      * @param {Discord.User} user Requested user
-     * @param {object} properties Custom properties
+     * @param {Object} properties Custom properties
      */
-    constructor(playlist: object | Song[], user: Discord.User, properties?: object);
+    constructor(playlist: import("ytpl").result | Song[], user: Discord.User, properties?: any);
     /**
      * User requested.
      * @type {Discord.User}
      */
     user: Discord.User;
     /**
-     * PLaylist songs.
+     * Playlist songs.
      * @type {Song[]}
      */
     songs: Song[];
@@ -26,25 +26,40 @@ declare class Playlist {
      */
     name: string;
     /**
-     * PLaylist URL.
+     * Playlist URL.
      * @type {string}
      */
     url: string;
     /**
-     * PLaylist thumbnail.
+     * Playlist thumbnail.
      * @type {string}
      */
     thumbnail: string;
-    /** @deprecated use `Playlist.name` instead */
+    /**
+     * @deprecated use `Playlist.name` instead
+     * @type {string}
+     */
     title: string;
-    /** @deprecated use `Playlist.songs` instead */
-    items: any[];
-    /** @deprecated use `Playlist.songs.length` instead */
+    /**
+     * @deprecated use `Playlist.songs` instead
+     * @type {Song[]}
+     */
+    items: Song[];
+    /**
+     * @deprecated use `Playlist.songs.length` instead
+     * @type {number}
+     */
     total_items: number;
-    /** @deprecated */
-    id: any;
-    /** @deprecated */
-    author: any;
+    /**
+     * @deprecated
+     * @type {string}
+     */
+    id: string;
+    /**
+     * @deprecated
+     * @type {object}
+    */
+    author: object;
     /**
      * Playlist duration in second.
      * @type {number}

@@ -24,7 +24,7 @@ const deprecateProps = {
 const parseNumber = string => typeof string === "string" ? Number(string.replace(/\D+/g, "")) : Number(string)
 
 /** Class representing a song. */
-module.exports = class Song {
+class Song {
   /**
    * Create a song.
    * @param {ytdl.videoInfo|Object} info Video info
@@ -132,7 +132,7 @@ module.exports = class Song {
 }
 
 /** `@2.7.0` Class representing a search result. */
-module.exports.SearchResult = class SearchResult {
+class SearchResult {
   /**
    * Create a search result.
    * @param {ytsr.Video} info Video info
@@ -191,3 +191,6 @@ module.exports.SearchResult = class SearchResult {
     for (let [oldProp, newProp] of Object.entries(deprecateProps)) deprecate(this, oldProp, this[newProp], newProp);
   }
 }
+
+module.exports = Song;
+module.exports.SearchResult = SearchResult;
