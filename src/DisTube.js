@@ -1,12 +1,11 @@
-const ytdl = require("@skick/discord-ytdl-core"),
-  ytsr = require("ytsr"),
+const ytdl = require("@distube/ytdl"),
+  ytsr = require("@distube/ytsr"),
   ytpl = require("ytpl"),
   { EventEmitter } = require("events"),
   Queue = require("./Queue"),
   Song = require("./Song"),
   Playlist = require("./Playlist"),
   Discord = require("discord.js"),
-  youtube_dl = require('youtube-dl'),
   path = require('path'),
   fs = require('fs'),
   { promisify } = require('util'),
@@ -14,6 +13,7 @@ const ytdl = require("@skick/discord-ytdl-core"),
 youtube_dl.getInfo = promisify(youtube_dl.getInfo);
 const binPath = path.join(__dirname, "../youtube-dl/youtube-dl" + (process.platform === 'win32' || process.env.NODE_PLATFORM === 'windows' ? ".exe" : ""));
 fs.chmodSync(binPath, '777');
+  youtube_dl = require("@distube/youtube-dl"),
 youtube_dl.setYtdlBinary(binPath);
 
 const isURL = (string) => {
