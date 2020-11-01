@@ -162,6 +162,11 @@ class DisTube extends EventEmitter {
         }
       }
     })
+
+    require("@distube/youtube-dl/lib/downloader")(path.join(__dirname, "../youtube-dl"))
+      .then(message => console.log(`[DisTube] ${message}`))
+      .catch(console.error)
+      .catch(() => console.log("[DisTube] Unable to update youtube-dl, using default version."));
   }
 
   /**
