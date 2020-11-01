@@ -10,11 +10,7 @@ import Playlist from "./Playlist";
  * @extends EventEmitter
  */
 declare class DisTube extends EventEmitter {
-    /**
-     * DisTube's current version.
-     * @type {string}
-     */
-    static get version(): string;
+    static get version(): any;
     /**
      * Create new DisTube.
      * @param {Discord.Client} client Discord.JS client
@@ -44,23 +40,28 @@ declare class DisTube extends EventEmitter {
      * Collection of guild queues
      * @type {Discord.Collection<string, Queue>}
      */
-    guildQueues: Discord.Collection<string, Queue >;
+    guildQueues: Discord.Collection<string, Queue>;
     /**
      * DisTube options
      * @type {DisTubeOptions}
      */
     options: DisTubeOptions;
     /**
-     * ytdl request options
-     * @private
-     * @ignore
+     * DisTube filters
+     * @type {Filter}
      */
-    private requestOptions;
+    filters: Filter;
+    requestOptions: {
+        headers: {
+            cookie: string;
+            "x-youtube-identity-token": string;
+        };
+    };
     /**
      * Resolve a Song
      * @async
      * @param {Discord.Message} message The message from guild channel
-     * @param {string|Song} song Youtube url | Search string | Song
+     * @param {string|Song} song Youtube url | Search string | {@link Song}
      * @private
      * @ignore
      * @returns {Promise<Song|Song[]>} Resolved Song
@@ -70,16 +71,16 @@ declare class DisTube extends EventEmitter {
      * Handle a Song or an array of Song
      * @async
      * @param {Discord.Message} message The message from guild channel
-     * @param {string|Song} song Youtube url | Search string | Song
+     * @param {Song|Song.SearchResult} song {@link Song} | {@link SearchResult}
      * @private
      * @ignore
      */
     private _handleSong;
     /**
-     * Play / add a song from Youtube video url or playlist from Youtube playlist url. Search and play a song if it is not a valid url.
+     * Play / add a song or playlist from url. Search and play a song if it is not a valid url.
      * @async
      * @param {Discord.Message} message The message from guild channel
-     * @param {string|Song} song Youtube url | Search string | Song
+     * @param {string|Song|Song.SearchResult} song Youtube url | Search string | {@link Song} | {@link SearchResult}
      * @example
      * client.on('message', (message) => {
      *     if (!message.content.startsWith(config.prefix)) return;
@@ -89,12 +90,12 @@ declare class DisTube extends EventEmitter {
      *         distube.play(message, args.join(" "));
      * });
      */
-    play(message: Discord.Message, song: string | Song): Promise<void>;
+    play(message: Discord.Message, song: string | Song | Song.SearchResult): Promise<void>;
     /**
-     * `@2.0.0` Skip the playing song and play a song or a playlist
+     * `@2.0.0` Skip the playing song and play a song or playlist
      * @async
      * @param {Discord.Message} message The message from guild channel
-     * @param {string|Song} song Youtube url | Search string | Song
+     * @param {string|Song|Song.SearchResult} song Youtube url | Search string | {@link Song} | {@link SearchResult}
      * @example
      * client.on('message', (message) => {
      *     if (!message.content.startsWith(config.prefix)) return;
@@ -104,22 +105,22 @@ declare class DisTube extends EventEmitter {
      *         distube.playSkip(message, args.join(" "));
      * });
      */
-    playSkip(message: Discord.Message, song: string | Song): Promise<void>;
+    playSkip(message: Discord.Message, song: string | Song | Song.SearchResult): Promise<void>;
     /**
      * `@2.1.0` Play or add array of Youtube video urls.
-     * DisTube#event:playList or DisTube#event:addList will be emitted
-     * with `playlist`'s properties include `properties` parameter's properties,
-     * `user`, `items`, `total_items`, `duration`, `formattedDuration`, `thumbnail` like Playlist
+     * {@link DisTube#event:playList} or {@link DisTube#event:addList} will be emitted
+     * with `playlist`'s properties include `properties` parameter's properties such as
+     * `user`, `songs`, `duration`, `formattedDuration`, `thumbnail` like {@link Playlist}
      * @async
      * @param {Discord.Message} message The message from guild channel
      * @param {string[]} urls Array of Youtube url
-     * @param {object} [properties={}] Additional properties such as `title`
+     * @param {Object} [properties={}] Additional properties such as `name`
      * @param {boolean} [playSkip=false] Whether or not play this playlist instantly
      * @example
      *     let songs = ["https://www.youtube.com/watch?v=xxx", "https://www.youtube.com/watch?v=yyy"];
-     *     distube.playCustomPlaylist(message, songs, { title: "My playlist name" });
+     *     distube.playCustomPlaylist(message, songs, { name: "My playlist name" });
      */
-    playCustomPlaylist(message: Discord.Message, urls: string[], properties?: object, playSkip?: boolean): Promise<void>;
+    playCustomPlaylist(message: Discord.Message, urls: string[], properties?: any, playSkip?: boolean): Promise<void>;
     /**
      * PLay / add a playlist
      * @async
@@ -127,11 +128,12 @@ declare class DisTube extends EventEmitter {
      * @ignore
      * @param {Discord.Message} message The message from guild channel
      * @param {string|Song[]|Playlist} arg2 Youtube playlist url | a Playlist
+     * @param {boolean} skip Skip the current song
      */
     private _handlePlaylist;
     /**
      * `@2.0.0` Search for a song. You can customize how user answers instead of send a number.
-     * Then use DisTube#play(message, aResultFromSearch) or DisTube#playSkip() to play it.
+     * Then use {@link DisTube#play|play(message, aResultFromSearch)} or {@link DisTube#playSkip|playSkip()} to play it.
      * @async
      * @param {string} string The string search for
      * @throws {NotFound} If not found
@@ -140,13 +142,12 @@ declare class DisTube extends EventEmitter {
      */
     search(string: string, retried?: boolean): Promise<Song[]>;
     /**
-     * Search for a song, fire DisTube#event:error if not found.
+     * Search for a song, fire {@link DisTube#event:error} if not found.
      * @async
      * @private
      * @ignore
      * @param {Discord.Message} message The message from guild channel
      * @param {string} name The string search for
-     * @throws {Error}
      * @returns {Song} Song info
      */
     private _searchSong;
@@ -192,6 +193,7 @@ declare class DisTube extends EventEmitter {
      * @ignore
      * @param {Discord.Snowflake|Discord.Message} message The message from guild channel
      * @param {Song} song Song to add
+     * @param {boolean} [unshift=false] Unshift
      * @throws {NotInVoice} if result is empty
      * @returns {Queue}
      */
@@ -202,6 +204,7 @@ declare class DisTube extends EventEmitter {
      * @ignore
      * @param {Discord.Snowflake|Discord.Message} message The message from guild channel
      * @param {Song[]} songs Array of song to add
+     * @param {boolean} [unshift=false] Unshift
      * @returns {Queue}
      */
     private _addSongsToQueue;
@@ -288,7 +291,7 @@ declare class DisTube extends EventEmitter {
      * @param {Discord.Snowflake|Discord.Message} message The message from guild channel
      * @param {number} num The song number to play
      * @returns {Queue} The guild queue
-     * @throws {InvalidSong} if `num` is invalid number (0 < num < Queue#songs.length)
+     * @throws {InvalidSong} if `num` is invalid number (0 < num < {@link Queue#songs}.length)
      * @example
      * client.on('message', (message) => {
      *     if (!message.content.startsWith(config.prefix)) return;
@@ -340,7 +343,7 @@ declare class DisTube extends EventEmitter {
      */
     toggleAutoplay(message: string | Discord.Message): boolean;
     /**
-     * Whether or not a guild is playing or paused music.
+     * Whether or not a guild is playing music.
      * @param {Discord.Snowflake|Discord.Message} message The message from guild channel to check
      * @returns {boolean} Whether or not the guild is playing song(s)
      */
@@ -360,15 +363,22 @@ declare class DisTube extends EventEmitter {
      */
     private _isVoiceChannelEmpty;
     /**
+     * TODO: Remove this
+     * @deprecated use {@link DisTube#addRelatedVideo} instead
+     * @param {DisTube.Message} message Message
+     * @returns {Promise<Queue>}
+     */
+    runAutoplay(message: any): Promise<Queue>;
+    /**
      * Add related song to the queue
      * @async
      * @param {Discord.Snowflake|Discord.Message} message The message from guild channel
      * @returns {Promise<Queue>} The guild queue
      */
-    runAutoplay(message: string | Discord.Message): Promise<Queue>;
+    addRelatedVideo(message: string | Discord.Message): Promise<Queue>;
     /**
      * `@2.0.0` Enable or disable a filter of the queue, replay the playing song.
-     * Available filters: Filter
+     * Available filters: {@link Filter}
      *
      * @param {Discord.Message} message The message from guild channel
      * @param {Filter} filter A filter name
@@ -530,7 +540,7 @@ declare class DisTube extends EventEmitter {
      *     message.channel.send(`**Choose an option from below**\n${result.map(song => `**${++i}**. ${song.title} - \`${song.formattedDuration}\``).join("\n")}\n*Enter anything else or wait 60 seconds to cancel*`);
      * });
      */
-    on(event: "searchResult", listener: (message: Discord.Message, result: Song[]) => void): this;
+    on(event: "searchResult", listener: (message: Discord.Message, result: Song.SearchResult[]) => void): this;
 }
 declare namespace DisTube {
     export { DisTubeOptions, Filter };
@@ -544,6 +554,7 @@ declare namespace DisTubeOptions {
     const searchSongs: boolean;
     const youtubeCookie: any;
     const youtubeIdentityToken: any;
+    const customFilters: {};
 }
 /**
  * DisTube audio filters.
@@ -554,7 +565,7 @@ type Filter = string;
  */
 type DisTubeOptions = {
     /**
-     * `@1.3.0`. If `true`, DisTube#event:playSong is not emitted when looping a song or next song is the same as the previous one
+     * `@1.3.0`. If `true`, {@link DisTube#event:playSong} is not emitted when looping a song or next song is the same as the previous one
      */
     emitNewSongOnly?: boolean;
     /**
@@ -570,7 +581,7 @@ type DisTubeOptions = {
      */
     leaveOnFinish?: boolean;
     /**
-     * Whether or not leaving voice channel after using DisTube#stop() function.
+     * Whether or not leaving voice channel after using {@link DisTube#stop|stop()} function.
      */
     leaveOnStop?: boolean;
     /**
@@ -585,4 +596,10 @@ type DisTubeOptions = {
      * `@2.4.0` If not given, ytdl-core will try to find it. You can find this by going to a video's watch page, viewing the source, and searching for "ID_TOKEN".
      */
     youtubeIdentityToken?: string;
+    /**
+     * `@2.7.0` Override or add more ffmpeg filters. Example: `{ "Filter name": "Filter value", "8d": "apulsator=hz=0.075" }`
+     */
+    customFilters?: {
+        [x: string]: string;
+    };
 };

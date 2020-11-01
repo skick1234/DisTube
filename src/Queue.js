@@ -87,7 +87,7 @@ class Queue {
   }
   /**
    * Queue's duration.
-   * @type {Number}
+   * @type {number}
    */
   get duration() {
     return this.songs.reduce((prev, next) => prev + next.duration, 0)

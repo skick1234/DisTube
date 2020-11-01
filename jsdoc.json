@@ -1,0 +1,58 @@
+{
+    "tags": {
+        "allowUnknownTags": true
+    },
+    "source": {
+        "include": ["README.md", "src"],
+        "includePattern": ".js$",
+        "excludePattern": "(node_modules/|docs)"
+    },
+    "plugins": [
+        "plugins/markdown"
+    ],
+    "templates": {
+        "cleverLinks": false,
+        "monospaceLinks": false,
+        "default": {
+            "outputSourceFiles": false
+        }
+    },
+    "opts": {
+        "destination": "docs/beta/",
+        "readme": "README.md",
+        "encoding": "utf8",
+        "private": true,
+        "recurse": true,
+        "template": "node_modules/clean-jsdoc-theme",
+        "theme_opts": {
+            "title": "DisTube",
+            "theme": "dark",
+            "filter": false,
+            "menu": [{
+                    "title": "NPM",
+                    "link": "https://www.npmjs.com/package/distube",
+                    "target": "_blank"
+                },
+                {
+                    "title": "GitHub",
+                    "link": "https://github.com/skick1234/DisTube/",
+                    "target": "_blank"
+                }
+            ],
+            "meta": [
+                "<meta name='author' content='Skick'>",
+                "<meta name='description' content='A Discord.js v12 module to manage music commands and play song on Discord without any API key.'>",
+                "<meta itemprop='name' content='DisTube'>",
+                "<meta itemprop='image' content='https://cdn.jsdelivr.net/gh/skick1234/MaBu-CDN@4.6.10/DisTube/img/banner.png'>",
+                "<meta property='og:url' content='https://DisTube.js.org'>",
+                "<meta property='og:type' content='website'>",
+                "<meta property='og:title' content='DisTube'>",
+                "<meta property='og:description' content='A Discord.js v12 module to manage music commands and play song on Discord without any API key.'>",
+                "<meta property='og:image' content='https://cdn.jsdelivr.net/gh/skick1234/MaBu-CDN@4.6.10/DisTube/img/banner.png'>",
+                "<link rel='shortcut icon' type='image/png' href='https://cdn.jsdelivr.net/gh/skick1234/MaBu-CDN@4.6.10/DisTube/img/favicon.png'>"
+            ],
+            "search": true,
+            "footer": "<a href='https://github.com/skick1234/DisTube/' target='_blank'>GitHub</a> • Powered by <a href='https://jsdoc.app/' target='_blank'>JSDoc</a>, <a href='https://github.com/ankitskvmdam/clean-jsdoc-theme' target='_blank'>clean-jsdoc-theme</a>, <a href='https://js.org' target='_blank'>js.org</a> and Love"
+        }
+    }
+}
