@@ -4,6 +4,7 @@ const ytdl = require("@distube/ytdl"),
   { EventEmitter } = require("events"),
   Queue = require("./Queue"),
   Song = require("./Song"),
+  { SearchResult } = require("./Song"),
   Playlist = require("./Playlist"),
   Discord = require("discord.js"),
   path = require('path'),
@@ -179,14 +180,11 @@ class DisTube extends EventEmitter {
    * @returns {Promise<Song|Song[]>} Resolved Song
    */
   async _resolveSong(message, song) {
-    if (song instanceof Song) {
-      song.user = message.author;
-      return song;
-    }
-    if (typeof song === "object")
-      return new Song(song, message.author)
     if (ytdl.validateURL(song))
       return new Song(await ytdl.getBasicInfo(song, { requestOptions: this.requestOptions }), message.author, true);
+    if (song instanceof Song) return song;
+    if (song instanceof SearchResult) return new Song(await ytdl.getInfo(song.url, { requestOptions: this.requestOptions }), message.author, true);
+    if (typeof song === "object") return new Song(song, message.author);
     if (isURL(song)) {
       let info = await youtube_dl.getInfo(song, youtube_dlOptions).catch(e => { throw new Error(e.stderr) })
       if (Array.isArray(info) && info.length > 0) return info.map(i => new Song(i, message.author));
@@ -199,7 +197,7 @@ class DisTube extends EventEmitter {
    * Handle a Song or an array of Song
    * @async
    * @param {Discord.Message} message The message from guild channel
-   * @param {string|Song} song Youtube url | Search string | {@link Song}
+   * @param {Song|Song.SearchResult} song {@link Song} | {@link SearchResult}
    * @private
    * @ignore
    */
@@ -221,7 +219,7 @@ class DisTube extends EventEmitter {
    * Play / add a song or playlist from url. Search and play a song if it is not a valid url.
    * @async
    * @param {Discord.Message} message The message from guild channel
-   * @param {string|Song} song Youtube url | Search string | {@link Song}
+   * @param {string|Song|Song.SearchResult} song Youtube url | Search string | {@link Song} | {@link SearchResult}
    * @example
    * client.on('message', (message) => {
    *     if (!message.content.startsWith(config.prefix)) return;
@@ -248,7 +246,7 @@ class DisTube extends EventEmitter {
    * `@2.0.0` Skip the playing song and play a song or playlist
    * @async
    * @param {Discord.Message} message The message from guild channel
-   * @param {string|Song} song Youtube url | Search string | {@link Song}
+   * @param {string|Song|Song.SearchResult} song Youtube url | Search string | {@link Song} | {@link SearchResult}
    * @example
    * client.on('message', (message) => {
    *     if (!message.content.startsWith(config.prefix)) return;
@@ -339,20 +337,15 @@ class DisTube extends EventEmitter {
    * @throws {Error} If an error encountered
    * @returns {Promise<Song[]>} Array of results
    */
-  async search(string, retried = 0) {
+  async search(string, retried = false) {
     try {
       let search = await ytsr(string, { limit: 15 });
-      let videos = search.items.filter(val => val.type === 'video' && val.link).map(vid => new Song({
-        ...vid,
-        id: vid.link.match(/^.*((youtu.be\/)|(v\/)|(\/u\/\w\/)|(embed\/)|(watch\?))\??v?=?([^#&?]*).*/)[7],
-      }, null, true));
-      videos.splice(15);
-      if (videos.length === 0) throw Error("No result!");
-      return videos;
+      let results = search.items.map(i => new SearchResult(i));
+      if (results.length === 0) throw Error("No result!");
+      return results;
     } catch (e) {
-      if (retried > 3) throw Error("No result! Please try again.");
-      await new Promise(r => setTimeout(r, 1000));
-      return await this.search(string, ++retried);
+      if (retried) throw e;
+      return this.search(string, true);
     }
   }
 
@@ -366,30 +359,26 @@ class DisTube extends EventEmitter {
    * @returns {Song} Song info
    */
   async _searchSong(message, name) {
-    let songs = await this.search(name);
-    let song = songs[0];
+    let results = await this.search(name);
+    let result = results[0];
     if (this.options.searchSongs) {
       try {
-        this.emit("searchResult", message, songs);
+        this.emit("searchResult", message, results);
         let answers = await message.channel.awaitMessages(m => m.author.id === message.author.id, {
           max: 1,
           time: 60000,
-          errors: ["time"]
+          errors: ["time"],
         })
-        if (!answers.first()) throw Error();
+        if (!answers.first()) throw new Error();
         let index = parseInt(answers.first().content, 10);
-        if (isNaN(index) || index > songs.length || index < 1) {
-          this.emit("searchCancel", message);
-          return;
-        }
-        song = songs[index - 1];
+        if (isNaN(index) || index > results.length || index < 1) throw new Error();
+        result = results[index - 1];
       } catch {
         this.emit("searchCancel", message);
-        return;
+        return null;
       }
     }
-    song.user = message.author;
-    return song;
+    return result;
   }
 
   /**
