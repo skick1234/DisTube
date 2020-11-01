@@ -1,12 +1,11 @@
-const moment = require('moment');
+const moment = require("moment");
 
-const formatInt = (int) => {
-  if (int < 10)
-    return `0${int}`;
+const formatInt = int => {
+  if (int < 10) return `0${int}`;
   return `${int}`;
 };
 
-module.exports.formatDuration = (milliseconds) => {
+module.exports.formatDuration = milliseconds => {
   if (!milliseconds || !parseInt(milliseconds)) return "00:00";
   const seconds = moment.duration(milliseconds).seconds();
   const minutes = moment.duration(milliseconds).minutes();
@@ -20,7 +19,7 @@ module.exports.formatDuration = (milliseconds) => {
   return `00:${formatInt(seconds)}`;
 };
 
-module.exports.toSecond = (string) => {
+module.exports.toSecond = string => {
   if (!string) return 0;
   if (typeof string !== "string") return parseInt(string);
   let h = 0,
@@ -37,5 +36,6 @@ module.exports.toSecond = (string) => {
       s = parseInt(time[2], 10);
     }
   } else s = parseInt(string, 10);
+  // eslint-disable-next-line no-mixed-operators
   return h * 60 * 60 + m * 60 + s;
 };
