@@ -180,6 +180,7 @@ class DisTube extends EventEmitter {
    * @returns {Promise<Song|Song[]>} Resolved Song
    */
   async _resolveSong(message, song) {
+    if (!song) return null;
     if (song instanceof Song) return song;
     if (song instanceof SearchResult) return new Song(await ytdl.getInfo(song.url, { requestOptions: this.requestOptions }), message.author, true);
     if (typeof song === "object") return new Song(song, message.author);
@@ -793,6 +794,29 @@ class DisTube extends EventEmitter {
   }
 
   /**
+   * `@2.7.0` Set the playing time to another position
+   *
+   * @param {Discord.Message} message The message from guild channel
+   * @param {number} time time in milliseconds
+   * @example
+   * client.on('message', (message) => {
+   *     if (!message.content.startsWith(config.prefix)) return;
+   *     const args = message.content.slice(config.prefix.length).trim().split(/ +/g);
+   *     const command = args.shift();
+   *     if ([`3d`, `bassboost`, `echo`, `karaoke`, `nightcore`, `vaporwave`].includes(command)) {
+   *         let filter = distube.setFilter(message, command);
+   *         message.channel.send("Current queue filter: " + (filter || "Off"));
+   *     }
+   * });
+   */
+  seek(message, time) {
+    let queue = this.getQueue(message);
+    if (!queue) throw new Error("NotPlaying");
+    queue.beginTime = time;
+    this._playSong(message);
+  }
+
+  /**
    * Emit error event
    * @private
    * @ignore
@@ -833,6 +857,7 @@ class DisTube extends EventEmitter {
       highWaterMark: this.options.highWaterMark,
       requestOptions: this.requestOptions,
       encoderArgs,
+      seek: queue.beginTime / 1000,
     };
     if (song.youtube) return ytdl.downloadFromInfo(song.info, streamOptions);
     return ytdl.arbitraryStream(song.streamURL, streamOptions);
@@ -865,12 +890,12 @@ class DisTube extends EventEmitter {
           quality: "highestaudio",
         }).url;
       }
-      queue.stream = this._createStream(queue).on("error", e => {
+      let stream = this._createStream(queue).on("error", e => {
         errorEmitted = true;
         e.message = `There is a problem while playing song!\nID: ${song.id}\nName: ${song.name}\n${e.message}`;
         this._emitError(message, e);
       });
-      queue.dispatcher = queue.connection.play(queue.stream, {
+      queue.dispatcher = queue.connection.play(stream, {
         highWaterMark: 1,
         type: "opus",
         volume: queue.volume / 100,
@@ -883,6 +908,8 @@ class DisTube extends EventEmitter {
           }
           this._handlePlayingError(message, queue);
         });
+      if (queue.stream) queue.stream.destroy();
+      queue.stream = stream;
     } catch (e) {
       e.message = `Cannot play song!\nID: ${song.id}\nName: ${song.name}\n${e.message}`;
       this._emitError(message, e);
@@ -894,6 +921,8 @@ class DisTube extends EventEmitter {
    * Handle the queue when a Song finish
    * @private
    * @ignore
+   * @param {Discord.Message} message message
+   * @param {Queue} queue queue
    */
   async _handleSongFinish(message, queue) {
     if (queue.stopped) return;
@@ -915,7 +944,7 @@ class DisTube extends EventEmitter {
     }
     queue.skipped = false;
     if (queue.repeatMode !== 1 || queue.skipped) queue.songs.shift();
-    if (queue.stream) queue.stream.destroy();
+    queue.beginTime = 0;
     await this._playSong(message);
     if (this._emitPlaySong(queue)) this.emit("playSong", message, queue, queue.songs[0]);
   }
