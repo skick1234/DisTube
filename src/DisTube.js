@@ -180,17 +180,16 @@ class DisTube extends EventEmitter {
    * @returns {Promise<Song|Song[]>} Resolved Song
    */
   async _resolveSong(message, song) {
-    if (ytdl.validateURL(song))
-      return new Song(await ytdl.getBasicInfo(song, { requestOptions: this.requestOptions }), message.author, true);
     if (song instanceof Song) return song;
     if (song instanceof SearchResult) return new Song(await ytdl.getInfo(song.url, { requestOptions: this.requestOptions }), message.author, true);
     if (typeof song === "object") return new Song(song, message.author);
+    if (ytdl.validateURL(song)) return new Song(await ytdl.getInfo(song, { requestOptions: this.requestOptions }), message.author, true);
     if (isURL(song)) {
       let info = await youtube_dl.getInfo(song, youtube_dlOptions).catch(e => { throw new Error(e.stderr) })
       if (Array.isArray(info) && info.length > 0) return info.map(i => new Song(i, message.author));
       return new Song(info, message.author)
     }
-    return await this._searchSong(message, song);
+    return this._resolveSong(message, await this._searchSong(message, song));
   }
 
   /**
@@ -412,7 +411,7 @@ class DisTube extends EventEmitter {
       this._deleteQueue(message);
     })
     queue.songs.push(song);
-    this._playSong(message);
+    await this._playSong(message);
     return queue;
   }
 
@@ -789,8 +788,9 @@ class DisTube extends EventEmitter {
     if (!Object.prototype.hasOwnProperty.call(this.filters, filter)) throw TypeError(filter + " is not a Filter (https://DisTube.js.org/global.html#Filter).");
     if (queue.filter == filter) queue.filter = null;
     else queue.filter = filter;
-    this._playSong(message);
-    if (!this.options.emitNewSongOnly) this.emit("playSong", message, queue, queue.songs[0]);
+    this._playSong(message).then(() => {
+      if (!this.options.emitNewSongOnly) this.emit("playSong", message, queue, queue.songs[0]);
+    });
     return queue.filter;
   }
 
@@ -838,7 +838,7 @@ class DisTube extends EventEmitter {
       requestOptions: this.requestOptions,
       encoderArgs,
     };
-    if (song.youtube) return ytdl(song.url, streamOptions);
+    if (song.youtube) return ytdl.downloadFromInfo(song.info, streamOptions);
     return ytdl.arbitraryStream(song.streamURL, streamOptions);
   }
 
@@ -848,12 +848,28 @@ class DisTube extends EventEmitter {
    * @ignore
    * @param {Discord.Message} message The message from guild channel
    */
-  _playSong(message) {
+  async _playSong(message) {
     let queue = this.getQueue(message);
     if (!queue) return;
-    if (!queue.songs.length) return this._deleteQueue(message);
+    if (!queue.songs.length) {
+      this._deleteQueue(message);
+      return;
+    }
+    let song = queue.songs[0];
     try {
       queue.stream = this._createStream(queue).on("error", e => this._handlePlayingError(e, message, queue));
+      let errorEmitted = false;
+      // Queue.stream.on('info') should works but maybe DisTube#playSong will emit before ytdl#info
+      if (song.youtube && !song.info) {
+        let { videoDetails } = song.info = await ytdl.getInfo(song.url, { requestOptions: this.requestOptions });
+        song.views = videoDetails.viewCount;
+        song.likes = videoDetails.likes;
+        song.dislikes = videoDetails.dislikes;
+        song.streamURL = ytdl.chooseFormat(song.info.formats, {
+          filter: song.isLive ? "audioandvideo" : "audioonly",
+          quality: "highestaudio",
+        }).url;
+      }
       queue.dispatcher = queue.connection.play(queue.stream, {
         highWaterMark: 1,
         type: 'opus',
@@ -892,9 +908,7 @@ class DisTube extends EventEmitter {
     }
     queue.skipped = false;
     if (queue.repeatMode !== 1 || queue.skipped) queue.songs.shift();
-    if (this._emitPlaySong(queue)) this.emit("playSong", message, queue, queue.songs[0]);
     if (queue.stream) queue.stream.destroy();
-    return this._playSong(message);
   }
 
   /**
@@ -910,6 +924,8 @@ class DisTube extends EventEmitter {
       this.emit("playSong", message, queue, queue.songs[0]);
       this._playSong(message);
     } else try { this.stop(message) } catch { this._deleteQueue(message) }
+    await this._playSong(message);
+    if (this._emitPlaySong(queue)) this.emit("playSong", message, queue, queue.songs[0]);
   }
 }
 
