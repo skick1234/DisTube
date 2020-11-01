@@ -5,6 +5,7 @@ import Discord from "discord.js";
 import Queue from "./Queue";
 import Song from "./Song";
 import Playlist from "./Playlist";
+import SearchResult from "./SearchResult";
 /**
  * Class representing a DisTube.
  * @extends EventEmitter
@@ -71,7 +72,7 @@ declare class DisTube extends EventEmitter {
      * Handle a Song or an array of Song
      * @async
      * @param {Discord.Message} message The message from guild channel
-     * @param {Song|Song.SearchResult} song {@link Song} | {@link SearchResult}
+     * @param {Song|SearchResult} song {@link Song} | {@link SearchResult}
      * @private
      * @ignore
      */
@@ -80,7 +81,7 @@ declare class DisTube extends EventEmitter {
      * Play / add a song or playlist from url. Search and play a song if it is not a valid url.
      * @async
      * @param {Discord.Message} message The message from guild channel
-     * @param {string|Song|Song.SearchResult} song Youtube url | Search string | {@link Song} | {@link SearchResult}
+     * @param {string|Song|SearchResult} song Youtube url | Search string | {@link Song} | {@link SearchResult}
      * @example
      * client.on('message', (message) => {
      *     if (!message.content.startsWith(config.prefix)) return;
@@ -90,12 +91,12 @@ declare class DisTube extends EventEmitter {
      *         distube.play(message, args.join(" "));
      * });
      */
-    play(message: Discord.Message, song: string | Song | Song.SearchResult): Promise<void>;
+    play(message: Discord.Message, song: string | Song | SearchResult): Promise<void>;
     /**
      * `@2.0.0` Skip the playing song and play a song or playlist
      * @async
      * @param {Discord.Message} message The message from guild channel
-     * @param {string|Song|Song.SearchResult} song Youtube url | Search string | {@link Song} | {@link SearchResult}
+     * @param {string|Song|SearchResult} song Youtube url | Search string | {@link Song} | {@link SearchResult}
      * @example
      * client.on('message', (message) => {
      *     if (!message.content.startsWith(config.prefix)) return;
@@ -105,7 +106,7 @@ declare class DisTube extends EventEmitter {
      *         distube.playSkip(message, args.join(" "));
      * });
      */
-    playSkip(message: Discord.Message, song: string | Song | Song.SearchResult): Promise<void>;
+    playSkip(message: Discord.Message, song: string | Song | SearchResult): Promise<void>;
     /**
      * `@2.1.0` Play or add array of Youtube video urls.
      * {@link DisTube#event:playList} or {@link DisTube#event:addList} will be emitted
@@ -540,7 +541,7 @@ declare class DisTube extends EventEmitter {
      *     message.channel.send(`**Choose an option from below**\n${result.map(song => `**${++i}**. ${song.title} - \`${song.formattedDuration}\``).join("\n")}\n*Enter anything else or wait 60 seconds to cancel*`);
      * });
      */
-    on(event: "searchResult", listener: (message: Discord.Message, result: Song.SearchResult[]) => void): this;
+    on(event: "searchResult", listener: (message: Discord.Message, result: SearchResult[]) => void): this;
 }
 declare namespace DisTube {
     export { DisTubeOptions, Filter };

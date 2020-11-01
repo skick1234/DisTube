@@ -4,7 +4,7 @@ const ytdl = require("@distube/ytdl"),
   { EventEmitter } = require("events"),
   Queue = require("./Queue"),
   Song = require("./Song"),
-  { SearchResult } = require("./Song"),
+  SearchResult = require("./SearchResult"),
   Playlist = require("./Playlist"),
   Discord = require("discord.js"),
   youtube_dl = require("@distube/youtube-dl"),
@@ -196,7 +196,7 @@ class DisTube extends EventEmitter {
    * Handle a Song or an array of Song
    * @async
    * @param {Discord.Message} message The message from guild channel
-   * @param {Song|Song.SearchResult} song {@link Song} | {@link SearchResult}
+   * @param {Song|SearchResult} song {@link Song} | {@link SearchResult}
    * @private
    * @ignore
    */
@@ -217,7 +217,7 @@ class DisTube extends EventEmitter {
    * Play / add a song or playlist from url. Search and play a song if it is not a valid url.
    * @async
    * @param {Discord.Message} message The message from guild channel
-   * @param {string|Song|Song.SearchResult} song Youtube url | Search string | {@link Song} | {@link SearchResult}
+   * @param {string|Song|SearchResult} song Youtube url | Search string | {@link Song} | {@link SearchResult}
    * @example
    * client.on('message', (message) => {
    *     if (!message.content.startsWith(config.prefix)) return;
@@ -242,7 +242,7 @@ class DisTube extends EventEmitter {
    * `@2.0.0` Skip the playing song and play a song or playlist
    * @async
    * @param {Discord.Message} message The message from guild channel
-   * @param {string|Song|Song.SearchResult} song Youtube url | Search string | {@link Song} | {@link SearchResult}
+   * @param {string|Song|SearchResult} song Youtube url | Search string | {@link Song} | {@link SearchResult}
    * @example
    * client.on('message', (message) => {
    *     if (!message.content.startsWith(config.prefix)) return;
