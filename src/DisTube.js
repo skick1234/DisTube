@@ -881,16 +881,12 @@ class DisTube extends EventEmitter {
             e.message = `There is a problem while playing song!\nID: ${song.id}\nName: ${song.name}\n${e.message}`;
             this._emitError(message, e);
           }
-          queue.songs.shift();
-          if (queue.songs.length > 0) this._playSong(message).then(() => this.emit("playSong", message, queue, queue.songs[0]));
-          else try { this.stop(message) } catch { this._deleteQueue(message) }
+          this._handlePlayingError(message, queue);
         });
     } catch (e) {
       e.message = `Cannot play song!\nID: ${song.id}\nName: ${song.name}\n${e.message}`;
       this._emitError(message, e);
-      queue.songs.shift();
-      if (queue.songs.length > 0) this._playSong(message).then(() => this.emit("playSong", message, queue, queue.songs[0]));
-      else try { this.stop(message) } catch { this._deleteQueue(message) }
+      this._handlePlayingError(message, queue);
     }
   }
 
@@ -922,6 +918,19 @@ class DisTube extends EventEmitter {
     if (queue.stream) queue.stream.destroy();
     await this._playSong(message);
     if (this._emitPlaySong(queue)) this.emit("playSong", message, queue, queue.songs[0]);
+  }
+
+  /**
+   * Handle error while playing
+   * @private
+   * @ignore
+   * @param {Discord.Message} message message
+   * @param {Queue} queue queue
+   */
+  _handlePlayingError(message, queue) {
+    queue.songs.shift();
+    if (queue.songs.length > 0) this._playSong(message).then(() => this.emit("playSong", message, queue, queue.songs[0]));
+    else try { this.stop(message) } catch { this._deleteQueue(message) }
   }
 }
 
