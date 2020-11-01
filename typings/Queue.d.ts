@@ -75,6 +75,11 @@ declare class Queue {
      */
     stream: any;
     /**
+     * `@2.7.0` What time in the song to begin (in milliseconds).
+     * @type {number}
+     */
+    beginTime: number;
+    /**
      * Formatted duration string.
      * @type {string}
      */
@@ -84,4 +89,9 @@ declare class Queue {
      * @type {number}
      */
     get duration(): number;
+    /**
+     * `@2.7.0` What time in the song is playing (in milliseconds).
+     * @type {number}
+     */
+    get currentTime(): number
 }
