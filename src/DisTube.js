@@ -796,16 +796,14 @@ class DisTube extends EventEmitter {
    * `@2.7.0` Set the playing time to another position
    *
    * @param {Discord.Message} message The message from guild channel
-   * @param {number} time time in milliseconds
+   * @param {number} time Time in milliseconds
    * @example
-   * client.on('message', (message) => {
+   * client.on('message', message => {
    *     if (!message.content.startsWith(config.prefix)) return;
    *     const args = message.content.slice(config.prefix.length).trim().split(/ +/g);
    *     const command = args.shift();
-   *     if ([`3d`, `bassboost`, `echo`, `karaoke`, `nightcore`, `vaporwave`].includes(command)) {
-   *         let filter = distube.setFilter(message, command);
-   *         message.channel.send("Current queue filter: " + (filter || "Off"));
-   *     }
+   *     if (command = 'seek')
+   *         distube.seek(message, Number(args[0]));
    * });
    */
   seek(message, time) {
