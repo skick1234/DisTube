@@ -1,5 +1,6 @@
 export = Queue;
 import Discord from "discord.js";
+import DisTube from "./DisTube";
 /**
  * Represents a queue.
  */
@@ -61,9 +62,9 @@ declare class Queue {
     /**
      * `@2.0.0` Queue audio filter.
      * Available filters: {@link Filter}
-     * @type {string}
+     * @type {DisTube.Filter}
      */
-    filter: string;
+    filter: DisTube.Filter;
     /**
      * `@2.2.0` Message which initialize the queue
      * @type {Discord.Message}

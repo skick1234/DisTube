@@ -560,7 +560,7 @@ declare namespace DisTubeOptions {
 /**
  * DisTube audio filters.
  */
-type Filter = string;
+type Filter = "3d" | "bassboost" | "echo" | "karaoke" | "nightcore" | "vaporwave" | "flanger" | "gate" | "haas" | "reverse" | "surround" | "mcompand" | "phaser" | "tremolo" | "earwax";
 /**
  * DisTube options.
  */
