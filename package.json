@@ -7,7 +7,7 @@
   "scripts": {
     "types": "tsc -p .",
     "docs": "jsdoc -c jsdoc.json",
-    "djs/docgen": "npx docgen --source src --output docs/beta.json"
+    "djs/docgen": "npx docgen --source src --output docs/master.json"
   },
   "repository": {
     "type": "git",

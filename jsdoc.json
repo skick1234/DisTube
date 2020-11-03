@@ -18,7 +18,7 @@
         }
     },
     "opts": {
-        "destination": "docs/beta/",
+        "destination": "docs/",
         "readme": "README.md",
         "encoding": "utf8",
         "private": true,
