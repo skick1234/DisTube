@@ -63,7 +63,7 @@ class Queue {
     /**
      * `@2.0.0` Queue audio filter.
      * Available filters: {@link Filter}
-     * @type {string}
+     * @type {Filter}
      */
     this.filter = null;
     /**

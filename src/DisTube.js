@@ -50,7 +50,7 @@ const DisTubeOptions = {
 
 /**
  * DisTube audio filters.
- * @typedef {string} Filter
+ * @typedef {("3d"|"bassboost"|"echo"|"karaoke"|"nightcore"|"vaporwave"|"flanger"|"gate"|"haas"|"reverse"|"surround"|"mcompand"|"phaser"|"tremolo"|"earwax")} Filter
  * @prop {string} 3d `@2.0.0`
  * @prop {string} bassboost `@2.0.0`
  * @prop {string} echo `@2.0.0`
@@ -784,7 +784,7 @@ class DisTube extends EventEmitter {
   setFilter(message, filter) {
     let queue = this.getQueue(message);
     if (!queue) throw new Error("NotPlaying");
-    if (!Object.prototype.hasOwnProperty.call(this.filters, filter)) throw TypeError(`${filter} is not a Filter (https://DisTube.js.org/global.html#Filter).`);
+    if (!Object.prototype.hasOwnProperty.call(this.filters, filter)) throw new TypeError(`${filter} is not a Filter (https://DisTube.js.org/global.html#Filter).`);
     if (queue.filter === filter) queue.filter = null;
     else queue.filter = filter;
     queue.beginTime = queue.currentTime;
