@@ -939,8 +939,8 @@ class DisTube extends EventEmitter {
         return;
       }
     }
-    queue.skipped = false;
     if (queue.repeatMode !== 1 || queue.skipped) queue.songs.shift();
+    queue.skipped = false;
     queue.beginTime = 0;
     await this._playSong(message);
     if (this._emitPlaySong(queue)) this.emit("playSong", message, queue, queue.songs[0]);
@@ -1093,7 +1093,7 @@ module.exports = DisTube;
  *
  * @event DisTube#searchResult
  * @param {Discord.Message} message The message from guild channel
- * @param {Song[]} result Searched result (max length = 12)
+ * @param {SearchResult[]} result Searched result (max length = 12)
  * @example
  * // DisTubeOptions.searchSongs = true
  * distube.on("searchResult", (message, result) => {
