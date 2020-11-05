@@ -397,6 +397,21 @@ declare class DisTube extends EventEmitter {
      */
     setFilter(message: Discord.Message, filter: Filter): string;
     /**
+     * `@2.7.0` Set the playing time to another position
+     *
+     * @param {Discord.Message} message The message from guild channel
+     * @param {number} time Time in milliseconds
+     * @example
+     * client.on('message', message => {
+     *     if (!message.content.startsWith(config.prefix)) return;
+     *     const args = message.content.slice(config.prefix.length).trim().split(/ +/g);
+     *     const command = args.shift();
+     *     if (command = 'seek')
+     *         distube.seek(message, Number(args[0]));
+     * });
+     */
+    seek(message: Discord.Message, time: number): void;
+    /**
      * Emit error event
      * @private
      * @ignore
