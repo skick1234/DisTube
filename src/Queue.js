@@ -1,5 +1,5 @@
-const duration = require("./duration"),
-  Song = require("./Song"),
+/* eslint no-unused-vars: "off" */
+const { formatDuration } = require("./duration"),
   Discord = require("discord.js");
 
 /**
@@ -30,16 +30,6 @@ class Queue {
      * @type {Song[]}
      */
     this.songs = [];
-    /**
-     * Queue's duration.
-     * @type {Number}
-     */
-    this.duration = 0;
-    /**
-     * Formatted duration string.
-     * @type {string}
-     */
-    this.formattedDuration = duration(this.duration * 1000);
     /**
      * Whether stream is currently stopped.
      * @type {boolean}
@@ -72,8 +62,8 @@ class Queue {
     this.autoplay = true;
     /**
      * `@2.0.0` Queue audio filter.
-     * Available filters: `3d`, `bassboost`, `echo`, `karaoke`, `nightcore`, `vaporwave`
-     * @type {string}
+     * Available filters: {@link Filter}
+     * @type {Filter}
      */
     this.filter = null;
     /**
@@ -81,16 +71,37 @@ class Queue {
      * @type {Discord.Message}
      */
     this.initMessage = message;
+    /**
+     * `@2.5.0` ytdl stream
+     * @type {Readable}
+     */
+    this.stream = null;
+    /**
+     * `@2.7.0` What time in the song to begin (in milliseconds).
+     * @type {number}
+     */
+    this.beginTime = 0;
   }
-
-  removeFirstSong() {
-    this.songs.shift();
-    this.updateDuration();
+  /**
+   * Formatted duration string.
+   * @type {string}
+   */
+  get formattedDuration() {
+    return formatDuration(this.duration * 1000)
   }
-
-  updateDuration() {
-    this.duration = this.songs.reduce((prev, next) => prev + next.duration, 0);
-    this.formattedDuration = duration(this.duration * 1000);
+  /**
+   * Queue's duration.
+   * @type {number}
+   */
+  get duration() {
+    return this.songs.reduce((prev, next) => prev + next.duration, 0)
+  }
+  /**
+   * `@2.7.0` What time in the song is playing (in milliseconds).
+   * @type {number}
+   */
+  get currentTime() {
+    return this.dispatcher.streamTime + this.beginTime;
   }
 }
 

@@ -2,14 +2,22 @@
   <p>
     <a href="https://nodei.co/npm/distube/"><img src="https://nodei.co/npm/distube.png?downloads=true&downloadRank=true&stars=true"></a>
   </p>
+  <p>
+    <img alt="npm" src="https://img.shields.io/npm/dt/distube">
+    <img alt="Codacy Grade" src="https://img.shields.io/codacy/grade/79c8b7d7d026410f8e1b7e9d326167a7?label=Codacy%20Score">
+    <img alt="CodeFactor Grade" src="https://img.shields.io/codefactor/grade/github/skick1234/DisTube?label=Codefactor%20Score">
+  </p>
 </div>
 
 # DisTube
-A Node.js module to easily manage music commands and play Youtube song on Discord without any API key.
-Discord support server: https://discord.gg/feaDd9h
+
+A Discord.js module to manage music commands and play songs on Discord without any API key.
+
+[DisTube Support Server](https://discord.gg/feaDd9h) - [Frequently Asked Questions](https://github.com/skick1234/DisTube/wiki/Frequently-Asked-Questions)
 
 ## Features
 
+- Support YouTube, SoundCloud, Facebook, and [700+ more sites](https://ytdl-org.github.io/youtube-dl/supportedsites.html).
 - Build on discord.js v12
 - Easily to use and customize
 - Work on multiple servers
@@ -17,55 +25,23 @@ Discord support server: https://discord.gg/feaDd9h
 ## Installation
 
 ```npm
-npm install distube @discordjs/opus --save
+npm install distube
 ```
 
-Require [discord.js](https://discord.js.org) v12 and [FFMPEG](https://www.ffmpeg.org/download.html).
+### Requirement
+- [discord.js](https://discord.js.org) v12
+- [FFmpeg](https://www.ffmpeg.org/download.html) - `npm install ffmpeg-static`
+- [@discordjs/opus](https://github.com/discordjs/opus) - `npm install @discordjs/opus`
+- [python](https://www.python.org/) *(For [`youtube-dl`](http://ytdl-org.github.io/youtube-dl/) to support [700+ more sites](https://ytdl-org.github.io/youtube-dl/supportedsites.html).)*
 
 ## Documentation
 
-### DisTube
-- [play(`message, string`)](https://distube.js.org/DisTube.html#play): play / add video(s) from video url or playlist url. Search for a video if `string` is invalid url.
-
-##### Song management
-- [playSkip(`message, string`)](https://distube.js.org/DisTube.html#play): same as [play()](https://distube.js.org/DisTube.html#play) but it will add new song(s) to the beginning of the queue and skip the playing song.
-- [playCustomPlaylist(`message, urls`)](https://distube.js.org/DisTube.html#playCustomPlaylist): Play or add to the queue a list of Youtube video url.
-- [stop(`message`)](https://distube.js.org/DisTube.html#stop): Stop the playing song and clear the queue.
-- [skip(`message`)](https://distube.js.org/DisTube.html#skip): Skip the current song.
-- [jump(`message, num`)](https://distube.js.org/DisTube.html#jump): Jump to the song number in the queue.
-- [pause(`message`)](https://distube.js.org/DisTube.html#pause): Pause the playing song.
-- [resume(`message`)](https://distube.js.org/DisTube.html#resume): Resume the paused song.
-
-##### Queue management
-- [setFilter(`message`, `filter`)](https://distube.js.org/DisTube.html#setFilter) Toggle a filter of the queue, replay playing song. Available filters: `3d`, `bassboost`, `echo`, `karaoke`, `nightcore`, `vaporwave`
-- [shuffle(`message`)](https://distube.js.org/DisTube.html#shuffle): Shuffle the server queue.
-- [setVolume(`message, percent`)](https://distube.js.org/DisTube.html#setVolume): Set server volume in percentage.
-- [setRepeatMode(`message, type`)](https://distube.js.org/DisTube.html#setRepeatMode): Set repeat mode of server `(disabled, repeat a song, repeat all the queue)`.
-- [toggleAutoplay(`message`)](https://distube.js.org/DisTube.html#toggleAutoplay): Toggle server's auto-play mode.
-- [getQueue(`message`)](https://distube.js.org/DisTube.html#getQueue): get the server queue.
-- [isPaused(`message`)](https://distube.js.org/DisTube.html#isPaused): Whether or not the server queue is paused.
-- [isPlaying(`message`)](https://distube.js.org/DisTube.html#isPlaying): Whether or not the bot is playing music in the server.
-
-##### Events
-
-| Event Name                                                             | Emitted When                                        |
-|------------------------------------------------------------------------|-----------------------------------------------------|
-| [playSong](https://distube.js.org/DisTube.html#event:playSong)         | Play a new song                                     |
-| [playList](https://distube.js.org/DisTube.html#event:playList)         | Play a new playlist                                 |
-| [addSong](https://distube.js.org/DisTube.html#event:addSong)           | Add new song to server queue                        |
-| [addList](https://distube.js.org/DisTube.html#event:addList)           | Add playlist to server queue                        |
-| [empty](https://distube.js.org/DisTube.html#event:empty)               | There is no user in VoiceChannel                    |
-| [finish](https://distube.js.org/DisTube.html#event:finish)             | There is no more music in the queue                 |
-| [noRelated](https://distube.js.org/DisTube.html#event:noRelated)       | DisTube cannot find related songs to play           |
-| [searchResult](https://distube.js.org/DisTube.html#event:searchResult) | Return results after searching (searchSongs = true) |
-| [searchCancel](https://distube.js.org/DisTube.html#event:searchCancel) | Cancel selecting results (searchSongs = true)       |
-| [error](https://distube.js.org/DisTube.html#event:error)               | An error encountered                                |
-
-See more definitions, properties and events details in the [Documentation page](https://distube.js.org/).
+Read DisTube's definitions, properties and events details in the [Documentation page](https://distube.js.org/).
 
 ## Example Bot
 
-- [DisTube-Bot](https://github.com/skick1234/DisTube-Bot) - [Invite Bot](https://discord.com/api/oauth2/authorize?client_id=730011243041128478&permissions=3238976&scope=bot)
+- [DisTube-Bot](https://skick.xyz/DisTube) - A music bot with reaction controller, filters, DJ mode, user's custom playlist and voting.
+- [DisTube-Example](https://github.com/skick1234/DisTube-Example) - Example bot with simple command handler.
 
 ```javascript
 // DisTube example bot, definitions, properties and events details in the Documentation page.
@@ -134,7 +110,7 @@ distube
     // DisTubeOptions.searchSongs = true
     .on("searchResult", (message, result) => {
         let i = 0;
-        message.channel.send(`**Choose an option from below**\n${result.map(song => `**${++i}**. ${song.title} - \`${song.duration}\``).join("\n")}\n*Enter anything else or wait 60 seconds to cancel*`);
+        message.channel.send(`**Choose an option from below**\n${result.map(song => `**${++i}**. ${song.name} - \`${song.formattedDuration}\``).join("\n")}\n*Enter anything else or wait 60 seconds to cancel*`);
     })
     // DisTubeOptions.searchSongs = true
     .on("searchCancel", (message) => message.channel.send(`Searching canceled`))

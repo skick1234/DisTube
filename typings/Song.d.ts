@@ -1,14 +1,21 @@
 export = Song;
-import ytdl from "ytdl-core";
 import Discord from "discord.js";
+import ytdl from "ytdl-core";
 /** Class representing a song. */
 declare class Song {
     /**
      * Create a song.
-     * @param {(ytdl.videoInfo|DisTube.ytpl_item)} video Youtube video info
+     * @param {ytdl.videoInfo|Object} info Video info
      * @param {Discord.User} user Requested user
+     * @param {boolean} [youtube=false] Weather or not the video is a Youtube video.
      */
-    constructor(video: (ytdl.videoInfo | import("./DisTube").ytpl_item), user: Discord.User);
+    constructor(info: ytdl.videoInfo | any, user: Discord.User, youtube?: boolean);
+    info: ytdl.videoInfo;
+    /**
+     * `@2.6.0` Weather or not the video is a Youtube video.
+     * @type {boolean}
+     */
+    youtube: boolean;
     /**
      * User requested
      * @type {Discord.User}
@@ -30,23 +37,68 @@ declare class Song {
      */
     duration: number;
     /**
-     * Formatted duration string `hh:mm:ss`.
+     * Formatted duration string `hh:mm:ss` or `mm:ss`.
      * @type {string}
      */
     formattedDuration: string;
     /**
-     * Video URL.
+     * Song URL.
      * @type {string}
      */
     url: string;
     /**
-     * Video thumbnail.
+     * `@2.6.0` Stream / Download URL.
+     * @type {?string}
+     */
+    streamURL: string | null;
+    /**
+     * Song thumbnail.
      * @type {string}
      */
     thumbnail: string;
     /**
-     * Related videos (for autoplay mode)
-     * @type {ytdl.relatedVideo[]}
+     * Related videos (Only available with YouTube video)
+     * @type {?ytdl.relatedVideo[]}
      */
-    related: ytdl.relatedVideo[];
+    related: ytdl.relatedVideo[] | null;
+    /**
+     * `@2.5.0` Indicates if the video is an active live.
+     * @type {boolean}
+     */
+    isLive: boolean;
+    /**
+     * `@2.6.0` Song views count
+     * @type {number}
+     */
+    views: number;
+    /**
+     * @deprecated use `Song.views` instead
+     * @type {number}
+     */
+    plays: number;
+    /**
+     * `@2.6.0` Song like count
+     * @type {number}
+     */
+    likes: number;
+    /**
+     * `@2.6.0` Song dislike count
+     * @type {number}
+     */
+    dislikes: number;
+    /**
+     * `@2.6.0` Song repost count
+     * @type {number}
+     */
+    reposts: number;
+    /**
+     * @deprecated use `Song.name` instead
+     * @type {string}
+     */
+    title: string;
+    /**
+     * @deprecated use `Song.url` instead
+     * @type {string}
+     */
+    link: string;
 }

@@ -1,5 +1,6 @@
 export = Queue;
-import Discord from "discord.js"
+import Discord from "discord.js";
+import DisTube from "./DisTube";
 /**
  * Represents a queue.
  */
@@ -27,17 +28,7 @@ declare class Queue {
      * List of songs
      * @type {Song[]}
      */
-    songs: import("./Song")[];
-    /**
-     * Queue's duration.
-     * @type {Number}
-     */
-    duration: number;
-    /**
-     * Formatted duration string.
-     * @type {string}
-     */
-    formattedDuration: string;
+    songs: any[];
     /**
      * Whether stream is currently stopped.
      * @type {boolean}
@@ -70,15 +61,38 @@ declare class Queue {
     autoplay: boolean;
     /**
      * `@2.0.0` Queue audio filter.
-     * Available filters: `3d`, `bassboost`, `echo`, `karaoke`, `nightcore`, `vaporwave`
-     * @type {string}
+     * Available filters: {@link Filter}
+     * @type {DisTube.Filter}
      */
-    filter: string;
+    filter: DisTube.Filter;
     /**
      * `@2.2.0` Message which initialize the queue
      * @type {Discord.Message}
      */
     initMessage: Discord.Message;
-    removeFirstSong(): void;
-    updateDuration(): void;
+    /**
+     * `@2.5.0` ytdl stream
+     * @type {Readable}
+     */
+    stream: any;
+    /**
+     * `@2.7.0` What time in the song to begin (in milliseconds).
+     * @type {number}
+     */
+    beginTime: number;
+    /**
+     * Formatted duration string.
+     * @type {string}
+     */
+    get formattedDuration(): string;
+    /**
+     * Queue's duration.
+     * @type {number}
+     */
+    get duration(): number;
+    /**
+     * `@2.7.0` What time in the song is playing (in milliseconds).
+     * @type {number}
+     */
+    get currentTime(): number
 }
