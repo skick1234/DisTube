@@ -41,7 +41,7 @@
   },
   "homepage": "https://distube.js.org/",
   "dependencies": {
-    "@distube/youtube-dl": "^1.0.0",
+    "@distube/youtube-dl": "^1.0.1",
     "@distube/ytdl": "^1.0.2",
     "@distube/ytsr": "^1.0.0",
     "moment": "^2.29.1",
