@@ -139,9 +139,9 @@ declare class DisTube extends EventEmitter {
      * @param {string} string The string search for
      * @throws {NotFound} If not found
      * @throws {Error} If an error encountered
-     * @returns {Promise<Song[]>} Array of results
+     * @returns {Promise<SearchResult[]>} Array of results
      */
-    search(string: string, retried?: boolean): Promise<Song[]>;
+    search(string: string, retried?: boolean): Promise<SearchResult[]>;
     /**
      * Search for a song, fire {@link DisTube#event:error} if not found.
      * @async

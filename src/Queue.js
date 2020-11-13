@@ -1,6 +1,7 @@
 /* eslint no-unused-vars: "off" */
 const { formatDuration } = require("./duration"),
-  Discord = require("discord.js");
+  Discord = require("discord.js"),
+  Song = require("./Song");
 
 /**
  * Represents a queue.
@@ -8,6 +9,7 @@ const { formatDuration } = require("./duration"),
 class Queue {
   /**
   * Create a queue.
+  * @param {Discord.Message} message Discord.Message
   */
   constructor(message) {
     /**
