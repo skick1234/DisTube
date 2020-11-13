@@ -43,9 +43,9 @@
   "dependencies": {
     "@distube/youtube-dl": "^1.0.1",
     "@distube/ytdl": "^1.0.2",
+    "@distube/ytpl": "^1.0.0",
     "@distube/ytsr": "^1.0.0",
-    "moment": "^2.29.1",
-    "ytpl": "^1.0.1"
+    "moment": "^2.29.1"
   },
   "devDependencies": {
     "@discordjs/opus": "^0.3.3",

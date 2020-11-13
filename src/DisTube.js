@@ -1,6 +1,6 @@
 const ytdl = require("@distube/ytdl"),
   ytsr = require("@distube/ytsr"),
-  ytpl = require("ytpl"),
+  ytpl = require("@distube/ytpl"),
   { EventEmitter } = require("events"),
   Queue = require("./Queue"),
   Song = require("./Song"),
