@@ -105,6 +105,13 @@ class Queue {
   get currentTime() {
     return this.dispatcher.streamTime + this.beginTime;
   }
+  /**
+   * `@3.0.0` Formatted {@link Queue#currentTime} string.
+   * @type {string}
+   */
+  get formattedCurrentTime() {
+    return formatDuration(this.currentTime);
+  }
 }
 
 module.exports = Queue;

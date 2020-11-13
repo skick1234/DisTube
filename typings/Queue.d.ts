@@ -96,4 +96,9 @@ declare class Queue {
      * @type {number}
      */
     get currentTime(): number
+    /**
+     * `@3.0.0` Formatted {@link Queue#currentTime} string.
+     * @type {string}
+     */
+    get formattedCurrentTime(): string
 }
