@@ -1,3 +1,4 @@
+/// <reference types="@distube/ytpl" />
 export = Playlist;
 import Discord from "discord.js";
 import Song from "./Song";
