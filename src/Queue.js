@@ -106,7 +106,7 @@ class Queue {
     return this.dispatcher.streamTime + this.beginTime;
   }
   /**
-   * `@3.0.0` Formatted {@link Queue#currentTime} string.
+   * `@2.8.0` Formatted {@link Queue#currentTime} string.
    * @type {string}
    */
   get formattedCurrentTime() {
