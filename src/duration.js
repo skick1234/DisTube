@@ -4,7 +4,7 @@ const formatInt = int => {
 };
 
 module.exports.formatDuration = milliseconds => {
-  if (!milliseconds || !parseInt(milliseconds)) return "00:00";
+  if (!milliseconds || !parseInt(milliseconds)) return "Live";
   const seconds = Math.floor(milliseconds % 60000 / 1000);
   const minutes = Math.floor(milliseconds % 3600000 / 60000);
   const hours = Math.floor(milliseconds / 3600000);
