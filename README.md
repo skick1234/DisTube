@@ -11,16 +11,17 @@
 
 # DisTube
 
-A Discord.js module to manage music commands and play songs on Discord without any API key.
+A Discord.js v12 module to simplify your music commands and play songs with audio filters on Discord without any API key.
 
 [DisTube Support Server](https://discord.gg/feaDd9h) - [Frequently Asked Questions](https://github.com/skick1234/DisTube/wiki/Frequently-Asked-Questions)
 
 ## Features
 
-- Support YouTube, SoundCloud, Facebook, and [700+ more sites](https://ytdl-org.github.io/youtube-dl/supportedsites.html).
+- Support YouTube, SoundCloud, Facebook, and [700+ more sites](https://web.archive.org/web/20201015124159/https://ytdl-org.github.io/youtube-dl/supportedsites.html)
+- Audio filters (bassboost, nightcore, vaporwave,...)
 - Build on discord.js v12
 - Easily to use and customize
-- Work on multiple servers
+- Multiple servers compatible
 
 ## Installation
 

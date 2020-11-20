@@ -2,7 +2,7 @@
 const { formatDuration } = require("./duration"),
   Discord = require("discord.js"),
   Song = require("./Song"),
-  ytpl = require("ytpl");
+  ytpl = require("@distube/ytpl");
 
 const deprecate = (obj, oldProp, value, newProp = null) => {
   Object.defineProperty(obj, oldProp, {

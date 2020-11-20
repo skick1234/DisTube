@@ -37,6 +37,11 @@
                     "title": "GitHub",
                     "link": "https://github.com/skick1234/DisTube/",
                     "target": "_blank"
+                },
+                {
+                    "title": "Frequently Asked Questions",
+                    "link": "https://github.com/skick1234/DisTube/wiki/Frequently-Asked-Questions",
+                    "target": "_blank"
                 }
             ],
             "meta": [

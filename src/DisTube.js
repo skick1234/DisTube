@@ -1,6 +1,6 @@
 const ytdl = require("@distube/ytdl"),
   ytsr = require("@distube/ytsr"),
-  ytpl = require("ytpl"),
+  ytpl = require("@distube/ytpl"),
   { EventEmitter } = require("events"),
   Queue = require("./Queue"),
   Song = require("./Song"),
@@ -34,6 +34,8 @@ const isURL = string => {
  * @prop {boolean} [searchSongs=false] Whether or not searching for multiple songs to select manually, DisTube will play the first result if `false`
  * @prop {string} [youtubeCookie=null] `@2.4.0` YouTube cookies. How to get it: {@link https://github.com/fent/node-ytdl-core/blob/784c04eaf9f3cfac0fe0933155adffe0e2e0848a/example/cookies.js#L6-L12|YTDL's Example}
  * @prop {string} [youtubeIdentityToken=null] `@2.4.0` If not given, ytdl-core will try to find it. You can find this by going to a video's watch page, viewing the source, and searching for "ID_TOKEN".
+ * @prop {boolean} [youtubeDL=true] `@2.8.0` Whether or not using youtube-dl.
+ * @prop {boolean} [updateYouTubeDL=true] `@2.8.0` Whether or not updating youtube-dl automatically.
  * @prop {Object.<string, string>} [customFilters] `@2.7.0` Override or add more ffmpeg filters. Example: `{ "Filter name": "Filter value", "8d": "apulsator=hz=0.075" }`
  */
 const DisTubeOptions = {
@@ -45,6 +47,8 @@ const DisTubeOptions = {
   searchSongs: false,
   youtubeCookie: null,
   youtubeIdentityToken: null,
+  youtubeDL: true,
+  updateYouTubeDL: true,
   customFilters: {},
 };
 
@@ -69,13 +73,13 @@ const DisTubeOptions = {
  */
 const ffmpegFilters = {
   "3d": "apulsator=hz=0.125",
-  bassboost: "dynaudnorm=f=150:g=15,equalizer=f=40:width_type=h:width=50:g=10",
+  bassboost: "bass=g=10,dynaudnorm=f=150:g=15",
   echo: "aecho=0.8:0.9:1000:0.3",
   flanger: "flanger",
   gate: "agate",
   haas: "haas",
   karaoke: "stereotools=mlev=0.1",
-  nightcore: "asetrate=48000*1.25,aresample=48000,equalizer=f=40:width_type=h:width=50:g=10",
+  nightcore: "asetrate=48000*1.25,aresample=48000,bass=g=5",
   reverse: "areverse",
   vaporwave: "asetrate=48000*0.8,aresample=48000,atempo=1.1",
   mcompand: "mcompand",
@@ -164,10 +168,12 @@ class DisTube extends EventEmitter {
       }
     })
 
-    require("@distube/youtube-dl/lib/downloader")(path.join(__dirname, "../youtube-dl"))
-      .then(message => console.log(`[DisTube] ${message}`))
-      .catch(console.error)
-      .catch(() => console.log("[DisTube] Unable to update youtube-dl, using default version."));
+    if (this.options.updateYouTubeDL) {
+      require("@distube/youtube-dl/lib/downloader")(path.join(__dirname, "../youtube-dl"))
+        .then(message => console.log(`[DisTube] ${message}`))
+        .catch(console.error)
+        .catch(() => console.log("[DisTube] Unable to update youtube-dl, using default version."));
+    }
   }
 
   /**
@@ -186,6 +192,7 @@ class DisTube extends EventEmitter {
     if (typeof song === "object") return new Song(song, message.author);
     if (ytdl.validateURL(song)) return new Song(await ytdl.getInfo(song, { requestOptions: this.requestOptions }), message.author, true);
     if (isURL(song)) {
+      if (!this.options.youtubeDL) throw new Error("Not Supported URL!");
       let info = await youtube_dl.getInfo(song, youtube_dlOptions).catch(e => { throw new Error(`[youtube-dl] ${e.stderr}`) });
       if (Array.isArray(info) && info.length > 0) return info.map(i => new Song(i, message.author));
       return new Song(info, message.author);
@@ -331,7 +338,7 @@ class DisTube extends EventEmitter {
    * @param {string} string The string search for
    * @throws {NotFound} If not found
    * @throws {Error} If an error encountered
-   * @returns {Promise<Song[]>} Array of results
+   * @returns {Promise<SearchResult[]>} Array of results
    */
   async search(string, retried = false) {
     try {

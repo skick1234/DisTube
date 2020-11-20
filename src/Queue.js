@@ -1,6 +1,7 @@
 /* eslint no-unused-vars: "off" */
 const { formatDuration } = require("./duration"),
-  Discord = require("discord.js");
+  Discord = require("discord.js"),
+  Song = require("./Song");
 
 /**
  * Represents a queue.
@@ -8,6 +9,7 @@ const { formatDuration } = require("./duration"),
 class Queue {
   /**
   * Create a queue.
+  * @param {Discord.Message} message Discord.Message
   */
   constructor(message) {
     /**
@@ -102,6 +104,13 @@ class Queue {
    */
   get currentTime() {
     return this.dispatcher.streamTime + this.beginTime;
+  }
+  /**
+   * `@2.8.0` Formatted {@link Queue#currentTime} string.
+   * @type {string}
+   */
+  get formattedCurrentTime() {
+    return formatDuration(this.currentTime);
   }
 }
 

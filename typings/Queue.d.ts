@@ -1,6 +1,7 @@
 export = Queue;
 import Discord from "discord.js";
 import DisTube from "./DisTube";
+import Song from "./Song";
 /**
  * Represents a queue.
  */
@@ -28,7 +29,7 @@ declare class Queue {
      * List of songs
      * @type {Song[]}
      */
-    songs: any[];
+    songs: Song[];
     /**
      * Whether stream is currently stopped.
      * @type {boolean}
@@ -95,4 +96,9 @@ declare class Queue {
      * @type {number}
      */
     get currentTime(): number
+    /**
+     * `@3.0.0` Formatted {@link Queue#currentTime} string.
+     * @type {string}
+     */
+    get formattedCurrentTime(): string
 }

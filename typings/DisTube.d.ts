@@ -139,9 +139,9 @@ declare class DisTube extends EventEmitter {
      * @param {string} string The string search for
      * @throws {NotFound} If not found
      * @throws {Error} If an error encountered
-     * @returns {Promise<Song[]>} Array of results
+     * @returns {Promise<SearchResult[]>} Array of results
      */
-    search(string: string, retried?: boolean): Promise<Song[]>;
+    search(string: string, retried?: boolean): Promise<SearchResult[]>;
     /**
      * Search for a song, fire {@link DisTube#event:error} if not found.
      * @async
@@ -396,6 +396,21 @@ declare class DisTube extends EventEmitter {
      * });
      */
     setFilter(message: Discord.Message, filter: Filter): string;
+    /**
+     * `@2.7.0` Set the playing time to another position
+     *
+     * @param {Discord.Message} message The message from guild channel
+     * @param {number} time Time in milliseconds
+     * @example
+     * client.on('message', message => {
+     *     if (!message.content.startsWith(config.prefix)) return;
+     *     const args = message.content.slice(config.prefix.length).trim().split(/ +/g);
+     *     const command = args.shift();
+     *     if (command = 'seek')
+     *         distube.seek(message, Number(args[0]));
+     * });
+     */
+    seek(message: Discord.Message, time: number): void;
     /**
      * Emit error event
      * @private
