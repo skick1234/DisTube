@@ -31,13 +31,15 @@ class Song {
    * @param {boolean} [youtube=false] Weather or not the video is a Youtube video.
    */
   constructor(info, user, youtube = false) {
-    if (this.youtube && info.full) this.info = info;
-    info = info.videoDetails || info;
     /**
      * `@2.6.0` Weather or not the video is a Youtube video.
      * @type {boolean}
      */
     this.youtube = info.youtube || youtube;
+    if (this.youtube && info.full) {
+      this.info = info;
+      info = info.videoDetails;
+    }
     /**
      * User requested
      * @type {Discord.User}
