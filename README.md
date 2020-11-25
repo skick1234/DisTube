@@ -4,6 +4,7 @@
   </p>
   <p>
     <img alt="npm" src="https://img.shields.io/npm/dt/distube">
+    <img alt="Depfu" src="https://img.shields.io/depfu/skick1234/DisTube">
     <img alt="Codacy Grade" src="https://img.shields.io/codacy/grade/79c8b7d7d026410f8e1b7e9d326167a7?label=Codacy%20Score">
     <img alt="CodeFactor Grade" src="https://img.shields.io/codefactor/grade/github/skick1234/DisTube?label=Codefactor%20Score">
   </p>
@@ -17,10 +18,12 @@ A Discord.js v12 module to simplify your music commands and play songs with audi
 
 ## Features
 
-- Support YouTube, SoundCloud, Facebook, and [700+ more sites](https://web.archive.org/web/20201015124159/https://ytdl-org.github.io/youtube-dl/supportedsites.html)
-- Audio filters (bassboost, nightcore, vaporwave,...)
 - Build on discord.js v12
 - Easily to use and customize
+- Support YouTube, SoundCloud, Facebook, and [700+ more sites](https://ytdl-org.github.io/youtube-dl/supportedsites.html)
+- Audio filters (bassboost, nightcore, vaporwave,...)
+- Autoplay related YouTube songs
+- Prebuilt server queue
 - Multiple servers compatible
 
 ## Installation
@@ -45,6 +48,7 @@ Read DisTube's definitions, properties and events details in the [Documentation 
 - [DisTube-Example](https://github.com/skick1234/DisTube-Example) - Example bot with simple command handler.
 
 ```javascript
+
 // DisTube example bot, definitions, properties and events details in the Documentation page.
 const Discord = require('discord.js'),
     DisTube = require('distube'),
@@ -55,7 +59,7 @@ const Discord = require('discord.js'),
     };
 
 // Create a new DisTube
-const distube = new DisTube(client, { searchSongs: true, emitNewSongOnly: true, highWaterMark: 1 << 25 });
+const distube = new DisTube(client, { searchSongs: true, emitNewSongOnly: true });
 
 client.on('ready', () => {
     console.log(`Logged in as ${client.user.tag}!`);
@@ -78,11 +82,14 @@ client.on("message", async (message) => {
         message.channel.send("Stopped the music!");
     }
 
+    if (command == "skip")
+        distube.skip(message);
+
     if (command == "queue") {
         let queue = distube.getQueue(message);
         message.channel.send('Current queue:\n' + queue.songs.map((song, id) =>
             `**${id + 1}**. ${song.name} - \`${song.formattedDuration}\``
-        ).join("\n"));
+        ).slice(0, 10).join("\n"));
     }
 
     if ([`3d`, `bassboost`, `echo`, `karaoke`, `nightcore`, `vaporwave`].includes(command)) {
@@ -103,10 +110,10 @@ distube
         `Added ${song.name} - \`${song.formattedDuration}\` to the queue by ${song.user}`
     ))
     .on("playList", (message, queue, playlist, song) => message.channel.send(
-        `Play \`${playlist.title}\` playlist (${playlist.total_items} songs).\nRequested by: ${song.user}\nNow playing \`${song.name}\` - \`${song.formattedDuration}\`\n${status(queue)}`
+        `Play \`${playlist.name}\` playlist (${playlist.songs.length} songs).\nRequested by: ${song.user}\nNow playing \`${song.name}\` - \`${song.formattedDuration}\`\n${status(queue)}`
     ))
     .on("addList", (message, queue, playlist) => message.channel.send(
-        `Added \`${playlist.title}\` playlist (${playlist.total_items} songs) to queue\n${status(queue)}`
+        `Added \`${playlist.name}\` playlist (${playlist.songs.length} songs) to queue\n${status(queue)}`
     ))
     // DisTubeOptions.searchSongs = true
     .on("searchResult", (message, result) => {
@@ -115,9 +122,10 @@ distube
     })
     // DisTubeOptions.searchSongs = true
     .on("searchCancel", (message) => message.channel.send(`Searching canceled`))
-    .on("error", (message, err) => message.channel.send(
-        "An error encountered: " + err
-    ));
+    .on("error", (message, e) => {
+        console.error(e)
+        message.channel.send("An error encountered: " + e);
+    });
 
 client.login(config.token);
 ```
