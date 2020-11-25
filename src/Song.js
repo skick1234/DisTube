@@ -56,6 +56,11 @@ class Song {
      */
     this.name = info.title;
     /**
+     * `@2.5.0` Indicates if the video is an active live.
+     * @type {boolean}
+     */
+    this.isLive = info.isLive || info.is_live || false;
+    /**
      * Song duration.
      * @type {number}
      */
@@ -64,7 +69,7 @@ class Song {
      * Formatted duration string `hh:mm:ss` or `mm:ss`.
      * @type {string}
      */
-    this.formattedDuration = formatDuration(this.duration * 1000)
+    this.formattedDuration = this.isLive ? "Live" : formatDuration(this.duration * 1000)
     /**
      * Song URL.
      * @type {string}
@@ -88,11 +93,6 @@ class Song {
      * @type {?ytdl.relatedVideo[]}
      */
     this.related = info.related_videos;
-    /**
-     * `@2.5.0` Indicates if the video is an active live.
-     * @type {boolean}
-     */
-    this.isLive = info.isLive || info.is_live || false;
     /**
      * `@2.6.0` Song views count
      * @type {number}
