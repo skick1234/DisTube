@@ -193,7 +193,7 @@ class DisTube extends EventEmitter {
     if (ytdl.validateURL(song)) return new Song(await ytdl.getInfo(song, { requestOptions: this.requestOptions }), message.author, true);
     if (isURL(song)) {
       if (!this.options.youtubeDL) throw new Error("Not Supported URL!");
-      let info = await youtube_dl.getInfo(song, youtube_dlOptions).catch(e => { throw new Error(`[youtube-dl] ${e.stderr}`) });
+      let info = await youtube_dl.getInfo(song, youtube_dlOptions).catch(e => { throw new Error(`[youtube-dl] ${e.stderr || e}`) });
       if (Array.isArray(info) && info.length > 0) return info.map(i => new Song(i, message.author));
       return new Song(info, message.author);
     }
@@ -404,7 +404,7 @@ class DisTube extends EventEmitter {
       queue.connection = await voice.join();
     } catch (e) {
       this._deleteQueue(message);
-      e.message = `DisTube cannot join the voice channel!\n${e.message}`;
+      e.message = `DisTube cannot join the voice channel!\nReason: ${e.message}`;
       if (retried) throw e;
       return this._newQueue(message, song, true);
     }
@@ -896,7 +896,7 @@ class DisTube extends EventEmitter {
       }
       let stream = this._createStream(queue).on("error", e => {
         errorEmitted = true;
-        e.message = `There is a problem while playing song!\nID: ${song.id}\nName: ${song.name}\n${e.message}`;
+        e.message = `${e.message}\nID: ${song.id}\nName: ${song.name}`;
         this._emitError(message, e);
       });
       queue.dispatcher = queue.connection.play(stream, {
@@ -906,18 +906,12 @@ class DisTube extends EventEmitter {
         bitrate: "auto",
       }).on("finish", () => this._handleSongFinish(message, queue))
         .on("error", e => {
-          if (!errorEmitted) {
-            e.message = `There is a problem while playing song!\nID: ${song.id}\nName: ${song.name}\n${e.message}`;
-            this._emitError(message, e);
-          }
-          this._handlePlayingError(message, queue);
+          this._handlePlayingError(message, queue, errorEmitted ? null : e);
         });
       if (queue.stream) queue.stream.destroy();
       queue.stream = stream;
     } catch (e) {
-      e.message = `Cannot play song!\nID: ${song.id}\nName: ${song.name}\n${e.message}`;
-      this._emitError(message, e);
-      this._handlePlayingError(message, queue);
+      this._handlePlayingError(message, queue, e);
     }
   }
 
@@ -959,9 +953,14 @@ class DisTube extends EventEmitter {
    * @ignore
    * @param {Discord.Message} message message
    * @param {Queue} queue queue
+   * @param {Error} error error
    */
-  _handlePlayingError(message, queue) {
-    queue.songs.shift();
+  _handlePlayingError(message, queue, error = null) {
+    let song = queue.songs.shift();
+    if (error) {
+      error.message = `${error.message}\nID: ${song.id}\nName: ${song.name}`;
+      this._emitError(message, error);
+    }
     if (queue.songs.length > 0) this._playSong(message).then(() => this.emit("playSong", message, queue, queue.songs[0]));
     else try { this.stop(message) } catch { this._deleteQueue(message) }
   }
