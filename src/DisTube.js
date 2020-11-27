@@ -765,7 +765,7 @@ class DisTube extends EventEmitter {
     }
     let related = song.related;
     if (!related) related = (await ytdl.getBasicInfo(song.url, { requestOptions: this.requestOptions })).related_videos;
-    if (related && related[0]) this._addToQueue(message, new Song(await ytdl.getInfo(related[0].id), this.client.user, true));
+    if (related && related[0]) this._addToQueue(message, new Song(await ytdl.getInfo(related[0].id, { requestOptions: this.requestOptions }), this.client.user, true));
     else this.emit("noRelated", message);
     return queue;
   }
