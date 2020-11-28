@@ -44,7 +44,7 @@
     "@distube/youtube-dl": "^1.0.2",
     "@distube/ytdl": "^1.0.6",
     "@distube/ytpl": "^1.0.4",
-    "@distube/ytsr": "^1.0.3",
+    "@distube/ytsr": "^1.0.6",
     "ytdl-core": "^4.1.0"
   },
   "devDependencies": {
