@@ -889,10 +889,12 @@ class DisTube extends EventEmitter {
         song.views = Number(videoDetails.viewCount);
         song.likes = videoDetails.likes;
         song.dislikes = videoDetails.dislikes;
-        song.streamURL = ytdl.chooseFormat(song.info.formats, {
-          filter: song.isLive ? "audioandvideo" : "audioonly",
-          quality: "highestaudio",
-        }).url;
+        if (song.info.formats.length) {
+          song.streamURL = ytdl.chooseFormat(song.info.formats, {
+            filter: song.isLive ? "audioandvideo" : "audioonly",
+            quality: "highestaudio",
+          }).url;
+        }
       }
       let stream = this._createStream(queue).on("error", e => {
         errorEmitted = true;

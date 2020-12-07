@@ -79,7 +79,7 @@ class Song {
      * `@2.6.0` Stream / Download URL.
      * @type {?string}
      */
-    this.streamURL = this.info ? ytdl.chooseFormat(this.info.formats, {
+    this.streamURL = this.info && this.info.formats.length ? ytdl.chooseFormat(this.info.formats, {
       filter: this.isLive ? "audioandvideo" : "audioonly",
       quality: "highestaudio",
     }).url : info.url;
