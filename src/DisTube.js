@@ -397,7 +397,7 @@ class DisTube extends EventEmitter {
   async _newQueue(message, song, retried = false) {
     let voice = message.member.voice.channel;
     if (!voice) throw new Error("User is not in the voice channel.");
-    let queue = new Queue(message);
+    let queue = new Queue(message, song);
     this.emit("initQueue", queue);
     this.guildQueues.set(message.guild.id, queue);
     try {
@@ -413,7 +413,6 @@ class DisTube extends EventEmitter {
       this._emitError(message, e);
       this._deleteQueue(message);
     })
-    queue.songs.push(song);
     await this._playSong(message);
     return queue;
   }

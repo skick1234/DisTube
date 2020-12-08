@@ -11,7 +11,7 @@ class Queue {
   * Create a queue.
   * @param {Discord.Message} message Discord.Message
   */
-  constructor(message) {
+  constructor(message, song) {
     /**
      * Stream dispatcher.
      * @type {Discord.StreamDispatcher}
@@ -31,7 +31,7 @@ class Queue {
      * List of songs
      * @type {Song[]}
      */
-    this.songs = [];
+    this.songs = [song];
     /**
      * Whether stream is currently stopped.
      * @type {boolean}
