@@ -413,7 +413,7 @@ class DisTube extends EventEmitter {
       this._emitError(message, e);
       this._deleteQueue(message);
     })
-    queue.songs.push(song);
+    queue.songs.unshift(song);
     await this._playSong(message);
     return queue;
   }
