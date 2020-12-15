@@ -20,7 +20,7 @@ const deprecateProps = {
   plays: "views",
 };
 
-const parseNumber = string => typeof string === "string" ? Number(string.replace(/\D+/g, "")) : Number(string)
+const parseNumber = string => (typeof string === "string" ? Number(string.replace(/\D+/g, "")) : Number(string)) || 0;
 
 /** Class representing a song. */
 class Song {
@@ -97,7 +97,7 @@ class Song {
      * `@2.6.0` Song views count
      * @type {number}
      */
-    this.views = parseNumber(info.viewCount || info.view_count || info.views || 0);
+    this.views = parseNumber(info.viewCount || info.view_count || info.views);
     /**
      * @deprecated use `Song.views` instead
      * @type {number}
@@ -107,17 +107,17 @@ class Song {
      * `@2.6.0` Song like count
      * @type {number}
      */
-    this.likes = parseNumber(info.likes || info.like_count || 0);
+    this.likes = parseNumber(info.likes || info.like_count);
     /**
      * `@2.6.0` Song dislike count
      * @type {number}
      */
-    this.dislikes = parseNumber(info.dislikes || info.dislike_count || 0);
+    this.dislikes = parseNumber(info.dislikes || info.dislike_count);
     /**
      * `@2.6.0` Song repost count
      * @type {number}
      */
-    this.reposts = parseNumber(info.repost_count || 0);
+    this.reposts = parseNumber(info.repost_count);
     /**
      * @deprecated use `Song.name` instead
      * @type {string}

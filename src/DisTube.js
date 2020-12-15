@@ -22,6 +22,7 @@ const isURL = string => {
   try { new URL(string) } catch { return false }
   return true;
 }
+const parseNumber = string => (typeof string === "string" ? Number(string.replace(/\D+/g, "")) : Number(string)) || 0;
 
 /**
  * DisTube options.
@@ -885,9 +886,9 @@ class DisTube extends EventEmitter {
       // Queue.stream.on('info') should works but maybe DisTube#playSong will emit before ytdl#info
       if (song.youtube && !song.info) {
         let { videoDetails } = song.info = await ytdl.getInfo(song.url, { requestOptions: this.requestOptions });
-        song.views = Number(videoDetails.viewCount);
-        song.likes = videoDetails.likes;
-        song.dislikes = videoDetails.dislikes;
+        song.views = parseNumber(videoDetails.viewCount);
+        song.likes = parseNumber(videoDetails.likes);
+        song.dislikes = parseNumber(videoDetails.dislikes);
         if (song.info.formats.length) {
           song.streamURL = ytdl.chooseFormat(song.info.formats, {
             filter: song.isLive ? "audioandvideo" : "audioonly",
