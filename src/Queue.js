@@ -10,6 +10,7 @@ class Queue {
   /**
   * Create a queue.
   * @param {Discord.Message} message Discord.Message
+  * @param {Song} song The first Song of the Queue
   */
   constructor(message, song) {
     /**

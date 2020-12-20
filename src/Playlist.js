@@ -90,6 +90,7 @@ class Playlist {
    * @type {number}
    */
   get duration() {
+    if (!this.songs[0]) return 0;
     return this.songs.reduce((prev, next) => prev + next.duration, 0)
   }
 

@@ -85,9 +85,9 @@ class Song {
     }).url : info.url;
     /**
      * Song thumbnail.
-     * @type {string}
+     * @type {?string}
      */
-    this.thumbnail = info.thumbnail ? info.thumbnail.thumbnails ? info.thumbnail.thumbnails.sort((a, b) => b.width - a.width)[0].url : info.thumbnail : null;
+    this.thumbnail = info.thumbnails ? info.thumbnails.sort((a, b) => b.width - a.width)[0].url : info.thumbnail || null;
     /**
      * Related videos (Only available with YouTube video)
      * @type {?ytdl.relatedVideo[]}
