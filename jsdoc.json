@@ -18,7 +18,7 @@
         }
     },
     "opts": {
-        "destination": "docs/",
+        "destination": "../distubejs.github.io/",
         "readme": "README.md",
         "encoding": "utf8",
         "private": true,
@@ -57,7 +57,7 @@
                 "<link rel='shortcut icon' type='image/png' href='https://cdn.jsdelivr.net/gh/skick1234/MaBu-CDN@4.6.10/DisTube/img/favicon.png'>"
             ],
             "search": true,
-            "footer": "<a href='https://github.com/skick1234/DisTube/' target='_blank'>GitHub</a> • Powered by <a href='https://jsdoc.app/' target='_blank'>JSDoc</a>, <a href='https://github.com/ankitskvmdam/clean-jsdoc-theme' target='_blank'>clean-jsdoc-theme</a>, <a href='https://js.org' target='_blank'>js.org</a> and Love"
+            "footer": "<a href='https://github.com/skick1234/DisTube/' target='_blank'>GitHub</a> • Powered by <a href='https://js.org' target='_blank'>js.org</a>, <a href='https://jsdoc.app/' target='_blank'>JSDoc</a>, <a href='https://github.com/ankitskvmdam/clean-jsdoc-theme' target='_blank'>clean-jsdoc-theme</a> and Love"
         }
     }
 }
