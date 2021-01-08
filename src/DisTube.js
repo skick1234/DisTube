@@ -189,14 +189,14 @@ class DisTube extends EventEmitter {
   async _resolveSong(message, song) {
     if (!song) return null;
     if (song instanceof Song) return song;
-    if (song instanceof SearchResult) return new Song(await ytdl.getInfo(song.url, { requestOptions: this.requestOptions }), message.author, true);
-    if (typeof song === "object") return new Song(song, message.author);
-    if (ytdl.validateURL(song)) return new Song(await ytdl.getInfo(song, { requestOptions: this.requestOptions }), message.author, true);
+    if (song instanceof SearchResult) return new Song(await ytdl.getInfo(song.url, this.ytdlOptions), message.member, true);
+    if (typeof song === "object") return new Song(song, message.member);
+    if (ytdl.validateURL(song)) return new Song(await ytdl.getInfo(song, this.ytdlOptions), message.member, true);
     if (isURL(song)) {
       if (!this.options.youtubeDL) throw new Error("Not Supported URL!");
       let info = await youtube_dl.getInfo(song, youtube_dlOptions).catch(e => { throw new Error(`[youtube-dl] ${e.stderr || e}`) });
-      if (Array.isArray(info) && info.length > 0) return info.map(i => new Song(i, message.author));
-      return new Song(info, message.author);
+      if (Array.isArray(info) && info.length > 0) return info.map(i => new Song(i, message.member));
+      return new Song(info, message.member);
     }
     return this._resolveSong(message, await this._searchSong(message, song));
   }
@@ -291,7 +291,7 @@ class DisTube extends EventEmitter {
     try {
       let songs = urls.filter(url => isURL(url)).map(url => this._resolveSong(message, url).catch(() => { }));
       songs = (await Promise.all(songs)).filter(song => song);
-      let playlist = new Playlist(songs, message.author, properties);
+      let playlist = new Playlist(songs, message.member, properties);
       await this._handlePlaylist(message, playlist, playSkip);
     } catch (e) {
       this._emitError(message, e);
@@ -312,10 +312,10 @@ class DisTube extends EventEmitter {
     if (typeof arg2 === "object") playlist = arg2; // Song[] or Playlist
     else if (typeof arg2 === "string") {
       playlist = await ytpl(arg2, { limit: Infinity });
-      playlist.items = playlist.items.filter(v => !v.thumbnail.includes("no_thumbnail")).map(v => new Song(v, message.author, true));
+      playlist.items = playlist.items.filter(v => !v.thumbnail.includes("no_thumbnail")).map(v => new Song(v, message.member, true));
     }
     if (!playlist) throw Error("Invalid Playlist");
-    if (!(playlist instanceof Playlist)) playlist = new Playlist(playlist, message.author)
+    if (!(playlist instanceof Playlist)) playlist = new Playlist(playlist, message.member)
     if (!playlist.songs.length) throw Error("No valid video in the playlist");
     let songs = playlist.songs;
     let queue = this.getQueue(message);

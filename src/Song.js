@@ -9,10 +9,11 @@ class Song {
   /**
    * Create a song.
    * @param {ytdl.videoInfo|Object} info Video info
-   * @param {Discord.User} user Requested user
-   * @param {boolean} [youtube=false] Weather or not the video is a Youtube video.
+   * @param {Discord.GuildMember} member Requested user
+   * @param {string} [src="youtube"] Weather or not the video is a Youtube video.
    */
-  constructor(info, user, youtube = false) {
+  constructor(info, member, src = "youtube") {
+    if (typeof src !== "string") throw new TypeError("Source must be a string");
     /**
      * `@2.6.0` Weather or not the video is a Youtube video.
      * @type {boolean}
@@ -24,9 +25,14 @@ class Song {
     }
     /**
      * User requested
+     * @type {Discord.GuildMember}
+     */
+    this.member = member;
+    /**
+     * User requested
      * @type {Discord.User}
      */
-    this.user = user;
+    this.user = member.user;
     /**
      * `@2.1.4` Youtube video id
      * @type {string}

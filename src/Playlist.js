@@ -9,20 +9,27 @@ class Playlist {
   /**
    * Create a playlist
    * @param {ytpl.result|Song[]} playlist Playlist
-   * @param {Discord.User} user Requested user
+   * @param {Discord.GuildMember} member Requested user
    * @param {Object} properties Custom properties
    */
-  constructor(playlist, user, properties = {}) {
+  constructor(playlist, member, properties = {}) {
+    if (typeof properties !== "object") throw new TypeError("Custom properties must be an object")
+    /**
+     * User requested.
+     * @type {Discord.GuildMember}
+     */
+    this.member = member || playlist.member;
     /**
      * User requested.
      * @type {Discord.User}
      */
-    this.user = user || playlist.user;
+    this.user = this.member.user;
     /**
      * Playlist songs.
      * @type {Song[]}
      */
     this.songs = Array.isArray(playlist) ? playlist : playlist.items;
+    if (!this.songs || !this.songs.length) throw new Error("Playlist is empty!");
     /**
      * Playlist name.
      * @type {string}

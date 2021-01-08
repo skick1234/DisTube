@@ -1,16 +1,19 @@
 /// <reference types="@distube/ytpl" />
 export = Playlist;
-import Discord from "discord.js";
-import Song from "./Song";
 /** Class representing a playlist. */
 declare class Playlist {
     /**
      * Create a playlist
      * @param {ytpl.result|Song[]} playlist Playlist
-     * @param {Discord.User} user Requested user
+     * @param {Discord.GuildMember} member Requested user
      * @param {Object} properties Custom properties
      */
-    constructor(playlist: import("ytpl").result | Song[], user: Discord.User, properties?: any);
+    constructor(playlist: import("ytpl").result | Song[], member: Discord.GuildMember, properties?: any);
+    /**
+     * User requested.
+     * @type {Discord.GuildMember}
+     */
+    member: Discord.GuildMember;
     /**
      * User requested.
      * @type {Discord.User}
@@ -47,3 +50,5 @@ declare class Playlist {
      */
     get formattedDuration(): string;
 }
+import Discord = require("discord.js");
+import Song = require("./Song");
