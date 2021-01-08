@@ -594,7 +594,16 @@ class DisTube extends EventEmitter {
     let queue = this.getQueue(message);
     if (!queue) throw new Error("NotPlaying");
     if (queue.songs <= 1 && !queue.autoplay) throw new Error("NoSong");
-    queue.skipped = true;
+    queue.next = true;
+    queue.dispatcher.end();
+    return queue;
+  }
+
+  previous(message) {
+    let queue = this.getQueue(message);
+    if (!queue) throw new Error("NotPlaying");
+    if (queue.previousSongs.length === 0) throw new Error("NoSong");
+    queue.previous = true;
     queue.dispatcher.end();
     return queue;
   }
@@ -626,7 +635,8 @@ class DisTube extends EventEmitter {
 
   /**
    * Jump to the song number in the queue.
-   * The next one is 1,...
+   * The next one is 1, 2,...
+   * The previous one is -1, -2,...
    * @param {Discord.Snowflake|Discord.Message} message The message from guild channel
    * @param {number} num The song number to play
    * @returns {Queue} The guild queue
@@ -644,9 +654,15 @@ class DisTube extends EventEmitter {
   jump(message, num) {
     let queue = this.getQueue(message);
     if (!queue) throw new Error("NotPlaying");
-    if (num > queue.songs.length || num < 1) throw new Error("InvalidSong");
-    queue.songs = queue.songs.splice(num - 1);
-    queue.skipped = true;
+    if (num > queue.songs.length || -num > queue.previousSongs.length || num === 0) throw new RangeError("Invalid Song");
+    if (num > 0) {
+      queue.songs = queue.songs.splice(num - 1);
+      queue.next = true;
+    } else if (num === -1) queue.previous = true;
+    else {
+      queue.songs.unshift(queue.previousSongs.splice(num + 1));
+      queue.previous = true
+    }
     if (queue.dispatcher) queue.dispatcher.end();
     return queue;
   }
@@ -931,8 +947,10 @@ class DisTube extends EventEmitter {
         return;
       }
     }
-    if (queue.repeatMode !== 1 || queue.skipped) queue.songs.shift();
-    queue.skipped = false;
+    if (queue.previous) queue.songs.unshift(queue.previousSongs.pop());
+    else if (queue.repeatMode !== 1 || queue.next) queue.previousSongs.push(queue.songs.shift());
+    queue.next = false;
+    queue.previous = false;
     queue.beginTime = 0;
     await this._playSong(message);
     if (this._emitPlaySong(queue)) this.emit("playSong", message, queue, queue.songs[0]);

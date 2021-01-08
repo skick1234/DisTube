@@ -34,15 +34,25 @@ class Queue {
      */
     this.songs = [song];
     /**
+     * List of the previous songs.
+     * @type {Song[]}
+     */
+    this.previousSongs = [];
+    /**
      * Whether stream is currently stopped.
      * @type {boolean}
      */
     this.stopped = false;
     /**
-     * Whether or not the last song was skipped.
+     * Whether or not the last song was skipped to next song.
      * @type {boolean}
      */
-    this.skipped = false;
+    this.next = false;
+    /**
+     * Whether or not the last song was skipped to previous song.
+     * @type {boolean}
+     */
+    this.previous = false;
     /**
      * Whether or not the stream is currently playing.
      * @type {boolean}

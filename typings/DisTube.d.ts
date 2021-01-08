@@ -281,7 +281,8 @@ declare class DisTube extends EventEmitter {
     shuffle(message: Discord.Snowflake | Discord.Message): Queue;
     /**
      * Jump to the song number in the queue.
-     * The next one is 1,...
+     * The next one is 1, 2,...
+     * The previous one is -1, -2,...
      * @param {Discord.Snowflake|Discord.Message} message The message from guild channel
      * @param {number} num The song number to play
      * @returns {Queue} The guild queue
