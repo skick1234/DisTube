@@ -1,5 +1,4 @@
 /// <reference types="@distube/ytsr" />
-import ytsr from "ytsr";
 export = SearchResult;
 /** `@2.7.0` Class representing a search result. */
 declare class SearchResult {
@@ -7,7 +6,7 @@ declare class SearchResult {
      * Create a search result.
      * @param {ytsr.Video} info Video info
      */
-    constructor(info: ytsr.Video);
+    constructor(info: import("ytsr").Video);
     /**
      * Youtube video id
      * @type {string}

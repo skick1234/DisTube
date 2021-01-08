@@ -2,7 +2,8 @@
 /* eslint no-unused-vars: "off" */
 const { formatDuration, toSecond, parseNumber } = require("./util"),
   Discord = require("discord.js"),
-  ytdl = require("ytdl-core");
+  ytdl = require("ytdl-core"),
+  Playlist = require("./Playlist");
 
 /** Class representing a song. */
 class Song {
@@ -15,14 +16,10 @@ class Song {
   constructor(info, member, src = "youtube") {
     if (typeof src !== "string") throw new TypeError("Source must be a string");
     /**
-     * `@2.6.0` Weather or not the video is a Youtube video.
-     * @type {boolean}
+     * `@3.0.0` The source of the song
+     * @type {string}
      */
-    this.youtube = info.youtube || youtube;
-    if (this.youtube && info.full) {
-      this.info = info;
-      info = info.videoDetails;
-    }
+    this.source = info.extractor || info.src || src;
     /**
      * User requested
      * @type {Discord.GuildMember}
@@ -33,6 +30,25 @@ class Song {
      * @type {Discord.User}
      */
     this.user = member.user;
+    if (this.source === "youtube" && info.full) {
+      /**
+       * `@3.0.0` `ytdl-core` raw info (If the song is from YouTube)
+       * @type {?ytdl.videoInfo}
+       * @private
+       */
+      this.info = info;
+      info = info.videoDetails;
+    }
+    this._patch(info);
+  }
+
+  /**
+   * Patch data
+   * @param {ytdl.MoreVideoDetails} info Video info
+   * @private
+   * @ignore
+   */
+  _patch(info) {
     /**
      * `@2.1.4` Youtube video id
      * @type {string}
@@ -52,7 +68,7 @@ class Song {
      * Song duration.
      * @type {number}
      */
-    this.duration = toSecond(Number(info.lengthSeconds) || info._duration_raw || info.duration) || 0;
+    this.duration = toSecond(info.lengthSeconds || info._duration_raw || info.duration) || 0;
     /**
      * Formatted duration string `hh:mm:ss` or `mm:ss`.
      * @type {string}
@@ -62,7 +78,7 @@ class Song {
      * Song URL.
      * @type {string}
      */
-    this.url = this.youtube ? `https://www.youtube.com/watch?v=${this.id}` : info.webpage_url;
+    this.url = this.src === "youtube" ? `https://www.youtube.com/watch?v=${this.id}` : info.webpage_url;
     /**
      * `@2.6.0` Stream / Download URL.
      * @type {?string}
@@ -102,9 +118,28 @@ class Song {
      */
     this.reposts = parseNumber(info.repost_count);
     /**
+     * `@3.0.0` Song uploader
+     * @type {object}
+     * @prop {?string} name Uploader name
+     * @prop {?string} url Uploader url
      */
+    this.uploader = {
+      name: info.author ? info.author.name : info.uploader || null,
+      url: info.author ? info.author.channel_url : info.uploader_url || null,
+    };
+  }
+
+  /**
+   * @param {Playlist} playlist Playlist
+   * @ignore
+   */
+  _playlist(playlist) {
+    if (!(playlist instanceof Playlist)) throw new TypeError("playlist is not a valid Playlist");
     /**
+     * `@3.0.0` The playlist added this song
+     * @type {?Playlist}
      */
+    this.playlist = playlist;
   }
 }
 

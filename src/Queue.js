@@ -29,7 +29,7 @@ class Queue {
      */
     this.volume = 50;
     /**
-     * List of songs
+     * List of songs in the queue (The first one is the playing song)
      * @type {Song[]}
      */
     this.songs = [song];
@@ -80,11 +80,6 @@ class Queue {
      */
     this.filter = null;
     /**
-     * `@2.2.0` Message which initialize the queue
-     * @type {Discord.Message}
-     */
-    this.initMessage = message;
-    /**
      * `@2.5.0` ytdl stream
      * @type {Readable}
      */
@@ -94,6 +89,11 @@ class Queue {
      * @type {number}
      */
     this.beginTime = 0;
+    /**
+     * `@3.0.0` The text channel of the Queue. (Default: where the first command is called).
+     * @type {Discord.TextChannel}
+     */
+    this.textChannel = message.channel;
   }
   /**
    * Formatted duration string.
@@ -122,6 +122,13 @@ class Queue {
    */
   get formattedCurrentTime() {
     return formatDuration(this.currentTime);
+  }
+  /**
+   * `@3.0.0` The voice channel playing in.
+   * @type {Discord.VoiceChannel}
+   */
+  get voiceChannel() {
+    return this.connection.voice.channel;
   }
 }
 

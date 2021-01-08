@@ -58,6 +58,7 @@ declare class DisTube extends EventEmitter {
     private _resolveSong;
     /**
      * Handle a Song or an array of Song
+     * @async
      * @param {Discord.Message} message The message from guild channel
      * @param {Song[]|Song|SearchResult} song {@link Song} | {@link SearchResult}
      * @param {boolean} skip Skip?
@@ -528,11 +529,11 @@ type DisTubeOptions = {
      */
     ytdlOptions?: any;
     /**
-     * Built-in search cooldown (When searchSongs is true)
+     * Built-in search cooldown in milliseconds (When searchSongs is true)
      */
-    searchCooldown: number;
+    searchCooldown?: number;
     /**
-     * Built-in leave on empty cooldown (When leaveOnEmpty is true)
+     * Built-in leave on empty cooldown in milliseconds (When leaveOnEmpty is true)
      */
-    emptyCooldown: number;
+    emptyCooldown?: number;
 };
