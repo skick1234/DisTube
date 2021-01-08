@@ -1,21 +1,6 @@
 /* eslint no-unused-vars: "off" */
-const { toSecond } = require("./duration"),
+const { toSecond } = require("./util"),
   ytsr = require("@distube/ytsr");
-
-const deprecate = (obj, oldProp, value, newProp = null) => {
-  Object.defineProperty(obj, oldProp, {
-    get: () => {
-      if (newProp) console.warn(`\`${obj.constructor.name}.${oldProp}\` will be removed in the next major release, use \`${obj.constructor.name}.${newProp}\` instead.`);
-      else console.warn(`\`${obj.constructor.name}.${oldProp}\` will be removed completely in the next major release.`)
-      return value;
-    },
-  });
-};
-
-const deprecateProps = {
-  title: "name",
-  link: "url",
-};
 
 /** `@2.7.0` Class representing a search result. */
 class SearchResult {
@@ -64,17 +49,6 @@ class SearchResult {
      * @type {number}
      */
     this.views = info.views;
-    /**
-     * @deprecated use `Song.name` instead
-     * @type {string}
-     */
-    this.title = "";
-    /**
-     * @deprecated use `Song.url` instead
-     * @type {string}
-     */
-    this.link = "";
-    for (let [oldProp, newProp] of Object.entries(deprecateProps)) deprecate(this, oldProp, this[newProp], newProp);
   }
 }
 

@@ -48,14 +48,4 @@ declare class SearchResult {
      * @type {number}
      */
     views: number;
-    /**
-     * @deprecated use `Song.name` instead
-     * @type {string}
-     */
-    title: string;
-    /**
-     * @deprecated use `Song.url` instead
-     * @type {string}
-     */
-    link: string;
 }

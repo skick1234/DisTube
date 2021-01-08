@@ -37,31 +37,6 @@ declare class Playlist {
      */
     thumbnail: string;
     /**
-     * @deprecated use `Playlist.name` instead
-     * @type {string}
-     */
-    title: string;
-    /**
-     * @deprecated use `Playlist.songs` instead
-     * @type {Song[]}
-     */
-    items: Song[];
-    /**
-     * @deprecated use `Playlist.songs.length` instead
-     * @type {number}
-     */
-    total_items: number;
-    /**
-     * @deprecated
-     * @type {string}
-     */
-    id: string;
-    /**
-     * @deprecated
-     * @type {object}
-    */
-    author: object;
-    /**
      * Playlist duration in second.
      * @type {number}
      */

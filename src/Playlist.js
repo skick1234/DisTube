@@ -1,23 +1,8 @@
 /* eslint no-unused-vars: "off" */
-const { formatDuration } = require("./duration"),
+const { formatDuration } = require("./util"),
   Discord = require("discord.js"),
   Song = require("./Song"),
   ytpl = require("@distube/ytpl");
-
-const deprecate = (obj, oldProp, value, newProp = null) => {
-  Object.defineProperty(obj, oldProp, {
-    get: () => {
-      if (newProp) console.warn(`\`playlist.${oldProp}\` will be removed in the next major release, use \`playlist.${newProp}\` instead.`);
-      else console.warn(`\`playlist.${oldProp}\` will be removed completely in the next major release.`);
-      return value;
-    },
-  });
-};
-
-const deprecateProps = {
-  title: "name",
-  items: "songs",
-};
 
 /** Class representing a playlist. */
 class Playlist {
@@ -54,35 +39,6 @@ class Playlist {
      */
     this.thumbnail = playlist.thumbnail || this.songs[0].thumbnail;
     for (let [key, value] of Object.entries(properties)) this[key] = value;
-
-    // Old version compatible
-    /**
-     * @deprecated use `Playlist.name` instead
-     * @type {string}
-     */
-    this.title = "";
-    /**
-     * @deprecated use `Playlist.songs` instead
-     * @type {Song[]}
-     */
-    this.items = [];
-    /**
-     * @deprecated use `Playlist.songs.length` instead
-     * @type {number}
-     */
-    this.total_items = this.songs.length || 0;
-    /**
-     * @deprecated
-     * @type {string}
-     */
-    this.id = playlist.id || "";
-    /**
-     * @deprecated
-     * @type {object}
-    */
-    this.author = playlist.author || {};
-    for (let [oldProp, newProp] of Object.entries(deprecateProps)) deprecate(this, oldProp, this[newProp], newProp);
-    for (let prop of ["id", "author", "total_items"]) deprecate(this, prop, this[prop]);
   }
 
   /**

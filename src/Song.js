@@ -1,26 +1,8 @@
 /* eslint-disable complexity */
 /* eslint no-unused-vars: "off" */
-const { formatDuration, toSecond } = require("./duration"),
+const { formatDuration, toSecond, parseNumber } = require("./util"),
   Discord = require("discord.js"),
   ytdl = require("ytdl-core");
-
-const deprecate = (obj, oldProp, value, newProp = null) => {
-  Object.defineProperty(obj, oldProp, {
-    get: () => {
-      if (newProp) console.warn(`\`${obj.constructor.name}.${oldProp}\` will be removed in the next major release, use \`${obj.constructor.name}.${newProp}\` instead.`);
-      else console.warn(`\`${obj.constructor.name}.${oldProp}\` will be removed completely in the next major release.`)
-      return value;
-    },
-  });
-};
-
-const deprecateProps = {
-  title: "name",
-  link: "url",
-  plays: "views",
-};
-
-const parseNumber = string => (typeof string === "string" ? Number(string.replace(/\D+/g, "")) : Number(string)) || 0;
 
 /** Class representing a song. */
 class Song {
@@ -99,11 +81,6 @@ class Song {
      */
     this.views = parseNumber(info.viewCount || info.view_count || info.views);
     /**
-     * @deprecated use `Song.views` instead
-     * @type {number}
-     */
-    this.plays = this.views;
-    /**
      * `@2.6.0` Song like count
      * @type {number}
      */
@@ -119,16 +96,9 @@ class Song {
      */
     this.reposts = parseNumber(info.repost_count);
     /**
-     * @deprecated use `Song.name` instead
-     * @type {string}
      */
-    this.title = "";
     /**
-     * @deprecated use `Song.url` instead
-     * @type {string}
      */
-    this.link = "";
-    for (let [oldProp, newProp] of Object.entries(deprecateProps)) deprecate(this, oldProp, this[newProp], newProp);
   }
 }
 

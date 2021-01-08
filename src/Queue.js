@@ -1,5 +1,5 @@
 /* eslint no-unused-vars: "off" */
-const { formatDuration } = require("./duration"),
+const { formatDuration } = require("./util"),
   Discord = require("discord.js"),
   Song = require("./Song");
 

@@ -72,11 +72,6 @@ declare class Song {
      */
     views: number;
     /**
-     * @deprecated use `Song.views` instead
-     * @type {number}
-     */
-    plays: number;
-    /**
      * `@2.6.0` Song like count
      * @type {number}
      */
@@ -92,13 +87,7 @@ declare class Song {
      */
     reposts: number;
     /**
-     * @deprecated use `Song.name` instead
-     * @type {string}
      */
-    title: string;
     /**
-     * @deprecated use `Song.url` instead
-     * @type {string}
      */
-    link: string;
 }

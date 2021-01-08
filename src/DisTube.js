@@ -739,17 +739,6 @@ class DisTube extends EventEmitter {
   }
 
   /**
-   * TODO: Remove this
-   * @deprecated use {@link DisTube#addRelatedVideo} instead
-   * @param {DisTube.Message} message Message
-   * @returns {Promise<Queue>}
-   */
-  runAutoplay(message) {
-    console.warn(`\`DisTube#runAutoplay\` is deprecated, use \`DisTube#addRelatedVideo\` instead.`);
-    return this.addRelatedVideo(message);
-  }
-
-  /**
    * Add related song to the queue
    * @async
    * @param {Discord.Snowflake|Discord.Message} message The message from guild channel
