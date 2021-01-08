@@ -1,26 +1,41 @@
 export = Song;
-import Discord from "discord.js";
-import ytdl from "ytdl-core";
 /** Class representing a song. */
 declare class Song {
     /**
      * Create a song.
      * @param {ytdl.videoInfo|Object} info Video info
-     * @param {Discord.User} user Requested user
-     * @param {boolean} [youtube=false] Weather or not the video is a Youtube video.
+     * @param {Discord.GuildMember} member Requested user
+     * @param {string} [src="youtube"] Weather or not the video is a Youtube video.
      */
-    constructor(info: ytdl.videoInfo | any, user: Discord.User, youtube?: boolean);
-    info: ytdl.videoInfo;
+    constructor(info: ytdl.videoInfo | any, member: Discord.GuildMember, src?: string);
     /**
-     * `@2.6.0` Weather or not the video is a Youtube video.
-     * @type {boolean}
+     * `@3.0.0` The source of the song
+     * @type {string}
      */
-    youtube: boolean;
+    source: string;
+    /**
+     * User requested
+     * @type {Discord.GuildMember}
+     */
+    member: Discord.GuildMember;
     /**
      * User requested
      * @type {Discord.User}
      */
     user: Discord.User;
+    /**
+     * `@3.0.0` `ytdl-core` raw info (If the song is from YouTube)
+     * @type {?ytdl.videoInfo}
+     * @private
+     */
+    private info;
+    /**
+     * Patch data
+     * @param {ytdl.MoreVideoDetails} info Video info
+     * @private
+     * @ignore
+     */
+    private _patch;
     /**
      * `@2.1.4` Youtube video id
      * @type {string}
@@ -31,6 +46,11 @@ declare class Song {
      * @type {string}
      */
     name: string;
+    /**
+     * `@2.5.0` Indicates if the video is an active live.
+     * @type {boolean}
+     */
+    isLive: boolean;
     /**
      * Song duration.
      * @type {number}
@@ -53,19 +73,14 @@ declare class Song {
     streamURL: string | null;
     /**
      * Song thumbnail.
-     * @type {string}
+     * @type {?string}
      */
-    thumbnail: string;
+    thumbnail: string | null;
     /**
      * Related videos (Only available with YouTube video)
      * @type {?ytdl.relatedVideo[]}
      */
     related: ytdl.relatedVideo[] | null;
-    /**
-     * `@2.5.0` Indicates if the video is an active live.
-     * @type {boolean}
-     */
-    isLive: boolean;
     /**
      * `@2.6.0` Song views count
      * @type {number}
@@ -87,7 +102,23 @@ declare class Song {
      */
     reposts: number;
     /**
+     * `@3.0.0` Song uploader
+     * @type {object}
+     * @prop {?string} name Uploader name
+     * @prop {?string} url Uploader url
      */
+    uploader: object;
     /**
+     * @param {Playlist} playlist Playlist
+     * @ignore
      */
+    _playlist(playlist: Playlist): void;
+    /**
+     * `@3.0.0` The playlist added this song
+     * @type {?Playlist}
+     */
+    playlist: Playlist | null;
 }
+import Discord = require("discord.js");
+import ytdl = require("ytdl-core");
+import Playlist = require("./Playlist");

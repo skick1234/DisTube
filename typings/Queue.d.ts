@@ -1,15 +1,14 @@
 export = Queue;
-import Discord from "discord.js";
-import DisTube from "./DisTube";
-import Song from "./Song";
 /**
  * Represents a queue.
  */
 declare class Queue {
     /**
     * Create a queue.
+    * @param {Discord.Message} message Discord.Message
+    * @param {Song} song The first Song of the Queue
     */
-    constructor(message: any);
+    constructor(message: Discord.Message, song: Song);
     /**
      * Stream dispatcher.
      * @type {Discord.StreamDispatcher}
@@ -26,20 +25,30 @@ declare class Queue {
      */
     volume: number;
     /**
-     * List of songs
+     * List of songs in the queue (The first one is the playing song)
      * @type {Song[]}
      */
     songs: Song[];
+    /**
+     * List of the previous songs.
+     * @type {Song[]}
+     */
+    previousSongs: Song[];
     /**
      * Whether stream is currently stopped.
      * @type {boolean}
      */
     stopped: boolean;
     /**
-     * Whether or not the last song was skipped.
+     * Whether or not the last song was skipped to next song.
      * @type {boolean}
      */
-    skipped: boolean;
+    next: boolean;
+    /**
+     * Whether or not the last song was skipped to previous song.
+     * @type {boolean}
+     */
+    previous: boolean;
     /**
      * Whether or not the stream is currently playing.
      * @type {boolean}
@@ -63,14 +72,9 @@ declare class Queue {
     /**
      * `@2.0.0` Queue audio filter.
      * Available filters: {@link Filter}
-     * @type {DisTube.Filter}
+     * @type {Filter}
      */
-    filter: DisTube.Filter;
-    /**
-     * `@2.2.0` Message which initialize the queue
-     * @type {Discord.Message}
-     */
-    initMessage: Discord.Message;
+    filter: any;
     /**
      * `@2.5.0` ytdl stream
      * @type {Readable}
@@ -81,6 +85,11 @@ declare class Queue {
      * @type {number}
      */
     beginTime: number;
+    /**
+     * `@3.0.0` The text channel of the Queue. (Default: where the first command is called).
+     * @type {Discord.TextChannel}
+     */
+    textChannel: Discord.TextChannel;
     /**
      * Formatted duration string.
      * @type {string}
@@ -95,10 +104,17 @@ declare class Queue {
      * `@2.7.0` What time in the song is playing (in milliseconds).
      * @type {number}
      */
-    get currentTime(): number
+    get currentTime(): number;
     /**
-     * `@3.0.0` Formatted {@link Queue#currentTime} string.
+     * `@2.8.0` Formatted {@link Queue#currentTime} string.
      * @type {string}
      */
-    get formattedCurrentTime(): string
+    get formattedCurrentTime(): string;
+    /**
+     * `@3.0.0` The voice channel playing in.
+     * @type {Discord.VoiceChannel}
+     */
+    get voiceChannel(): Discord.VoiceChannel;
 }
+import Discord = require("discord.js");
+import Song = require("./Song");
