@@ -98,20 +98,23 @@ declare class DisTube extends EventEmitter {
      */
     playSkip(message: Discord.Message, song: string | Song | SearchResult): Promise<void>;
     /**
-     * `@2.1.0` Play or add array of Youtube video urls.
+     * `@2.1.0` Play or add array of video urls.
      * {@link DisTube#event:playList} or {@link DisTube#event:addList} will be emitted
      * with `playlist`'s properties include `properties` parameter's properties such as
      * `user`, `songs`, `duration`, `formattedDuration`, `thumbnail` like {@link Playlist}
      * @async
      * @param {Discord.Message} message The message from guild channel
-     * @param {string[]} urls Array of Youtube url
+     * @param {string[]} songs Array of url
      * @param {Object} [properties={}] Additional properties such as `name`
      * @param {boolean} [playSkip=false] Whether or not play this playlist instantly
+     * @param {boolean} [parallel=true] `@3.0.0` Whether or not fetch the playlist in parallel
      * @example
      *     let songs = ["https://www.youtube.com/watch?v=xxx", "https://www.youtube.com/watch?v=yyy"];
      *     distube.playCustomPlaylist(message, songs, { name: "My playlist name" });
+     *     // Fetching custom playlist sequentially (reduce lag for low specs)
+     *     distube.playCustomPlaylist(message, songs, { name: "My playlist name" }, false, false);
      */
-    playCustomPlaylist(message: Discord.Message, urls: string[], properties?: any, playSkip?: boolean): Promise<void>;
+    playCustomPlaylist(message: Discord.Message, songs: string[], properties?: any, playSkip?: boolean, parallel?: boolean): Promise<void>;
     /**
      * Play / add a playlist
      * @async
