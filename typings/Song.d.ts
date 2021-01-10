@@ -111,8 +111,9 @@ declare class Song {
     /**
      * @param {Playlist} playlist Playlist
      * @ignore
+     * @returns {Song}
      */
-    _playlist(playlist: Playlist): void;
+    _patchPlaylist(playlist: Playlist): Song;
     /**
      * `@3.0.0` The playlist added this song
      * @type {?Playlist}

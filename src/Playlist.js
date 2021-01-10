@@ -1,14 +1,13 @@
 /* eslint no-unused-vars: "off" */
 const { formatDuration } = require("./util"),
   Discord = require("discord.js"),
-  Song = require("./Song"),
-  ytpl = require("@distube/ytpl");
+  Song = require("./Song");
 
 /** Class representing a playlist. */
 class Playlist {
   /**
    * Create a playlist
-   * @param {ytpl.result|Song[]} playlist Playlist
+   * @param {Song[]} playlist Playlist
    * @param {Discord.GuildMember} member Requested user
    * @param {Object} properties Custom properties
    */
@@ -30,6 +29,7 @@ class Playlist {
      */
     this.songs = Array.isArray(playlist) ? playlist : playlist.items;
     if (!this.songs || !this.songs.length) throw new Error("Playlist is empty!");
+    this.songs.map(s => s instanceof Song && s._patchPlaylist(this));
     /**
      * Playlist name.
      * @type {string}

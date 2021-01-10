@@ -1,14 +1,13 @@
-/// <reference types="@distube/ytpl" />
 export = Playlist;
 /** Class representing a playlist. */
 declare class Playlist {
     /**
      * Create a playlist
-     * @param {ytpl.result|Song[]} playlist Playlist
+     * @param {Song[]} playlist Playlist
      * @param {Discord.GuildMember} member Requested user
      * @param {Object} properties Custom properties
      */
-    constructor(playlist: import("ytpl").result | Song[], member: Discord.GuildMember, properties?: any);
+    constructor(playlist: Song[], member: Discord.GuildMember, properties?: any);
     /**
      * User requested.
      * @type {Discord.GuildMember}

@@ -132,14 +132,16 @@ class Song {
   /**
    * @param {Playlist} playlist Playlist
    * @ignore
+   * @returns {Song}
    */
-  _playlist(playlist) {
+  _patchPlaylist(playlist) {
     if (!(playlist instanceof Playlist)) throw new TypeError("playlist is not a valid Playlist");
     /**
      * `@3.0.0` The playlist added this song
      * @type {?Playlist}
      */
     this.playlist = playlist;
+    return this;
   }
 }
 
