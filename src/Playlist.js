@@ -29,7 +29,7 @@ class Playlist {
      */
     this.songs = Array.isArray(playlist) ? playlist : playlist.items;
     if (!this.songs || !this.songs.length) throw new Error("Playlist is empty!");
-    this.songs.map(s => s instanceof Song && s._patchPlaylist(this));
+    this.songs.map(s => s instanceof Song && s._patchPlaylist(this, this.member));
     /**
      * Playlist name.
      * @type {string}

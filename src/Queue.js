@@ -14,6 +14,11 @@ class Queue {
   */
   constructor(message, song) {
     /**
+     * `@3.0.0` Queue id (Guild id)
+     * @type {Discord.Snowflake}
+     */
+    this.id = message.guild.id;
+    /**
      * Stream dispatcher.
      * @type {Discord.StreamDispatcher}
      */

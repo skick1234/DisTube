@@ -13,23 +13,18 @@ class Song {
    * @param {Discord.GuildMember} member Requested user
    * @param {string} [src="youtube"] Weather or not the video is a Youtube video.
    */
-  constructor(info, member, src = "youtube") {
+  constructor(info, member = null, src = "youtube") {
     if (typeof src !== "string") throw new TypeError("Source must be a string");
     /**
      * `@3.0.0` The source of the song
      * @type {string}
      */
-    this.source = info.extractor || info.src || src;
+    this.source = src;
     /**
-     * User requested
+     * `@3.0.0` User requested
      * @type {Discord.GuildMember}
      */
     this.member = member;
-    /**
-     * User requested
-     * @type {Discord.User}
-     */
-    this.user = member.user;
     if (this.source === "youtube" && info.full) {
       /**
        * `@3.0.0` `ytdl-core` raw info (If the song is from YouTube)
@@ -40,6 +35,14 @@ class Song {
       info = info.videoDetails;
     }
     this._patch(info);
+  }
+
+  /**
+   * User requested
+   * @type {Discord.User}
+   */
+  get user() {
+    return this.member.user;
   }
 
   /**
@@ -131,16 +134,18 @@ class Song {
 
   /**
    * @param {Playlist} playlist Playlist
+   * @param {Discord.GuildMember} member User requested
    * @ignore
    * @returns {Song}
    */
-  _patchPlaylist(playlist) {
+  _patchPlaylist(playlist, member = this.member) {
     if (!(playlist instanceof Playlist)) throw new TypeError("playlist is not a valid Playlist");
     /**
      * `@3.0.0` The playlist added this song
      * @type {?Playlist}
      */
     this.playlist = playlist;
+    this.member = member;
     return this;
   }
 }

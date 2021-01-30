@@ -6,49 +6,62 @@ const { toSecond } = require("./util"),
 class SearchResult {
   /**
    * Create a search result.
-   * @param {ytsr.Video} info Video info
+   * @param {ytsr.Video|ytsr} info Video info
    */
   constructor(info) {
     /**
-     * Youtube video id
+     * Type of SearchResult (video or playlist)
+     * @type {string}
+     */
+    this.type = info.type;
+    /**
+     * Youtube video or playlist id
      * @type {string}
      */
     this.id = info.id;
     /**
-     * Song name aka video title.
+     * Video or playlist  title.
      * @type {string}
      */
     this.name = info.name;
     /**
-     * Song duration.
-     * @type {number}
-     */
-    this.duration = toSecond(info.duration) || 0;
-    /**
-     * Formatted duration string `hh:mm:ss` or `mm:ss`.
-     * @type {string}
-     */
-    this.formattedDuration = info.duration;
-    /**
-     * Song URL.
+     * Video or playlist URL.
      * @type {string}
      */
     this.url = info.url;
-    /**
-     * Song thumbnail.
-     * @type {string}
-     */
-    this.thumbnail = info.thumbnail;
-    /**
-     * Indicates if the video is an active live.
-     * @type {boolean}
-     */
-    this.isLive = info.isLive;
-    /**
-     * Song views count
-     * @type {number}
-     */
-    this.views = info.views;
+    if (this.type === "video") {
+      /**
+       * Video duration.
+       * @type {number}
+       */
+      this.duration = toSecond(info.duration) || 0;
+      /**
+       * Formatted duration string `hh:mm:ss` or `mm:ss`.
+       * @type {string}
+       */
+      this.formattedDuration = info.duration;
+      /**
+       * Video thumbnail.
+       * @type {string}
+       */
+      this.thumbnail = info.thumbnail;
+      /**
+       * Indicates if the video is an active live.
+       * @type {boolean}
+       */
+      this.isLive = info.isLive;
+      /**
+       * Video views count
+       * @type {number}
+       */
+      this.views = info.views;
+    } else if (this.type === "playlist") {
+      /**
+       * Playlist length
+       * @type {number}
+       */
+      this.views = info.views;
+    } else throw new TypeError("Unsupported info");
   }
 }
 

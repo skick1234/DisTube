@@ -44,20 +44,53 @@
                     "target": "_blank"
                 }
             ],
-            "meta": [
-                "<meta name='author' content='Skick'>",
-                "<meta name='description' content='A Discord.js v12 module to manage music commands and play song on Discord without any API key.'>",
-                "<meta itemprop='name' content='DisTube'>",
-                "<meta itemprop='image' content='https://cdn.jsdelivr.net/gh/skick1234/MaBu-CDN@4.6.10/DisTube/img/banner.png'>",
-                "<meta property='og:url' content='https://DisTube.js.org'>",
-                "<meta property='og:type' content='website'>",
-                "<meta property='og:title' content='DisTube'>",
-                "<meta property='og:description' content='A Discord.js v12 module to manage music commands and play song on Discord without any API key.'>",
-                "<meta property='og:image' content='https://cdn.jsdelivr.net/gh/skick1234/MaBu-CDN@4.6.10/DisTube/img/banner.png'>",
-                "<link rel='shortcut icon' type='image/png' href='https://cdn.jsdelivr.net/gh/skick1234/MaBu-CDN@4.6.10/DisTube/img/favicon.png'>"
+            "meta": [{
+                    "name": "author",
+                    "content": "Skick"
+                },
+                {
+                    "name": "description",
+                    "content": "A Discord.js v12 module to manage music commands and play song on Discord without any API key."
+                },
+                {
+                    "itemprop": "name",
+                    "content": "DisTube"
+                },
+                {
+                    "itemprop": "image",
+                    "content": "https://cdn.jsdelivr.net/gh/skick1234/MaBu-CDN@4.6.10/DisTube/img/banner.png"
+                },
+                {
+                    "property": "og:url",
+                    "content": "https://DisTube.js.org"
+                },
+                {
+                    "property": "og:type",
+                    "content": "website"
+                },
+                {
+                    "property": "og:title",
+                    "content": "DisTube"
+                },
+                {
+                    "property": "og:description",
+                    "content": "A Discord.js v12 module to manage music commands and play song on Discord without any API key."
+                },
+                {
+                    "property": "og:image",
+                    "content": "https://cdn.jsdelivr.net/gh/skick1234/MaBu-CDN@4.6.10/DisTube/img/banner.png"
+                }
             ],
+            "add_script_path": [{
+                "src": "https://arc.io/widget.min.js#2srirM1z"
+            }],
+            "add_style_path": [{
+                "rel": "shortcut icon",
+                "type": "image/png",
+                "href": "https://cdn.jsdelivr.net/gh/skick1234/MaBu-CDN@4.6.10/DisTube/img/favicon.png"
+            }],
             "search": true,
-            "footer": "<a href='https://github.com/skick1234/DisTube/' target='_blank'>GitHub</a> • Powered by <a href='https://js.org' target='_blank'>js.org</a>, <a href='https://jsdoc.app/' target='_blank'>JSDoc</a>, <a href='https://github.com/ankitskvmdam/clean-jsdoc-theme' target='_blank'>clean-jsdoc-theme</a> and Love"
+            "footer": "Powered by <a href='https://js.org' target='_blank'>js.org</a>, <a href='https://jsdoc.app/' target='_blank'>JSDoc</a>, <a href='https://github.com/ankitskvmdam/clean-jsdoc-theme' target='_blank'>clean-jsdoc-theme</a> and Love."
         }
     }
 }

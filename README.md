@@ -4,9 +4,9 @@
   </p>
   <p>
     <img alt="npm" src="https://img.shields.io/npm/dt/distube">
-    <img alt="Depfu" src="https://img.shields.io/depfu/distubejs/DisTube">
+    <img alt="Depfu" src="https://img.shields.io/depfu/skick1234/DisTube">
     <img alt="Codacy Grade" src="https://img.shields.io/codacy/grade/79c8b7d7d026410f8e1b7e9d326167a7?label=Codacy%20Score">
-    <img alt="CodeFactor Grade" src="https://img.shields.io/codefactor/grade/github/distubejs/DisTube?label=Codefactor%20Score">
+    <img alt="CodeFactor Grade" src="https://img.shields.io/codefactor/grade/github/skick1234/DisTube?label=Codefactor%20Score">
   </p>
 </div>
 
@@ -14,7 +14,7 @@
 
 A Discord.js v12 module to simplify your music commands and play songs with audio filters on Discord without any API key.
 
-[DisTube Support Server](https://discord.gg/feaDd9h) - [Frequently Asked Questions](https://github.com/distubejs/DisTube/wiki/Frequently-Asked-Questions)
+[DisTube Support Server](https://discord.gg/feaDd9h) - [Frequently Asked Questions](https://github.com/skick1234/DisTube/wiki/Frequently-Asked-Questions)
 
 ## Features
 
