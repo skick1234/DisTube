@@ -50,7 +50,7 @@ const DisTubeOptions = {
 
 /**
  * DisTube audio filters.
- * @typedef {("3d"|"bassboost"|"echo"|"karaoke"|"nightcore"|"vaporwave"|"flanger"|"gate"|"haas"|"reverse"|"surround"|"mcompand"|"phaser"|"tremolo"|"earwax")} Filter
+ * @typedef {("3d"|"bassboost"|"echo"|"karaoke"|"nightcore"|"vaporwave"|"flanger"|"gate"|"haas"|"reverse"|"surround"|"mcompand"|"phaser"|"tremolo"|"earwax"|string)} Filter
  * @prop {string} 3d `@2.0.0`
  * @prop {string} bassboost `@2.0.0`
  * @prop {string} echo `@2.0.0`

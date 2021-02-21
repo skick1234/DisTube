@@ -1,11 +1,4 @@
-/// <reference types="node" />
 export = DisTube;
-import { EventEmitter } from "events";
-import Discord from "discord.js";
-import Queue from "./Queue";
-import Song from "./Song";
-import Playlist from "./Playlist";
-import SearchResult from "./SearchResult";
 /**
  * Class representing a DisTube.
  * @extends EventEmitter
@@ -187,7 +180,7 @@ declare class DisTube extends EventEmitter {
      *     }
      * });
      */
-    getQueue(message: string | Discord.Message): Queue;
+    getQueue(message: Discord.Snowflake | Discord.Message): Queue;
     /**
      * Add a video to queue
      * @private
@@ -215,14 +208,14 @@ declare class DisTube extends EventEmitter {
      * @returns {Queue} The guild queue
      * @throws {NotPlaying} No playing queue
      */
-    pause(message: string | Discord.Message): Queue;
+    pause(message: Discord.Snowflake | Discord.Message): Queue;
     /**
      * Resume the guild stream
      * @param {Discord.Snowflake|Discord.Message} message The message from guild channel
      * @returns {Queue} The guild queue
      * @throws {NotPlaying} No playing queue
      */
-    resume(message: string | Discord.Message): Queue;
+    resume(message: Discord.Snowflake | Discord.Message): Queue;
     /**
      * Stop the guild stream
      * @param {Discord.Snowflake|Discord.Message} message The message from guild channel
@@ -238,7 +231,7 @@ declare class DisTube extends EventEmitter {
      *     }
      * });
      */
-    stop(message: string | Discord.Message): void;
+    stop(message: Discord.Snowflake | Discord.Message): void;
     /**
      * Set the guild stream's volume
      * @param {Discord.Snowflake|Discord.Message} message The message from guild channel
@@ -254,7 +247,7 @@ declare class DisTube extends EventEmitter {
      *         distube.setVolume(message, args[0]);
      * });
      */
-    setVolume(message: string | Discord.Message, percent: number): Queue;
+    setVolume(message: Discord.Snowflake | Discord.Message, percent: number): Queue;
     /**
      * Skip the playing song
      *
@@ -271,7 +264,7 @@ declare class DisTube extends EventEmitter {
      *         distube.skip(message);
      * });
      */
-    skip(message: string | Discord.Message): Queue;
+    skip(message: Discord.Snowflake | Discord.Message): Queue;
     /**
      * Shuffle the guild queue songs
      * @param {Discord.Snowflake|Discord.Message} message The message from guild channel
@@ -285,7 +278,7 @@ declare class DisTube extends EventEmitter {
      *         distube.shuffle(message);
      * });
      */
-    shuffle(message: string | Discord.Message): Queue;
+    shuffle(message: Discord.Snowflake | Discord.Message): Queue;
     /**
      * Jump to the song number in the queue.
      * The next one is 1,...
@@ -303,7 +296,7 @@ declare class DisTube extends EventEmitter {
      *             .catch(err => message.channel.send("Invalid song number."));
      * });
      */
-    jump(message: string | Discord.Message, num: number): Queue;
+    jump(message: Discord.Snowflake | Discord.Message, num: number): Queue;
     /**
      * Set the repeat mode of the guild queue.
      * Turn off if repeat mode is the same value as new mode.
@@ -325,7 +318,7 @@ declare class DisTube extends EventEmitter {
      *     }
      * });
      */
-    setRepeatMode(message: string | Discord.Message, mode?: number): number;
+    setRepeatMode(message: Discord.Snowflake | Discord.Message, mode?: number): number;
     /**
      * Toggle autoplay mode
      * @param {Discord.Snowflake|Discord.Message} message The message from guild channel
@@ -342,19 +335,19 @@ declare class DisTube extends EventEmitter {
      *     }
      * });
      */
-    toggleAutoplay(message: string | Discord.Message): boolean;
+    toggleAutoplay(message: Discord.Snowflake | Discord.Message): boolean;
     /**
      * Whether or not a guild is playing music.
      * @param {Discord.Snowflake|Discord.Message} message The message from guild channel to check
      * @returns {boolean} Whether or not the guild is playing song(s)
      */
-    isPlaying(message: string | Discord.Message): boolean;
+    isPlaying(message: Discord.Snowflake | Discord.Message): boolean;
     /**
      * Whether or not the guild queue is paused
      * @param {Discord.Snowflake|Discord.Message} message The message from guild channel to check
      * @returns {boolean} Whether or not the guild queue is paused
      */
-    isPaused(message: string | Discord.Message): boolean;
+    isPaused(message: Discord.Snowflake | Discord.Message): boolean;
     /**
      * Whether or not the queue's voice channel is empty
      * @private
@@ -376,7 +369,7 @@ declare class DisTube extends EventEmitter {
      * @param {Discord.Snowflake|Discord.Message} message The message from guild channel
      * @returns {Promise<Queue>} The guild queue
      */
-    addRelatedVideo(message: string | Discord.Message): Promise<Queue>;
+    addRelatedVideo(message: Discord.Snowflake | Discord.Message): Promise<Queue>;
     /**
      * `@2.0.0` Enable or disable a filter of the queue, replay the playing song.
      * Available filters: {@link Filter}
@@ -440,12 +433,17 @@ declare class DisTube extends EventEmitter {
      * Handle the queue when a Song finish
      * @private
      * @ignore
+     * @param {Discord.Message} message message
+     * @param {Queue} queue queue
      */
     private _handleSongFinish;
     /**
-     * Handle error while playing Song
+     * Handle error while playing
      * @private
      * @ignore
+     * @param {Discord.Message} message message
+     * @param {Queue} queue queue
+     * @param {Error} error error
      */
     private _handlePlayingError;
     /**
@@ -561,6 +559,9 @@ declare class DisTube extends EventEmitter {
 declare namespace DisTube {
     export { DisTubeOptions, Filter };
 }
+import { EventEmitter } from "node/events";
+import Discord = require("discord.js");
+import Queue = require("./Queue");
 declare namespace DisTubeOptions {
     const highWaterMark: number;
     const emitNewSongOnly: boolean;
@@ -570,12 +571,16 @@ declare namespace DisTubeOptions {
     const searchSongs: boolean;
     const youtubeCookie: any;
     const youtubeIdentityToken: any;
+    const youtubeDL: boolean;
+    const updateYouTubeDL: boolean;
     const customFilters: {};
 }
 /**
  * DisTube audio filters.
  */
-type Filter = "3d" | "bassboost" | "echo" | "karaoke" | "nightcore" | "vaporwave" | "flanger" | "gate" | "haas" | "reverse" | "surround" | "mcompand" | "phaser" | "tremolo" | "earwax";
+type Filter = string;
+import Song = require("./Song");
+import SearchResult = require("./SearchResult");
 /**
  * DisTube options.
  */
@@ -612,6 +617,14 @@ type DisTubeOptions = {
      * `@2.4.0` If not given, ytdl-core will try to find it. You can find this by going to a video's watch page, viewing the source, and searching for "ID_TOKEN".
      */
     youtubeIdentityToken?: string;
+    /**
+     * `@2.8.0` Whether or not using youtube-dl.
+     */
+    youtubeDL?: boolean;
+    /**
+     * `@2.8.0` Whether or not updating youtube-dl automatically.
+     */
+    updateYouTubeDL?: boolean;
     /**
      * `@2.7.0` Override or add more ffmpeg filters. Example: `{ "Filter name": "Filter value", "8d": "apulsator=hz=0.075" }`
      */

@@ -1,15 +1,14 @@
 export = Queue;
-import Discord from "discord.js";
-import DisTube from "./DisTube";
-import Song from "./Song";
 /**
  * Represents a queue.
  */
 declare class Queue {
     /**
     * Create a queue.
+    * @param {Discord.Message} message Discord.Message
+    * @param {Song} song The first Song of the Queue
     */
-    constructor(message: any);
+    constructor(message: Discord.Message, song: Song);
     /**
      * Stream dispatcher.
      * @type {Discord.StreamDispatcher}
@@ -95,10 +94,13 @@ declare class Queue {
      * `@2.7.0` What time in the song is playing (in milliseconds).
      * @type {number}
      */
-    get currentTime(): number
+    get currentTime(): number;
     /**
-     * `@3.0.0` Formatted {@link Queue#currentTime} string.
+     * `@2.8.0` Formatted {@link Queue#currentTime} string.
      * @type {string}
      */
-    get formattedCurrentTime(): string
+    get formattedCurrentTime(): string;
 }
+import Discord = require("discord.js");
+import Song = require("./Song");
+import DisTube = require("./DisTube");

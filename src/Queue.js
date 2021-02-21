@@ -1,7 +1,8 @@
 /* eslint no-unused-vars: "off" */
 const { formatDuration } = require("./duration"),
   Discord = require("discord.js"),
-  Song = require("./Song");
+  Song = require("./Song"),
+  DisTube = require("./DisTube");
 
 /**
  * Represents a queue.
@@ -66,7 +67,7 @@ class Queue {
     /**
      * `@2.0.0` Queue audio filter.
      * Available filters: {@link Filter}
-     * @type {Filter}
+     * @type {DisTube.Filter}
      */
     this.filter = null;
     /**

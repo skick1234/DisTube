@@ -1,6 +1,4 @@
 export = Song;
-import Discord from "discord.js";
-import ytdl from "ytdl-core";
 /** Class representing a song. */
 declare class Song {
     /**
@@ -10,12 +8,12 @@ declare class Song {
      * @param {boolean} [youtube=false] Weather or not the video is a Youtube video.
      */
     constructor(info: ytdl.videoInfo | any, user: Discord.User, youtube?: boolean);
-    info: ytdl.videoInfo;
     /**
      * `@2.6.0` Weather or not the video is a Youtube video.
      * @type {boolean}
      */
     youtube: boolean;
+    info: any;
     /**
      * User requested
      * @type {Discord.User}
@@ -31,6 +29,11 @@ declare class Song {
      * @type {string}
      */
     name: string;
+    /**
+     * `@2.5.0` Indicates if the video is an active live.
+     * @type {boolean}
+     */
+    isLive: boolean;
     /**
      * Song duration.
      * @type {number}
@@ -53,19 +56,14 @@ declare class Song {
     streamURL: string | null;
     /**
      * Song thumbnail.
-     * @type {string}
+     * @type {?string}
      */
-    thumbnail: string;
+    thumbnail: string | null;
     /**
      * Related videos (Only available with YouTube video)
      * @type {?ytdl.relatedVideo[]}
      */
     related: ytdl.relatedVideo[] | null;
-    /**
-     * `@2.5.0` Indicates if the video is an active live.
-     * @type {boolean}
-     */
-    isLive: boolean;
     /**
      * `@2.6.0` Song views count
      * @type {number}
@@ -102,3 +100,5 @@ declare class Song {
      */
     link: string;
 }
+import Discord = require("discord.js");
+import ytdl = require("ytdl-core");

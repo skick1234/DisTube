@@ -1,7 +1,4 @@
-/// <reference types="@distube/ytpl" />
 export = Playlist;
-import Discord from "discord.js";
-import Song from "./Song";
 /** Class representing a playlist. */
 declare class Playlist {
     /**
@@ -10,7 +7,7 @@ declare class Playlist {
      * @param {Discord.User} user Requested user
      * @param {Object} properties Custom properties
      */
-    constructor(playlist: import("ytpl").result | Song[], user: Discord.User, properties?: any);
+    constructor(playlist: any | Song[], user: Discord.User, properties?: any);
     /**
      * User requested.
      * @type {Discord.User}
@@ -72,3 +69,5 @@ declare class Playlist {
      */
     get formattedDuration(): string;
 }
+import Discord = require("discord.js");
+import Song = require("./Song");
