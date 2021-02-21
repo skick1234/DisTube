@@ -8,13 +8,8 @@ const ytdl = require("@distube/ytdl"),
   Playlist = require("./Playlist"),
   Discord = require("discord.js"),
   youtube_dl = require("@distube/youtube-dl"),
-  path = require("path"),
-  fs = require("fs"),
   { promisify } = require("util");
 const youtube_dlOptions = ["--no-warnings", "--force-ipv4"];
-const binPath = path.join(__dirname, `../youtube-dl/youtube-dl${process.platform === "win32" || process.env.NODE_PLATFORM === "windows" ? ".exe" : ""}`);
-fs.chmodSync(binPath, "777");
-youtube_dl.setYtdlBinary(binPath);
 youtube_dl.getInfo = promisify(youtube_dl.getInfo);
 
 const isURL = string => {
@@ -170,7 +165,7 @@ class DisTube extends EventEmitter {
     })
 
     if (this.options.updateYouTubeDL) {
-      require("@distube/youtube-dl/lib/downloader")(path.join(__dirname, "../youtube-dl"))
+      require("@distube/youtube-dl/lib/downloader")()
         .then(message => console.log(`[DisTube] ${message}`))
         .catch(console.error)
         .catch(() => console.log("[DisTube] Unable to update youtube-dl, using default version."));

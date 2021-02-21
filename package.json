@@ -41,11 +41,11 @@
   },
   "homepage": "https://distube.js.org/",
   "dependencies": {
-    "@distube/youtube-dl": "^1.0.2",
     "@distube/ytdl": "^1.0.6",
     "@distube/ytpl": "^1.0.8",
     "@distube/ytsr": "^1.0.7",
     "ytdl-core": "^4.2.1"
+    "@distube/youtube-dl": "^1.0.4",
   },
   "devDependencies": {
     "@discordjs/opus": "^0.3.3",
