@@ -633,7 +633,7 @@ class DisTube extends EventEmitter {
   skip(message) {
     let queue = this.getQueue(message);
     if (!queue) throw new Error("NotPlaying");
-    if (queue.songs <= 1 && !queue.autoplay) throw new Error("NoSong");
+    if (queue.songs.length <= 1 && !queue.autoplay) throw new Error("NoSong");
     queue.next = true;
     queue.dispatcher.end();
     return queue;
