@@ -54,7 +54,7 @@
     "discord.js": "^12.5.1",
     "discord.js-docgen": "github:distubejs/docgen",
     "jsdoc": "^3.6.6",
-    "typescript": "^4.1.5"
+    "typescript": "^4.2.2"
   },
   "engines": {
     "discord.js": "^12.0.0",

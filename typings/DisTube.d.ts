@@ -559,9 +559,10 @@ declare class DisTube extends EventEmitter {
 declare namespace DisTube {
     export { DisTubeOptions, Filter };
 }
-import { EventEmitter } from "node/events";
+import { EventEmitter } from "events";
 import Discord = require("discord.js");
 import Queue = require("./Queue");
+import Playlist = require("./Playlist");
 declare namespace DisTubeOptions {
     const highWaterMark: number;
     const emitNewSongOnly: boolean;
@@ -578,7 +579,7 @@ declare namespace DisTubeOptions {
 /**
  * DisTube audio filters.
  */
-type Filter = string;
+type Filter = ("3d" | "bassboost" | "echo" | "karaoke" | "nightcore" | "vaporwave" | "flanger" | "gate" | "haas" | "reverse" | "surround" | "mcompand" | "phaser" | "tremolo" | "earwax" | string);
 import Song = require("./Song");
 import SearchResult = require("./SearchResult");
 /**
