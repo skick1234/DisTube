@@ -81,6 +81,7 @@
                     "content": "https://cdn.jsdelivr.net/gh/skick1234/MaBu-CDN@4.6.10/DisTube/img/banner.png"
                 }
             ],
+            "create_style": "::-webkit-scrollbar { display: none }",
             "add_script_path": [{
                 "src": "https://arc.io/widget.min.js#2srirM1z"
             }],
