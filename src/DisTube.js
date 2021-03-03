@@ -779,16 +779,20 @@ class DisTube extends EventEmitter {
    *     const command = args.shift();
    *     if ([`3d`, `bassboost`, `echo`, `karaoke`, `nightcore`, `vaporwave`].includes(command)) {
    *         let filter = distube.setFilter(message, command);
-   *         message.channel.send("Current queue filter: " + (filter || "Off"));
+   *         message.channel.send("Added queue filter: " + (filter || `Removed ${filter}`));
    *     }
    * });
    */
   setFilter(message, filter) {
-    let queue = this.getQueue(message);
+        // Get guild queue
+    const queue = this.getQueue(message)
     if (!queue) throw new Error("NotPlaying");
     if (!Object.prototype.hasOwnProperty.call(this.filters, filter)) throw new TypeError(`${filter} is not a Filter (https://DisTube.js.org/global.html#Filter).`);
-    if (queue.filter === filter) queue.filter = null;
-    else queue.filter = filter;
+    if (queue.filter.includes(filter)){ //remove filter if its in queue.filter array
+     const index = queue.filter.indexOf(filter);
+     queue.filter = queue.filter.splice(index, 1);
+    } //push in the queue.filter
+    else queue.filter.push(filter);
     queue.beginTime = queue.currentTime;
     this._playSong(message);
     return queue.filter;
