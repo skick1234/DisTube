@@ -789,8 +789,8 @@ class DisTube extends EventEmitter {
     if (!queue) throw new Error("NotPlaying");
     if (!Object.prototype.hasOwnProperty.call(this.filters, filter)) throw new TypeError(`${filter} is not a Filter (https://DisTube.js.org/global.html#Filter).`);
     if (queue.filter.includes(filter)){
-     const index = array.indexOf(filter);
-     queue.filter = array.splice(index, 1);
+     const index = queue.filter.indexOf(filter);
+     queue.filter = queue.filter.splice(index, 1);
     }
     else queue.filter.push(filter);
     queue.beginTime = queue.currentTime;
