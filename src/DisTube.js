@@ -784,11 +784,15 @@ class DisTube extends EventEmitter {
    * });
    */
   setFilter(message, filter) {
-    let queue = this.getQueue(message);
+    // Get guild queue
+    const queue = this.getQueue(message)
     if (!queue) throw new Error("NotPlaying");
     if (!Object.prototype.hasOwnProperty.call(this.filters, filter)) throw new TypeError(`${filter} is not a Filter (https://DisTube.js.org/global.html#Filter).`);
-    if (queue.filter === filter) queue.filter = null;
-    else queue.filter = filter;
+    if (queue.filter.includes(filter)){
+     const index = array.indexOf(filter);
+     queue.filter = array.splice(index, 1);
+    }
+    else queue.filter.push(filter);
     queue.beginTime = queue.currentTime;
     this._playSong(message);
     return queue.filter;
