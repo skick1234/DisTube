@@ -63,7 +63,7 @@ class Queue {
      * Whether or not the autoplay mode is enabled.
      * @type {boolean}
      */
-    this.autoplay = true;
+    this.autoplay = false;
     /**
      * `@2.0.0` Queue audio filter.
      * Available filters: {@link Filter}

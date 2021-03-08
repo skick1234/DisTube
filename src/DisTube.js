@@ -213,6 +213,7 @@ class DisTube extends EventEmitter {
       else this.emit("addSong", message, queue, song);
     } else {
       let queue = await this._newQueue(message, song);
+      this.getQueue(message)
       this.emit("playSong", message, queue, song);
     }
   }

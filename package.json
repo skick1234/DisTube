@@ -1,5 +1,5 @@
 {
-  "name": "distube",
+  "name": "juketube",
   "version": "2.8.10",
   "description": "A Discord.js v12 module to simplify your music commands and play songs with audio filters on Discord without any API key. Support YouTube, SoundCloud, Bandcamp, Facebook, and 700+ more sites",
   "main": "src/DisTube.js",
