@@ -1,16 +1,19 @@
 /* eslint-disable complexity */
-/* eslint no-unused-vars: "off" */
 const { formatDuration, toSecond, parseNumber } = require("./util"),
-  Discord = require("discord.js"),
   ytdl = require("ytdl-core"),
   Playlist = require("./Playlist");
+
+/**
+ * @typedef {import("discord.js").GuildMember} GuildMember
+ * @typedef {import("discord.js").User} User
+ */
 
 /** Class representing a song. */
 class Song {
   /**
    * Create a song.
    * @param {ytdl.videoInfo|Object} info Video info
-   * @param {Discord.GuildMember} member Requested user
+   * @param {GuildMember?} member Requested user
    * @param {string} [src="youtube"] Weather or not the video is a Youtube video.
    */
   constructor(info, member = null, src = "youtube") {
@@ -22,7 +25,7 @@ class Song {
     this.source = src;
     /**
      * `@3.0.0` User requested
-     * @type {Discord.GuildMember}
+     * @type {GuildMember?}
      */
     this.member = member;
     if (this.source === "youtube" && info.full) {
@@ -39,10 +42,10 @@ class Song {
 
   /**
    * User requested
-   * @type {Discord.User}
+   * @type {User?}
    */
   get user() {
-    return this.member.user;
+    return this.member?.user;
   }
 
   /**
@@ -71,12 +74,12 @@ class Song {
      * Song duration.
      * @type {number}
      */
-    this.duration = toSecond(info.lengthSeconds || info._duration_raw || info.duration) || 0;
+    this.duration = toSecond(info.lengthSeconds || info._duration_raw || info.duration);
     /**
      * Formatted duration string `hh:mm:ss` or `mm:ss`.
      * @type {string}
      */
-    this.formattedDuration = this.isLive ? "Live" : formatDuration(this.duration * 1000)
+    this.formattedDuration = this.isLive ? "Live" : formatDuration(this.duration * 1000);
     /**
      * Song URL.
      * @type {string}
@@ -134,7 +137,7 @@ class Song {
 
   /**
    * @param {Playlist} playlist Playlist
-   * @param {Discord.GuildMember} member User requested
+   * @param {GuildMember} member User requested
    * @ignore
    * @returns {Song}
    */

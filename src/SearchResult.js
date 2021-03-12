@@ -1,12 +1,15 @@
-/* eslint no-unused-vars: "off" */
-const { toSecond } = require("./util"),
-  ytsr = require("@distube/ytsr");
+const { toSecond } = require("./util");
+
+/**
+ * @typedef {import("ytsr").Video} Video ytsr.Video
+ * @typedef {import("ytsr").Playlist} Playlist ytsr.Playlist
+ */
 
 /** `@2.7.0` Class representing a search result. */
 class SearchResult {
   /**
    * Create a search result.
-   * @param {ytsr.Video|ytsr} info Video info
+   * @param {Video|Playlist} info Video info
    */
   constructor(info) {
     /**
@@ -34,7 +37,7 @@ class SearchResult {
        * Video duration.
        * @type {number}
        */
-      this.duration = toSecond(info.duration) || 0;
+      this.duration = toSecond(info.duration);
       /**
        * Formatted duration string `hh:mm:ss` or `mm:ss`.
        * @type {string}

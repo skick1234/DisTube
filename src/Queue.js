@@ -1,7 +1,14 @@
-/* eslint no-unused-vars: "off" */
-const { formatDuration } = require("./util"),
-  Discord = require("discord.js"),
-  Song = require("./Song");
+const { formatDuration } = require("./util");
+
+/**
+ * @typedef {import("discord.js").Message} Message
+ * @typedef {import("discord.js").Snowflake} Snowflake
+ * @typedef {import("discord.js").StreamDispatcher} StreamDispatcher
+ * @typedef {import("discord.js").VoiceConnection} VoiceConnection
+ * @typedef {import("discord.js").VoiceChannel} VoiceChannel
+ * @typedef {import("discord.js").TextChannel} TextChannel
+ * @typedef {import("./Song")} Song
+ */
 
 /**
  * Represents a queue.
@@ -9,23 +16,23 @@ const { formatDuration } = require("./util"),
 class Queue {
   /**
   * Create a queue.
-  * @param {Discord.Message} message Discord.Message
+  * @param {Message} message Discord.Message
   * @param {Song} song The first Song of the Queue
   */
   constructor(message, song) {
     /**
      * `@3.0.0` Queue id (Guild id)
-     * @type {Discord.Snowflake}
+     * @type {Snowflake}
      */
     this.id = message.guild.id;
     /**
      * Stream dispatcher.
-     * @type {Discord.StreamDispatcher}
+     * @type {StreamDispatcher}
      */
     this.dispatcher = null;
     /**
      * Voice connection.
-     * @type {Discord.VoiceConnection}
+     * @type {VoiceConnection}
      */
     this.connection = null;
     /**
@@ -96,7 +103,7 @@ class Queue {
     this.beginTime = 0;
     /**
      * `@3.0.0` The text channel of the Queue. (Default: where the first command is called).
-     * @type {Discord.TextChannel}
+     * @type {TextChannel}
      */
     this.textChannel = message.channel;
   }
@@ -105,14 +112,14 @@ class Queue {
    * @type {string}
    */
   get formattedDuration() {
-    return formatDuration(this.duration * 1000)
+    return formatDuration(this.duration * 1000);
   }
   /**
    * Queue's duration.
    * @type {number}
    */
   get duration() {
-    return this.songs.reduce((prev, next) => prev + next.duration, 0)
+    return this.songs.reduce((prev, next) => prev + next.duration, 0);
   }
   /**
    * `@2.7.0` What time in the song is playing (in milliseconds).
@@ -130,7 +137,7 @@ class Queue {
   }
   /**
    * `@3.0.0` The voice channel playing in.
-   * @type {Discord.VoiceChannel}
+   * @type {VoiceChannel}
    */
   get voiceChannel() {
     return this.connection.voice.channel;

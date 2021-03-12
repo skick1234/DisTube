@@ -8,10 +8,8 @@ const ytdl = require("@distube/ytdl"),
   Playlist = require("./Playlist"),
   { parseNumber } = require("./util"),
   Discord = require("discord.js"),
-  youtube_dl = require("youtube-dl"),
-  { promisify } = require("util"),
-  // eslint-disable-next-line no-unused-vars
-  { opus } = require("prism-media");
+  youtube_dl = require("@distube/youtube-dl"),
+  { promisify } = require("util");
 const youtube_dlOptions = ["--no-warnings", "--force-ipv4"];
 youtube_dl.getInfo = promisify(youtube_dl.getInfo);
 
@@ -19,7 +17,11 @@ const isURL = string => {
   // eslint-disable-next-line no-new
   try { new URL(string) } catch { return false }
   return true;
-}
+};
+
+/**
+ * @typedef {import("prism-media").opus.Encoder|import("prism-media").FFmpeg} DisTubeStream
+ */
 
 /**
  * DisTube options.
@@ -91,7 +93,7 @@ const ffmpegFilters = {
   tremolo: "tremolo",
   surround: "surround",
   earwax: "earwax",
-}
+};
 
 /**
  * Class representing a DisTube.
@@ -162,12 +164,12 @@ class DisTube extends EventEmitter {
             this.emit("empty", queue.textChannel);
             this._deleteQueue(queue.textChannel.guild.id);
           }
-        }, this.options.emptyCooldown)
+        }, this.options.emptyCooldown);
       }
-    })
+    });
 
     if (this.options.updateYouTubeDL) {
-      require("youtube-dl/lib/downloader")()
+      require("@distube/youtube-dl/lib/downloader")()
         .then(message => console.log(`[DisTube] ${message}`))
         .catch(console.error)
         .catch(() => console.log("[DisTube] Unable to update youtube-dl, using default version."));
@@ -243,7 +245,7 @@ class DisTube extends EventEmitter {
     if (!song) return;
     try {
       if (ytpl.validateID(song)) await this._handlePlaylist(message, await this._resolvePlaylist(message, song), skip);
-      else await this._handleSong(message, await this._resolveSong(message, song), skip)
+      else await this._handleSong(message, await this._resolveSong(message, song), skip);
     } catch (e) {
       e.message = `play(${song}) encountered:\n${e.message}`;
       this._emitError(message, e);
@@ -403,7 +405,7 @@ class DisTube extends EventEmitter {
         max: 1,
         time: this.options.searchCooldown,
         errors: ["time"],
-      })
+      });
       if (!answers.first()) {
         this.emit("searchCancel", message);
         return null;
@@ -445,7 +447,7 @@ class DisTube extends EventEmitter {
         e.message = `There is a problem with Discord Voice Connection.\nPlease try again! Sorry for the interruption!\nReason: ${e.message}`;
         this._emitError(message, e);
         this._deleteQueue(message);
-      })
+      });
       this.emit("initQueue", queue);
       let err = await this._playSong(message);
       return err || queue;
@@ -512,7 +514,7 @@ class DisTube extends EventEmitter {
     if (unshift) {
       let playing = queue.songs.shift();
       queue.songs.unshift(playing, song);
-    } else { queue.songs.push(song); }
+    } else { queue.songs.push(song) }
     return queue;
   }
 
@@ -533,7 +535,7 @@ class DisTube extends EventEmitter {
     if (unshift) {
       let playing = queue.songs.shift();
       queue.songs.unshift(playing, ...songs);
-    } else { queue.songs.push(...songs); }
+    } else { queue.songs.push(...songs) }
     return queue;
   }
 
@@ -611,7 +613,7 @@ class DisTube extends EventEmitter {
     if (!queue) throw new Error("NotPlaying");
     queue.volume = percent;
     queue.dispatcher.setVolume(queue.volume / 100);
-    return queue
+    return queue;
   }
 
   /**
@@ -701,7 +703,7 @@ class DisTube extends EventEmitter {
     } else if (num === -1) queue.previous = true;
     else {
       queue.songs.unshift(queue.previousSongs.splice(num + 1));
-      queue.previous = true
+      queue.previous = true;
     }
     if (queue.dispatcher) queue.dispatcher.end();
     return queue;
@@ -900,7 +902,7 @@ class DisTube extends EventEmitter {
    * @param {Queue} queue Queue
    * @private
    * @ignore
-   * @returns {opus.Encoder}
+   * @returns {DisTubeStream}
    */
   _createStream(queue) {
     let song = queue.songs[0];
@@ -913,7 +915,7 @@ class DisTube extends EventEmitter {
       seek: queue.beginTime / 1000,
     };
     streamOptions = Object.assign(streamOptions, this.ytdlOptions);
-    if (song.youtube) return ytdl.downloadFromInfo(song.info, streamOptions);
+    if (song.youtube) return ytdl(song.info, streamOptions);
     return ytdl.arbitraryStream(song.streamURL, streamOptions);
   }
 
@@ -1009,7 +1011,7 @@ class DisTube extends EventEmitter {
     if (!err && this._emitPlaySong(queue)) {
       let song = queue.songs[0];
       if (song.playlist) this.emit("playList", queue, song.playlist, song);
-      else this.emit("playSong", queue, song)
+      else this.emit("playSong", queue, song);
     }
   }
 
@@ -1032,7 +1034,7 @@ class DisTube extends EventEmitter {
         if (e) return;
         song = queue.songs[0];
         if (song.playlist) this.emit("playList", queue, song.playlist, song);
-        else this.emit("playSong", queue, song)
+        else this.emit("playSong", queue, song);
       });
     } else try { this.stop(message) } catch { this._deleteQueue(message) }
   }

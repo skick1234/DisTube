@@ -39,7 +39,6 @@
   
       "accessor-pairs": "warn",
       "array-callback-return": "error",
-      "complexity": "warn",
       "consistent-return": "error",
       "curly": ["error", "multi-line"],
       "dot-location": ["error", "property"],
@@ -121,6 +120,7 @@
       "padded-blocks": ["error", "never"],
       "quote-props": ["error", "as-needed"],
       "quotes": ["error", "double", { "avoidEscape": true, "allowTemplateLiterals": true }],
+      "semi": ["error", "always", { "omitLastInOneLineBlock": true }],
       "semi-spacing": "error",
       "space-before-blocks": "error",
       "space-in-parens": "error",

@@ -1,28 +1,31 @@
-/* eslint no-unused-vars: "off" */
 const { formatDuration } = require("./util"),
-  Discord = require("discord.js"),
   Song = require("./Song");
+
+/**
+ * @typedef {import("discord.js").GuildMember} GuildMember
+ * @typedef {import("discord.js").User} User
+ */
 
 /** Class representing a playlist. */
 class Playlist {
   /**
    * Create a playlist
    * @param {Song[]} playlist Playlist
-   * @param {Discord.GuildMember} member Requested user
+   * @param {GuildMember} member Requested user
    * @param {Object} properties Custom properties
    */
   constructor(playlist, member, properties = {}) {
-    if (typeof properties !== "object") throw new TypeError("Custom properties must be an object")
+    if (typeof properties !== "object") throw new TypeError("Custom properties must be an object");
     /**
      * User requested.
-     * @type {Discord.GuildMember}
+     * @type {GuildMember}
      */
     this.member = member || playlist.member;
     /**
      * User requested.
-     * @type {Discord.User}
+     * @type {User}
      */
-    this.user = this.member.user;
+    this.user = this.member?.user;
     /**
      * Playlist songs.
      * @type {Song[]}
@@ -54,7 +57,7 @@ class Playlist {
    */
   get duration() {
     if (!this.songs[0]) return 0;
-    return this.songs.reduce((prev, next) => prev + next.duration, 0)
+    return this.songs.reduce((prev, next) => prev + next.duration, 0);
   }
 
   /**
@@ -62,7 +65,7 @@ class Playlist {
    * @type {string}
    */
   get formattedDuration() {
-    return formatDuration(this.duration * 1000)
+    return formatDuration(this.duration * 1000);
   }
 }
 
