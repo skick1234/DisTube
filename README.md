@@ -47,7 +47,7 @@ Read DisTube's definitions, properties and events details in the [Documentation 
 ## Example Bot
 
 - [DisTube-Bot](https://skick.xyz/DisTube) - A music bot with reaction controller, filters, DJ mode, user's custom playlist and voting.
-- [DisTube-Example](https://github.com/distubejs/DisTube-Example) - Example bot with simple command handler.
+- [DisTube-Example](https://github.com/distubejs/example) - Example bot with simple command handler.
 
 ```javascript
 
