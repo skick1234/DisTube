@@ -1,38 +1,36 @@
 const { formatDuration } = require("./util");
-
-/**
- * @typedef {import("discord.js").Message} Message
- * @typedef {import("discord.js").Snowflake} Snowflake
- * @typedef {import("discord.js").StreamDispatcher} StreamDispatcher
- * @typedef {import("discord.js").VoiceConnection} VoiceConnection
- * @typedef {import("discord.js").VoiceChannel} VoiceChannel
- * @typedef {import("discord.js").TextChannel} TextChannel
- * @typedef {import("./Song")} Song
- */
+const Song = require("./Song");
+const Base = require("./DisTubeBase");
+// eslint-disable-next-line no-unused-vars
+const DisTube = require("./DisTube");
+// eslint-disable-next-line no-unused-vars
+const Discord = require("discord.js");
 
 /**
  * Represents a queue.
  */
-class Queue {
+class Queue extends Base {
   /**
   * Create a queue.
-  * @param {Message} message Discord.Message
+  * @param {DisTube} distube DisTube
+  * @param {Discord.Message} message Discord.Message
   * @param {Song} song The first Song of the Queue
   */
-  constructor(message, song) {
+  constructor(distube, message, song) {
+    super(distube);
     /**
      * `@3.0.0` Queue id (Guild id)
-     * @type {Snowflake}
+     * @type {Discord.Snowflake}
      */
     this.id = message.guild.id;
     /**
      * Stream dispatcher.
-     * @type {StreamDispatcher}
+     * @type {Discord.StreamDispatcher}
      */
     this.dispatcher = null;
     /**
      * Voice connection.
-     * @type {VoiceConnection}
+     * @type {Discord.VoiceConnection}
      */
     this.connection = null;
     /**
@@ -86,11 +84,11 @@ class Queue {
      */
     this.autoplay = true;
     /**
-     * `@2.0.0` Queue audio filter.
+     * Enabled audio filters.
      * Available filters: {@link Filter}
-     * @type {Filter}
+     * @type {Filter[]}
      */
-    this.filter = null;
+    this.filters = null;
     /**
      * `@2.5.0` ytdl stream
      * @type {Readable}
@@ -103,7 +101,7 @@ class Queue {
     this.beginTime = 0;
     /**
      * `@3.0.0` The text channel of the Queue. (Default: where the first command is called).
-     * @type {TextChannel}
+     * @type {Discord.TextChannel}
      */
     this.textChannel = message.channel;
   }
@@ -137,10 +135,185 @@ class Queue {
   }
   /**
    * `@3.0.0` The voice channel playing in.
-   * @type {VoiceChannel}
+   * @type {Discord.VoiceChannel}
    */
   get voiceChannel() {
     return this.connection.voice.channel;
+  }
+  /**
+   * Add a Song or an array of Song to the queue
+   * @param {Song|Song[]} song Song to add
+   * @param {boolean} [unshift=false] Unshift?
+   * @throws {Error} If an error encountered
+   * @returns {Queue}
+   */
+  addToQueue(song, unshift = false) {
+    const isArray = Array.isArray(song);
+    if (!song && !song.length) throw new Error("No Song provided.");
+    if (unshift) {
+      let playing = this.songs.shift();
+      if (isArray) this.songs.unshift(playing, ...song);
+      else this.songs.unshift(playing, song);
+    } else if (isArray) this.songs.push(...song);
+    else this.songs.push(song);
+    return this;
+  }
+  /**
+   * Pause the guild stream
+   * @returns {Queue} The guild queue
+   */
+  pause() {
+    this.playing = false;
+    this.pause = true;
+    this.dispatcher.pause();
+    return this;
+  }
+  /**
+   * Resume the guild stream
+   * @returns {Queue} The guild queue
+   */
+  resume() {
+    this.playing = true;
+    this.pause = false;
+    this.dispatcher.resume();
+    return this;
+  }
+  /**
+   * Stop the guild stream
+   */
+  stop() {
+    this.stopped = true;
+    if (this.dispatcher) try { this.dispatcher.end() } catch { }
+    if (this.options.leaveOnStop && this.connection) try { this.connection.channel.leave() } catch { }
+  }
+  /**
+   * Set the guild stream's volume
+   * @param {number} percent The percentage of volume you want to set
+   * @returns {Queue} The guild queue
+   */
+  setVolume(percent) {
+    this.volume = percent;
+    this.dispatcher.setVolume(this.volume / 100);
+    return this;
+  }
+
+  /**
+   * Skip the playing song
+   * @returns {Queue} The guild queue
+   * @throws {NoSong} if there is no song in queue
+   */
+  skip() {
+    if (this.songs.length <= 1 && !this.autoplay) throw new Error("NoSong");
+    this.next = true;
+    this.dispatcher.end();
+    return this;
+  }
+
+  /**
+   * Play the previous song
+   * @returns {Queue} The guild queue
+   * @throws {NoSong} if there is no previous song
+   */
+  previous() {
+    if (this.previousSongs.length === 0) throw new Error("NoSong");
+    this.previous = true;
+    this.dispatcher.end();
+    return this;
+  }
+  /**
+   * Shuffle the queue's songs
+   * @returns {Queue} The guild queue
+   */
+  shuffle() {
+    let playing = this.songs.shift();
+    for (let i = this.songs.length - 1; i > 0; i--) {
+      let j = Math.floor(Math.random() * (i + 1));
+      [this.songs[i], this.songs[j]] = [this.songs[j], this.songs[i]];
+    }
+    this.songs.unshift(playing);
+    return this;
+  }
+  /**
+   * Jump to the song number in the queue.
+   * The next one is 1, 2,...
+   * The previous one is -1, -2,...
+   * @param {number} num The song number to play
+   * @returns {Queue} The guild queue
+   * @throws {InvalidSong} if `num` is invalid number (0 < num < {@link Queue#songs}.length)
+   */
+  jump(num) {
+    if (num > this.songs.length || -num > this.previousSongs.length || num === 0) throw new RangeError("InvalidSong");
+    if (num > 0) {
+      this.songs = this.songs.splice(num - 1);
+      this.next = true;
+    } else if (num === -1) this.previous = true;
+    else {
+      this.songs.unshift(this.previousSongs.splice(num + 1));
+      this.previous = true;
+    }
+    if (this.dispatcher) this.dispatcher.end();
+    return this;
+  }
+  /**
+   * Set the repeat mode of the guild queue.
+   * Turn off if repeat mode is the same value as new mode.
+   * Toggle mode: `mode = null` `(0 -> 1 -> 2 -> 0...)`
+   * @param {number?} [mode] The repeat modes `(0: disabled, 1: Repeat a song, 2: Repeat all the queue)`
+   * @returns {number} The new repeat mode
+   */
+  setRepeatMode(mode = null) {
+    mode = parseInt(mode, 10);
+    if (!mode && mode !== 0) this.repeatMode = (this.repeatMode + 1) % 3;
+    else if (this.repeatMode === mode) this.repeatMode = 0;
+    else this.repeatMode = mode;
+    return this.repeatMode;
+  }
+  /**
+   * Enable or disable filter(s) of the queue.
+   * Available filters: {@link Filter}
+   * @param {Filter} filter A filter name
+   * @returns {string} Current queue's filter name.
+   * @throws {Error} If it's not a filter
+   */
+  setFilter(filter) {
+    if (!Object.prototype.hasOwnProperty.call(this.filters, filter)) throw new TypeError(`${filter} is not a filter name.`);
+    if (this.filters.includes(filter)) this.filters = this.filters.filter(f => f !== filter);
+    else this.filters.push(filter);
+    this.beginTime = this.currentTime;
+    this.handler.playSong(this);
+    return this.filters;
+  }
+  /**
+   * Set the playing time to another position
+   * @param {number} time Time in milliseconds
+   * @returns {Queue}
+   * @example
+   * client.on('message', message => {
+   *     if (!message.content.startsWith(config.prefix)) return;
+   *     const args = message.content.slice(config.prefix.length).trim().split(/ +/g);
+   *     const command = args.shift();
+   *     if (command = 'seek')
+   *         distube.seek(message, Number(args[0]));
+   * });
+   */
+  seek(time) {
+    this.beginTime = time;
+    this.handler.playSong(this);
+    return this;
+  }
+  /**
+   * Add a related song to the queue
+   * @async
+   * @param {Song} [song] A song to get the related one
+   * @returns {Promise<Queue>} The guild queue
+   * @throws {NoRelated}
+   */
+  async addRelatedVideo(song = this.songs[0]) {
+    const related = (await this.handler.getRelatedVideo(song))
+      .find(v => !this.previousSongs.map(s => s.id).includes(v.id));
+    if (!related) throw new Error("NoRelated");
+    this.addToQueue(new Song(await this.handler.getYouTubeInfo(related.id), this.textChannel.guild.me));
+    return this;
   }
 }
 

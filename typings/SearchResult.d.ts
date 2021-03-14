@@ -1,24 +1,33 @@
-/// <reference types="@distube/ytsr" />
 export = SearchResult;
 /** `@2.7.0` Class representing a search result. */
 declare class SearchResult {
     /**
      * Create a search result.
-     * @param {ytsr.Video} info Video info
+     * @param {ytsr.Video|ytsr.Playlist} info Video info
      */
-    constructor(info: import("ytsr").Video);
+    constructor(info: any | any);
     /**
-     * Youtube video id
+     * Type of SearchResult (video or playlist)
+     * @type {string}
+     */
+    type: string;
+    /**
+     * Youtube video or playlist id
      * @type {string}
      */
     id: string;
     /**
-     * Song name aka video title.
+     * Video or playlist  title.
      * @type {string}
      */
     name: string;
     /**
-     * Song duration.
+     * Video or playlist URL.
+     * @type {string}
+     */
+    url: string;
+    /**
+     * Video duration.
      * @type {number}
      */
     duration: number;
@@ -28,12 +37,7 @@ declare class SearchResult {
      */
     formattedDuration: string;
     /**
-     * Song URL.
-     * @type {string}
-     */
-    url: string;
-    /**
-     * Song thumbnail.
+     * Video thumbnail.
      * @type {string}
      */
     thumbnail: string;
@@ -43,7 +47,7 @@ declare class SearchResult {
      */
     isLive: boolean;
     /**
-     * Song views count
+     * Video views count
      * @type {number}
      */
     views: number;

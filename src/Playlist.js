@@ -1,29 +1,27 @@
 const { formatDuration } = require("./util"),
-  Song = require("./Song");
+  Song = require("./Song"),
+  // eslint-disable-next-line no-unused-vars
+  Discord = require("discord.js");
 
-/**
- * @typedef {import("discord.js").GuildMember} GuildMember
- * @typedef {import("discord.js").User} User
- */
 
 /** Class representing a playlist. */
 class Playlist {
   /**
    * Create a playlist
    * @param {Song[]} playlist Playlist
-   * @param {GuildMember} member Requested user
+   * @param {Discord.GuildMember} member Requested user
    * @param {Object} properties Custom properties
    */
   constructor(playlist, member, properties = {}) {
     if (typeof properties !== "object") throw new TypeError("Custom properties must be an object");
     /**
      * User requested.
-     * @type {GuildMember}
+     * @type {Discord.GuildMember}
      */
     this.member = member || playlist.member;
     /**
      * User requested.
-     * @type {User}
+     * @type {Discord.User}
      */
     this.user = this.member?.user;
     /**

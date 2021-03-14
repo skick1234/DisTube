@@ -52,3 +52,34 @@ module.exports.toSecond = string => {
  * @ignore
  */
 module.exports.parseNumber = string => (typeof string === "string" ? Number(string.replace(/\D+/g, "")) : Number(string)) || 0;
+
+const merge = module.exports.mergeObject = (def, opt) => {
+  if (!opt) return def;
+  for (const key in def) {
+    if (!Object.prototype.hasOwnProperty.call(opt, key) || opt[key] === undefined) {
+      opt[key] = def[key];
+    } else if (opt[key] === Object(opt[key])) {
+      opt[key] = merge(def[key], opt[key]);
+    }
+  }
+  return opt;
+};
+
+module.exports.isURL = string => {
+  // eslint-disable-next-line no-new
+  try { new URL(string) } catch { return false }
+  return true;
+};
+
+/**
+ * Whether or not the queue's voice channel is empty
+ * @private
+ * @ignore
+ * @param {Queue} queue The guild queue
+ * @returns {boolean} No user in voice channel return `true`
+ */
+module.exports.isVoiceChannelEmpty = queue => {
+  let voiceChannel = queue.connection.channel;
+  let members = voiceChannel.members.filter(m => !m.user.bot);
+  return !members.size;
+};

@@ -2,13 +2,19 @@ export = Queue;
 /**
  * Represents a queue.
  */
-declare class Queue {
+declare class Queue extends Base {
     /**
     * Create a queue.
+    * @param {DisTube} distube DisTube
     * @param {Discord.Message} message Discord.Message
     * @param {Song} song The first Song of the Queue
     */
-    constructor(message: Discord.Message, song: Song);
+    constructor(distube: DisTube, message: Discord.Message, song: Song);
+    /**
+     * `@3.0.0` Queue id (Guild id)
+     * @type {Discord.Snowflake}
+     */
+    id: Discord.Snowflake;
     /**
      * Stream dispatcher.
      * @type {Discord.StreamDispatcher}
@@ -45,20 +51,21 @@ declare class Queue {
      */
     next: boolean;
     /**
-     * Whether or not the last song was skipped to previous song.
-     * @type {boolean}
+     * Play the previous song
+     * @returns {Queue} The guild queue
+     * @throws {NoSong} if there is no previous song
      */
-    previous: boolean;
+    previous(): Queue;
     /**
      * Whether or not the stream is currently playing.
      * @type {boolean}
      */
     playing: boolean;
     /**
-     * Whether or not the stream is currently paused.
-     * @type {boolean}
+     * Pause the guild stream
+     * @returns {Queue} The guild queue
      */
-    pause: boolean;
+    pause(): Queue;
     /**
      * Type of repeat mode (0 is disabled, 1 is repeating a song, 2 is repeating all the playlist)
      * @type {number}
@@ -70,11 +77,11 @@ declare class Queue {
      */
     autoplay: boolean;
     /**
-     * `@2.0.0` Queue audio filter.
+     * Enabled audio filters.
      * Available filters: {@link Filter}
-     * @type {Filter}
+     * @type {Filter[]}
      */
-    filter: any;
+    filters: any[];
     /**
      * `@2.5.0` ytdl stream
      * @type {Readable}
@@ -115,6 +122,89 @@ declare class Queue {
      * @type {Discord.VoiceChannel}
      */
     get voiceChannel(): Discord.VoiceChannel;
+    /**
+     * Add a Song or an array of Song to the queue
+     * @param {Song|Song[]} song Song to add
+     * @param {boolean} [unshift=false] Unshift?
+     * @throws {Error} If an error encountered
+     * @returns {Queue}
+     */
+    addToQueue(song: Song | Song[], unshift?: boolean): Queue;
+    /**
+     * Resume the guild stream
+     * @returns {Queue} The guild queue
+     */
+    resume(): Queue;
+    /**
+     * Stop the guild stream
+     */
+    stop(): void;
+    /**
+     * Set the guild stream's volume
+     * @param {number} percent The percentage of volume you want to set
+     * @returns {Queue} The guild queue
+     */
+    setVolume(percent: number): Queue;
+    /**
+     * Skip the playing song
+     * @returns {Queue} The guild queue
+     * @throws {NoSong} if there is no song in queue
+     */
+    skip(): Queue;
+    /**
+     * Shuffle the queue's songs
+     * @returns {Queue} The guild queue
+     */
+    shuffle(): Queue;
+    /**
+     * Jump to the song number in the queue.
+     * The next one is 1, 2,...
+     * The previous one is -1, -2,...
+     * @param {number} num The song number to play
+     * @returns {Queue} The guild queue
+     * @throws {InvalidSong} if `num` is invalid number (0 < num < {@link Queue#songs}.length)
+     */
+    jump(num: number): Queue;
+    /**
+     * Set the repeat mode of the guild queue.
+     * Turn off if repeat mode is the same value as new mode.
+     * Toggle mode: `mode = null` `(0 -> 1 -> 2 -> 0...)`
+     * @param {number?} [mode] The repeat modes `(0: disabled, 1: Repeat a song, 2: Repeat all the queue)`
+     * @returns {number} The new repeat mode
+     */
+    setRepeatMode(mode?: number | null): number;
+    /**
+     * Enable or disable filter(s) of the queue.
+     * Available filters: {@link Filter}
+     * @param {Filter} filter A filter name
+     * @returns {string} Current queue's filter name.
+     * @throws {Error} If it's not a filter
+     */
+    setFilter(filter: any): string;
+    /**
+     * Set the playing time to another position
+     * @param {number} time Time in milliseconds
+     * @returns {Queue}
+     * @example
+     * client.on('message', message => {
+     *     if (!message.content.startsWith(config.prefix)) return;
+     *     const args = message.content.slice(config.prefix.length).trim().split(/ +/g);
+     *     const command = args.shift();
+     *     if (command = 'seek')
+     *         distube.seek(message, Number(args[0]));
+     * });
+     */
+    seek(time: number): Queue;
+    /**
+     * Add a related song to the queue
+     * @async
+     * @param {Song} [song] A song to get the related one
+     * @returns {Promise<Queue>} The guild queue
+     * @throws {NoRelated}
+     */
+    addRelatedVideo(song?: Song): Promise<Queue>;
 }
+import Base = require("./DisTubeBase");
 import Discord = require("discord.js");
 import Song = require("./Song");
+import DisTube = require("./DisTube");

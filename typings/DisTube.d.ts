@@ -1,5 +1,27 @@
 export = DisTube;
 /**
+ * @typedef {Object.<string, string>} Filters
+ * @ignore
+ */
+/**
+ * DisTube options.
+ * @typedef {Object} DisTubeOptions
+ * @prop {boolean} [emitNewSongOnly=false] `@1.3.0`. If `true`, {@link DisTube#event:playSong} will not be emitted when looping a song or next song is the same as the previous one
+ * @prop {boolean} [leaveOnEmpty=true] Whether or not leaving voice channel if channel is empty in 60s. (Avoid accident leaving)
+ * @prop {boolean} [leaveOnFinish=false] Whether or not leaving voice channel when the queue ends.
+ * @prop {boolean} [leaveOnStop=true] Whether or not leaving voice channel after using {@link DisTube#stop|stop()} function.
+ * @prop {boolean} [savePreviousSongs=true] Whether or not saving the previous songs of the queue and enable {@link DisTube#previous|previous()} method
+ * @prop {number} [searchSongs=0] Whether or not searching for multiple songs to select manually; DisTube will play the first result if `false`
+ * @prop {string} [youtubeCookie=null] `@2.4.0` YouTube cookies. Read how to get it in {@link https://github.com/fent/node-ytdl-core/blob/997efdd5dd9063363f6ef668bb364e83970756e7/example/cookies.js#L6-L12|YTDL's Example}
+ * @prop {string} [youtubeIdentityToken=null] `@2.4.0` If not given; ytdl-core will try to find it. You can find this by going to a video's watch page; viewing the source; and searching for "ID_TOKEN".
+ * @prop {boolean} [youtubeDL=true] `@2.8.0` Whether or not using youtube-dl.
+ * @prop {boolean} [updateYouTubeDL=true] `@2.8.0` Whether or not updating youtube-dl automatically.
+ * @prop {Filters} [customFilters] `@2.7.0` Override {@link DefaultFilters} or add more ffmpeg filters. Example=`{ "Filter name"="Filter value"; "8d"="apulsator=hz=0.075" }`
+ * @prop {Object} [ytdlOptions] `@3.0.0` `ytdl-core` options
+ * @prop {number} [searchCooldown=60000] Built-in search cooldown in milliseconds (When searchSongs is bigger than 0)
+ * @prop {number} [emptyCooldown=60000] Built-in leave on empty cooldown in milliseconds (When leaveOnEmpty is true)
+ */
+/**
  * Class representing a DisTube.
  * @extends EventEmitter
  */
@@ -14,7 +36,7 @@ declare class DisTube extends EventEmitter {
      *     DisTube = require('distube'),
      *     client = new Discord.Client();
      * // Create a new DisTube
-     * const distube = new DisTube(client, { searchSongs: true });
+     * const distube = new DisTube(client, { searchSongs: 10 });
      * // client.DisTube = distube // make it access easily
      * client.login("Your Discord Bot Token")
      */
@@ -40,37 +62,17 @@ declare class DisTube extends EventEmitter {
      * @type {DisTubeOptions}
      */
     options: DisTubeOptions;
+    handler: Handler;
     /**
      * DisTube filters
-     * @type {Filter}
+     * @type {Filters}
      */
-    filters: Filter;
-    ytdlOptions: any;
-    /**
-     * Resolve a Song
-     * @async
-     * @param {Discord.Message} message The message from guild channel
-     * @param {string|Song} song Youtube url | Search string | {@link Song}
-     * @private
-     * @ignore
-     * @returns {Promise<Song|Song[]>} Resolved Song
-     */
-    private _resolveSong;
-    /**
-     * Handle a Song or an array of Song
-     * @async
-     * @param {Discord.Message} message The message from guild channel
-     * @param {Song[]|Song|SearchResult} song {@link Song} | {@link SearchResult}
-     * @param {boolean} skip Skip?
-     * @private
-     * @ignore
-     */
-    private _handleSong;
+    filters: Filters;
     /**
      * Play / add a song or playlist from url. Search and play a song if it is not a valid url.
      * @async
      * @param {Discord.Message} message The message from guild channel
-     * @param {string|Song|SearchResult} song Youtube url | Search string | {@link Song} | {@link SearchResult}
+     * @param {string|Song|SearchResult|Playlist} song Youtube url | Search string | {@link Song} | {@link SearchResult} | {@link Playlist}
      * @param {boolean} skip Wether or not skipping the playing song
      * @example
      * client.on('message', (message) => {
@@ -81,12 +83,12 @@ declare class DisTube extends EventEmitter {
      *         distube.play(message, args.join(" "));
      * });
      */
-    play(message: Discord.Message, song: string | Song | SearchResult, skip?: boolean): Promise<void>;
+    play(message: Discord.Message, song: string | Song | SearchResult | Playlist, skip?: boolean): Promise<void>;
     /**
      * `@2.0.0` Skip the playing song and play a song or playlist
      * @async
      * @param {Discord.Message} message The message from guild channel
-     * @param {string|Song|SearchResult} song Youtube url | Search string | {@link Song} | {@link SearchResult}
+     * @param {string|Song|SearchResult|Playlist} song Youtube url | Search string | {@link Song} | {@link SearchResult} | {@link Playlist}
      * @example
      * client.on('message', (message) => {
      *     if (!message.content.startsWith(config.prefix)) return;
@@ -96,7 +98,7 @@ declare class DisTube extends EventEmitter {
      *         distube.playSkip(message, args.join(" "));
      * });
      */
-    playSkip(message: Discord.Message, song: string | Song | SearchResult): Promise<void>;
+    playSkip(message: Discord.Message, song: string | Song | SearchResult | Playlist): Promise<void>;
     /**
      * `@2.1.0` Play or add array of video urls.
      * {@link DisTube#event:playList} or {@link DisTube#event:addList} will be emitted
@@ -121,7 +123,7 @@ declare class DisTube extends EventEmitter {
      * @private
      * @ignore
      * @param {Discord.Message} message The message from guild channel
-     * @param {string|Song[]|Playlist} arg2 Youtube playlist url | a Playlist
+     * @param {Playlist} playlist Youtube playlist url | a Playlist
      * @param {boolean} skip Skip the current song
      */
     private _handlePlaylist;
@@ -130,21 +132,17 @@ declare class DisTube extends EventEmitter {
      * Then use {@link DisTube#play|play(message, aResultFromSearch)} or {@link DisTube#playSkip|playSkip()} to play it.
      * @async
      * @param {string} string The string search for
+     * @param {Object} options Search options
+     * @param {number} [options.limit=10] Limit the results
+     * @param {"video"|"playlist"} [options.type="video"] Type of search (video or playlist).
      * @param {boolean} retried Retried?
      * @throws {Error} If an error encountered
      * @returns {Promise<SearchResult[]>} Array of results
      */
-    search(string: string, retried?: boolean): Promise<SearchResult[]>;
-    /**
-     * Search for a song, fire {@link DisTube#event:error} if not found.
-     * @async
-     * @private
-     * @ignore
-     * @param {Discord.Message} message The message from guild channel
-     * @param {string} name The string search for
-     * @returns {?Song} Song info
-     */
-    private _searchSong;
+    search(string: string, options?: {
+        limit?: number;
+        type?: "video" | "playlist";
+    }, retried?: boolean): Promise<SearchResult[]>;
     /**
      * Create a new guild queue
      * @async
@@ -159,11 +157,10 @@ declare class DisTube extends EventEmitter {
     private _newQueue;
     /**
      * Delete a guild queue
-     * @private
      * @ignore
-     * @param {Discord.Snowflake|Discord.Message} message The message from guild channel
+     * @param {Discord.Snowflake|Discord.Message|Queue} queue The message from guild channel | Queue
      */
-    private _deleteQueue;
+    deleteQueue(queue: Discord.Snowflake | Discord.Message | Queue): void;
     /**
      * Get the guild queue
      * @param {Discord.Snowflake|Discord.Message} message The guild ID or message from guild channel.
@@ -184,28 +181,6 @@ declare class DisTube extends EventEmitter {
      */
     getQueue(message: Discord.Snowflake | Discord.Message): Queue;
     /**
-     * Add a video to queue
-     * @private
-     * @ignore
-     * @param {Discord.Snowflake|Discord.Message} message The message from guild channel
-     * @param {Song} song Song to add
-     * @param {boolean} [unshift=false] Unshift?
-     * @throws {Error} If an error encountered
-     * @returns {Queue}
-     */
-    private _addToQueue;
-    /**
-     * Add a array of videos to queue
-     * @private
-     * @ignore
-     * @param {Discord.Snowflake|Discord.Message} message The message from guild channel
-     * @param {Song[]} songs Array of song to add
-     * @param {boolean} [unshift=false] Unshift?
-     * @throws {Error} If an error encountered
-     * @returns {Queue}
-     */
-    private _addSongsToQueue;
-    /**
      * Pause the guild stream
      * @param {Discord.Snowflake|Discord.Message} message The message from guild channel
      * @returns {Queue} The guild queue
@@ -221,7 +196,7 @@ declare class DisTube extends EventEmitter {
     resume(message: Discord.Snowflake | Discord.Message): Queue;
     /**
      * Stop the guild stream
-     * @param {Discord.Snowflake|Discord.Message} message The message from guild channel
+     * @param {Discord.Snowflake|Discord.Message} message The message from guild channel or Queue
      * @throws {Error} If an error encountered
      * @example
      * client.on('message', (message) => {
@@ -268,7 +243,24 @@ declare class DisTube extends EventEmitter {
      * });
      */
     skip(message: Discord.Snowflake | Discord.Message): Queue;
-    previous(message: any): Queue;
+    /**
+     * Play the previous song
+     *
+     * @param {Discord.Snowflake|Discord.Message} message The message from guild channel
+     * @returns {Queue} The guild queue
+     * @throws {Disabled} If this method is disabled
+     * @throws {NotPlaying} No playing queue
+     * @throws {NoSong} if there is no previous song
+     * @example
+     * client.on('message', (message) => {
+     *     if (!message.content.startsWith(config.prefix)) return;
+     *     const args = message.content.slice(config.prefix.length).trim().split(/ +/g);
+     *     const command = args.shift();
+     *     if (command == "previous")
+     *         distube.previous(message);
+     * });
+     */
+    previous(message: Discord.Snowflake | Discord.Message): Queue;
     /**
      * Shuffle the guild queue songs
      * @param {Discord.Snowflake|Discord.Message} message The message from guild channel
@@ -354,16 +346,7 @@ declare class DisTube extends EventEmitter {
      */
     isPaused(message: Discord.Snowflake | Discord.Message): boolean;
     /**
-     * Whether or not the queue's voice channel is empty
-     * @private
-     * @ignore
-     * @param {Queue} queue The guild queue
-     * @returns {boolean} No user in voice channel return `true`
-     */
-    private _isVoiceChannelEmpty;
-    /**
      * Add related song to the queue
-     * @async
      * @param {Discord.Snowflake|Discord.Message} message The message from guild channel
      * @returns {Promise<Queue>} The guild queue
      */
@@ -374,7 +357,7 @@ declare class DisTube extends EventEmitter {
      *
      * @param {Discord.Message} message The message from guild channel
      * @param {Filter} filter A filter name
-     * @returns {string} Current queue's filter name.
+     * @returns {Filter[]} Enabled filters.
      * @example
      * client.on('message', (message) => {
      *     if (!message.content.startsWith(config.prefix)) return;
@@ -382,16 +365,16 @@ declare class DisTube extends EventEmitter {
      *     const command = args.shift();
      *     if ([`3d`, `bassboost`, `echo`, `karaoke`, `nightcore`, `vaporwave`].includes(command)) {
      *         let filter = distube.setFilter(message, command);
-     *         message.channel.send("Current queue filter: " + (filter || "Off"));
+     *         message.channel.send("Current queue filter: " + (filter.join(", ") || "Off"));
      *     }
      * });
      */
-    setFilter(message: Discord.Message, filter: Filter): string;
+    setFilter(message: Discord.Message, filter: any): any[];
     /**
      * `@2.7.0` Set the playing time to another position
-     *
      * @param {Discord.Message} message The message from guild channel
      * @param {number} time Time in milliseconds
+     * @returns {Queue}
      * @example
      * client.on('message', message => {
      *     if (!message.content.startsWith(config.prefix)) return;
@@ -401,92 +384,27 @@ declare class DisTube extends EventEmitter {
      *         distube.seek(message, Number(args[0]));
      * });
      */
-    seek(message: Discord.Message, time: number): void;
+    seek(message: Discord.Message, time: number): Queue;
     /**
      * Emit error event
      * @param {Discord.TextChannel} channel Text channel where the error is encountered.
      * @param {Error} error error
-     * @private
      * @ignore
      */
-    private _emitError;
-    /**
-     * Whether or not emit playSong event
-     * @param {Queue} queue Queue
-     * @private
-     * @ignore
-     * @returns {boolean}
-     */
-    private _emitPlaySong;
-    /**
-     * Create a ytdl stream
-     * @param {Queue} queue Queue
-     * @private
-     * @ignore
-     * @returns {opus.Encoder}
-     */
-    private _createStream;
-    /**
-     * Play a song on voice connection
-     * @private
-     * @ignore
-     * @param {Discord.Message} message The message from guild channel
-     * @returns {boolean} error?
-     */
-    private _playSong;
-    /**
-     * Handle the queue when a Song finish
-     * @private
-     * @ignore
-     * @param {Discord.Message} message message
-     * @param {Queue} queue queue
-     */
-    private _handleSongFinish;
-    /**
-     * Handle error while playing
-     * @private
-     * @ignore
-     * @param {Discord.Message} message message
-     * @param {Queue} queue queue
-     * @param {Error} error error
-     */
-    private _handlePlayingError;
+    emitError(channel: Discord.TextChannel, error: Error): void;
 }
 declare namespace DisTube {
-    export { DisTubeOptions, Filter };
+    export { Filters, DisTubeOptions };
 }
-import { EventEmitter } from "node/events";
+import { EventEmitter } from "events";
 import Discord = require("discord.js");
 import Queue = require("./Queue");
-declare namespace DisTubeOptions {
-    const emitNewSongOnly: boolean;
-    const leaveOnEmpty: boolean;
-    const leaveOnFinish: boolean;
-    const leaveOnStop: boolean;
-    const searchSongs: boolean;
-    const youtubeCookie: any;
-    const youtubeIdentityToken: any;
-    const youtubeDL: boolean;
-    const updateYouTubeDL: boolean;
-    const customFilters: {};
-    namespace ytdlOptions {
-        const highWaterMark: number;
-    }
-    const searchCooldown: number;
-    const emptyCooldown: number;
-}
-/**
- * DisTube audio filters.
- */
-type Filter = "3d" | "bassboost" | "echo" | "karaoke" | "nightcore" | "vaporwave" | "flanger" | "gate" | "haas" | "reverse" | "surround" | "mcompand" | "phaser" | "tremolo" | "earwax";
-import Song = require("./Song");
-import SearchResult = require("./SearchResult");
 /**
  * DisTube options.
  */
 type DisTubeOptions = {
     /**
-     * `@1.3.0`. If `true`, {@link DisTube#event:playSong} is not emitted when looping a song or next song is the same as the previous one
+     * `@1.3.0`. If `true`, {@link DisTube#event:playSong} will not be emitted when looping a song or next song is the same as the previous one
      */
     emitNewSongOnly?: boolean;
     /**
@@ -502,15 +420,19 @@ type DisTubeOptions = {
      */
     leaveOnStop?: boolean;
     /**
-     * Whether or not searching for multiple songs to select manually, DisTube will play the first result if `false`
+     * Whether or not saving the previous songs of the queue and enable {@link DisTube#previous|previous()} method
      */
-    searchSongs?: boolean;
+    savePreviousSongs?: boolean;
     /**
-     * `@2.4.0` YouTube cookies. How to get it: {@link https://github.com/fent/node-ytdl-core/blob/784c04eaf9f3cfac0fe0933155adffe0e2e0848a/example/cookies.js#L6-L12|YTDL's Example}
+     * Whether or not searching for multiple songs to select manually; DisTube will play the first result if `false`
+     */
+    searchSongs?: number;
+    /**
+     * `@2.4.0` YouTube cookies. Read how to get it in {@link https://github.com/fent/node-ytdl-core/blob/997efdd5dd9063363f6ef668bb364e83970756e7/example/cookies.js#L6-L12|YTDL's Example}
      */
     youtubeCookie?: string;
     /**
-     * `@2.4.0` If not given, ytdl-core will try to find it. You can find this by going to a video's watch page, viewing the source, and searching for "ID_TOKEN".
+     * `@2.4.0` If not given; ytdl-core will try to find it. You can find this by going to a video's watch page; viewing the source; and searching for "ID_TOKEN".
      */
     youtubeIdentityToken?: string;
     /**
@@ -522,17 +444,15 @@ type DisTubeOptions = {
      */
     updateYouTubeDL?: boolean;
     /**
-     * `@2.7.0` Override or add more ffmpeg filters. Example: `{ "Filter name": "Filter value", "8d": "apulsator=hz=0.075" }`
+     * `@2.7.0` Override {@link DefaultFilters} or add more ffmpeg filters. Example=`{ "Filter name"="Filter value"; "8d"="apulsator=hz=0.075" }`
      */
-    customFilters?: {
-        [x: string]: string;
-    };
+    customFilters?: Filters;
     /**
      * `@3.0.0` `ytdl-core` options
      */
     ytdlOptions?: any;
     /**
-     * Built-in search cooldown in milliseconds (When searchSongs is true)
+     * Built-in search cooldown in milliseconds (When searchSongs is bigger than 0)
      */
     searchCooldown?: number;
     /**
@@ -540,3 +460,10 @@ type DisTubeOptions = {
      */
     emptyCooldown?: number;
 };
+import Handler = require("./DisTubeHandler");
+type Filters = {
+    [x: string]: string;
+};
+import Song = require("./Song");
+import SearchResult = require("./SearchResult");
+import Playlist = require("./Playlist");

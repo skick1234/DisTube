@@ -33,7 +33,9 @@ npm install distube
 ```
 
 ### Requirement
-- [discord.js](https://discord.js.org) v12
+
+- Node v14.x or higher
+- [discord.js](https://discord.js.org) v12 / master branch (v13)
 - [FFmpeg](https://www.ffmpeg.org/download.html) - `npm install ffmpeg-static`
 - [@discordjs/opus](https://github.com/discordjs/opus) - `npm install @discordjs/opus`
 - [python](https://www.python.org/) *(For [`youtube-dl`](http://ytdl-org.github.io/youtube-dl/) to support [700+ more sites](https://ytdl-org.github.io/youtube-dl/supportedsites.html).)*

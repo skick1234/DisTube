@@ -1,15 +1,12 @@
-const { toSecond } = require("./util");
-
-/**
- * @typedef {import("ytsr").Video} Video ytsr.Video
- * @typedef {import("ytsr").Playlist} Playlist ytsr.Playlist
- */
+const { toSecond } = require("./util"),
+  // eslint-disable-next-line no-unused-vars
+  ytsr = require("@distube/ytsr");
 
 /** `@2.7.0` Class representing a search result. */
 class SearchResult {
   /**
    * Create a search result.
-   * @param {Video|Playlist} info Video info
+   * @param {ytsr.Video|ytsr.Playlist} info Video info
    */
   constructor(info) {
     /**

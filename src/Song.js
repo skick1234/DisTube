@@ -1,19 +1,15 @@
-/* eslint-disable complexity */
 const { formatDuration, toSecond, parseNumber } = require("./util"),
   ytdl = require("ytdl-core"),
-  Playlist = require("./Playlist");
-
-/**
- * @typedef {import("discord.js").GuildMember} GuildMember
- * @typedef {import("discord.js").User} User
- */
+  Playlist = require("./Playlist"),
+  // eslint-disable-next-line no-unused-vars
+  Discord = require("discord.js");
 
 /** Class representing a song. */
 class Song {
   /**
    * Create a song.
    * @param {ytdl.videoInfo|Object} info Video info
-   * @param {GuildMember?} member Requested user
+   * @param {Discord.GuildMember?} member Requested user
    * @param {string} [src="youtube"] Weather or not the video is a Youtube video.
    */
   constructor(info, member = null, src = "youtube") {
@@ -25,9 +21,14 @@ class Song {
     this.source = src;
     /**
      * `@3.0.0` User requested
-     * @type {GuildMember?}
+     * @type {Discord.GuildMember?}
      */
     this.member = member;
+    /**
+     * User requested
+     * @type {Discord.User?}
+     */
+    this.user = this.member?.user;
     if (this.source === "youtube" && info.full) {
       /**
        * `@3.0.0` `ytdl-core` raw info (If the song is from YouTube)
@@ -38,14 +39,6 @@ class Song {
       info = info.videoDetails;
     }
     this._patch(info);
-  }
-
-  /**
-   * User requested
-   * @type {User?}
-   */
-  get user() {
-    return this.member?.user;
   }
 
   /**
@@ -137,7 +130,7 @@ class Song {
 
   /**
    * @param {Playlist} playlist Playlist
-   * @param {GuildMember} member User requested
+   * @param {Discord.GuildMember} member User requested
    * @ignore
    * @returns {Song}
    */

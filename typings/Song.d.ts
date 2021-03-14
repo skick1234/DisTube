@@ -4,25 +4,25 @@ declare class Song {
     /**
      * Create a song.
      * @param {ytdl.videoInfo|Object} info Video info
-     * @param {Discord.GuildMember} member Requested user
+     * @param {Discord.GuildMember?} member Requested user
      * @param {string} [src="youtube"] Weather or not the video is a Youtube video.
      */
-    constructor(info: ytdl.videoInfo | any, member: Discord.GuildMember, src?: string);
+    constructor(info: ytdl.videoInfo | any, member?: Discord.GuildMember | null, src?: string);
     /**
      * `@3.0.0` The source of the song
      * @type {string}
      */
     source: string;
     /**
-     * User requested
-     * @type {Discord.GuildMember}
+     * `@3.0.0` User requested
+     * @type {Discord.GuildMember?}
      */
-    member: Discord.GuildMember;
+    member: Discord.GuildMember | null;
     /**
      * User requested
-     * @type {Discord.User}
+     * @type {Discord.User?}
      */
-    user: Discord.User;
+    user: Discord.User | null;
     /**
      * `@3.0.0` `ytdl-core` raw info (If the song is from YouTube)
      * @type {?ytdl.videoInfo}
@@ -110,10 +110,11 @@ declare class Song {
     uploader: object;
     /**
      * @param {Playlist} playlist Playlist
+     * @param {Discord.GuildMember} member User requested
      * @ignore
      * @returns {Song}
      */
-    _patchPlaylist(playlist: Playlist): Song;
+    _patchPlaylist(playlist: Playlist, member?: Discord.GuildMember): Song;
     /**
      * `@3.0.0` The playlist added this song
      * @type {?Playlist}
