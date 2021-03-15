@@ -863,7 +863,7 @@ class DisTube extends EventEmitter {
       encoderArgs,
       seek: queue.beginTime / 1000,
     };
-    if (song.youtube) return ytdl.downloadFromInfo(song.info, streamOptions);
+    if (song.youtube) return ytdl(song.info, streamOptions);
     return ytdl.arbitraryStream(song.streamURL, streamOptions);
   }
 
