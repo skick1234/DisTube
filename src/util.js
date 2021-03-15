@@ -48,8 +48,13 @@ const merge = module.exports.mergeObject = (def, opt) => {
 };
 
 module.exports.isURL = string => {
-  // eslint-disable-next-line no-new
-  try { new URL(string) } catch { return false }
+  if (string.includes(" ")) return false;
+  try {
+    const url = new URL(string);
+    if (!["https:", "http:"].includes(url.protocol) ||
+      url.origin === "null" || !url.host
+    ) return false;
+  } catch { return false }
   return true;
 };
 
