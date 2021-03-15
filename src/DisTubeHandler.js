@@ -297,9 +297,12 @@ class DisTubeHandler extends Base {
       }
     }
     if (queue.previous) queue.songs.unshift(queue.previousSongs.pop());
-    else if (queue.repeatMode !== 1 || queue.next) queue.previousSongs.push(queue.songs.shift());
     queue.next = false;
     queue.previous = false;
+    else if (queue.repeatMode !== 1 && queue.next) {
+      const prev = queue.songs.shift();
+      if (this.options.savePreviousSongs) queue.previousSongs.push(prev);
+    }
     queue.beginTime = 0;
     const emitPlaySong = this._emitPlaySong(queue);
     let err = await this.playSong(queue);
