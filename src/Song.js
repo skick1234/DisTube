@@ -6,12 +6,6 @@ const { formatDuration, toSecond, parseNumber } = require("./util"),
 
 /** Class representing a song. */
 class Song {
-  /**
-   * Create a song.
-   * @param {ytdl.videoInfo|Object} info Video info
-   * @param {Discord.GuildMember?} member Requested user
-   * @param {string} [src="youtube"] Weather or not the video is a Youtube video.
-   */
   constructor(info, member = null, src = "youtube") {
     if (typeof src !== "string") throw new TypeError("Source must be a string");
     /**

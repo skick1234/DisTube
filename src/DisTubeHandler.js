@@ -14,8 +14,11 @@ const ytdl = require("@distube/ytdl"),
   Discord = require("discord.js");
 
 
-/** @ignore */
-module.exports = class DisTubeHandler extends Base {
+/**
+ * DisTube's Handler
+ * @private
+ */
+class DisTubeHandler extends Base {
   constructor(distube) {
     super(distube);
     const requestOptions = this.options.youtubeCookie ? { headers: { cookie: this.options.youtubeCookie, "x-youtube-identity-token": this.options.youtubeIdentityToken } } : undefined;
@@ -41,7 +44,6 @@ module.exports = class DisTubeHandler extends Base {
   }
 
   /**
-   * @ignore
    * @param {string} url url
    * @returns {Promise<ytdl.videoInfo>}
    */
@@ -322,4 +324,6 @@ module.exports = class DisTubeHandler extends Base {
       });
     } else try { queue.stop() } catch { this.deleteQueue(queue) }
   }
-};
+}
+
+module.exports = DisTubeHandler;

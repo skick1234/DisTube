@@ -6,12 +6,6 @@ const { formatDuration } = require("./util"),
 
 /** Class representing a playlist. */
 class Playlist {
-  /**
-   * Create a playlist
-   * @param {Song[]} playlist Playlist
-   * @param {Discord.GuildMember} member Requested user
-   * @param {Object} properties Custom properties
-   */
   constructor(playlist, member, properties = {}) {
     if (typeof properties !== "object") throw new TypeError("Custom properties must be an object");
     /**

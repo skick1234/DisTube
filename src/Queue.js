@@ -1,21 +1,13 @@
-const { formatDuration } = require("./util");
-const Song = require("./Song");
-const Base = require("./DisTubeBase");
-// eslint-disable-next-line no-unused-vars
-const DisTube = require("./DisTube");
-// eslint-disable-next-line no-unused-vars
-const Discord = require("discord.js");
+const { formatDuration } = require("./util"),
+  Song = require("./Song"),
+  Base = require("./DisTubeBase"),
+  // eslint-disable-next-line no-unused-vars
+  Discord = require("discord.js");
 
 /**
  * Represents a queue.
  */
 class Queue extends Base {
-  /**
-  * Create a queue.
-  * @param {DisTube} distube DisTube
-  * @param {Discord.Message} message Discord.Message
-  * @param {Song} song The first Song of the Queue
-  */
   constructor(distube, message, song) {
     super(distube);
     /**

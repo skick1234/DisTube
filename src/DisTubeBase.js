@@ -1,8 +1,8 @@
 // eslint-disable-next-line no-unused-vars
 const DisTube = require("./DisTube");
 
-/** @ignore*/
-module.exports = class DisTubeBase {
+/** @private */
+class DisTubeBase {
   /** @param {DisTube} distube distube */
   constructor(distube) {
     this.distube = distube;
@@ -14,3 +14,5 @@ module.exports = class DisTubeBase {
     this.distube.emit(...args);
   }
 };
+
+module.exports = DisTubeBase;

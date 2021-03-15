@@ -1,11 +1,5 @@
 const formatInt = int => int < 10 ? `0${int}` : int;
 
-/**
- * Convert milliseconds to `hh:mm:ss` string
- * @param {number} milliseconds milliseconds
- * @returns {string}
- * @ignore
- */
 module.exports.formatDuration = milliseconds => {
   if (!milliseconds || !parseInt(milliseconds)) return "00:00";
   const seconds = Math.floor(milliseconds % 60000 / 1000);
@@ -20,12 +14,6 @@ module.exports.formatDuration = milliseconds => {
   return `00:${formatInt(seconds)}`;
 };
 
-/**
- * Convert `hh:mm:ss` string to seconds
- * @param {string} string duration
- * @returns {number}
- * @ignore
- */
 module.exports.toSecond = string => {
   if (!string) return 0;
   if (typeof string !== "string") return parseInt(string) || 0;
@@ -45,12 +33,6 @@ module.exports.toSecond = string => {
   return h * 60 * 60 + m * 60 + s;
 };
 
-/**
- * Convert string of int to number
- * @param {string} string string
- * @returns {number}
- * @ignore
- */
 module.exports.parseNumber = string => (typeof string === "string" ? Number(string.replace(/\D+/g, "")) : Number(string)) || 0;
 
 const merge = module.exports.mergeObject = (def, opt) => {
@@ -71,13 +53,6 @@ module.exports.isURL = string => {
   return true;
 };
 
-/**
- * Whether or not the queue's voice channel is empty
- * @private
- * @ignore
- * @param {Queue} queue The guild queue
- * @returns {boolean} No user in voice channel return `true`
- */
 module.exports.isVoiceChannelEmpty = queue => {
   let voiceChannel = queue.connection.channel;
   let members = voiceChannel.members.filter(m => !m.user.bot);
