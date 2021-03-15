@@ -13,8 +13,13 @@ const youtube_dlOptions = ["--no-warnings", "--force-ipv4"];
 youtube_dl.getInfo = promisify(youtube_dl.getInfo);
 
 const isURL = string => {
-  // eslint-disable-next-line no-new
-  try { new URL(string) } catch { return false }
+  if (string.includes(" ")) return false;
+  try {
+    const url = new URL(string);
+    if (!["https:", "http:"].includes(url.protocol) ||
+      url.origin === "null" || !url.host
+    ) return false;
+  } catch { return false }
   return true;
 }
 const parseNumber = string => (typeof string === "string" ? Number(string.replace(/\D+/g, "")) : Number(string)) || 0;
