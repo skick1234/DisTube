@@ -40,7 +40,7 @@ class DisTubeHandler extends Base {
    * @param {Discord.Snowflake|Discord.Message|Queue} queue The message from guild channel | Queue
    */
   deleteQueue(queue) {
-    this.distube.deleteQueue(queue);
+    this.distube._deleteQueue(queue);
   }
 
   /**
@@ -98,7 +98,6 @@ class DisTubeHandler extends Base {
   /**
    * Search for a song, fire {@link DisTube#event:error} if not found.
    * @async
-   * @private
    * @param {Discord.Message} message The message from guild channel
    * @param {string} name The string search for
    * @returns {Song} Song info
@@ -297,12 +296,11 @@ class DisTubeHandler extends Base {
       }
     }
     if (queue.previous) queue.songs.unshift(queue.previousSongs.pop());
-    queue.next = false;
-    queue.previous = false;
     else if (queue.repeatMode !== 1 && queue.next) {
       const prev = queue.songs.shift();
       if (this.options.savePreviousSongs) queue.previousSongs.push(prev);
     }
+    queue.next = queue.previous = false;
     queue.beginTime = 0;
     const emitPlaySong = this._emitPlaySong(queue);
     let err = await this.playSong(queue);

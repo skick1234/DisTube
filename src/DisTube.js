@@ -105,7 +105,7 @@ class DisTube extends EventEmitter {
           if (this.guildQueues.has(guildID) && isVoiceChannelEmpty(queue)) {
             queue.connection.channel.leave();
             this.emit("empty", queue.textChannel);
-            this.deleteQueue(queue.textChannel.guild.id);
+            this._deleteQueue(queue.textChannel.guild.id);
           }
         }, this.options.emptyCooldown);
       } else if (timeout) {
@@ -297,10 +297,10 @@ class DisTube extends EventEmitter {
 
   /**
    * Delete a guild queue
-   * @ignore
+   * @private
    * @param {Discord.Snowflake|Discord.Message|Queue} queue The message from guild channel | Queue
    */
-  deleteQueue(queue) {
+  _deleteQueue(queue) {
     if (!(queue instanceof Queue)) queue = this.getQueue(queue);
     if (!queue) return;
     if (queue.dispatcher) try { queue.dispatcher.destroy() } catch { }

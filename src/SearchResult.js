@@ -1,6 +1,4 @@
-const { toSecond } = require("./util"),
-  // eslint-disable-next-line no-unused-vars
-  ytsr = require("@distube/ytsr");
+const { toSecond } = require("./util");
 
 /** `@2.7.0` Class representing a search result. */
 class SearchResult {
