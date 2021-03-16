@@ -9,12 +9,12 @@ class Song {
   constructor(info, member = null, src = "youtube") {
     if (typeof src !== "string") throw new TypeError("Source must be a string");
     /**
-     * `@3.0.0` The source of the song
+     * The source of the song
      * @type {string}
      */
     this.source = src;
     /**
-     * `@3.0.0` User requested
+     * User requested
      * @type {Discord.GuildMember?}
      */
     this.member = member;
@@ -25,7 +25,7 @@ class Song {
     this.user = this.member?.user;
     if (this.source === "youtube" && info.full) {
       /**
-       * `@3.0.0` `ytdl-core` raw info (If the song is from YouTube)
+       * `ytdl-core` raw info (If the song is from YouTube)
        * @type {?ytdl.videoInfo}
        * @private
        */
@@ -43,7 +43,7 @@ class Song {
    */
   _patch(info) {
     /**
-     * `@2.1.4` Youtube video id
+     * Youtube video id
      * @type {string}
      */
     this.id = info.videoId || info.id;
@@ -53,7 +53,7 @@ class Song {
      */
     this.name = info.title;
     /**
-     * `@2.5.0` Indicates if the video is an active live.
+     * Indicates if the video is an active live.
      * @type {boolean}
      */
     this.isLive = info.isLive || info.is_live || false;
@@ -73,7 +73,7 @@ class Song {
      */
     this.url = this.src === "youtube" ? `https://www.youtube.com/watch?v=${this.id}` : info.webpage_url;
     /**
-     * `@2.6.0` Stream / Download URL.
+     * Stream / Download URL.
      * @type {?string}
      */
     this.streamURL = this.info && this.info.formats.length ? ytdl.chooseFormat(this.info.formats, {
@@ -91,27 +91,27 @@ class Song {
      */
     this.related = info.related_videos;
     /**
-     * `@2.6.0` Song views count
+     * Song views count
      * @type {number}
      */
     this.views = parseNumber(info.viewCount || info.view_count || info.views);
     /**
-     * `@2.6.0` Song like count
+     * Song like count
      * @type {number}
      */
     this.likes = parseNumber(info.likes || info.like_count);
     /**
-     * `@2.6.0` Song dislike count
+     * Song dislike count
      * @type {number}
      */
     this.dislikes = parseNumber(info.dislikes || info.dislike_count);
     /**
-     * `@2.6.0` Song repost count
+     * Song repost count
      * @type {number}
      */
     this.reposts = parseNumber(info.repost_count);
     /**
-     * `@3.0.0` Song uploader
+     * Song uploader
      * @type {object}
      * @prop {?string} name Uploader name
      * @prop {?string} url Uploader url
@@ -125,13 +125,13 @@ class Song {
   /**
    * @param {Playlist} playlist Playlist
    * @param {Discord.GuildMember} member User requested
-   * @ignore
+   * @private
    * @returns {Song}
    */
   _patchPlaylist(playlist, member = this.member) {
     if (!(playlist instanceof Playlist)) throw new TypeError("playlist is not a valid Playlist");
     /**
-     * `@3.0.0` The playlist added this song
+     * The playlist added this song
      * @type {?Playlist}
      */
     this.playlist = playlist;

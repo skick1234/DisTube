@@ -1,11 +1,7 @@
 export = SearchResult;
-/** `@2.7.0` Class representing a search result. */
+/** Class representing a search result. */
 declare class SearchResult {
-    /**
-     * Create a search result.
-     * @param {ytsr.Video|ytsr.Playlist} info Video info
-     */
-    constructor(info: any | any);
+    constructor(info: any);
     /**
      * Type of SearchResult (video or playlist)
      * @type {string}
@@ -28,26 +24,26 @@ declare class SearchResult {
     url: string;
     /**
      * Video duration.
-     * @type {number}
+     * @type {number?}
      */
-    duration: number;
+    duration: number | null;
     /**
      * Formatted duration string `hh:mm:ss` or `mm:ss`.
-     * @type {string}
+     * @type {string?}
      */
-    formattedDuration: string;
+    formattedDuration: string | null;
     /**
      * Video thumbnail.
-     * @type {string}
+     * @type {string?}
      */
-    thumbnail: string;
+    thumbnail: string | null;
     /**
      * Indicates if the video is an active live.
-     * @type {boolean}
+     * @type {boolean?}
      */
-    isLive: boolean;
+    isLive: boolean | null;
     /**
-     * Video views count
+     * Video / Playlist views count
      * @type {number}
      */
     views: number;

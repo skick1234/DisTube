@@ -1,13 +1,7 @@
 export = Playlist;
 /** Class representing a playlist. */
 declare class Playlist {
-    /**
-     * Create a playlist
-     * @param {Song[]} playlist Playlist
-     * @param {Discord.GuildMember} member Requested user
-     * @param {Object} properties Custom properties
-     */
-    constructor(playlist: Song[], member: Discord.GuildMember, properties?: any);
+    constructor(playlist: any, member: any, properties?: {});
     /**
      * User requested.
      * @type {Discord.GuildMember}

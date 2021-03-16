@@ -1,12 +1,18 @@
-/// <reference types="discord.js" />
 export = DisTubeBase;
+/** @private */
 declare class DisTubeBase {
     /** @param {DisTube} distube distube */
     constructor(distube: DisTube);
+    /** @type {DisTube} */
     distube: DisTube;
-    handler: import("./DisTubeHandler");
+    /** @type {DisTubeHandler} */
+    handler: DisTubeHandler;
+    /** @type {DisTube.DisTubeOptions} */
     options: DisTube.DisTubeOptions;
-    client: import("discord.js").Client;
+    /** @type {Discord.Client} */
+    client: Discord.Client;
     emit(...args: any[]): void;
 }
 import DisTube = require("./DisTube");
+import DisTubeHandler = require("./DisTubeHandler");
+import Discord = require("discord.js");

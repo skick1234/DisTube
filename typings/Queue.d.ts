@@ -3,15 +3,9 @@ export = Queue;
  * Represents a queue.
  */
 declare class Queue extends Base {
+    constructor(distube: any, message: any, song: any);
     /**
-    * Create a queue.
-    * @param {DisTube} distube DisTube
-    * @param {Discord.Message} message Discord.Message
-    * @param {Song} song The first Song of the Queue
-    */
-    constructor(distube: DisTube, message: Discord.Message, song: Song);
-    /**
-     * `@3.0.0` Queue id (Guild id)
+     * Queue id (Guild id)
      * @type {Discord.Snowflake}
      */
     id: Discord.Snowflake;
@@ -83,17 +77,17 @@ declare class Queue extends Base {
      */
     filters: any[];
     /**
-     * `@2.5.0` ytdl stream
+     * ytdl stream
      * @type {Readable}
      */
     stream: any;
     /**
-     * `@2.7.0` What time in the song to begin (in milliseconds).
+     * What time in the song to begin (in milliseconds).
      * @type {number}
      */
     beginTime: number;
     /**
-     * `@3.0.0` The text channel of the Queue. (Default: where the first command is called).
+     * The text channel of the Queue. (Default: where the first command is called).
      * @type {Discord.TextChannel}
      */
     textChannel: Discord.TextChannel;
@@ -108,17 +102,17 @@ declare class Queue extends Base {
      */
     get duration(): number;
     /**
-     * `@2.7.0` What time in the song is playing (in milliseconds).
+     * What time in the song is playing (in milliseconds).
      * @type {number}
      */
     get currentTime(): number;
     /**
-     * `@2.8.0` Formatted {@link Queue#currentTime} string.
+     * Formatted {@link Queue#currentTime} string.
      * @type {string}
      */
     get formattedCurrentTime(): string;
     /**
-     * `@3.0.0` The voice channel playing in.
+     * The voice channel playing in.
      * @type {Discord.VoiceChannel}
      */
     get voiceChannel(): Discord.VoiceChannel;
@@ -207,4 +201,3 @@ declare class Queue extends Base {
 import Base = require("./DisTubeBase");
 import Discord = require("discord.js");
 import Song = require("./Song");
-import DisTube = require("./DisTube");

@@ -11,7 +11,7 @@ class Queue extends Base {
   constructor(distube, message, song) {
     super(distube);
     /**
-     * `@3.0.0` Queue id (Guild id)
+     * Queue id (Guild id)
      * @type {Discord.Snowflake}
      */
     this.id = message.guild.id;
@@ -82,17 +82,17 @@ class Queue extends Base {
      */
     this.filters = null;
     /**
-     * `@2.5.0` ytdl stream
+     * ytdl stream
      * @type {Readable}
      */
     this.stream = null;
     /**
-     * `@2.7.0` What time in the song to begin (in milliseconds).
+     * What time in the song to begin (in milliseconds).
      * @type {number}
      */
     this.beginTime = 0;
     /**
-     * `@3.0.0` The text channel of the Queue. (Default: where the first command is called).
+     * The text channel of the Queue. (Default: where the first command is called).
      * @type {Discord.TextChannel}
      */
     this.textChannel = message.channel;
@@ -112,21 +112,21 @@ class Queue extends Base {
     return this.songs.reduce((prev, next) => prev + next.duration, 0);
   }
   /**
-   * `@2.7.0` What time in the song is playing (in milliseconds).
+   * What time in the song is playing (in milliseconds).
    * @type {number}
    */
   get currentTime() {
     return this.dispatcher.streamTime + this.beginTime;
   }
   /**
-   * `@2.8.0` Formatted {@link Queue#currentTime} string.
+   * Formatted {@link Queue#currentTime} string.
    * @type {string}
    */
   get formattedCurrentTime() {
     return formatDuration(this.currentTime);
   }
   /**
-   * `@3.0.0` The voice channel playing in.
+   * The voice channel playing in.
    * @type {Discord.VoiceChannel}
    */
   get voiceChannel() {

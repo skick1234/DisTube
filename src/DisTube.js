@@ -12,25 +12,28 @@ const ytsr = require("@distube/ytsr"),
   Song = require("./Song");
 
 /**
+ * FFmpeg Filters
+ * * `{ "Filter Name":  "Filter Value" }`
+ * * `{ bassboost: "bass=g=10,dynaudnorm=f=150:g=15" }`
  * @typedef {Object.<string, string>} Filters
- * @ignore
+ * @prop {string} filterName filterValue
  */
 
 /**
  * DisTube options.
  * @typedef {Object} DisTubeOptions
- * @prop {boolean} [emitNewSongOnly=false] `@1.3.0`. If `true`, {@link DisTube#event:playSong} will not be emitted when looping a song or next song is the same as the previous one
+ * @prop {boolean} [emitNewSongOnly=false] If `true`, {@link DisTube#event:playSong} will not be emitted when looping a song or next song is the same as the previous one
  * @prop {boolean} [leaveOnEmpty=true] Whether or not leaving voice channel if channel is empty in 60s. (Avoid accident leaving)
  * @prop {boolean} [leaveOnFinish=false] Whether or not leaving voice channel when the queue ends.
  * @prop {boolean} [leaveOnStop=true] Whether or not leaving voice channel after using {@link DisTube#stop|stop()} function.
  * @prop {boolean} [savePreviousSongs=true] Whether or not saving the previous songs of the queue and enable {@link DisTube#previous|previous()} method
  * @prop {number} [searchSongs=0] Whether or not searching for multiple songs to select manually; DisTube will play the first result if `false`
- * @prop {string} [youtubeCookie=null] `@2.4.0` YouTube cookies. Read how to get it in {@link https://github.com/fent/node-ytdl-core/blob/997efdd5dd9063363f6ef668bb364e83970756e7/example/cookies.js#L6-L12|YTDL's Example}
- * @prop {string} [youtubeIdentityToken=null] `@2.4.0` If not given; ytdl-core will try to find it. You can find this by going to a video's watch page; viewing the source; and searching for "ID_TOKEN".
- * @prop {boolean} [youtubeDL=true] `@2.8.0` Whether or not using youtube-dl.
- * @prop {boolean} [updateYouTubeDL=true] `@2.8.0` Whether or not updating youtube-dl automatically.
- * @prop {Filters} [customFilters] `@2.7.0` Override {@link DefaultFilters} or add more ffmpeg filters. Example=`{ "Filter name"="Filter value"; "8d"="apulsator=hz=0.075" }`
- * @prop {Object} [ytdlOptions] `@3.0.0` `ytdl-core` options
+ * @prop {string} [youtubeCookie=null] YouTube cookies. Read how to get it in {@link https://github.com/fent/node-ytdl-core/blob/997efdd5dd9063363f6ef668bb364e83970756e7/example/cookies.js#L6-L12|YTDL's Example}
+ * @prop {string} [youtubeIdentityToken=null] If not given; ytdl-core will try to find it. You can find this by going to a video's watch page; viewing the source; and searching for "ID_TOKEN".
+ * @prop {boolean} [youtubeDL=true] Whether or not using youtube-dl.
+ * @prop {boolean} [updateYouTubeDL=true] Whether or not updating youtube-dl automatically.
+ * @prop {Filters} [customFilters] Override {@link DefaultFilters} or add more ffmpeg filters. Example=`{ "Filter name"="Filter value"; "8d"="apulsator=hz=0.075" }`
+ * @prop {Object} [ytdlOptions] `ytdl-core` options
  * @prop {number} [searchCooldown=60000] Built-in search cooldown in milliseconds (When searchSongs is bigger than 0)
  * @prop {number} [emptyCooldown=60000] Built-in leave on empty cooldown in milliseconds (When leaveOnEmpty is true)
  */
@@ -93,7 +96,7 @@ class DisTube extends EventEmitter {
 
     let timeout = null;
     client.on("voiceStateUpdate", oldState => {
-      let queue = this.guildQueues.find(gQueue => gQueue.connection && gQueue.connection.channel.id === oldState.channelID);
+      const queue = this.guildQueues.find(gQueue => gQueue.connection && gQueue.connection.channel.id === oldState.channelID);
       if (!queue || !this.options.leaveOnEmpty) return;
       if (oldState && oldState.channel && isVoiceChannelEmpty(queue)) {
         if (timeout) {
@@ -101,7 +104,7 @@ class DisTube extends EventEmitter {
           timeout = null;
         }
         timeout = setTimeout(() => {
-          let guildID = queue.connection.channel.guild.id;
+          const guildID = queue.connection.channel.guild.id;
           if (this.guildQueues.has(guildID) && isVoiceChannelEmpty(queue)) {
             queue.connection.channel.leave();
             this.emit("empty", queue.textChannel);
@@ -162,7 +165,7 @@ class DisTube extends EventEmitter {
   }
 
   /**
-   * `@2.0.0` Skip the playing song and play a song or playlist
+   * Skip the playing song and play a song or playlist
    * @async
    * @param {Discord.Message} message The message from guild channel
    * @param {string|Song|SearchResult|Playlist} song Youtube url | Search string | {@link Song} | {@link SearchResult} | {@link Playlist}
@@ -186,7 +189,7 @@ class DisTube extends EventEmitter {
   }
 
   /**
-   * `@2.1.0` Play or add array of video urls.
+   * Play or add array of video urls.
    * {@link DisTube#event:playList} or {@link DisTube#event:addList} will be emitted
    * with `playlist`'s properties include `properties` parameter's properties such as
    * `user`, `songs`, `duration`, `formattedDuration`, `thumbnail` like {@link Playlist}
@@ -195,7 +198,7 @@ class DisTube extends EventEmitter {
    * @param {string[]} songs Array of url
    * @param {Object} [properties={}] Additional properties such as `name`
    * @param {boolean} [playSkip=false] Whether or not play this playlist instantly
-   * @param {boolean} [parallel=true] `@3.0.0` Whether or not fetch the playlist in parallel
+   * @param {boolean} [parallel=true] Whether or not fetch the playlist in parallel
    * @example
    *     let songs = ["https://www.youtube.com/watch?v=xxx", "https://www.youtube.com/watch?v=yyy"];
    *     distube.playCustomPlaylist(message, songs, { name: "My playlist name" });
@@ -249,7 +252,7 @@ class DisTube extends EventEmitter {
   }
 
   /**
-   * `@2.0.0` Search for a song. You can customize how user answers instead of send a number.
+   * Search for a song. You can customize how user answers instead of send a number.
    * Then use {@link DisTube#play|play(message, aResultFromSearch)} or {@link DisTube#playSkip|playSkip()} to play it.
    * @async
    * @param {string} string The string search for
@@ -319,7 +322,7 @@ class DisTube extends EventEmitter {
    *     const args = message.content.slice(config.prefix.length).trim().split(/ +/g);
    *     const command = args.shift();
    *     if (command == "queue") {
-   *         let queue = distube.getQueue(message);
+   *         const queue = distube.getQueue(message);
    *         message.channel.send('Current queue:\n' + queue.songs.map((song, id) =>
    *             `**${id+1}**. [${song.name}](${song.url}) - \`${song.formattedDuration}\``
    *         ).join("\n"));
@@ -569,7 +572,7 @@ class DisTube extends EventEmitter {
   }
 
   /**
-   * `@2.0.0` Enable or disable a filter of the queue, replay the playing song.
+   * Enable or disable a filter of the queue, replay the playing song.
    * Available filters: {@link Filter}
    *
    * @param {Discord.Message} message The message from guild channel
@@ -593,7 +596,7 @@ class DisTube extends EventEmitter {
   }
 
   /**
-   * `@2.7.0` Set the playing time to another position
+   * Set the playing time to another position
    * @param {Discord.Message} message The message from guild channel
    * @param {number} time Time in milliseconds
    * @returns {Queue}
@@ -607,7 +610,7 @@ class DisTube extends EventEmitter {
    * });
    */
   seek(message, time) {
-    let queue = this.getQueue(message);
+    const queue = this.getQueue(message);
     if (!queue) throw new Error("NotPlaying");
     return queue.seek(time);
   }
@@ -685,7 +688,7 @@ module.exports = DisTube;
  */
 
 /**
- * `@2.3.0` Emitted when DisTube initialize a queue to change queue default properties.
+ * Emitted when DisTube initialize a queue to change queue default properties.
  *
  * @event DisTube#initQueue
  * @param {Queue} queue The guild queue

@@ -1,20 +1,14 @@
 export = Song;
 /** Class representing a song. */
 declare class Song {
+    constructor(info: any, member?: any, src?: string);
     /**
-     * Create a song.
-     * @param {ytdl.videoInfo|Object} info Video info
-     * @param {Discord.GuildMember?} member Requested user
-     * @param {string} [src="youtube"] Weather or not the video is a Youtube video.
-     */
-    constructor(info: ytdl.videoInfo | any, member?: Discord.GuildMember | null, src?: string);
-    /**
-     * `@3.0.0` The source of the song
+     * The source of the song
      * @type {string}
      */
     source: string;
     /**
-     * `@3.0.0` User requested
+     * User requested
      * @type {Discord.GuildMember?}
      */
     member: Discord.GuildMember | null;
@@ -24,7 +18,7 @@ declare class Song {
      */
     user: Discord.User | null;
     /**
-     * `@3.0.0` `ytdl-core` raw info (If the song is from YouTube)
+     * `ytdl-core` raw info (If the song is from YouTube)
      * @type {?ytdl.videoInfo}
      * @private
      */
@@ -37,7 +31,7 @@ declare class Song {
      */
     private _patch;
     /**
-     * `@2.1.4` Youtube video id
+     * Youtube video id
      * @type {string}
      */
     id: string;
@@ -47,7 +41,7 @@ declare class Song {
      */
     name: string;
     /**
-     * `@2.5.0` Indicates if the video is an active live.
+     * Indicates if the video is an active live.
      * @type {boolean}
      */
     isLive: boolean;
@@ -67,7 +61,7 @@ declare class Song {
      */
     url: string;
     /**
-     * `@2.6.0` Stream / Download URL.
+     * Stream / Download URL.
      * @type {?string}
      */
     streamURL: string | null;
@@ -82,27 +76,27 @@ declare class Song {
      */
     related: ytdl.relatedVideo[] | null;
     /**
-     * `@2.6.0` Song views count
+     * Song views count
      * @type {number}
      */
     views: number;
     /**
-     * `@2.6.0` Song like count
+     * Song like count
      * @type {number}
      */
     likes: number;
     /**
-     * `@2.6.0` Song dislike count
+     * Song dislike count
      * @type {number}
      */
     dislikes: number;
     /**
-     * `@2.6.0` Song repost count
+     * Song repost count
      * @type {number}
      */
     reposts: number;
     /**
-     * `@3.0.0` Song uploader
+     * Song uploader
      * @type {object}
      * @prop {?string} name Uploader name
      * @prop {?string} url Uploader url
@@ -111,12 +105,12 @@ declare class Song {
     /**
      * @param {Playlist} playlist Playlist
      * @param {Discord.GuildMember} member User requested
-     * @ignore
+     * @private
      * @returns {Song}
      */
-    _patchPlaylist(playlist: Playlist, member?: Discord.GuildMember): Song;
+    private _patchPlaylist;
     /**
-     * `@3.0.0` The playlist added this song
+     * The playlist added this song
      * @type {?Playlist}
      */
     playlist: Playlist | null;

@@ -1,6 +1,6 @@
 const { toSecond } = require("./util");
 
-/** `@2.7.0` Class representing a search result. */
+/** Class representing a search result. */
 class SearchResult {
   constructor(info) {
     /**

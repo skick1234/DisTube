@@ -1,4 +1,8 @@
 export = DisTubeHandler;
+/**
+ * DisTube's Handler
+ * @private
+ */
 declare class DisTubeHandler extends Base {
     constructor(distube: any);
     ytdlOptions: any;
@@ -15,7 +19,6 @@ declare class DisTubeHandler extends Base {
      */
     deleteQueue(queue: Discord.Snowflake | Discord.Message | Queue): void;
     /**
-     * @ignore
      * @param {string} url url
      * @returns {Promise<ytdl.videoInfo>}
      */
@@ -38,12 +41,11 @@ declare class DisTubeHandler extends Base {
     /**
      * Search for a song, fire {@link DisTube#event:error} if not found.
      * @async
-     * @private
      * @param {Discord.Message} message The message from guild channel
      * @param {string} name The string search for
      * @returns {Song} Song info
      */
-    private searchSong;
+    searchSong(message: Discord.Message, name: string): Song;
     /**
      * Join the voice channel
      * @param {Queue} queue The message from guild channel
