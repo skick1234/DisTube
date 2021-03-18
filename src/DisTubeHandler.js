@@ -132,10 +132,6 @@ class DisTubeHandler extends Base {
       this.emit("searchNoResult", message);
       return null;
     }
-    if (!results.length) {
-      this.emit("searchNoResult", message);
-      return null;
-    }
     let result = results[0];
     if (this.options.searchSongs && this.options.searchSongs > 1) {
       this.emit("searchResult", message, results, name);
@@ -197,7 +193,7 @@ class DisTubeHandler extends Base {
    * @throws {NoRelated}
    */
   async getRelatedVideo(song) {
-    if (!song.youtube) throw new Error("NoRelated");
+    if (song.source !== "youtube") throw new Error("NoRelated");
     let related = song.related;
     if (!related) related = (await ytdl.getBasicInfo(song.url, this.ytdlOptions)).related_videos;
     if (!related || !related.length) throw new Error("NoRelated");
@@ -222,7 +218,7 @@ class DisTubeHandler extends Base {
       seek: queue.beginTime,
     };
     streamOptions = Object.assign(streamOptions, this.ytdlOptions);
-    if (song.youtube) return ytdl(song.info, streamOptions);
+    if (song.source === "youtube") return ytdl(song.info, streamOptions);
     return ytdl.arbitraryStream(song.streamURL, streamOptions);
   }
 
@@ -275,7 +271,7 @@ class DisTubeHandler extends Base {
     const song = queue.songs[0];
     try {
       let errorEmitted = false;
-      if (song.youtube) await this.checkYouTubeInfo(song);
+      if (song.source === "youtube") await this.checkYouTubeInfo(song);
       const stream = this.createStream(queue).on("error", e => {
         errorEmitted = true;
         e.message = `${e.message}\nID: ${song.id}\nName: ${song.name}`;

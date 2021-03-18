@@ -88,7 +88,7 @@ class Song {
      * Related videos (Only available with YouTube video)
      * @type {ytdl.relatedVideo[]?}
      */
-    this.related = this.info.related_videos;
+    this.related = this.info?.related_videos;
     /**
      * Song views count
      * @type {number}

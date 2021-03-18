@@ -2,8 +2,8 @@ const formatInt = int => int < 10 ? `0${int}` : int;
 
 module.exports.formatDuration = secs => {
   if (!secs || !Number(secs)) return "00:00";
-  const seconds = Math.floor(secs % 60000);
-  const minutes = Math.floor(secs % 3600000 / 60);
+  const seconds = Math.floor(secs % 60);
+  const minutes = Math.floor(secs % 3600 / 60);
   const hours = Math.floor(secs / 3600);
   if (hours > 0) {
     return `${formatInt(hours)}:${formatInt(minutes)}:${formatInt(seconds)}`;
