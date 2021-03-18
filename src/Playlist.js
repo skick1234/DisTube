@@ -40,7 +40,7 @@ class Playlist {
      * @type {string}
      */
     this.thumbnail = playlist.thumbnail || this.songs[0].thumbnail;
-    for (let [key, value] of Object.entries(properties)) this[key] = value;
+    for (const [key, value] of Object.entries(properties)) this[key] = value;
   }
 
   /**

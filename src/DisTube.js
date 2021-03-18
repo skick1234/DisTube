@@ -211,14 +211,14 @@ class DisTube extends EventEmitter {
         songs = songs.map(url => this._resolveSong(message, url).catch(() => undefined));
         songs = (await Promise.all(songs)).filter(song => song);
       } else {
-        let resolved = [];
-        for (let song of songs) {
+        const resolved = [];
+        for (const song of songs) {
           // eslint-disable-next-line no-await-in-loop
           resolved.push(await this._resolveSong(message, song).catch(() => undefined));
         }
         songs = resolved.filter(song => song);
       }
-      let playlist = new Playlist(songs, message.member, properties);
+      const playlist = new Playlist(songs, message.member, properties);
       await this.handler.handlePlaylist(message, playlist, playSkip);
     } catch (e) {
       this.emitError(message.channel, e);
@@ -511,8 +511,7 @@ class DisTube extends EventEmitter {
   toggleAutoplay(message) {
     const queue = this.getQueue(message);
     if (!queue) throw new Error("NotPlaying");
-    queue.autoplay = !queue.autoplay;
-    return queue.autoplay;
+    return queue.toggleAutoplay();
   }
 
   /**

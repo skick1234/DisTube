@@ -137,6 +137,7 @@
       "no-useless-computed-key": "error",
       "no-useless-constructor": "error",
       "prefer-arrow-callback": "error",
+      "prefer-const": "error",
       "prefer-numeric-literals": "error",
       "prefer-rest-params": "error",
       "prefer-spread": "error",

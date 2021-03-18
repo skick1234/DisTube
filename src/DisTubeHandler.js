@@ -70,7 +70,7 @@ class DisTubeHandler extends Base {
     if (ytdl.validateURL(song)) return new Song(await this.getYouTubeInfo(song), message.member);
     if (isURL(song)) {
       if (!this.options.youtubeDL) throw new Error("Not Supported URL!");
-      let info = await youtube_dl(song, {
+      const info = await youtube_dl(song, {
         dumpJson: true,
         noWarnings: true,
       }).catch(e => { throw new Error(`[youtube-dl] ${e.stderr || e}`) });
@@ -139,7 +139,7 @@ class DisTubeHandler extends Base {
     let result = results[0];
     if (this.options.searchSongs && this.options.searchSongs > 1) {
       this.emit("searchResult", message, results, name);
-      let answers = await message.channel.awaitMessages(m => m.author.id === message.author.id, {
+      const answers = await message.channel.awaitMessages(m => m.author.id === message.author.id, {
         max: 1,
         time: this.options.searchCooldown * 1000,
         errors: ["time"],
@@ -148,8 +148,8 @@ class DisTubeHandler extends Base {
         this.emit("searchCancel", message);
         return null;
       }
-      let ans = answers.first();
-      let index = parseInt(ans.content, 10);
+      const ans = answers.first();
+      const index = parseInt(ans.content, 10);
       if (isNaN(index) || index > results.length || index < 1) {
         this.emit("searchCancel", message);
         return null;
@@ -228,7 +228,7 @@ class DisTubeHandler extends Base {
 
   async checkYouTubeInfo(song) {
     if (!song.info) {
-      let { videoDetails } = song.info = await this.getYouTubeInfo(song.url);
+      const { videoDetails } = song.info = await this.getYouTubeInfo(song.url);
       song.views = parseNumber(videoDetails.viewCount);
       song.likes = parseNumber(videoDetails.likes);
       song.dislikes = parseNumber(videoDetails.dislikes);
@@ -239,7 +239,7 @@ class DisTubeHandler extends Base {
         }).url;
       }
     }
-    let err = require("ytdl-core/lib/utils").playError(song.info.player_response, ["UNPLAYABLE", "LIVE_STREAM_OFFLINE", "LOGIN_REQUIRED"]);
+    const err = require("ytdl-core/lib/utils").playError(song.info.player_response, ["UNPLAYABLE", "LIVE_STREAM_OFFLINE", "LOGIN_REQUIRED"]);
     if (err) throw err;
     if (!song.info.formats.length) throw new Error("This video is unavailable");
   }
@@ -325,7 +325,7 @@ class DisTubeHandler extends Base {
     queue.next = queue.previous = false;
     queue.beginTime = 0;
     const emitPlaySong = this._emitPlaySong(queue);
-    let err = await this.playSong(queue);
+    const err = await this.playSong(queue);
     if (!err && emitPlaySong) this.emit("playSong", queue, queue.songs[0]);
   }
 
@@ -336,7 +336,7 @@ class DisTubeHandler extends Base {
    * @param {Error} error error
    */
   _handlePlayingError(queue, error = null) {
-    let song = queue.songs.shift();
+    const song = queue.songs.shift();
     if (error) {
       error.message = `${error.message}\nID: ${song.id}\nName: ${song.name}`;
       this._emitError(queue.textChannel, error);

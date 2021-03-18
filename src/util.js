@@ -19,7 +19,7 @@ module.exports.toSecond = string => {
   if (typeof string !== "string") return parseInt(string) || 0;
   let h = 0, m = 0, s = 0;
   if (string.match(/:/g)) {
-    let time = string.split(":");
+    const time = string.split(":");
     if (time.length === 2) {
       m = parseInt(time[0], 10);
       s = parseInt(time[1], 10);
@@ -59,7 +59,7 @@ module.exports.isURL = string => {
 };
 
 module.exports.isVoiceChannelEmpty = queue => {
-  let voiceChannel = queue.connection.channel;
-  let members = voiceChannel.members.filter(m => !m.user.bot);
+  const voiceChannel = queue.connection.channel;
+  const members = voiceChannel.members.filter(m => !m.user.bot);
   return !members.size;
 };

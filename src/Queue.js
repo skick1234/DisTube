@@ -146,7 +146,7 @@ class Queue extends Base {
     const isArray = Array.isArray(song);
     if (!song && !song.length) throw new Error("No Song provided.");
     if (unshift) {
-      let playing = this.songs.shift();
+      const playing = this.songs.shift();
       if (isArray) this.songs.unshift(playing, ...song);
       else this.songs.unshift(playing, song);
     } else if (isArray) this.songs.push(...song);
@@ -220,9 +220,9 @@ class Queue extends Base {
    * @returns {Queue} The guild queue
    */
   shuffle() {
-    let playing = this.songs.shift();
+    const playing = this.songs.shift();
     for (let i = this.songs.length - 1; i > 0; i--) {
-      let j = Math.floor(Math.random() * (i + 1));
+      const j = Math.floor(Math.random() * (i + 1));
       [this.songs[i], this.songs[j]] = [this.songs[j], this.songs[i]];
     }
     this.songs.unshift(playing);
@@ -309,6 +309,14 @@ class Queue extends Base {
     if (!related) throw new Error("NoRelated");
     this.addToQueue(new Song(await this.handler.getYouTubeInfo(related.id), this.textChannel.guild.me));
     return this;
+  }
+  /**
+   * Toggle autoplay mode
+   * @returns {boolean} Autoplay mode state
+   */
+  toggleAutoplay() {
+    this.autoplay = !this.autoplay;
+    return this.autoplay;
   }
 }
 
