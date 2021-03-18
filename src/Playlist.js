@@ -57,7 +57,7 @@ class Playlist {
    * @type {string}
    */
   get formattedDuration() {
-    return formatDuration(this.duration * 1000);
+    return formatDuration(this.duration);
   }
 }
 

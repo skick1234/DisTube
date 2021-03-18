@@ -90,7 +90,7 @@ class Queue extends Base {
      */
     this.stream = null;
     /**
-     * What time in the song to begin (in milliseconds).
+     * What time in the song to begin (in seconds).
      * @type {number}
      */
     this.beginTime = 0;
@@ -105,7 +105,7 @@ class Queue extends Base {
    * @type {string}
    */
   get formattedDuration() {
-    return formatDuration(this.duration * 1000);
+    return formatDuration(this.duration);
   }
   /**
    * Queue's duration.
@@ -115,11 +115,11 @@ class Queue extends Base {
     return this.songs.length ? this.songs.reduce((prev, next) => prev + next.duration, 0) : 0;
   }
   /**
-   * What time in the song is playing (in milliseconds).
+   * What time in the song is playing (in seconds).
    * @type {number}
    */
   get currentTime() {
-    return this.dispatcher ? this.dispatcher.streamTime + this.beginTime : 0;
+    return this.dispatcher ? (this.dispatcher.streamTime / 1000) + this.beginTime : 0;
   }
   /**
    * Formatted {@link Queue#currentTime} string.
@@ -280,7 +280,7 @@ class Queue extends Base {
   }
   /**
    * Set the playing time to another position
-   * @param {number} time Time in milliseconds
+   * @param {number} time Time in seconds
    * @returns {Queue}
    * @example
    * client.on('message', message => {

@@ -141,7 +141,7 @@ class DisTubeHandler extends Base {
       this.emit("searchResult", message, results, name);
       let answers = await message.channel.awaitMessages(m => m.author.id === message.author.id, {
         max: 1,
-        time: this.options.searchCooldown,
+        time: this.options.searchCooldown * 1000,
         errors: ["time"],
       });
       if (!answers.first()) {
@@ -219,7 +219,7 @@ class DisTubeHandler extends Base {
       filter: song.isLive ? "audioandvideo" : "audioonly",
       quality: "highestaudio",
       encoderArgs,
-      seek: queue.beginTime / 1000,
+      seek: queue.beginTime,
     };
     streamOptions = Object.assign(streamOptions, this.ytdlOptions);
     if (song.youtube) return ytdl(song.info, streamOptions);
@@ -276,7 +276,7 @@ class DisTubeHandler extends Base {
     try {
       let errorEmitted = false;
       if (song.youtube) await this.checkYouTubeInfo(song);
-      const stream = this._createStream(queue).on("error", e => {
+      const stream = this.createStream(queue).on("error", e => {
         errorEmitted = true;
         e.message = `${e.message}\nID: ${song.id}\nName: ${song.name}`;
         this._emitError(queue.textChannel, e);

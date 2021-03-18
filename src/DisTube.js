@@ -33,8 +33,8 @@ const ytsr = require("@distube/ytsr"),
  * @prop {boolean} [updateYouTubeDL=true] Whether or not updating youtube-dl automatically.
  * @prop {Filters} [customFilters] Override {@link DefaultFilters} or add more ffmpeg filters. Example=`{ "Filter name"="Filter value"; "8d"="apulsator=hz=0.075" }`
  * @prop {Object} [ytdlOptions] `ytdl-core` options
- * @prop {number} [searchCooldown=60000] Built-in search cooldown in milliseconds (When searchSongs is bigger than 0)
- * @prop {number} [emptyCooldown=60000] Built-in leave on empty cooldown in milliseconds (When leaveOnEmpty is true)
+ * @prop {number} [searchCooldown=60] Built-in search cooldown in seconds (When searchSongs is bigger than 0)
+ * @prop {number} [emptyCooldown=60] Built-in leave on empty cooldown in seconds (When leaveOnEmpty is true)
  */
 
 /**
@@ -109,7 +109,7 @@ class DisTube extends EventEmitter {
               this.emit("empty", queue.textChannel);
               this._deleteQueue(queue.textChannel.guild.id);
             }
-          }, this.options.emptyCooldown);
+          }, this.options.emptyCooldown * 1000);
         }
       }
     });
@@ -573,7 +573,7 @@ class DisTube extends EventEmitter {
   /**
    * Set the playing time to another position
    * @param {Discord.Message} message The message from guild channel
-   * @param {number} time Time in milliseconds
+   * @param {number} time Time in seconds
    * @returns {Queue}
    * @example
    * client.on('message', message => {

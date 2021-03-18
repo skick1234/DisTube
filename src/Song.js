@@ -65,7 +65,7 @@ class Song {
      * Formatted duration string `hh:mm:ss` or `mm:ss`.
      * @type {string}
      */
-    this.formattedDuration = this.isLive ? "Live" : formatDuration(this.duration * 1000);
+    this.formattedDuration = this.isLive ? "Live" : formatDuration(this.duration);
     /**
      * Song URL.
      * @type {string}

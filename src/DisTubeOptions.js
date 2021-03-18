@@ -14,8 +14,8 @@ const defaultOptions = {
   ytdlOptions: {
     highWaterMark: 1 << 24,
   },
-  searchCooldown: 60000,
-  emptyCooldown: 60000,
+  searchCooldown: 60,
+  emptyCooldown: 60,
 };
 
 module.exports = class DisTubeOptions {
