@@ -62,12 +62,12 @@ declare class Song {
     url: string;
     /**
      * Stream / Download URL.
-     * @type {?string}
+     * @type {string?}
      */
     streamURL: string | null;
     /**
      * Song thumbnail.
-     * @type {?string}
+     * @type {string?}
      */
     thumbnail: string | null;
     /**
@@ -98,8 +98,8 @@ declare class Song {
     /**
      * Song uploader
      * @type {object}
-     * @prop {?string} name Uploader name
-     * @prop {?string} url Uploader url
+     * @prop {string?} name Uploader name
+     * @prop {string?} url Uploader url
      */
     uploader: object;
     /**
@@ -111,7 +111,7 @@ declare class Song {
     private _patchPlaylist;
     /**
      * The playlist added this song
-     * @type {?Playlist}
+     * @type {Playlist?}
      */
     playlist: Playlist | null;
 }

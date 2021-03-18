@@ -39,7 +39,6 @@ class Song {
    * Patch data
    * @param {ytdl.MoreVideoDetails} info Video info
    * @private
-   * @ignore
    */
   _patch(info) {
     /**
@@ -74,7 +73,7 @@ class Song {
     this.url = this.src === "youtube" ? `https://www.youtube.com/watch?v=${this.id}` : info.webpage_url;
     /**
      * Stream / Download URL.
-     * @type {?string}
+     * @type {string?}
      */
     this.streamURL = this.info && this.info.formats.length ? ytdl.chooseFormat(this.info.formats, {
       filter: this.isLive ? "audioandvideo" : "audioonly",
@@ -82,7 +81,7 @@ class Song {
     }).url : info.url;
     /**
      * Song thumbnail.
-     * @type {?string}
+     * @type {string?}
      */
     this.thumbnail = info.thumbnails ? info.thumbnails.sort((a, b) => b.width - a.width)[0].url : info.thumbnail || null;
     /**
@@ -113,8 +112,8 @@ class Song {
     /**
      * Song uploader
      * @type {object}
-     * @prop {?string} name Uploader name
-     * @prop {?string} url Uploader url
+     * @prop {string?} name Uploader name
+     * @prop {string?} url Uploader url
      */
     this.uploader = {
       name: info.author ? info.author.name : info.uploader || null,
@@ -132,7 +131,7 @@ class Song {
     if (!(playlist instanceof Playlist)) throw new TypeError("playlist is not a valid Playlist");
     /**
      * The playlist added this song
-     * @type {?Playlist}
+     * @type {Playlist?}
      */
     this.playlist = playlist;
     this.member = member;

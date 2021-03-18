@@ -17,12 +17,12 @@ class Queue extends Base {
     this.id = message.guild.id;
     /**
      * Stream dispatcher.
-     * @type {Discord.StreamDispatcher}
+     * @type {Discord.StreamDispatcher?}
      */
     this.dispatcher = null;
     /**
      * Voice connection.
-     * @type {Discord.VoiceConnection}
+     * @type {Discord.VoiceConnection?}
      */
     this.connection = null;
     /**
@@ -43,16 +43,19 @@ class Queue extends Base {
     /**
      * Whether stream is currently stopped.
      * @type {boolean}
+     * @private
      */
     this.stopped = false;
     /**
      * Whether or not the last song was skipped to next song.
      * @type {boolean}
+     * @private
      */
     this.next = false;
     /**
      * Whether or not the last song was skipped to previous song.
      * @type {boolean}
+     * @private
      */
     this.previous = false;
     /**
@@ -80,10 +83,10 @@ class Queue extends Base {
      * Available filters: {@link Filter}
      * @type {Filter[]}
      */
-    this.filters = null;
+    this.filters = [];
     /**
-     * ytdl stream
-     * @type {Readable}
+     * Should be an opus stream
+     * @type {Readable?}
      */
     this.stream = null;
     /**
@@ -109,14 +112,14 @@ class Queue extends Base {
    * @type {number}
    */
   get duration() {
-    return this.songs.reduce((prev, next) => prev + next.duration, 0);
+    return this.songs.length ? this.songs.reduce((prev, next) => prev + next.duration, 0) : 0;
   }
   /**
    * What time in the song is playing (in milliseconds).
    * @type {number}
    */
   get currentTime() {
-    return this.dispatcher.streamTime + this.beginTime;
+    return this.dispatcher ? this.dispatcher.streamTime + this.beginTime : 0;
   }
   /**
    * Formatted {@link Queue#currentTime} string.

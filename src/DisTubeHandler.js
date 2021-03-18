@@ -96,6 +96,28 @@ class DisTubeHandler extends Base {
   }
 
   /**
+   * Play / add a playlist
+   * @async
+   * @param {Discord.Message} message The message from guild channel
+   * @param {Playlist} playlist Youtube playlist url | a Playlist
+   * @param {boolean} skip Skip the current song
+   */
+  async handlePlaylist(message, playlist, skip = false) {
+    if (!playlist || !(playlist instanceof Playlist)) throw Error("Invalid Playlist");
+    if (!playlist.songs.length) throw Error("No valid video in the playlist");
+    const songs = playlist.songs;
+    let queue = this.getQueue(message);
+    if (queue) {
+      queue.addToQueue(songs, skip);
+      if (skip) queue.skip();
+      else this.emit("addList", queue, playlist);
+    } else {
+      queue = await this._newQueue(message, songs);
+      if (queue instanceof Queue) this.emit("playSong", queue, queue.songs[0]);
+    }
+  }
+
+  /**
    * Search for a song, fire {@link DisTube#event:error} if not found.
    * @async
    * @param {Discord.Message} message The message from guild channel

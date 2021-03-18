@@ -1,21 +1,21 @@
 /**
  * Default DisTube audio filters.
  * @typedef {Object} DefaultFilters
- * @prop {string} 3d
- * @prop {string} bassboost
- * @prop {string} echo
- * @prop {string} karaoke
- * @prop {string} nightcore
- * @prop {string} vaporwave
- * @prop {string} flanger
- * @prop {string} gate
- * @prop {string} haas
- * @prop {string} reverse
- * @prop {string} surround
- * @prop {string} mcompand
- * @prop {string} phaser
- * @prop {string} tremolo
- * @prop {string} earwax
+ * @prop {string} 3d 3d
+ * @prop {string} bassboost bassboost
+ * @prop {string} echo echo
+ * @prop {string} karaoke karaoke
+ * @prop {string} nightcore nightcore
+ * @prop {string} vaporwave vaporwave
+ * @prop {string} flanger flanger
+ * @prop {string} gate gate
+ * @prop {string} haas haas
+ * @prop {string} reverse reverse
+ * @prop {string} surround surround
+ * @prop {string} mcompand mcompand
+ * @prop {string} phaser phaser
+ * @prop {string} tremolo tremolo
+ * @prop {string} earwax earwax
  */
 module.exports = {
   "3d": "apulsator=hz=0.125",

@@ -16,7 +16,6 @@ const ytsr = require("@distube/ytsr"),
  * * `{ "Filter Name":  "Filter Value" }`
  * * `{ bassboost: "bass=g=10,dynaudnorm=f=150:g=15" }`
  * @typedef {Object.<string, string>} Filters
- * @prop {string} filterName filterValue
  */
 
 /**
@@ -39,14 +38,13 @@ const ytsr = require("@distube/ytsr"),
  */
 
 /**
- * Class representing a DisTube.
+ * DisTube class
  * @extends EventEmitter
  */
 class DisTube extends EventEmitter {
   /**
    * DisTube's current version.
    * @type {string}
-   * @ignore
    */
   get version() { return require("../package.json").version }
   static get version() { return require("../package.json").version }
@@ -98,22 +96,21 @@ class DisTube extends EventEmitter {
     client.on("voiceStateUpdate", oldState => {
       const queue = this.guildQueues.find(gQueue => gQueue.connection && gQueue.connection.channel.id === oldState.channelID);
       if (!queue || !this.options.leaveOnEmpty) return;
-      if (oldState && oldState.channel && isVoiceChannelEmpty(queue)) {
+      if (oldState && oldState.channel) {
         if (timeout) {
           clearTimeout(timeout);
           timeout = null;
         }
-        timeout = setTimeout(() => {
-          const guildID = queue.connection.channel.guild.id;
-          if (this.guildQueues.has(guildID) && isVoiceChannelEmpty(queue)) {
-            queue.connection.channel.leave();
-            this.emit("empty", queue.textChannel);
-            this._deleteQueue(queue.textChannel.guild.id);
-          }
-        }, this.options.emptyCooldown);
-      } else if (timeout) {
-        clearTimeout(timeout);
-        timeout = null;
+        if (isVoiceChannelEmpty(queue)) {
+          timeout = setTimeout(() => {
+            const guildID = queue.connection.channel.guild.id;
+            if (this.guildQueues.has(guildID) && isVoiceChannelEmpty(queue)) {
+              queue.connection.channel.leave();
+              this.emit("empty", queue.textChannel);
+              this._deleteQueue(queue.textChannel.guild.id);
+            }
+          }, this.options.emptyCooldown);
+        }
       }
     });
 
@@ -143,10 +140,11 @@ class DisTube extends EventEmitter {
   async play(message, song, skip = false) {
     if (!song) return;
     try {
-      if (ytpl.validateID(song)) await this._handlePlaylist(message, await this.handler.resolvePlaylist(message, song), skip);
+      if (song.type === "playlist") song = song.url;
+      if (ytpl.validateID(song)) await this.handler.handlePlaylist(message, await this.handler.resolvePlaylist(message, song), skip);
       else {
         song = await this.handler.resolveSong(message, song);
-        if (song instanceof Playlist) await this._handlePlaylist(message, song, skip);
+        if (song instanceof Playlist) await this.handler.handlePlaylist(message, song, skip);
         if (!song) return;
         let queue = this.getQueue(message);
         if (queue) {
@@ -198,7 +196,7 @@ class DisTube extends EventEmitter {
    * @param {string[]} songs Array of url
    * @param {Object} [properties={}] Additional properties such as `name`
    * @param {boolean} [playSkip=false] Whether or not play this playlist instantly
-   * @param {boolean} [parallel=true] Whether or not fetch the playlist in parallel
+   * @param {boolean} [parallel=true] Whether or not fetch the songs in parallel
    * @example
    *     let songs = ["https://www.youtube.com/watch?v=xxx", "https://www.youtube.com/watch?v=yyy"];
    *     distube.playCustomPlaylist(message, songs, { name: "My playlist name" });
@@ -221,33 +219,9 @@ class DisTube extends EventEmitter {
         songs = resolved.filter(song => song);
       }
       let playlist = new Playlist(songs, message.member, properties);
-      await this._handlePlaylist(message, playlist, playSkip);
+      await this.handler.handlePlaylist(message, playlist, playSkip);
     } catch (e) {
       this.emitError(message.channel, e);
-    }
-  }
-
-  /**
-   * Play / add a playlist
-   * @async
-   * @private
-   * @ignore
-   * @param {Discord.Message} message The message from guild channel
-   * @param {Playlist} playlist Youtube playlist url | a Playlist
-   * @param {boolean} skip Skip the current song
-   */
-  async _handlePlaylist(message, playlist, skip = false) {
-    if (!playlist || !(playlist instanceof Playlist)) throw Error("Invalid Playlist");
-    if (!playlist.songs.length) throw Error("No valid video in the playlist");
-    const songs = playlist.songs;
-    let queue = this.getQueue(message);
-    if (queue) {
-      queue.addToQueue(songs, skip);
-      if (skip) queue.skip();
-      else this.emit("addList", queue, playlist);
-    } else {
-      queue = await this._newQueue(message, songs);
-      if (queue instanceof Queue) this.emit("playSong", queue, queue.songs[0]);
     }
   }
 
@@ -267,6 +241,7 @@ class DisTube extends EventEmitter {
     const opts = Object.assign({ type: "video", limit: 10 }, options);
     if (!["video", "playlist"].includes(opts.type)) throw new Error("options.type must be 'video' or 'playlist'.");
     if (typeof opts.limit !== "number") throw new Error("options.limit must be a number");
+    if (opts.limit < 1) throw new Error("option.limit must be bigger or equal to 1");
     try {
       const search = await ytsr(string, opts);
       const results = search.items.map(i => new SearchResult(i));
@@ -619,7 +594,7 @@ class DisTube extends EventEmitter {
    * Emit error event
    * @param {Discord.TextChannel} channel Text channel where the error is encountered.
    * @param {Error} error error
-   * @ignore
+   * @private
    */
   emitError(channel, error) {
     if (this.listeners("error").length) this.emit("error", channel, error);
