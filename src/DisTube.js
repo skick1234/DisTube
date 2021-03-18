@@ -63,7 +63,7 @@ class DisTube extends EventEmitter {
    */
   constructor(client, otp = {}) {
     super();
-    if (!client || !client.user) throw new TypeError("Invalid Discord.Client");
+    if (!client || typeof client.user === "undefined") throw new TypeError("Invalid Discord.Client");
 
     /**
      * Discord.JS client

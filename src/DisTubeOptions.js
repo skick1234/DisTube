@@ -24,7 +24,7 @@ module.exports = class DisTubeOptions {
     for (const key in opt) {
       this[key] = opt[key];
     }
-    this.validateOptions();
+    this._validateOptions();
   }
 
   _validateOptions(options = this) {

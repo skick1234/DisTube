@@ -26,7 +26,7 @@ class Song {
     if (this.source === "youtube" && info.full) {
       /**
        * `ytdl-core` raw info (If the song is from YouTube)
-       * @type {?ytdl.videoInfo}
+       * @type {ytdl.videoInfo?}
        * @private
        */
       this.info = info;
@@ -70,7 +70,7 @@ class Song {
      * Song URL.
      * @type {string}
      */
-    this.url = this.src === "youtube" ? `https://www.youtube.com/watch?v=${this.id}` : info.webpage_url;
+    this.url = this.source === "youtube" ? `https://www.youtube.com/watch?v=${this.id}` : info.webpage_url;
     /**
      * Stream / Download URL.
      * @type {string?}
@@ -86,9 +86,9 @@ class Song {
     this.thumbnail = info.thumbnails ? info.thumbnails.sort((a, b) => b.width - a.width)[0].url : info.thumbnail || null;
     /**
      * Related videos (Only available with YouTube video)
-     * @type {?ytdl.relatedVideo[]}
+     * @type {ytdl.relatedVideo[]?}
      */
-    this.related = info.related_videos;
+    this.related = this.info.related_videos;
     /**
      * Song views count
      * @type {number}
