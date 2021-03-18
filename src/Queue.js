@@ -77,7 +77,7 @@ class Queue extends Base {
      * Whether or not the autoplay mode is enabled.
      * @type {boolean}
      */
-    this.autoplay = true;
+    this.autoplay = false;
     /**
      * Enabled audio filters.
      * Available filters: {@link Filter}
