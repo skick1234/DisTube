@@ -942,11 +942,12 @@ class DisTube extends EventEmitter {
         return;
       }
     }
+    const emitSong = this._emitPlaySong(queue);
     if (queue.repeatMode !== 1 || queue.skipped) queue.songs.shift();
     queue.skipped = false;
     queue.beginTime = 0;
     await this._playSong(message);
-    if (this._emitPlaySong(queue)) this.emit("playSong", message, queue, queue.songs[0]);
+    if (emitSong) this.emit("playSong", message, queue, queue.songs[0]);
   }
 
   /**
