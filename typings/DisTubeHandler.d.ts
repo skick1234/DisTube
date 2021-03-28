@@ -12,7 +12,7 @@ declare class DisTubeHandler extends Base {
      * @param {Error} error error
      * @private
      */
-    private _emitError;
+    private emitError;
     /**
      * Delete a guild queue
      * @param {Discord.Snowflake|Discord.Message|Queue} queue The message from guild channel | Queue
@@ -39,13 +39,21 @@ declare class DisTubeHandler extends Base {
      */
     resolvePlaylist(message: Discord.Message, playlist: Song[] | string): Playlist;
     /**
+     * Play / add a playlist
+     * @async
+     * @param {Discord.Message} message The message from guild channel
+     * @param {Playlist} playlist Youtube playlist url | a Playlist
+     * @param {boolean} skip Skip the current song
+     */
+    handlePlaylist(message: Discord.Message, playlist: Playlist, skip?: boolean): Promise<void>;
+    /**
      * Search for a song, fire {@link DisTube#event:error} if not found.
      * @async
      * @param {Discord.Message} message The message from guild channel
-     * @param {string} name The string search for
+     * @param {string} query The query string
      * @returns {Song} Song info
      */
-    searchSong(message: Discord.Message, name: string): Song;
+    searchSong(message: Discord.Message, query: string): Song;
     /**
      * Join the voice channel
      * @param {Queue} queue The message from guild channel

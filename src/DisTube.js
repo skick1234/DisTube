@@ -49,7 +49,7 @@ class DisTube extends EventEmitter {
   get version() { return require("../package.json").version }
   static get version() { return require("../package.json").version }
   /**
-   * Create new DisTube.
+   * Create a new DisTube class.
    * @param {Discord.Client} client Discord.JS client
    * @param {DisTubeOptions} [otp={}] Custom DisTube options
    * @example
@@ -83,6 +83,11 @@ class DisTube extends EventEmitter {
      */
     this.options = new DisTubeOption(otp);
 
+    /**
+     * DisTube's Handler
+     * @type {Handler}
+     * @private
+     */
     this.handler = new Handler(this);
 
     /**
@@ -106,7 +111,7 @@ class DisTube extends EventEmitter {
             const guildID = queue.connection.channel.guild.id;
             if (this.guildQueues.has(guildID) && isVoiceChannelEmpty(queue)) {
               queue.connection.channel.leave();
-              this.emit("empty", queue.textChannel);
+              this.emit("empty", queue);
               this._deleteQueue(queue.textChannel.guild.id);
             }
           }, this.options.emptyCooldown * 1000);
@@ -127,7 +132,7 @@ class DisTube extends EventEmitter {
    * @async
    * @param {Discord.Message} message The message from guild channel
    * @param {string|Song|SearchResult|Playlist} song Youtube url | Search string | {@link Song} | {@link SearchResult} | {@link Playlist}
-   * @param {boolean} skip Wether or not skipping the playing song
+   * @param {boolean} skip Whether or not skipping the playing song
    * @example
    * client.on('message', (message) => {
    *     if (!message.content.startsWith(config.prefix)) return;
@@ -140,7 +145,7 @@ class DisTube extends EventEmitter {
   async play(message, song, skip = false) {
     if (!song) return;
     try {
-      if (song.type === "playlist") song = song.url;
+      if (song instanceof SearchResult && song.type === "playlist") song = song.url;
       if (ytpl.validateID(song)) await this.handler.handlePlaylist(message, await this.handler.resolvePlaylist(message, song), skip);
       else {
         song = await this.handler.resolveSong(message, song);
@@ -226,7 +231,8 @@ class DisTube extends EventEmitter {
   }
 
   /**
-   * Search for a song. You can customize how user answers instead of send a number.
+   * Search for a song.
+   * You can customize how user answers instead of send a number.
    * Then use {@link DisTube#play|play(message, aResultFromSearch)} or {@link DisTube#playSkip|playSkip()} to play it.
    * @async
    * @param {string} string The string search for
@@ -249,7 +255,7 @@ class DisTube extends EventEmitter {
       return results;
     } catch (e) {
       if (retried) throw e;
-      return this.search(string, true);
+      return this.search(string, options, true);
     }
   }
 
@@ -257,10 +263,8 @@ class DisTube extends EventEmitter {
    * Create a new guild queue
    * @async
    * @private
-   * @ignore
    * @param {Discord.Message} message The message from guild channel
    * @param {Song|Song[]} song Song to play
-   * @param {boolean} retried retried?
    * @throws {Error} If an error encountered
    * @returns {Promise<Queue|true>}
    */
@@ -318,7 +322,7 @@ class DisTube extends EventEmitter {
    */
   pause(message) {
     const queue = this.getQueue(message);
-    if (!queue) throw new Error("NotPlaying");
+    if (!queue) throw new Error("Cannot find the playing queue.");
     return queue.pause();
   }
 
@@ -330,7 +334,7 @@ class DisTube extends EventEmitter {
    */
   resume(message) {
     const queue = this.getQueue(message);
-    if (!queue) throw new Error("NotPlaying");
+    if (!queue) throw new Error("Cannot find the playing queue.");
     return queue.resume();
   }
 
@@ -351,7 +355,7 @@ class DisTube extends EventEmitter {
    */
   stop(message) {
     const queue = this.getQueue(message);
-    if (!queue) throw new Error("NotPlaying");
+    if (!queue) throw new Error("Cannot find the playing queue.");
     queue.stop();
   }
 
@@ -360,7 +364,7 @@ class DisTube extends EventEmitter {
    * @param {Discord.Snowflake|Discord.Message} message The message from guild channel
    * @param {number} percent The percentage of volume you want to set
    * @returns {Queue} The guild queue
-   * @throws {NotPlaying} No playing queue
+   * @throws {Error} No playing queue
    * @example
    * client.on('message', (message) => {
    *     if (!message.content.startsWith(config.prefix)) return;
@@ -372,7 +376,7 @@ class DisTube extends EventEmitter {
    */
   setVolume(message, percent) {
     const queue = this.getQueue(message);
-    if (!queue) throw new Error("NotPlaying");
+    if (!queue) throw new Error("Cannot find the playing queue.");
     return queue.setVolume(percent);
   }
 
@@ -381,7 +385,7 @@ class DisTube extends EventEmitter {
    *
    * @param {Discord.Snowflake|Discord.Message} message The message from guild channel
    * @returns {Queue} The guild queue
-   * @throws {NotPlaying} No playing queue
+   * @throws {Error} No playing queue
    * @throws {NoSong} if there is no song in queue
    * @example
    * client.on('message', (message) => {
@@ -394,7 +398,7 @@ class DisTube extends EventEmitter {
    */
   skip(message) {
     const queue = this.getQueue(message);
-    if (!queue) throw new Error("NotPlaying");
+    if (!queue) throw new Error("Cannot find the playing queue.");
     return queue.skip();
   }
 
@@ -404,7 +408,7 @@ class DisTube extends EventEmitter {
    * @param {Discord.Snowflake|Discord.Message} message The message from guild channel
    * @returns {Queue} The guild queue
    * @throws {Disabled} If this method is disabled
-   * @throws {NotPlaying} No playing queue
+   * @throws {Error} No playing queue
    * @throws {NoSong} if there is no previous song
    * @example
    * client.on('message', (message) => {
@@ -418,7 +422,7 @@ class DisTube extends EventEmitter {
   previous(message) {
     if (!this.options.savePreviousSongs) throw new Error("Disabled");
     const queue = this.getQueue(message);
-    if (!queue) throw new Error("NotPlaying");
+    if (!queue) throw new Error("Cannot find the playing queue.");
     return queue.previous();
   }
 
@@ -437,7 +441,7 @@ class DisTube extends EventEmitter {
    */
   shuffle(message) {
     const queue = this.getQueue(message);
-    if (!queue) throw new Error("NotPlaying");
+    if (!queue) throw new Error("Cannot find the playing queue.");
     return queue.shuffle();
   }
 
@@ -461,7 +465,7 @@ class DisTube extends EventEmitter {
    */
   jump(message, num) {
     const queue = this.getQueue(message);
-    if (!queue) throw new Error("NotPlaying");
+    if (!queue) throw new Error("Cannot find the playing queue.");
     return queue.jump(num);
   }
 
@@ -488,7 +492,7 @@ class DisTube extends EventEmitter {
    */
   setRepeatMode(message, mode = null) {
     const queue = this.getQueue(message);
-    if (!queue) throw new Error("NotPlaying");
+    if (!queue) throw new Error("Cannot find the playing queue.");
     return queue.setRepeatMode(mode);
   }
 
@@ -496,7 +500,7 @@ class DisTube extends EventEmitter {
    * Toggle autoplay mode
    * @param {Discord.Snowflake|Discord.Message} message The message from guild channel
    * @returns {boolean} Autoplay mode state
-   * @throws {NotPlaying} No playing queue
+   * @throws {Error} No playing queue
    * @example
    * client.on('message', (message) => {
    *     if (!message.content.startsWith(config.prefix)) return;
@@ -510,7 +514,7 @@ class DisTube extends EventEmitter {
    */
   toggleAutoplay(message) {
     const queue = this.getQueue(message);
-    if (!queue) throw new Error("NotPlaying");
+    if (!queue) throw new Error("Cannot find the playing queue.");
     return queue.toggleAutoplay();
   }
 
@@ -541,12 +545,12 @@ class DisTube extends EventEmitter {
    */
   addRelatedVideo(message) {
     const queue = this.getQueue(message);
-    if (!queue) throw new Error("NotPlaying");
+    if (!queue) throw new Error("Cannot find the playing queue.");
     return queue.addRelatedVideo();
   }
 
   /**
-   * Enable or disable a filter of the queue, replay the playing song.
+   * Enable or disable a filter of the queue.
    * Available filters: {@link Filter}
    *
    * @param {Discord.Message} message The message from guild channel
@@ -565,7 +569,7 @@ class DisTube extends EventEmitter {
    */
   setFilter(message, filter) {
     const queue = this.getQueue(message);
-    if (!queue) throw new Error("NotPlaying");
+    if (!queue) throw new Error("Cannot find the playing queue.");
     return queue.setFilter(filter);
   }
 
@@ -585,7 +589,7 @@ class DisTube extends EventEmitter {
    */
   seek(message, time) {
     const queue = this.getQueue(message);
-    if (!queue) throw new Error("NotPlaying");
+    if (!queue) throw new Error("Cannot find the playing queue.");
     return queue.seek(time);
   }
 
@@ -604,16 +608,14 @@ class DisTube extends EventEmitter {
 module.exports = DisTube;
 
 /**
- *  Emitted after DisTube add playlist to guild queue
+ * Emitted after DisTube add playlist to guild queue
  *
  * @event DisTube#addList
  * @param {Queue} queue The guild queue
  * @param {Playlist} playlist Playlist info
- * @since 1.1.0
  * @example
- * const status = (queue) => `Volume: \`${queue.volume}%\` | Loop: \`${queue.repeatMode ? queue.repeatMode == 2 ? "Server Queue" : "This Song" : "Off"}\` | Autoplay: \`${queue.autoplay ? "On" : "Off"}\``;
- * distube.on("addList", (message, queue, playlist) => message.channel.send(
- *     `Added \`${playlist.name}\` playlist (${playlist.songs.length} songs) to queue\n${status(queue)}`
+ * distube.on("addList", (queue, playlist) => queue.textChannel.send(
+ *     `Added \`${playlist.name}\` playlist (${playlist.songs.length} songs) to the queue!`
  * ));
  */
 
@@ -624,9 +626,8 @@ module.exports = DisTube;
  * @param {Queue} queue The guild queue
  * @param {Song} song Added song
  * @example
- * const status = (queue) => `Volume: \`${queue.volume}%\` | Loop: \`${queue.repeatMode ? queue.repeatMode == 2 ? "Server Queue" : "This Song" : "Off"}\` | Autoplay: \`${queue.autoplay ? "On" : "Off"}\``;
- * distube.on("addSong", (message, queue, song) => message.channel.send(
- *     `Added ${song.name} - \`${song.formattedDuration}\` to the queue by ${song.user}`
+ * distube.on("addSong", (queue, song) => queue.textChannel.send(
+ *     `Added ${song.name} - \`${song.formattedDuration}\` to the queue by ${song.user}.`
  * ));
  */
 
@@ -634,9 +635,9 @@ module.exports = DisTube;
  * Emitted when there is no user in VoiceChannel and {@link DisTubeOptions}.leaveOnEmpty is `true`.
  *
  * @event DisTube#empty
- * @param {Discord.TextChannel} channel The text channel play commands called
+ * @param {Queue} queue The guild queue
  * @example
- * distube.on("empty", message => message.channel.send("Channel is empty. Leaving the channel"))
+ * distube.on("empty", queue => queue.textChannel.send("Channel is empty. Leaving the channel"))
  */
 
 /**
@@ -644,10 +645,10 @@ module.exports = DisTube;
  *
  * @event DisTube#error
  * @param {Discord.TextChannel} channel Text channel where the error is encountered.
- * @param {Error} err The error encountered
+ * @param {Error} error The error encountered
  * @example
- * distube.on("error", (message, err) => message.channel.send(
- *     "An error encountered: " + err
+ * distube.on("error", (channel, error) => channel.send(
+ *     "An error encountered: " + error
  * ));
  */
 
@@ -656,9 +657,9 @@ module.exports = DisTube;
  * DisTube will leave voice channel if {@link DisTubeOptions}.leaveOnFinish is `true`
  *
  * @event DisTube#finish
- * @param {Discord.TextChannel} channel The text channel play commands called
+ * @param {Queue} queue The guild queue
  * @example
- * distube.on("finish", message => message.channel.send("No more song in queue"));
+ * distube.on("finish", channel => queue.textChannel.send("No more song in queue"));
  */
 
 /**
@@ -678,9 +679,9 @@ module.exports = DisTube;
  * DisTube cannot find related songs to play
  *
  * @event DisTube#noRelated
- * @param {Discord.TextChannel} channel The text channel play commands called
+ * @param {Queue} queue The guild queue
  * @example
- * distube.on("noRelated", message => message.channel.send("Can't find related video to play. Stop playing music."));
+ * distube.on("noRelated", queue => queue.textChannel.send("Can't find related video to play. Stop playing music."));
  */
 
 /**
@@ -688,7 +689,6 @@ module.exports = DisTube;
  * If {@link DisTubeOptions}.emitNewSongOnly is `true`, event is not emitted when looping a song or next song is the previous one
  *
  * @event DisTube#playSong
- * @param {Discord.Message} message The message from guild channel
  * @param {Queue} queue The guild queue
  * @param {Song} song Playing song
  * @example
@@ -699,28 +699,54 @@ module.exports = DisTube;
  */
 
 /**
- * Emitted when {@link DisTubeOptions}.searchSongs bigger than 0.
- * Search will be canceled if user's next message is invalid number or timeout (60s)
+ * Emitted when {@link DisTubeOptions|DisTubeOptions.searchSongs} bigger than 0
+ * and DisTube cannot find any results for the query
+ *
+ * @event DisTube#searchNoResult
+ * @param {Discord.Message} message The message called play method
+ * @param {string} query The search query
+ * @example
+ * // DisTubeOptions.searchSongs > 0
+ * distube.on("searchNoResult", (message, query) => message.channel.send(`No result found for ${query}!`));
+ */
+
+/**
+ * Emitted when {@link DisTubeOptions|DisTubeOptions.searchSongs} bigger than 0
+ * and the search canceled due to user's next message is invalid number or timeout
  *
  * @event DisTube#searchCancel
- * @param {Discord.Message} message The message from guild channel
+ * @param {Discord.Message} message The message called play method
+ * @param {string} query The search query
  * @example
  * // DisTubeOptions.searchSongs > 0
  * distube.on("searchCancel", (message) => message.channel.send(`Searching canceled`));
  */
 
 /**
- * Emitted when {@link DisTubeOptions}.searchSongs bigger than 0.
- * DisTube will wait for user's next message to choose song manually
- * if song param of {@link DisTube#play|play()} is invalid url
+ * Emitted when {@link DisTubeOptions|DisTubeOptions.searchSongs} bigger than 0
+ * and song param of {@link DisTube#play|play()} is invalid url.
+ * DisTube will wait for user's next message to choose song manually.
  *
  * @event DisTube#searchResult
- * @param {Discord.Message} message The message from guild channel
- * @param {SearchResult[]} result Searched result (max length = 12)
+ * @param {Discord.Message} message The message called play method
+ * @param {SearchResult[]} results Searched results
+ * @param {string} query The search query
  * @example
  * // DisTubeOptions.searchSongs > 0
- * distube.on("searchResult", (message, result) => {
- *     let i = 0;
- *     message.channel.send(`**Choose an option from below**\n${result.map(song => `**${++i}**. ${song.name} - \`${song.formattedDuration}\``).join("\n")}\n*Enter anything else or wait 60 seconds to cancel*`);
+ * distube.on("searchResult", (message, results) => {
+ *     message.channel.send(`**Choose an option from below**\n${results.map((song, i) => `**${i + 1}**. ${song.name} - \`${song.formattedDuration}\``).join("\n")}\n*Enter anything else or wait 60 seconds to cancel*`);
  * });
+ */
+
+/**
+ * Emitted when {@link DisTubeOptions|DisTubeOptions.searchSongs} bigger than 0
+ * and the user chose a search result to play
+ *
+ * @event DisTube#searchDone
+ * @param {Discord.Message} message The message called play method
+ * @param {Discord.Message} answer The answer message
+ * @param {string} query The search query
+ * @example
+ * // DisTubeOptions.searchSongs > 0
+ * distube.on("searchCancel", (message) => message.channel.send(`Searching canceled`));
  */

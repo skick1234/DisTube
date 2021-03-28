@@ -11,14 +11,14 @@ declare class Queue extends Base {
     id: Discord.Snowflake;
     /**
      * Stream dispatcher.
-     * @type {Discord.StreamDispatcher}
+     * @type {Discord.StreamDispatcher?}
      */
-    dispatcher: Discord.StreamDispatcher;
+    dispatcher: Discord.StreamDispatcher | null;
     /**
      * Voice connection.
-     * @type {Discord.VoiceConnection}
+     * @type {Discord.VoiceConnection?}
      */
-    connection: Discord.VoiceConnection;
+    connection: Discord.VoiceConnection | null;
     /**
      * Stream volume.
      * @type {number}
@@ -31,25 +31,27 @@ declare class Queue extends Base {
     songs: Song[];
     /**
      * List of the previous songs.
-     * @type {Song[]}
+     * @type {Song[]?}
      */
-    previousSongs: Song[];
+    previousSongs: Song[] | null;
     /**
      * Whether stream is currently stopped.
      * @type {boolean}
+     * @private
      */
-    stopped: boolean;
+    private stopped;
     /**
      * Whether or not the last song was skipped to next song.
      * @type {boolean}
+     * @private
      */
-    next: boolean;
+    private next;
     /**
-     * Play the previous song
-     * @returns {Queue} The guild queue
-     * @throws {NoSong} if there is no previous song
+     * Whether or not the last song was skipped to previous song.
+     * @type {boolean}
+     * @private
      */
-    previous(): Queue;
+    private prev;
     /**
      * Whether or not the stream is currently playing.
      * @type {boolean}
@@ -61,7 +63,7 @@ declare class Queue extends Base {
      */
     pause(): Queue;
     /**
-     * Type of repeat mode (0 is disabled, 1 is repeating a song, 2 is repeating all the playlist)
+     * Type of repeat mode (0 is disabled, 1 is repeating a song, 2 is repeating all the queue)
      * @type {number}
      */
     repeatMode: number;
@@ -77,12 +79,13 @@ declare class Queue extends Base {
      */
     filters: any[];
     /**
-     * ytdl stream
-     * @type {Readable}
+     * Should be an opus stream
+     * @type {Readable?}
+     * @private
      */
-    stream: any;
+    private stream;
     /**
-     * What time in the song to begin (in milliseconds).
+     * What time in the song to begin (in seconds).
      * @type {number}
      */
     beginTime: number;
@@ -91,6 +94,11 @@ declare class Queue extends Base {
      * @type {Discord.TextChannel}
      */
     textChannel: Discord.TextChannel;
+    /**
+     * @type {DisTubeHandler}
+     * @private
+     */
+    private handler;
     /**
      * Formatted duration string.
      * @type {string}
@@ -102,7 +110,7 @@ declare class Queue extends Base {
      */
     get duration(): number;
     /**
-     * What time in the song is playing (in milliseconds).
+     * What time in the song is playing (in seconds).
      * @type {number}
      */
     get currentTime(): number;
@@ -113,7 +121,7 @@ declare class Queue extends Base {
     get formattedCurrentTime(): string;
     /**
      * The voice channel playing in.
-     * @type {Discord.VoiceChannel}
+     * @type {Discord.VoiceChannel?}
      */
     get voiceChannel(): Discord.VoiceChannel;
     /**
@@ -141,10 +149,16 @@ declare class Queue extends Base {
     setVolume(percent: number): Queue;
     /**
      * Skip the playing song
-     * @returns {Queue} The guild queue
-     * @throws {NoSong} if there is no song in queue
+     * @returns {Song} The song will skip to
+     * @throws {Error} if there is no song in queue
      */
-    skip(): Queue;
+    skip(): Song;
+    /**
+     * Play the previous song
+     * @returns {Song} The guild queue
+     * @throws {Error} if there is no previous song
+     */
+    previous(): Song;
     /**
      * Shuffle the queue's songs
      * @returns {Queue} The guild queue
@@ -168,16 +182,16 @@ declare class Queue extends Base {
      */
     setRepeatMode(mode?: number | null): number;
     /**
-     * Enable or disable filter(s) of the queue.
+     * Enable or disable filter of the queue.
      * Available filters: {@link Filter}
-     * @param {Filter} filter A filter name
+     * @param {Filter|false} filter A filter name, `false` to clear all the filters
      * @returns {string} Current queue's filter name.
      * @throws {Error} If it's not a filter
      */
-    setFilter(filter: any): string;
+    setFilter(filter: any | false): string;
     /**
      * Set the playing time to another position
-     * @param {number} time Time in milliseconds
+     * @param {number} time Time in seconds
      * @returns {Queue}
      * @example
      * client.on('message', message => {
@@ -194,9 +208,14 @@ declare class Queue extends Base {
      * @async
      * @param {Song} [song] A song to get the related one
      * @returns {Promise<Queue>} The guild queue
-     * @throws {NoRelated}
+     * @throws {Error}
      */
     addRelatedVideo(song?: Song): Promise<Queue>;
+    /**
+     * Toggle autoplay mode
+     * @returns {boolean} Autoplay mode state
+     */
+    toggleAutoplay(): boolean;
 }
 import Base = require("./DisTubeBase");
 import Discord = require("discord.js");

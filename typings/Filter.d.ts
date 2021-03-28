@@ -21,21 +21,63 @@ export = _exports;
  */
 export type DefaultFilters = {
     /**
-     * 3d
+     * 3d 3d
      */
     "": string;
+    /**
+     * bassboost
+     */
     bassboost: string;
+    /**
+     * echo
+     */
     echo: string;
+    /**
+     * karaoke
+     */
     karaoke: string;
+    /**
+     * nightcore
+     */
     nightcore: string;
+    /**
+     * vaporwave
+     */
     vaporwave: string;
+    /**
+     * flanger
+     */
     flanger: string;
+    /**
+     * gate
+     */
     gate: string;
+    /**
+     * haas
+     */
     haas: string;
+    /**
+     * reverse
+     */
     reverse: string;
+    /**
+     * surround
+     */
     surround: string;
+    /**
+     * mcompand
+     */
     mcompand: string;
+    /**
+     * phaser
+     */
     phaser: string;
+    /**
+     * tremolo
+     */
     tremolo: string;
+    /**
+     * earwax
+     */
     earwax: string;
 };

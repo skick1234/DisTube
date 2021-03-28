@@ -19,7 +19,7 @@ declare class Song {
     user: Discord.User | null;
     /**
      * `ytdl-core` raw info (If the song is from YouTube)
-     * @type {?ytdl.videoInfo}
+     * @type {ytdl.videoInfo?}
      * @private
      */
     private info;
@@ -27,7 +27,6 @@ declare class Song {
      * Patch data
      * @param {ytdl.MoreVideoDetails} info Video info
      * @private
-     * @ignore
      */
     private _patch;
     /**
@@ -72,7 +71,7 @@ declare class Song {
     thumbnail: string | null;
     /**
      * Related videos (Only available with YouTube video)
-     * @type {?ytdl.relatedVideo[]}
+     * @type {ytdl.relatedVideo[]?}
      */
     related: ytdl.relatedVideo[] | null;
     /**

@@ -4,7 +4,6 @@ export = DisTube;
  * * `{ "Filter Name":  "Filter Value" }`
  * * `{ bassboost: "bass=g=10,dynaudnorm=f=150:g=15" }`
  * @typedef {Object.<string, string>} Filters
- * @prop {string} filterName filterValue
  */
 /**
  * DisTube options.
@@ -21,17 +20,17 @@ export = DisTube;
  * @prop {boolean} [updateYouTubeDL=true] Whether or not updating youtube-dl automatically.
  * @prop {Filters} [customFilters] Override {@link DefaultFilters} or add more ffmpeg filters. Example=`{ "Filter name"="Filter value"; "8d"="apulsator=hz=0.075" }`
  * @prop {Object} [ytdlOptions] `ytdl-core` options
- * @prop {number} [searchCooldown=60000] Built-in search cooldown in milliseconds (When searchSongs is bigger than 0)
- * @prop {number} [emptyCooldown=60000] Built-in leave on empty cooldown in milliseconds (When leaveOnEmpty is true)
+ * @prop {number} [searchCooldown=60] Built-in search cooldown in seconds (When searchSongs is bigger than 0)
+ * @prop {number} [emptyCooldown=60] Built-in leave on empty cooldown in seconds (When leaveOnEmpty is true)
  */
 /**
- * Class representing a DisTube.
+ * DisTube class
  * @extends EventEmitter
  */
 declare class DisTube extends EventEmitter {
     static get version(): any;
     /**
-     * Create new DisTube.
+     * Create a new DisTube class.
      * @param {Discord.Client} client Discord.JS client
      * @param {DisTubeOptions} [otp={}] Custom DisTube options
      * @example
@@ -47,7 +46,6 @@ declare class DisTube extends EventEmitter {
     /**
      * DisTube's current version.
      * @type {string}
-     * @ignore
      */
     get version(): string;
     /**
@@ -65,7 +63,12 @@ declare class DisTube extends EventEmitter {
      * @type {DisTubeOptions}
      */
     options: DisTubeOptions;
-    handler: Handler;
+    /**
+     * DisTube's Handler
+     * @type {Handler}
+     * @private
+     */
+    private handler;
     /**
      * DisTube filters
      * @type {Filters}
@@ -76,7 +79,7 @@ declare class DisTube extends EventEmitter {
      * @async
      * @param {Discord.Message} message The message from guild channel
      * @param {string|Song|SearchResult|Playlist} song Youtube url | Search string | {@link Song} | {@link SearchResult} | {@link Playlist}
-     * @param {boolean} skip Wether or not skipping the playing song
+     * @param {boolean} skip Whether or not skipping the playing song
      * @example
      * client.on('message', (message) => {
      *     if (!message.content.startsWith(config.prefix)) return;
@@ -112,7 +115,7 @@ declare class DisTube extends EventEmitter {
      * @param {string[]} songs Array of url
      * @param {Object} [properties={}] Additional properties such as `name`
      * @param {boolean} [playSkip=false] Whether or not play this playlist instantly
-     * @param {boolean} [parallel=true] Whether or not fetch the playlist in parallel
+     * @param {boolean} [parallel=true] Whether or not fetch the songs in parallel
      * @example
      *     let songs = ["https://www.youtube.com/watch?v=xxx", "https://www.youtube.com/watch?v=yyy"];
      *     distube.playCustomPlaylist(message, songs, { name: "My playlist name" });
@@ -121,17 +124,8 @@ declare class DisTube extends EventEmitter {
      */
     playCustomPlaylist(message: Discord.Message, songs: string[], properties?: any, playSkip?: boolean, parallel?: boolean): Promise<void>;
     /**
-     * Play / add a playlist
-     * @async
-     * @private
-     * @ignore
-     * @param {Discord.Message} message The message from guild channel
-     * @param {Playlist} playlist Youtube playlist url | a Playlist
-     * @param {boolean} skip Skip the current song
-     */
-    private _handlePlaylist;
-    /**
-     * Search for a song. You can customize how user answers instead of send a number.
+     * Search for a song.
+     * You can customize how user answers instead of send a number.
      * Then use {@link DisTube#play|play(message, aResultFromSearch)} or {@link DisTube#playSkip|playSkip()} to play it.
      * @async
      * @param {string} string The string search for
@@ -150,10 +144,8 @@ declare class DisTube extends EventEmitter {
      * Create a new guild queue
      * @async
      * @private
-     * @ignore
      * @param {Discord.Message} message The message from guild channel
      * @param {Song|Song[]} song Song to play
-     * @param {boolean} retried retried?
      * @throws {Error} If an error encountered
      * @returns {Promise<Queue|true>}
      */
@@ -218,7 +210,7 @@ declare class DisTube extends EventEmitter {
      * @param {Discord.Snowflake|Discord.Message} message The message from guild channel
      * @param {number} percent The percentage of volume you want to set
      * @returns {Queue} The guild queue
-     * @throws {NotPlaying} No playing queue
+     * @throws {Error} No playing queue
      * @example
      * client.on('message', (message) => {
      *     if (!message.content.startsWith(config.prefix)) return;
@@ -234,7 +226,7 @@ declare class DisTube extends EventEmitter {
      *
      * @param {Discord.Snowflake|Discord.Message} message The message from guild channel
      * @returns {Queue} The guild queue
-     * @throws {NotPlaying} No playing queue
+     * @throws {Error} No playing queue
      * @throws {NoSong} if there is no song in queue
      * @example
      * client.on('message', (message) => {
@@ -252,7 +244,7 @@ declare class DisTube extends EventEmitter {
      * @param {Discord.Snowflake|Discord.Message} message The message from guild channel
      * @returns {Queue} The guild queue
      * @throws {Disabled} If this method is disabled
-     * @throws {NotPlaying} No playing queue
+     * @throws {Error} No playing queue
      * @throws {NoSong} if there is no previous song
      * @example
      * client.on('message', (message) => {
@@ -323,7 +315,7 @@ declare class DisTube extends EventEmitter {
      * Toggle autoplay mode
      * @param {Discord.Snowflake|Discord.Message} message The message from guild channel
      * @returns {boolean} Autoplay mode state
-     * @throws {NotPlaying} No playing queue
+     * @throws {Error} No playing queue
      * @example
      * client.on('message', (message) => {
      *     if (!message.content.startsWith(config.prefix)) return;
@@ -355,7 +347,7 @@ declare class DisTube extends EventEmitter {
      */
     addRelatedVideo(message: Discord.Snowflake | Discord.Message): Promise<Queue>;
     /**
-     * Enable or disable a filter of the queue, replay the playing song.
+     * Enable or disable a filter of the queue.
      * Available filters: {@link Filter}
      *
      * @param {Discord.Message} message The message from guild channel
@@ -376,7 +368,7 @@ declare class DisTube extends EventEmitter {
     /**
      * Set the playing time to another position
      * @param {Discord.Message} message The message from guild channel
-     * @param {number} time Time in milliseconds
+     * @param {number} time Time in seconds
      * @returns {Queue}
      * @example
      * client.on('message', message => {
@@ -392,9 +384,45 @@ declare class DisTube extends EventEmitter {
      * Emit error event
      * @param {Discord.TextChannel} channel Text channel where the error is encountered.
      * @param {Error} error error
-     * @ignore
+     * @private
      */
-    emitError(channel: Discord.TextChannel, error: Error): void;
+    private emitError;
+	on(
+		event: "addList",
+		listener: (queue: Queue, playlist: Playlist) => void
+	): this;
+	on(
+		event: "addSong" | "playSong",
+		listener: (queue: Queue, song: Song) => void
+	): this;
+	on(
+		event: "empty" | "finish" | "initQueue" | "noRelated",
+		listener: (queue: Queue) => void
+	): this;
+	on(
+		event: "error",
+		listener: (channel: Discord.TextChannel, error: Error) => void
+	): this;
+	on(
+		event: "searchNoResult" | "searchCancel",
+		listener: (message: Discord.Message, query: string) => void
+	): this;
+	on(
+		event: "searchResult",
+		listener: (
+			message: Discord.Message,
+			results: SearchResult[],
+			query: string
+		) => void
+	): this;
+	on(
+		event: "searchDone",
+		listener: (
+			message: Discord.Message,
+			answer: Discord.Message,
+			query: string
+		) => void
+	): this;
 }
 declare namespace DisTube {
     export { Filters, DisTubeOptions };
@@ -455,15 +483,14 @@ type DisTubeOptions = {
      */
     ytdlOptions?: any;
     /**
-     * Built-in search cooldown in milliseconds (When searchSongs is bigger than 0)
+     * Built-in search cooldown in seconds (When searchSongs is bigger than 0)
      */
     searchCooldown?: number;
     /**
-     * Built-in leave on empty cooldown in milliseconds (When leaveOnEmpty is true)
+     * Built-in leave on empty cooldown in seconds (When leaveOnEmpty is true)
      */
     emptyCooldown?: number;
 };
-import Handler = require("./DisTubeHandler");
 /**
  * FFmpeg Filters
  * * `{ "Filter Name":  "Filter Value" }`

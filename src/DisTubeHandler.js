@@ -31,7 +31,7 @@ class DisTubeHandler extends Base {
    * @param {Error} error error
    * @private
    */
-  _emitError(channel, error) {
+  emitError(channel, error) {
     this.distube.emit(channel, error);
   }
 
@@ -121,36 +121,36 @@ class DisTubeHandler extends Base {
    * Search for a song, fire {@link DisTube#event:error} if not found.
    * @async
    * @param {Discord.Message} message The message from guild channel
-   * @param {string} name The string search for
+   * @param {string} query The query string
    * @returns {Song} Song info
    */
-  async searchSong(message, name) {
+  async searchSong(message, query) {
     let results;
     try {
-      results = await this.distube.search(name, { limit: this.options.searchSongs || 1 });
+      results = await this.distube.search(query, { limit: this.options.searchSongs || 1 });
     } catch {
-      this.emit("searchNoResult", message);
+      this.emit("searchNoResult", message, query);
       return null;
     }
     let result = results[0];
     if (this.options.searchSongs && this.options.searchSongs > 1) {
-      this.emit("searchResult", message, results, name);
+      this.emit("searchResult", message, results, query);
       const answers = await message.channel.awaitMessages(m => m.author.id === message.author.id, {
         max: 1,
         time: this.options.searchCooldown * 1000,
         errors: ["time"],
       });
       if (!answers.first()) {
-        this.emit("searchCancel", message);
+        this.emit("searchCancel", message, query);
         return null;
       }
       const ans = answers.first();
       const index = parseInt(ans.content, 10);
       if (isNaN(index) || index > results.length || index < 1) {
-        this.emit("searchCancel", message);
+        this.emit("searchCancel", message, query);
         return null;
       }
-      this.emit("searchDone", message, ans);
+      this.emit("searchDone", message, ans, query);
       result = results[index - 1];
     }
     return result;
@@ -172,7 +172,7 @@ class DisTubeHandler extends Base {
         try { queue.stop() } catch { this.deleteQueue(guildID) }
       }).on("error", e => {
         e.message = `There is a problem with Discord Voice Connection.\nReason: ${e.message}`;
-        this.emitError(queue.channel, e);
+        this.emitError(queue.textChannel, e);
         this.deleteQueue(queue);
       });
       const err = await this.playSong(queue);
@@ -209,7 +209,7 @@ class DisTubeHandler extends Base {
     const song = queue.songs[0];
     const filterArgs = [];
     queue.filters.forEach(filter => filterArgs.push(this.distube.filters[filter]));
-    const encoderArgs = queue.filters ? ["-af", filterArgs.join(",")] : null;
+    const encoderArgs = queue.filters?.length ? ["-af", filterArgs.join(",")] : null;
     let streamOptions = {
       opusEncoded: true,
       filter: song.isLive ? "audioandvideo" : "audioonly",
@@ -251,7 +251,7 @@ class DisTubeHandler extends Base {
       !this.options.emitNewSongOnly ||
       (
         queue.repeatMode !== 1 &&
-        (!queue.songs[1] || queue.songs[0].id !== queue.songs[1].id)
+        queue.songs[0]?.id !== queue.songs[1]?.id
       )
     ) return true;
     return false;
@@ -275,7 +275,7 @@ class DisTubeHandler extends Base {
       const stream = this.createStream(queue).on("error", e => {
         errorEmitted = true;
         e.message = `${e.message}\nID: ${song.id}\nName: ${song.name}`;
-        this._emitError(queue.textChannel, e);
+        this.emitError(queue.textChannel, e);
       });
       queue.dispatcher = queue.connection.play(stream, {
         highWaterMark: 1,
@@ -303,24 +303,27 @@ class DisTubeHandler extends Base {
       this.deleteQueue(queue);
       return;
     }
-    if (queue.repeatMode === 2 && !queue.next) queue.songs.push(queue.songs[0]);
+    if (queue.repeatMode === 2 && !queue.prev) queue.songs.push(queue.songs[0]);
+    if (queue.prev) {
+      if (queue.repeatMode === 2) queue.songs.unshift(queue.songs.pop());
+      else queue.songs.unshift(queue.previousSongs.pop());
+    }
     if (queue.songs.length <= 1 && (queue.next || !queue.repeatMode)) {
-      if (queue.autoplay) await queue.addRelatedVideo();
+      if (queue.autoplay) try { await queue.addRelatedVideo() } catch { this.emit("noRelated", queue) }
       if (queue.songs.length <= 1) {
         if (this.options.leaveOnFinish) queue.connection.channel.leave();
-        if (!queue.autoplay) this.emit("finish", queue.textChannel);
+        if (!queue.autoplay) this.emit("finish", queue);
         this.deleteQueue(queue);
         return;
       }
     }
-    if (queue.previous) queue.songs.unshift(queue.previousSongs.pop());
-    else if (queue.repeatMode !== 1 && queue.next) {
+    const emitPlaySong = this._emitPlaySong(queue);
+    if (!queue.prev && (queue.repeatMode !== 1 || queue.next)) {
       const prev = queue.songs.shift();
       if (this.options.savePreviousSongs) queue.previousSongs.push(prev);
     }
-    queue.next = queue.previous = false;
+    queue.next = queue.prev = false;
     queue.beginTime = 0;
-    const emitPlaySong = this._emitPlaySong(queue);
     const err = await this.playSong(queue);
     if (!err && emitPlaySong) this.emit("playSong", queue, queue.songs[0]);
   }
@@ -335,7 +338,7 @@ class DisTubeHandler extends Base {
     const song = queue.songs.shift();
     if (error) {
       error.message = `${error.message}\nID: ${song.id}\nName: ${song.name}`;
-      this._emitError(queue.textChannel, error);
+      this.emitError(queue.textChannel, error);
     }
     if (queue.songs.length > 0) {
       this.playSong(queue).then(e => {

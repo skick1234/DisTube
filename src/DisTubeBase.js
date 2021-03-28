@@ -9,8 +9,6 @@ class DisTubeBase {
   constructor(distube) {
     /** @type {DisTube} */
     this.distube = distube;
-    /** @type {import("./DisTubeHandler")} */
-    this.handler = distube.handler;
     /** @type {DisTube.DisTubeOptions} */
     this.options = this.distube.options;
     /** @type {Discord.Client} */

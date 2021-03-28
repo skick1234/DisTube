@@ -2,7 +2,11 @@ const { formatDuration } = require("./util"),
   Song = require("./Song"),
   Base = require("./DisTubeBase"),
   // eslint-disable-next-line no-unused-vars
-  Discord = require("discord.js");
+  Discord = require("discord.js"),
+  // eslint-disable-next-line no-unused-vars
+  { Readable } = require("stream"),
+  // eslint-disable-next-line no-unused-vars
+  DisTubeHandler = require("./DisTubeHandler");
 
 /**
  * Represents a queue.
@@ -35,11 +39,13 @@ class Queue extends Base {
      * @type {Song[]}
      */
     this.songs = [song];
-    /**
-     * List of the previous songs.
-     * @type {Song[]}
-     */
-    this.previousSongs = [];
+    if (this.options.savePreviousSongs) {
+      /**
+       * List of the previous songs.
+       * @type {Song[]?}
+       */
+      this.previousSongs = [];
+    }
     /**
      * Whether stream is currently stopped.
      * @type {boolean}
@@ -57,7 +63,7 @@ class Queue extends Base {
      * @type {boolean}
      * @private
      */
-    this.previous = false;
+    this.prev = false;
     /**
      * Whether or not the stream is currently playing.
      * @type {boolean}
@@ -69,7 +75,7 @@ class Queue extends Base {
      */
     this.pause = false;
     /**
-     * Type of repeat mode (0 is disabled, 1 is repeating a song, 2 is repeating all the playlist)
+     * Type of repeat mode (0 is disabled, 1 is repeating a song, 2 is repeating all the queue)
      * @type {number}
      */
     this.repeatMode = 0;
@@ -87,6 +93,7 @@ class Queue extends Base {
     /**
      * Should be an opus stream
      * @type {Readable?}
+     * @private
      */
     this.stream = null;
     /**
@@ -99,6 +106,11 @@ class Queue extends Base {
      * @type {Discord.TextChannel}
      */
     this.textChannel = message.channel;
+    /**
+     * @type {DisTubeHandler}
+     * @private
+     */
+    this.handler = this.distube.handler;
   }
   /**
    * Formatted duration string.
@@ -130,10 +142,10 @@ class Queue extends Base {
   }
   /**
    * The voice channel playing in.
-   * @type {Discord.VoiceChannel}
+   * @type {Discord.VoiceChannel?}
    */
   get voiceChannel() {
-    return this.connection.voice.channel;
+    return this.connection?.voice?.channel;
   }
   /**
    * Add a Song or an array of Song to the queue
@@ -187,6 +199,7 @@ class Queue extends Base {
    * @returns {Queue} The guild queue
    */
   setVolume(percent) {
+    if (typeof percent !== "number") throw new Error("Volume percent must be a number.");
     this.volume = percent;
     this.dispatcher.setVolume(this.volume / 100);
     return this;
@@ -194,26 +207,29 @@ class Queue extends Base {
 
   /**
    * Skip the playing song
-   * @returns {Queue} The guild queue
-   * @throws {NoSong} if there is no song in queue
+   * @returns {Song} The song will skip to
+   * @throws {Error} if there is no song in queue
    */
   skip() {
-    if (this.songs.length <= 1 && !this.autoplay) throw new Error("NoSong");
+    if (this.songs.length <= 1 && !this.autoplay) throw new Error("There is no song to skip.");
+    const song = this.songs[1];
     this.next = true;
     this.dispatcher.end();
-    return this;
+    return song;
   }
 
   /**
    * Play the previous song
-   * @returns {Queue} The guild queue
-   * @throws {NoSong} if there is no previous song
+   * @returns {Song} The guild queue
+   * @throws {Error} if there is no previous song
    */
   previous() {
-    if (this.previousSongs.length === 0) throw new Error("NoSong");
-    this.previous = true;
+    if (!this.options.savePreviousSongs) throw new Error("savePreviousSongs is disabled.");
+    if (this.previousSongs?.length === 0 && this.repeatMode !== 2) throw new Error("There is no previous song.");
+    const song = this.repeatMode === 2 ? this.songs[this.songs.length - 1] : this.previousSongs[this.previousSongs.length - 1];
+    this.prev = true;
     this.dispatcher.end();
-    return this;
+    return song;
   }
   /**
    * Shuffle the queue's songs
@@ -241,10 +257,10 @@ class Queue extends Base {
     if (num > 0) {
       this.songs = this.songs.splice(num - 1);
       this.next = true;
-    } else if (num === -1) this.previous = true;
+    } else if (num === -1) this.prev = true;
     else {
-      this.songs.unshift(this.previousSongs.splice(num + 1));
-      this.previous = true;
+      this.songs.unshift(...this.previousSongs.splice(num + 1));
+      this.prev = true;
     }
     if (this.dispatcher) this.dispatcher.end();
     return this;
@@ -264,15 +280,16 @@ class Queue extends Base {
     return this.repeatMode;
   }
   /**
-   * Enable or disable filter(s) of the queue.
+   * Enable or disable filter of the queue.
    * Available filters: {@link Filter}
-   * @param {Filter} filter A filter name
+   * @param {Filter|false} filter A filter name, `false` to clear all the filters
    * @returns {string} Current queue's filter name.
    * @throws {Error} If it's not a filter
    */
   setFilter(filter) {
-    if (!Object.prototype.hasOwnProperty.call(this.filters, filter)) throw new TypeError(`${filter} is not a filter name.`);
-    if (this.filters.includes(filter)) this.filters = this.filters.filter(f => f !== filter);
+    if (filter === false) this.filters = [];
+    else if (!Object.prototype.hasOwnProperty.call(this.distube.filters, filter)) throw new TypeError(`${filter} is not a filter name.`);
+    else if (this.filters.includes(filter)) this.filters = this.filters.filter(f => f !== filter);
     else this.filters.push(filter);
     this.beginTime = this.currentTime;
     this.handler.playSong(this);
@@ -301,12 +318,12 @@ class Queue extends Base {
    * @async
    * @param {Song} [song] A song to get the related one
    * @returns {Promise<Queue>} The guild queue
-   * @throws {NoRelated}
+   * @throws {Error}
    */
   async addRelatedVideo(song = this.songs[0]) {
     const related = (await this.handler.getRelatedVideo(song))
       .find(v => !this.previousSongs.map(s => s.id).includes(v.id));
-    if (!related) throw new Error("NoRelated");
+    if (!related) throw new Error("Cannot find any related songs.");
     this.addToQueue(new Song(await this.handler.getYouTubeInfo(related.id), this.textChannel.guild.me));
     return this;
   }
