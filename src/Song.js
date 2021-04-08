@@ -62,7 +62,7 @@ class Song {
      */
     this.duration = toSecond(info.lengthSeconds || info._duration_raw || info.duration);
     /**
-     * Formatted duration string `hh:mm:ss` or `mm:ss`.
+     * Formatted duration string (`hh:mm:ss`, `mm:ss` or `Live`).
      * @type {string}
      */
     this.formattedDuration = this.isLive ? "Live" : formatDuration(this.duration);
@@ -111,7 +111,7 @@ class Song {
     this.reposts = parseNumber(info.repost_count);
     /**
      * Song uploader
-     * @type {object}
+     * @type {Object}
      * @prop {string?} name Uploader name
      * @prop {string?} url Uploader url
      */

@@ -74,10 +74,10 @@ declare class Queue extends Base {
     autoplay: boolean;
     /**
      * Enabled audio filters.
-     * Available filters: {@link Filter}
-     * @type {Filter[]}
+     * Available filters: {@link Filters}
+     * @type {string[]}
      */
-    filters: any[];
+    filters: string[];
     /**
      * Should be an opus stream
      * @type {Readable?}
@@ -183,24 +183,16 @@ declare class Queue extends Base {
     setRepeatMode(mode?: number | null): number;
     /**
      * Enable or disable filter of the queue.
-     * Available filters: {@link Filter}
-     * @param {Filter|false} filter A filter name, `false` to clear all the filters
-     * @returns {string} Current queue's filter name.
+     * Available filters: {@link Filters}
+     * @param {string|false} filter A filter name, `false` to clear all the filters
+     * @returns {string[]} Enabled filters.
      * @throws {Error} If it's not a filter
      */
-    setFilter(filter: any | false): string;
+    setFilter(filter: string | false): string[];
     /**
      * Set the playing time to another position
      * @param {number} time Time in seconds
      * @returns {Queue}
-     * @example
-     * client.on('message', message => {
-     *     if (!message.content.startsWith(config.prefix)) return;
-     *     const args = message.content.slice(config.prefix.length).trim().split(/ +/g);
-     *     const command = args.shift();
-     *     if (command = 'seek')
-     *         distube.seek(message, Number(args[0]));
-     * });
      */
     seek(time: number): Queue;
     /**

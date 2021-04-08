@@ -50,7 +50,7 @@ declare class Song {
      */
     duration: number;
     /**
-     * Formatted duration string `hh:mm:ss` or `mm:ss`.
+     * Formatted duration string (`hh:mm:ss`, `mm:ss` or `Live`).
      * @type {string}
      */
     formattedDuration: string;
@@ -96,11 +96,11 @@ declare class Song {
     reposts: number;
     /**
      * Song uploader
-     * @type {object}
+     * @type {Object}
      * @prop {string?} name Uploader name
      * @prop {string?} url Uploader url
      */
-    uploader: object;
+    uploader: any;
     /**
      * @param {Playlist} playlist Playlist
      * @param {Discord.GuildMember} member User requested

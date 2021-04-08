@@ -24,9 +24,9 @@ declare class SearchResult {
     url: string;
     /**
      * Video duration.
-     * @type {number?}
+     * @type {number|string|null}
      */
-    duration: number | null;
+    duration: number | string | null;
     /**
      * Formatted duration string `hh:mm:ss` or `mm:ss`.
      * @type {string?}

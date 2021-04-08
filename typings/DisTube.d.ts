@@ -1,8 +1,12 @@
 export = DisTube;
 /**
  * FFmpeg Filters
- * * `{ "Filter Name":  "Filter Value" }`
- * * `{ bassboost: "bass=g=10,dynaudnorm=f=150:g=15" }`
+ * ```
+ * {
+ *   "Filter Name": "Filter Value",
+ *   "bassboost":   "bass=g=10,dynaudnorm=f=150:g=15"
+ * }
+ * ```
  * @typedef {Object.<string, string>} Filters
  */
 /**
@@ -32,7 +36,7 @@ declare class DisTube extends EventEmitter {
     /**
      * Create a new DisTube class.
      * @param {Discord.Client} client Discord.JS client
-     * @param {DisTubeOptions} [otp={}] Custom DisTube options
+     * @param {DisTubeOptions} [otp] Custom DisTube options
      * @example
      * const Discord = require('discord.js'),
      *     DisTube = require('distube'),
@@ -131,14 +135,14 @@ declare class DisTube extends EventEmitter {
      * @param {string} string The string search for
      * @param {Object} options Search options
      * @param {number} [options.limit=10] Limit the results
-     * @param {"video"|"playlist"} [options.type="video"] Type of search (video or playlist).
+     * @param {'video'|'playlist'} [options.type='video'] Type of search (video or playlist).
      * @param {boolean} retried Retried?
      * @throws {Error} If an error encountered
      * @returns {Promise<SearchResult[]>} Array of results
      */
     search(string: string, options?: {
         limit?: number;
-        type?: "video" | "playlist";
+        type?: 'video' | 'playlist';
     }, retried?: boolean): Promise<SearchResult[]>;
     /**
      * Create a new guild queue
@@ -348,11 +352,11 @@ declare class DisTube extends EventEmitter {
     addRelatedVideo(message: Discord.Snowflake | Discord.Message): Promise<Queue>;
     /**
      * Enable or disable a filter of the queue.
-     * Available filters: {@link Filter}
+     * Available filters: {@link Filters}
      *
-     * @param {Discord.Message} message The message from guild channel
-     * @param {Filter} filter A filter name
-     * @returns {Filter[]} Enabled filters.
+     * @param {Discord.Snowflake|Discord.Message} message The message from guild channel
+     * @param {string|false} filter A filter name, `false` to clear all the filters
+     * @returns {string[]} Enabled filters.
      * @example
      * client.on('message', (message) => {
      *     if (!message.content.startsWith(config.prefix)) return;
@@ -364,10 +368,10 @@ declare class DisTube extends EventEmitter {
      *     }
      * });
      */
-    setFilter(message: Discord.Message, filter: any): any[];
+    setFilter(message: Discord.Snowflake | Discord.Message, filter: string | false): string[];
     /**
      * Set the playing time to another position
-     * @param {Discord.Message} message The message from guild channel
+     * @param {Discord.Snowflake|Discord.Message} message The message from guild channel
      * @param {number} time Time in seconds
      * @returns {Queue}
      * @example
@@ -379,7 +383,7 @@ declare class DisTube extends EventEmitter {
      *         distube.seek(message, Number(args[0]));
      * });
      */
-    seek(message: Discord.Message, time: number): Queue;
+    seek(message: Discord.Snowflake | Discord.Message, time: number): Queue;
     /**
      * Emit error event
      * @param {Discord.TextChannel} channel Text channel where the error is encountered.
@@ -493,8 +497,12 @@ type DisTubeOptions = {
 };
 /**
  * FFmpeg Filters
- * * `{ "Filter Name":  "Filter Value" }`
- * * `{ bassboost: "bass=g=10,dynaudnorm=f=150:g=15" }`
+ * ```
+ * {
+ *   "Filter Name": "Filter Value",
+ *   "bassboost":   "bass=g=10,dynaudnorm=f=150:g=15"
+ * }
+ * ```
  */
 type Filters = {
     [x: string]: string;

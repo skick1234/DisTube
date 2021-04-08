@@ -26,7 +26,7 @@ class SearchResult {
     if (this.type === "video") {
       /**
        * Video duration.
-       * @type {number?}
+       * @type {number|string|null}
        */
       this.duration = toSecond(info.duration);
       /**
