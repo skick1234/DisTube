@@ -135,6 +135,10 @@ class DisTube extends EventEmitter {
         .catch(() => console.log("[DisTube] Unable to update youtube-dl, using default version."));
     }
 
+    // Default plugin
+    const HTTPPlugin = require("./Plugin/http"),
+      HTTPSPlugin = require("./Plugin/https");
+    this.options.plugins.push(new HTTPPlugin(), new HTTPSPlugin());
     this.options.plugins.map(p => p.init(this));
     /**
      * Extractor Plugins
