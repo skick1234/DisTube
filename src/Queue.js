@@ -1,6 +1,6 @@
 const { formatDuration } = require("./util"),
   Song = require("./Song"),
-  Base = require("./DisTubeBase"),
+  DisTubeBase = require("./DisTubeBase"),
   // eslint-disable-next-line no-unused-vars
   Discord = require("discord.js"),
   // eslint-disable-next-line no-unused-vars
@@ -10,8 +10,15 @@ const { formatDuration } = require("./util"),
 
 /**
  * Represents a queue.
+ * @extends DisTubeBase
  */
-class Queue extends Base {
+class Queue extends DisTubeBase {
+  /**
+  * Create a queue.
+  * @param {DisTube} distube DisTube
+  * @param {Discord.Message} message Discord.Message
+  * @param {Song} song The first Song of the Queue
+  */
   constructor(distube, message, song) {
     super(distube);
     /**
@@ -111,6 +118,12 @@ class Queue extends Base {
      * @private
      */
     this.handler = this.distube.handler;
+    /**
+     * Timeout for checking empty channel
+     * @type {NodeJS.Timeout?}
+     * @private
+     */
+    this.emptyTimeout = null;
   }
   /**
    * Formatted duration string.
@@ -151,7 +164,7 @@ class Queue extends Base {
    * Add a Song or an array of Song to the queue
    * @param {Song|Song[]} song Song to add
    * @param {boolean} [unshift=false] Unshift?
-   * @throws {Error} If an error encountered
+   * @throws {Error}
    * @returns {Queue}
    */
   addToQueue(song, unshift = false) {
@@ -208,7 +221,7 @@ class Queue extends Base {
   /**
    * Skip the playing song
    * @returns {Song} The song will skip to
-   * @throws {Error} if there is no song in queue
+   * @throws {Error}
    */
   skip() {
     if (this.songs.length <= 1 && !this.autoplay) throw new Error("There is no song to skip.");
@@ -221,7 +234,7 @@ class Queue extends Base {
   /**
    * Play the previous song
    * @returns {Song} The guild queue
-   * @throws {Error} if there is no previous song
+   * @throws {Error}
    */
   previous() {
     if (!this.options.savePreviousSongs) throw new Error("savePreviousSongs is disabled.");
@@ -284,7 +297,7 @@ class Queue extends Base {
    * Available filters: {@link Filters}
    * @param {string|false} filter A filter name, `false` to clear all the filters
    * @returns {string[]} Enabled filters.
-   * @throws {Error} If it's not a filter
+   * @throws {Error}
    */
   setFilter(filter) {
     if (filter === false) this.filters = [];

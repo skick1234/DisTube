@@ -1,9 +1,16 @@
 export = Queue;
 /**
  * Represents a queue.
+ * @extends DisTubeBase
  */
-declare class Queue extends Base {
-    constructor(distube: any, message: any, song: any);
+declare class Queue extends DisTubeBase {
+    /**
+    * Create a queue.
+    * @param {DisTube} distube DisTube
+    * @param {Discord.Message} message Discord.Message
+    * @param {Song} song The first Song of the Queue
+    */
+    constructor(distube: any, message: Discord.Message, song: Song);
     /**
      * Queue id (Guild id)
      * @type {Discord.Snowflake}
@@ -100,6 +107,12 @@ declare class Queue extends Base {
      */
     private handler;
     /**
+     * Timeout for checking empty channel
+     * @type {NodeJS.Timeout?}
+     * @private
+     */
+    private emptyTimeout;
+    /**
      * Formatted duration string.
      * @type {string}
      */
@@ -128,7 +141,7 @@ declare class Queue extends Base {
      * Add a Song or an array of Song to the queue
      * @param {Song|Song[]} song Song to add
      * @param {boolean} [unshift=false] Unshift?
-     * @throws {Error} If an error encountered
+     * @throws {Error}
      * @returns {Queue}
      */
     addToQueue(song: Song | Song[], unshift?: boolean): Queue;
@@ -150,13 +163,13 @@ declare class Queue extends Base {
     /**
      * Skip the playing song
      * @returns {Song} The song will skip to
-     * @throws {Error} if there is no song in queue
+     * @throws {Error}
      */
     skip(): Song;
     /**
      * Play the previous song
      * @returns {Song} The guild queue
-     * @throws {Error} if there is no previous song
+     * @throws {Error}
      */
     previous(): Song;
     /**
@@ -186,7 +199,7 @@ declare class Queue extends Base {
      * Available filters: {@link Filters}
      * @param {string|false} filter A filter name, `false` to clear all the filters
      * @returns {string[]} Enabled filters.
-     * @throws {Error} If it's not a filter
+     * @throws {Error}
      */
     setFilter(filter: string | false): string[];
     /**
@@ -209,6 +222,6 @@ declare class Queue extends Base {
      */
     toggleAutoplay(): boolean;
 }
-import Base = require("./DisTubeBase");
+import DisTubeBase = require("./DisTubeBase");
 import Discord = require("discord.js");
 import Song = require("./Song");

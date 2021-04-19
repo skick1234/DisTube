@@ -50,7 +50,7 @@ class Song {
      * Song name aka video title.
      * @type {string}
      */
-    this.name = info.title;
+    this.name = info.title || info.name;
     /**
      * Indicates if the video is an active live.
      * @type {boolean}
@@ -70,7 +70,7 @@ class Song {
      * Song URL.
      * @type {string}
      */
-    this.url = this.source === "youtube" ? `https://www.youtube.com/watch?v=${this.id}` : info.webpage_url;
+    this.url = this.source === "youtube" ? `https://www.youtube.com/watch?v=${this.id}` : info.webpage_url || info.url;
     /**
      * Stream / Download URL.
      * @type {string?}
@@ -78,7 +78,7 @@ class Song {
     this.streamURL = this.info && this.info.formats.length ? ytdl.chooseFormat(this.info.formats, {
       filter: this.isLive ? "audioandvideo" : "audioonly",
       quality: "highestaudio",
-    }).url : info.url;
+    }).url : this.url;
     /**
      * Song thumbnail.
      * @type {string?}

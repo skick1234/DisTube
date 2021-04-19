@@ -5,7 +5,7 @@ const ytdl = require("@distube/ytdl"),
   Playlist = require("./Playlist"),
   { parseNumber, isURL } = require("./util"),
   youtube_dl = require("@distube/youtube-dl"),
-  Base = require("./DisTubeBase"),
+  DisTubeBase = require("./DisTubeBase"),
   // eslint-disable-next-line no-unused-vars
   Queue = require("./Queue"),
   // eslint-disable-next-line no-unused-vars
@@ -16,9 +16,10 @@ const ytdl = require("@distube/ytdl"),
 
 /**
  * DisTube's Handler
+ * @extends DisTubeBase
  * @private
  */
-class DisTubeHandler extends Base {
+class DisTubeHandler extends DisTubeBase {
   constructor(distube) {
     super(distube);
     const requestOptions = this.options.youtubeCookie ? { headers: { cookie: this.options.youtubeCookie, "x-youtube-identity-token": this.options.youtubeIdentityToken } } : undefined;
@@ -69,6 +70,7 @@ class DisTubeHandler extends Base {
     if (typeof song === "object") return new Song(song, message.member);
     if (ytdl.validateURL(song)) return new Song(await this.getYouTubeInfo(song), message.member);
     if (isURL(song)) {
+      for (const plugin of this.distube.extractorPlugins) if (await plugin.validate(song)) return plugin.resolve(song, message.member);
       if (!this.options.youtubeDL) throw new Error("Not Supported URL!");
       const info = await youtube_dl(song, {
         dumpJson: true,
@@ -161,7 +163,7 @@ class DisTubeHandler extends Base {
    * @param {Queue} queue The message from guild channel
    * @param {Discord.VoiceChannel} voice The string search for
    * @param {boolean} retried retried?
-   * @throws {Error} If an error encountered
+   * @throws {Error}
    * @returns {Promise<Queue|true>}
    */
   async joinVoiceChannel(queue, voice, retried = false) {
@@ -210,14 +212,14 @@ class DisTubeHandler extends Base {
     const filterArgs = [];
     queue.filters.forEach(filter => filterArgs.push(this.distube.filters[filter]));
     const encoderArgs = queue.filters?.length ? ["-af", filterArgs.join(",")] : null;
-    let streamOptions = {
+    const streamOptions = {
       opusEncoded: true,
       filter: song.isLive ? "audioandvideo" : "audioonly",
       quality: "highestaudio",
       encoderArgs,
       seek: queue.beginTime,
     };
-    streamOptions = Object.assign(streamOptions, this.ytdlOptions);
+    Object.assign(streamOptions, this.ytdlOptions);
     if (song.source === "youtube") return ytdl(song.info, streamOptions);
     return ytdl.arbitraryStream(song.streamURL, streamOptions);
   }

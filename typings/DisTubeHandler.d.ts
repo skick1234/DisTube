@@ -1,9 +1,10 @@
 export = DisTubeHandler;
 /**
  * DisTube's Handler
+ * @extends DisTubeBase
  * @private
  */
-declare class DisTubeHandler extends Base {
+declare class DisTubeHandler extends DisTubeBase {
     constructor(distube: any);
     ytdlOptions: any;
     /**
@@ -59,7 +60,7 @@ declare class DisTubeHandler extends Base {
      * @param {Queue} queue The message from guild channel
      * @param {Discord.VoiceChannel} voice The string search for
      * @param {boolean} retried retried?
-     * @throws {Error} If an error encountered
+     * @throws {Error}
      * @returns {Promise<Queue|true>}
      */
     joinVoiceChannel(queue: Queue, voice: Discord.VoiceChannel, retried?: boolean): Promise<Queue | true>;
@@ -105,7 +106,7 @@ declare class DisTubeHandler extends Base {
      */
     private _handlePlayingError;
 }
-import Base = require("./DisTubeBase");
+import DisTubeBase = require("./DisTubeBase");
 import Discord = require("discord.js");
 import Queue = require("./Queue");
 import Song = require("./Song");

@@ -16,6 +16,7 @@ const defaultOptions = {
   },
   searchCooldown: 60,
   emptyCooldown: 60,
+  plugins: [],
 };
 
 module.exports = class DisTubeOptions {
@@ -66,6 +67,9 @@ module.exports = class DisTubeOptions {
     }
     if (typeof options.emptyCooldown !== "number" || isNaN(options.emptyCooldown)) {
       throw new TypeError("DisTubeOptions.emptyCooldown must be a number");
+    }
+    if (!Array.isArray(options.plugins)) {
+      throw new TypeError("DisTubeOptions.plugins must be an array of Plugin.");
     }
   }
 };

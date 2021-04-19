@@ -69,7 +69,7 @@ declare class DisTube extends EventEmitter {
     options: DisTubeOptions;
     /**
      * DisTube's Handler
-     * @type {Handler}
+     * @type {DisTubeHandler}
      * @private
      */
     private handler;
@@ -78,6 +78,18 @@ declare class DisTube extends EventEmitter {
      * @type {Filters}
      */
     filters: Filters;
+    /**
+     * Extractor Plugins
+     * @type {Array<Plugin>}
+     * @private
+     */
+    private extractorPlugins;
+    /**
+     * Custom Plugins
+     * @type {Array<Plugin>}
+     * @private
+     */
+    private customPlugins;
     /**
      * Play / add a song or playlist from url. Search and play a song if it is not a valid url.
      * @async
@@ -116,7 +128,7 @@ declare class DisTube extends EventEmitter {
      * `user`, `songs`, `duration`, `formattedDuration`, `thumbnail` like {@link Playlist}
      * @async
      * @param {Discord.Message} message The message from guild channel
-     * @param {string[]} songs Array of url
+     * @param {Array<string|Song|SearchResult>} songs Array of url, Song or SearchResult
      * @param {Object} [properties={}] Additional properties such as `name`
      * @param {boolean} [playSkip=false] Whether or not play this playlist instantly
      * @param {boolean} [parallel=true] Whether or not fetch the songs in parallel
@@ -126,7 +138,7 @@ declare class DisTube extends EventEmitter {
      *     // Fetching custom playlist sequentially (reduce lag for low specs)
      *     distube.playCustomPlaylist(message, songs, { name: "My playlist name" }, false, false);
      */
-    playCustomPlaylist(message: Discord.Message, songs: string[], properties?: any, playSkip?: boolean, parallel?: boolean): Promise<void>;
+    playCustomPlaylist(message: Discord.Message, songs: Array<string | Song | SearchResult>, properties?: any, playSkip?: boolean, parallel?: boolean): Promise<void>;
     /**
      * Search for a song.
      * You can customize how user answers instead of send a number.
@@ -137,7 +149,7 @@ declare class DisTube extends EventEmitter {
      * @param {number} [options.limit=10] Limit the results
      * @param {'video'|'playlist'} [options.type='video'] Type of search (video or playlist).
      * @param {boolean} retried Retried?
-     * @throws {Error} If an error encountered
+     * @throws {Error}
      * @returns {Promise<SearchResult[]>} Array of results
      */
     search(string: string, options?: {
@@ -150,7 +162,7 @@ declare class DisTube extends EventEmitter {
      * @private
      * @param {Discord.Message} message The message from guild channel
      * @param {Song|Song[]} song Song to play
-     * @throws {Error} If an error encountered
+     * @throws {Error}
      * @returns {Promise<Queue|true>}
      */
     private _newQueue;
@@ -164,7 +176,7 @@ declare class DisTube extends EventEmitter {
      * Get the guild queue
      * @param {Discord.Snowflake|Discord.Message} message The guild ID or message from guild channel.
      * @returns {Queue} The guild queue
-     * @throws {Error} If an error encountered
+     * @throws {Error}
      * @example
      * client.on('message', (message) => {
      *     if (!message.content.startsWith(config.prefix)) return;
@@ -183,20 +195,20 @@ declare class DisTube extends EventEmitter {
      * Pause the guild stream
      * @param {Discord.Snowflake|Discord.Message} message The message from guild channel
      * @returns {Queue} The guild queue
-     * @throws {Error} If an error encountered
+     * @throws {Error}
      */
     pause(message: Discord.Snowflake | Discord.Message): Queue;
     /**
      * Resume the guild stream
      * @param {Discord.Snowflake|Discord.Message} message The message from guild channel
      * @returns {Queue} The guild queue
-     * @throws {Error} If an error encountered
+     * @throws {Error}
      */
     resume(message: Discord.Snowflake | Discord.Message): Queue;
     /**
      * Stop the guild stream
      * @param {Discord.Snowflake|Discord.Message} message The message from guild channel or Queue
-     * @throws {Error} If an error encountered
+     * @throws {Error}
      * @example
      * client.on('message', (message) => {
      *     if (!message.content.startsWith(config.prefix)) return;
@@ -214,7 +226,7 @@ declare class DisTube extends EventEmitter {
      * @param {Discord.Snowflake|Discord.Message} message The message from guild channel
      * @param {number} percent The percentage of volume you want to set
      * @returns {Queue} The guild queue
-     * @throws {Error} No playing queue
+     * @throws {Error}
      * @example
      * client.on('message', (message) => {
      *     if (!message.content.startsWith(config.prefix)) return;
@@ -230,8 +242,7 @@ declare class DisTube extends EventEmitter {
      *
      * @param {Discord.Snowflake|Discord.Message} message The message from guild channel
      * @returns {Queue} The guild queue
-     * @throws {Error} No playing queue
-     * @throws {NoSong} if there is no song in queue
+     * @throws {Error}
      * @example
      * client.on('message', (message) => {
      *     if (!message.content.startsWith(config.prefix)) return;
@@ -247,9 +258,7 @@ declare class DisTube extends EventEmitter {
      *
      * @param {Discord.Snowflake|Discord.Message} message The message from guild channel
      * @returns {Queue} The guild queue
-     * @throws {Disabled} If this method is disabled
-     * @throws {Error} No playing queue
-     * @throws {NoSong} if there is no previous song
+     * @throws {Error}
      * @example
      * client.on('message', (message) => {
      *     if (!message.content.startsWith(config.prefix)) return;
@@ -319,7 +328,7 @@ declare class DisTube extends EventEmitter {
      * Toggle autoplay mode
      * @param {Discord.Snowflake|Discord.Message} message The message from guild channel
      * @returns {boolean} Autoplay mode state
-     * @throws {Error} No playing queue
+     * @throws {Error}
      * @example
      * client.on('message', (message) => {
      *     if (!message.content.startsWith(config.prefix)) return;
@@ -429,7 +438,7 @@ declare class DisTube extends EventEmitter {
 	): this;
 }
 declare namespace DisTube {
-    export { Filters, DisTubeOptions };
+    export { CustomPlugin, ExtractorPlugin, Playlist, Song, Filters, DisTubeOptions };
 }
 import { EventEmitter } from "events";
 import Discord = require("discord.js");
@@ -510,3 +519,6 @@ type Filters = {
 import Song = require("./Song");
 import SearchResult = require("./SearchResult");
 import Playlist = require("./Playlist");
+declare var CustomPlugin: typeof import("./Plugin/CustomPlugin");
+declare var ExtractorPlugin: typeof import("./Plugin/ExtractorPlugin");
+declare var Playlist: typeof Playlist;

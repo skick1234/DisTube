@@ -6,6 +6,12 @@ const { formatDuration } = require("./util"),
 
 /** Class representing a playlist. */
 class Playlist {
+  /**
+   * Create a playlist
+   * @param {Song[]|Object} playlist Playlist
+   * @param {Discord.GuildMember} member Requested user
+   * @param {Object} properties Custom properties
+   */
   constructor(playlist, member, properties = {}) {
     if (typeof properties !== "object") throw new TypeError("Custom properties must be an object");
     /**
@@ -22,8 +28,8 @@ class Playlist {
      * Playlist songs.
      * @type {Song[]}
      */
-    this.songs = Array.isArray(playlist) ? playlist : playlist.items;
-    if (!this.songs || !this.songs.length) throw new Error("Playlist is empty!");
+    this.songs = Array.isArray(playlist) ? playlist : playlist.items || playlist.songs;
+    if (!Array.isArray(this.songs) || !this.songs.length) throw new Error("Playlist is empty!");
     this.songs.map(s => s instanceof Song && s._patchPlaylist(this, this.member));
     /**
      * Playlist name.
