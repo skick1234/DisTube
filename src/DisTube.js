@@ -797,3 +797,11 @@ module.exports = DisTube;
  * @param {Queue} queue The guild queue
  */
 
+/**
+ * Emitted when DisTube finished a song
+ *
+ * @event DisTube#finishSong
+ * @param {Queue} queue The guild queue
+ * @param {Song} song Finished song
+ */
+

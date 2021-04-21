@@ -301,6 +301,7 @@ class DisTubeHandler extends DisTubeBase {
    * @param {Queue} queue queue
    */
   async _handleSongFinish(queue) {
+    this.emit("finishSong", queue, queue.songs[0]);
     if (queue.stopped) {
       this.deleteQueue(queue);
       return;

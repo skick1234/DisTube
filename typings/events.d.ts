@@ -5,7 +5,7 @@ declare class DisTube extends EventEmitter {
 		listener: (queue: Queue, playlist: Playlist) => void
 	): this;
 	on(
-		event: "addSong" | "playSong",
+		event: "addSong" | "playSong" | "finishSong",
 		listener: (queue: Queue, song: Song) => void
 	): this;
 	on(
