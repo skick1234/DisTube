@@ -170,12 +170,12 @@ class DisTubeHandler extends DisTubeBase {
     try {
       queue.connection = await voice.join();
       queue.connection.on("disconnect", () => {
-        const guildID = queue.connection.channel.guild.id;
-        try { queue.stop() } catch { this.deleteQueue(guildID) }
+        this.emit("disconnect", queue);
+        try { queue.stop() } catch { this.deleteQueue(queue) }
       }).on("error", e => {
         e.message = `There is a problem with Discord Voice Connection.\nReason: ${e.message}`;
         this.emitError(queue.textChannel, e);
-        this.deleteQueue(queue);
+        try { queue.stop() } catch { this.deleteQueue(queue) }
       });
       const err = await this.playSong(queue);
       return err || queue;

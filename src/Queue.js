@@ -203,8 +203,8 @@ class Queue extends DisTubeBase {
    */
   stop() {
     this.stopped = true;
-    if (this.dispatcher) try { this.dispatcher.end() } catch { }
-    if (this.options.leaveOnStop && this.connection) try { this.connection.channel.leave() } catch { }
+    try { this.dispatcher?.end() } catch { }
+    if (this.options.leaveOnStop) try { this.connection?.channel?.leave() } catch { }
   }
   /**
    * Set the guild stream's volume

@@ -789,3 +789,11 @@ module.exports = DisTube;
  * // DisTubeOptions.searchSongs > 0
  * distube.on("searchCancel", (message) => message.channel.send(`Searching canceled`));
  */
+
+/**
+ * Emitted when the bot is disconnected to the voice channel
+ *
+ * @event DisTube#disconnect
+ * @param {Queue} queue The guild queue
+ */
+
