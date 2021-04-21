@@ -106,7 +106,11 @@ class DisTubeHandler extends DisTubeBase {
    */
   async handlePlaylist(message, playlist, skip = false) {
     if (!playlist || !(playlist instanceof Playlist)) throw Error("Invalid Playlist");
-    if (!playlist.songs.length) throw Error("No valid video in the playlist");
+    if (!this.options.nsfw && !message.channel.nsfw) playlist.songs = playlist.songs.filter(s => !s.age_restricted);
+    if (!playlist.songs.length) {
+      if (!this.options.nsfw && !message.channel.nsfw) throw new Error("No valid video in the playlist.\nMaybe age-restricted contents is filtered because you are in non-NSFW channel.");
+      throw Error("No valid video in the playlist");
+    }
     const songs = playlist.songs;
     let queue = this.getQueue(message);
     if (queue) {

@@ -43,6 +43,7 @@ const ytsr = require("@distube/ytsr"),
  * @prop {Object} [ytdlOptions] `ytdl-core` options
  * @prop {number} [searchCooldown=60] Built-in search cooldown in seconds (When searchSongs is bigger than 0)
  * @prop {number} [emptyCooldown=60] Built-in leave on empty cooldown in seconds (When leaveOnEmpty is true)
+ * @prop {boolean} [nsfw=false] Whether or not playing age-restricted content in non-NSFW channel
  */
 
 /**
@@ -185,6 +186,10 @@ class DisTube extends EventEmitter {
       else {
         song = await this.handler.resolveSong(message, song);
         if (song instanceof Playlist) await this.handler.handlePlaylist(message, song, skip);
+        else if (!this.options.nsfw && song.age_restricted && !message.channel.nsfw) {
+          try { message.delete().catch(() => undefined) } catch { }
+          throw new Error("Cannot play age-restricted content in non-NSFW channel.");
+        }
         if (!song) return;
         let queue = this.getQueue(message);
         if (queue) {
@@ -246,9 +251,11 @@ class DisTube extends EventEmitter {
    *     distube.playCustomPlaylist(message, songs, { name: "My playlist name" }, false, false);
    */
   async playCustomPlaylist(message, songs, properties = {}, playSkip = false, parallel = true) {
-    if (!songs.length) return;
+    if (!Array.isArray(songs)) throw new TypeError("songs must be an array of url");
+    if (!songs.length) throw new Error("songs is an empty array");
     try {
       songs = songs.filter(song => song instanceof Song || song instanceof SearchResult || isURL(song));
+      if (!songs.length) throw new Error("songs does not have any valid Song, SearchResult or url");
       if (parallel) {
         songs = songs.map(song => this._resolveSong(message, song).catch(() => undefined));
         songs = await Promise.all(songs);

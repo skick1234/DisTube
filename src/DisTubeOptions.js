@@ -17,6 +17,7 @@ const defaultOptions = {
   searchCooldown: 60,
   emptyCooldown: 60,
   plugins: [],
+  nsfw: false,
 };
 
 module.exports = class DisTubeOptions {
@@ -70,6 +71,9 @@ module.exports = class DisTubeOptions {
     }
     if (!Array.isArray(options.plugins)) {
       throw new TypeError("DisTubeOptions.plugins must be an array of Plugin.");
+    }
+    if (typeof options.nsfw !== "boolean") {
+      throw new TypeError("DisTubeOptions.nsfw must be a boolean");
     }
   }
 };

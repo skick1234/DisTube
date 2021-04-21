@@ -12,6 +12,7 @@ export = DisTube;
 /**
  * DisTube options.
  * @typedef {Object} DisTubeOptions
+ * @prop {Array<Plugin>} [plugins] DisTube plugins.
  * @prop {boolean} [emitNewSongOnly=false] If `true`, {@link DisTube#event:playSong} will not be emitted when looping a song or next song is the same as the previous one
  * @prop {boolean} [leaveOnEmpty=true] Whether or not leaving voice channel if channel is empty in 60s. (Avoid accident leaving)
  * @prop {boolean} [leaveOnFinish=false] Whether or not leaving voice channel when the queue ends.
@@ -26,6 +27,7 @@ export = DisTube;
  * @prop {Object} [ytdlOptions] `ytdl-core` options
  * @prop {number} [searchCooldown=60] Built-in search cooldown in seconds (When searchSongs is bigger than 0)
  * @prop {number} [emptyCooldown=60] Built-in leave on empty cooldown in seconds (When leaveOnEmpty is true)
+ * @prop {boolean} [nsfw=false] Whether or not playing age-restricted content in non-NSFW channel
  */
 /**
  * DisTube class
@@ -80,13 +82,13 @@ declare class DisTube extends EventEmitter {
     filters: Filters;
     /**
      * Extractor Plugins
-     * @type {Array<Plugin>}
+     * @type {Array<ExtractorPlugin>}
      * @private
      */
     private extractorPlugins;
     /**
      * Custom Plugins
-     * @type {Array<Plugin>}
+     * @type {Array<CustomPlugin>}
      * @private
      */
     private customPlugins;
@@ -448,6 +450,10 @@ import Queue = require("./Queue");
  */
 type DisTubeOptions = {
     /**
+     * DisTube plugins.
+     */
+    plugins?: Array<Plugin>;
+    /**
      * If `true`, {@link DisTube#event:playSong} will not be emitted when looping a song or next song is the same as the previous one
      */
     emitNewSongOnly?: boolean;
@@ -503,6 +509,10 @@ type DisTubeOptions = {
      * Built-in leave on empty cooldown in seconds (When leaveOnEmpty is true)
      */
     emptyCooldown?: number;
+    /**
+     * Whether or not playing age-restricted content in non-NSFW channel
+     */
+    nsfw?: boolean;
 };
 /**
  * FFmpeg Filters
@@ -519,6 +529,7 @@ type Filters = {
 import Song = require("./Song");
 import SearchResult = require("./SearchResult");
 import Playlist = require("./Playlist");
-declare var CustomPlugin: typeof import("./Plugin/CustomPlugin");
-declare var ExtractorPlugin: typeof import("./Plugin/ExtractorPlugin");
+import CustomPlugin = require("./Plugin/CustomPlugin");
+import ExtractorPlugin = require("./Plugin/ExtractorPlugin");
 declare var Playlist: typeof Playlist;
+import Plugin = require("./Plugin/Plugin");

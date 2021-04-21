@@ -119,6 +119,15 @@ class Song {
       name: info.author ? info.author.name : info.uploader || null,
       url: info.author ? info.author.channel_url : info.uploader_url || null,
     };
+    /**
+     * Whether or not an age-restricted content
+     * @type {boolean}
+     */
+    this.age_restricted = info.age_restricted ||
+      (info.age_limit && parseNumber(info.age_limit) >= 18) ||
+      (typeof info.media?.notice === "string" && (
+        info.media.notice.includes("Age-restricted") || info.media.notice.includes("age-restricted")
+      )) || false;
   }
 
   /**

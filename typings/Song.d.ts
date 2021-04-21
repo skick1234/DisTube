@@ -102,6 +102,11 @@ declare class Song {
      */
     uploader: any;
     /**
+     * Whether or not an age-restricted content
+     * @type {boolean}
+     */
+    age_restricted: boolean;
+    /**
      * @param {Playlist} playlist Playlist
      * @param {Discord.GuildMember} member User requested
      * @private
