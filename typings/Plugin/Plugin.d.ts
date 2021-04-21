@@ -1,5 +1,7 @@
 export = Plugin;
-/** DisTube Plugin */
+/**
+ * DisTube Plugin
+ */
 declare class Plugin {
     constructor(type: any);
     /**
@@ -8,7 +10,15 @@ declare class Plugin {
      */
     type: string;
     init(distube: any): void;
-    distube: any;
+    /**
+     * DisTube
+     * @type {DisTube}
+     */
+    distube: DisTube;
+    /**
+     * @type {DisTubeHandler}
+     */
+    handler: any;
     /**
      * Check if the url is working with this plugin
      * @param {string} url Input url
@@ -16,3 +26,4 @@ declare class Plugin {
      */
     validate(url: string): Promise<boolean>;
 }
+import DisTube = require("../DisTube");

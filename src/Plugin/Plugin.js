@@ -1,4 +1,6 @@
 /* eslint-disable */
+const DisTube = require("../DisTube");
+
 /**
  * DisTube Plugin
  */
@@ -11,7 +13,15 @@ class Plugin {
     this.type = type;
   }
   init(distube) {
+    /**
+     * DisTube
+     * @type {DisTube}
+     */
     this.distube = distube;
+    /**
+     * @type {DisTubeHandler}
+     */
+    this.handler = this.distube.handler;
   }
   /**
    * Check if the url is working with this plugin

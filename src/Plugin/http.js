@@ -12,7 +12,7 @@ class HTTPPlugin extends ExtractorPlugin {
     if (new URL(url).protocol.toLowerCase() !== "http:") return false;
     const headers = await getResponseHeaders(url);
     const type = headers["content-type"];
-    if (type.startsWith("audio") || type.startsWith("video")) return true;
+    if (type.startsWith("audio")) return true;
     return false;
   }
   resolve(url, member) {
