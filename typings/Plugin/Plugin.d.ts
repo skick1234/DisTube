@@ -1,6 +1,7 @@
 export = Plugin;
 /**
  * DisTube Plugin
+ * @private
  */
 declare class Plugin {
     constructor(type: any);
@@ -16,6 +17,7 @@ declare class Plugin {
      */
     distube: DisTube;
     /**
+     * Handler
      * @type {DisTubeHandler}
      */
     handler: any;

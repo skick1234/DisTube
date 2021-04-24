@@ -13,7 +13,7 @@ declare class SearchResult {
      */
     id: string;
     /**
-     * Video or playlist  title.
+     * Video or playlist title.
      * @type {string}
      */
     name: string;

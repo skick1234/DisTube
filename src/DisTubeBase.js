@@ -7,13 +7,30 @@ const Discord = require("discord.js");
 class DisTubeBase {
   /** @param {DisTube} distube distube */
   constructor(distube) {
-    /** @type {DisTube} */
+    /**
+     * DisTube
+     * @type {DisTube}
+     * @private
+     */
     this.distube = distube;
-    /** @type {DisTube.DisTubeOptions} */
+    /**
+     * DisTube options
+     * @type {DisTube.DisTubeOptions}
+     * @private
+     */
     this.options = this.distube.options;
-    /** @type {Discord.Client} */
+    /**
+     * Discord.js client
+     * @type {Discord.Client}
+     * @private
+     */
     this.client = this.distube.client;
   }
+  /**
+   * Redirect emitter
+   * @private
+   * @param  {...any} args arguments
+   */
   emit(...args) {
     this.distube.emit(...args);
   }

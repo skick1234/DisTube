@@ -23,6 +23,7 @@ const ytsr = require("@distube/ytsr"),
  * }
  * ```
  * @typedef {Object.<string, string>} Filters
+ * @see {@link DefaultFilters}
  */
 
 /**
@@ -283,10 +284,10 @@ class DisTube extends EventEmitter {
    * @param {string} string The string search for
    * @param {Object} options Search options
    * @param {number} [options.limit=10] Limit the results
-   * @param {'video'|'playlist'} [options.type='video'] Type of search (video or playlist).
+   * @param {'video'|'playlist'} [options.type='video'] Type of search (`video` or `playlist`).
    * @param {boolean} retried Retried?
    * @throws {Error}
-   * @returns {Promise<SearchResult[]>} Array of results
+   * @returns {Promise<Array<SearchResult>>} Array of results
    */
   async search(string, options = {}, retried = false) {
     const opts = Object.assign({ type: "video", limit: 10 }, options);
@@ -309,7 +310,7 @@ class DisTube extends EventEmitter {
    * @async
    * @private
    * @param {Discord.Message} message The message from guild channel
-   * @param {Song|Song[]} song Song to play
+   * @param {Song|Array<Song>} song Song to play
    * @throws {Error}
    * @returns {Promise<Queue|true>}
    */
@@ -597,7 +598,7 @@ class DisTube extends EventEmitter {
    *
    * @param {Discord.Snowflake|Discord.Message} message The message from guild channel
    * @param {string|false} filter A filter name, `false` to clear all the filters
-   * @returns {string[]} Enabled filters.
+   * @returns {Array<string>} Enabled filters.
    * @example
    * client.on('message', (message) => {
    *     if (!message.content.startsWith(config.prefix)) return;
@@ -775,7 +776,7 @@ module.exports = DisTube;
  *
  * @event DisTube#searchResult
  * @param {Discord.Message} message The message called play method
- * @param {SearchResult[]} results Searched results
+ * @param {Array<SearchResult>} results Searched results
  * @param {string} query The search query
  * @example
  * // DisTubeOptions.searchSongs > 0

@@ -1,7 +1,13 @@
 export = Song;
 /** Class representing a song. */
 declare class Song {
-    constructor(info: any, member?: any, src?: string);
+    /**
+     * Create a Song
+     * @param {ytdl.videoInfo|Object} info Raw info
+     * @param {Discord.GuildMember} member Requested user
+     * @param {string} src Song source
+     */
+    constructor(info: ytdl.videoInfo | any, member?: Discord.GuildMember, src?: string);
     /**
      * The source of the song
      * @type {string}
@@ -25,7 +31,7 @@ declare class Song {
     private info;
     /**
      * Patch data
-     * @param {ytdl.MoreVideoDetails} info Video info
+     * @param {ytdl.MoreVideoDetails|Object} info Video info
      * @private
      */
     private _patch;
@@ -71,9 +77,9 @@ declare class Song {
     thumbnail: string | null;
     /**
      * Related videos (Only available with YouTube video)
-     * @type {ytdl.relatedVideo[]?}
+     * @type {Array<ytdl.relatedVideo>?}
      */
-    related: ytdl.relatedVideo[] | null;
+    related: Array<ytdl.relatedVideo> | null;
     /**
      * Song views count
      * @type {number}
@@ -107,6 +113,16 @@ declare class Song {
      */
     age_restricted: boolean;
     /**
+     * @typedef {Object} Chapter
+     * @prop {string} title Chapter title
+     * @prop {number} start_time Chapter start time in seconds
+     */
+    /**
+     * Chapters information (YouTube only)
+     * @type {Chapter[]}
+     */
+    chapters: Chapter[];
+    /**
      * @param {Playlist} playlist Playlist
      * @param {Discord.GuildMember} member User requested
      * @private
@@ -119,6 +135,19 @@ declare class Song {
      */
     playlist: Playlist | null;
 }
+declare namespace Song {
+    export { Chapter };
+}
 import Discord = require("discord.js");
 import ytdl = require("ytdl-core");
+type Chapter = {
+    /**
+     * Chapter title
+     */
+    title: string;
+    /**
+     * Chapter start time in seconds
+     */
+    start_time: number;
+};
 import Playlist = require("./Playlist");

@@ -13,12 +13,6 @@ const { formatDuration } = require("./util"),
  * @extends DisTubeBase
  */
 class Queue extends DisTubeBase {
-  /**
-  * Create a queue.
-  * @param {DisTube} distube DisTube
-  * @param {Discord.Message} message Discord.Message
-  * @param {Song} song The first Song of the Queue
-  */
   constructor(distube, message, song) {
     super(distube);
     /**
@@ -37,19 +31,19 @@ class Queue extends DisTubeBase {
      */
     this.connection = null;
     /**
-     * Stream volume.
+     * Stream volume. Default value: `50`.
      * @type {number}
      */
     this.volume = 50;
     /**
      * List of songs in the queue (The first one is the playing song)
-     * @type {Song[]}
+     * @type {Array<Song>}
      */
     this.songs = [song];
     if (this.options.savePreviousSongs) {
       /**
        * List of the previous songs.
-       * @type {Song[]?}
+       * @type {Array<Song>?}
        */
       this.previousSongs = [];
     }
@@ -82,19 +76,21 @@ class Queue extends DisTubeBase {
      */
     this.pause = false;
     /**
-     * Type of repeat mode (0 is disabled, 1 is repeating a song, 2 is repeating all the queue)
+     * Type of repeat mode (`0` is disabled, `1` is repeating a song, `2` is repeating all the queue).
+     * Default value: `0` (disabled)
      * @type {number}
      */
     this.repeatMode = 0;
     /**
      * Whether or not the autoplay mode is enabled.
+     * Default value: `false`
      * @type {boolean}
      */
     this.autoplay = false;
     /**
      * Enabled audio filters.
      * Available filters: {@link Filters}
-     * @type {string[]}
+     * @type {Array<string>}
      */
     this.filters = [];
     /**
@@ -162,7 +158,7 @@ class Queue extends DisTubeBase {
   }
   /**
    * Add a Song or an array of Song to the queue
-   * @param {Song|Song[]} song Song to add
+   * @param {Song|Array<Song>} song Song to add
    * @param {boolean} [unshift=false] Unshift?
    * @throws {Error}
    * @returns {Queue}
@@ -296,7 +292,7 @@ class Queue extends DisTubeBase {
    * Enable or disable filter of the queue.
    * Available filters: {@link Filters}
    * @param {string|false} filter A filter name, `false` to clear all the filters
-   * @returns {string[]} Enabled filters.
+   * @returns {Array<string>} Enabled filters.
    * @throws {Error}
    */
   setFilter(filter) {

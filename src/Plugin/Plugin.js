@@ -3,6 +3,7 @@ const DisTube = require("../DisTube");
 
 /**
  * DisTube Plugin
+ * @private
  */
 class Plugin {
   constructor(type) {
@@ -19,6 +20,7 @@ class Plugin {
      */
     this.distube = distube;
     /**
+     * Handler
      * @type {DisTubeHandler}
      */
     this.handler = this.distube.handler;

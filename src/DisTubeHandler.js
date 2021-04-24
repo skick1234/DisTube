@@ -57,7 +57,7 @@ class DisTubeHandler extends DisTubeBase {
    * @async
    * @param {Discord.Message} message The message from guild channel
    * @param {string|Song} song Youtube url | Search string | {@link Song}
-   * @returns {Promise<Song|Song[]>} Resolved Song
+   * @returns {Promise<Song|Array<Song>>} Resolved Song
    */
   async resolveSong(message, song) {
     if (!song) return null;
@@ -85,7 +85,7 @@ class DisTubeHandler extends DisTubeBase {
   /**
    * Resole Song[] or url to a Playlist
    * @param {Discord.Message} message The message from guild channel
-   * @param {Song[]|string} playlist Resolvable playlist
+   * @param {Array<Song>|string} playlist Resolvable playlist
    * @returns {Playlist}
    */
   async resolvePlaylist(message, playlist) {
@@ -195,7 +195,7 @@ class DisTubeHandler extends DisTubeBase {
    * Get related songs
    * @async
    * @param {Song} song song
-   * @returns {ytdl.relatedVideo[]} Related videos
+   * @returns {Array<ytdl.relatedVideo>} Related videos
    * @throws {NoRelated}
    */
   async getRelatedVideo(song) {

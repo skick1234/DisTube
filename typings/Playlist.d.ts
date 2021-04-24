@@ -3,11 +3,11 @@ export = Playlist;
 declare class Playlist {
     /**
      * Create a playlist
-     * @param {Song[]|Object} playlist Playlist
+     * @param {Array<Song>|Object} playlist Playlist
      * @param {Discord.GuildMember} member Requested user
      * @param {Object} properties Custom properties
      */
-    constructor(playlist: Song[] | any, member: Discord.GuildMember, properties?: any);
+    constructor(playlist: Array<Song> | any, member: Discord.GuildMember, properties?: any);
     /**
      * User requested.
      * @type {Discord.GuildMember}
@@ -20,9 +20,9 @@ declare class Playlist {
     user: Discord.User;
     /**
      * Playlist songs.
-     * @type {Song[]}
+     * @type {Array<Song>}
      */
-    songs: Song[];
+    songs: Array<Song>;
     /**
      * Playlist name.
      * @type {string}

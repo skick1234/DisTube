@@ -8,7 +8,7 @@ const { formatDuration } = require("./util"),
 class Playlist {
   /**
    * Create a playlist
-   * @param {Song[]|Object} playlist Playlist
+   * @param {Array<Song>|Object} playlist Playlist
    * @param {Discord.GuildMember} member Requested user
    * @param {Object} properties Custom properties
    */
@@ -26,7 +26,7 @@ class Playlist {
     this.user = this.member?.user;
     /**
      * Playlist songs.
-     * @type {Song[]}
+     * @type {Array<Song>}
      */
     this.songs = Array.isArray(playlist) ? playlist : playlist.items || playlist.songs;
     if (!Array.isArray(this.songs) || !this.songs.length) throw new Error("Playlist is empty!");

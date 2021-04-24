@@ -8,6 +8,7 @@ export = DisTube;
  * }
  * ```
  * @typedef {Object.<string, string>} Filters
+ * @see {@link DefaultFilters}
  */
 /**
  * DisTube options.
@@ -149,21 +150,21 @@ declare class DisTube extends EventEmitter {
      * @param {string} string The string search for
      * @param {Object} options Search options
      * @param {number} [options.limit=10] Limit the results
-     * @param {'video'|'playlist'} [options.type='video'] Type of search (video or playlist).
+     * @param {'video'|'playlist'} [options.type='video'] Type of search (`video` or `playlist`).
      * @param {boolean} retried Retried?
      * @throws {Error}
-     * @returns {Promise<SearchResult[]>} Array of results
+     * @returns {Promise<Array<SearchResult>>} Array of results
      */
     search(string: string, options?: {
         limit?: number;
         type?: 'video' | 'playlist';
-    }, retried?: boolean): Promise<SearchResult[]>;
+    }, retried?: boolean): Promise<Array<SearchResult>>;
     /**
      * Create a new guild queue
      * @async
      * @private
      * @param {Discord.Message} message The message from guild channel
-     * @param {Song|Song[]} song Song to play
+     * @param {Song|Array<Song>} song Song to play
      * @throws {Error}
      * @returns {Promise<Queue|true>}
      */
@@ -367,7 +368,7 @@ declare class DisTube extends EventEmitter {
      *
      * @param {Discord.Snowflake|Discord.Message} message The message from guild channel
      * @param {string|false} filter A filter name, `false` to clear all the filters
-     * @returns {string[]} Enabled filters.
+     * @returns {Array<string>} Enabled filters.
      * @example
      * client.on('message', (message) => {
      *     if (!message.content.startsWith(config.prefix)) return;
@@ -379,7 +380,7 @@ declare class DisTube extends EventEmitter {
      *     }
      * });
      */
-    setFilter(message: Discord.Snowflake | Discord.Message, filter: string | false): string[];
+    setFilter(message: Discord.Snowflake | Discord.Message, filter: string | false): Array<string>;
     /**
      * Set the playing time to another position
      * @param {Discord.Snowflake|Discord.Message} message The message from guild channel
@@ -402,42 +403,6 @@ declare class DisTube extends EventEmitter {
      * @private
      */
     private emitError;
-	on(
-		event: "addList",
-		listener: (queue: Queue, playlist: Playlist) => void
-	): this;
-	on(
-		event: "addSong" | "playSong" | "finishSong",
-		listener: (queue: Queue, song: Song) => void
-	): this;
-	on(
-		event: "empty" | "finish" | "initQueue" | "noRelated" | "disconnect",
-		listener: (queue: Queue) => void
-	): this;
-	on(
-		event: "error",
-		listener: (channel: Discord.TextChannel, error: Error) => void
-	): this;
-	on(
-		event: "searchNoResult" | "searchCancel",
-		listener: (message: Discord.Message, query: string) => void
-	): this;
-	on(
-		event: "searchResult",
-		listener: (
-			message: Discord.Message,
-			results: SearchResult[],
-			query: string
-		) => void
-	): this;
-	on(
-		event: "searchDone",
-		listener: (
-			message: Discord.Message,
-			answer: Discord.Message,
-			query: string
-		) => void
-	): this;
 }
 declare namespace DisTube {
     export { CustomPlugin, ExtractorPlugin, Playlist, Song, Filters, DisTubeOptions };

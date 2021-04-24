@@ -14,7 +14,7 @@ class SearchResult {
      */
     this.id = info.id;
     /**
-     * Video or playlist  title.
+     * Video or playlist title.
      * @type {string}
      */
     this.name = info.name;

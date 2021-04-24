@@ -6,6 +6,12 @@ const { formatDuration, toSecond, parseNumber } = require("./util"),
 
 /** Class representing a song. */
 class Song {
+  /**
+   * Create a Song
+   * @param {ytdl.videoInfo|Object} info Raw info
+   * @param {Discord.GuildMember} member Requested user
+   * @param {string} src Song source
+   */
   constructor(info, member = null, src = "youtube") {
     if (typeof src !== "string") throw new TypeError("Source must be a string");
     /**
@@ -37,7 +43,7 @@ class Song {
 
   /**
    * Patch data
-   * @param {ytdl.MoreVideoDetails} info Video info
+   * @param {ytdl.MoreVideoDetails|Object} info Video info
    * @private
    */
   _patch(info) {
@@ -75,18 +81,18 @@ class Song {
      * Stream / Download URL.
      * @type {string?}
      */
-    this.streamURL = this.info && this.info.formats.length ? ytdl.chooseFormat(this.info.formats, {
+    this.streamURL = this.info?.formats.length ? ytdl.chooseFormat(this.info.formats, {
       filter: this.isLive ? "audioandvideo" : "audioonly",
       quality: "highestaudio",
-    }).url : this.url;
+    }).url : info.url;
     /**
      * Song thumbnail.
      * @type {string?}
      */
-    this.thumbnail = info.thumbnails ? info.thumbnails.sort((a, b) => b.width - a.width)[0].url : info.thumbnail || null;
+    this.thumbnail = info.thumbnails?.sort((a, b) => b.width - a.width)[0].url || info.thumbnail || null;
     /**
      * Related videos (Only available with YouTube video)
-     * @type {ytdl.relatedVideo[]?}
+     * @type {Array<ytdl.relatedVideo>?}
      */
     this.related = this.info?.related_videos;
     /**
@@ -116,8 +122,8 @@ class Song {
      * @prop {string?} url Uploader url
      */
     this.uploader = {
-      name: info.author ? info.author.name : info.uploader || null,
-      url: info.author ? info.author.channel_url : info.uploader_url || null,
+      name: info.author?.name || info.uploader || null,
+      url: info.author?.channel_url || info.uploader_url || null,
     };
     /**
      * Whether or not an age-restricted content
@@ -128,6 +134,16 @@ class Song {
       (typeof info.media?.notice === "string" && (
         info.media.notice.includes("Age-restricted") || info.media.notice.includes("age-restricted")
       )) || false;
+    /**
+     * @typedef {Object} Chapter
+     * @prop {string} title Chapter title
+     * @prop {number} start_time Chapter start time in seconds
+     */
+    /**
+     * Chapters information (YouTube only)
+     * @type {Chapter[]}
+     */
+    this.chapters = info.chapters || [];
   }
 
   /**

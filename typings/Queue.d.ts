@@ -4,13 +4,7 @@ export = Queue;
  * @extends DisTubeBase
  */
 declare class Queue extends DisTubeBase {
-    /**
-    * Create a queue.
-    * @param {DisTube} distube DisTube
-    * @param {Discord.Message} message Discord.Message
-    * @param {Song} song The first Song of the Queue
-    */
-    constructor(distube: any, message: Discord.Message, song: Song);
+    constructor(distube: any, message: any, song: any);
     /**
      * Queue id (Guild id)
      * @type {Discord.Snowflake}
@@ -27,20 +21,20 @@ declare class Queue extends DisTubeBase {
      */
     connection: Discord.VoiceConnection | null;
     /**
-     * Stream volume.
+     * Stream volume. Default value: `50`.
      * @type {number}
      */
     volume: number;
     /**
      * List of songs in the queue (The first one is the playing song)
-     * @type {Song[]}
+     * @type {Array<Song>}
      */
-    songs: Song[];
+    songs: Array<Song>;
     /**
      * List of the previous songs.
-     * @type {Song[]?}
+     * @type {Array<Song>?}
      */
-    previousSongs: Song[] | null;
+    previousSongs: Array<Song> | null;
     /**
      * Whether stream is currently stopped.
      * @type {boolean}
@@ -70,21 +64,23 @@ declare class Queue extends DisTubeBase {
      */
     pause(): Queue;
     /**
-     * Type of repeat mode (0 is disabled, 1 is repeating a song, 2 is repeating all the queue)
+     * Type of repeat mode (`0` is disabled, `1` is repeating a song, `2` is repeating all the queue).
+     * Default value: `0` (disabled)
      * @type {number}
      */
     repeatMode: number;
     /**
      * Whether or not the autoplay mode is enabled.
+     * Default value: `false`
      * @type {boolean}
      */
     autoplay: boolean;
     /**
      * Enabled audio filters.
      * Available filters: {@link Filters}
-     * @type {string[]}
+     * @type {Array<string>}
      */
-    filters: string[];
+    filters: Array<string>;
     /**
      * Should be an opus stream
      * @type {Readable?}
@@ -139,12 +135,12 @@ declare class Queue extends DisTubeBase {
     get voiceChannel(): Discord.VoiceChannel;
     /**
      * Add a Song or an array of Song to the queue
-     * @param {Song|Song[]} song Song to add
+     * @param {Song|Array<Song>} song Song to add
      * @param {boolean} [unshift=false] Unshift?
      * @throws {Error}
      * @returns {Queue}
      */
-    addToQueue(song: Song | Song[], unshift?: boolean): Queue;
+    addToQueue(song: Song | Array<Song>, unshift?: boolean): Queue;
     /**
      * Resume the guild stream
      * @returns {Queue} The guild queue
@@ -198,10 +194,10 @@ declare class Queue extends DisTubeBase {
      * Enable or disable filter of the queue.
      * Available filters: {@link Filters}
      * @param {string|false} filter A filter name, `false` to clear all the filters
-     * @returns {string[]} Enabled filters.
+     * @returns {Array<string>} Enabled filters.
      * @throws {Error}
      */
-    setFilter(filter: string | false): string[];
+    setFilter(filter: string | false): Array<string>;
     /**
      * Set the playing time to another position
      * @param {number} time Time in seconds
