@@ -23,6 +23,11 @@ declare class SearchResult {
      */
     url: string;
     /**
+     * Video / Playlist views count
+     * @type {number}
+     */
+    views: number;
+    /**
      * Video duration.
      * @type {number|string|null}
      */
@@ -42,9 +47,4 @@ declare class SearchResult {
      * @type {boolean?}
      */
     isLive: boolean | null;
-    /**
-     * Video / Playlist views count
-     * @type {number}
-     */
-    views: number;
 }

@@ -16,6 +16,11 @@ class Playlist {
   constructor(playlist, member, properties = {}) {
     if (typeof properties !== "object") throw new TypeError("Custom properties must be an object");
     /**
+     * The source of the playlist
+     * @type {string}
+     */
+    this.source = playlist.source || properties.source || "youtube";
+    /**
      * User requested.
      * @type {Discord.GuildMember}
      */

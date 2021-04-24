@@ -9,6 +9,11 @@ declare class Playlist {
      */
     constructor(playlist: Array<Song> | any, member: Discord.GuildMember, properties?: any);
     /**
+     * The source of the playlist
+     * @type {string}
+     */
+    source: string;
+    /**
      * User requested.
      * @type {Discord.GuildMember}
      */

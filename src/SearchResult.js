@@ -23,6 +23,11 @@ class SearchResult {
      * @type {string}
      */
     this.url = info.url;
+    /**
+     * Video / Playlist views count
+     * @type {number}
+     */
+    this.views = info.views;
     if (this.type === "video") {
       /**
        * Video duration.
@@ -44,14 +49,7 @@ class SearchResult {
        * @type {boolean?}
        */
       this.isLive = info.isLive;
-      /**
-       * Video / Playlist views count
-       * @type {number}
-       */
-      this.views = info.views;
-    } else if (this.type === "playlist") {
-      this.views = info.views;
-    } else throw new TypeError("Unsupported info");
+    } else if (this.type !== "playlist") throw new TypeError("Unsupported info");
   }
 }
 

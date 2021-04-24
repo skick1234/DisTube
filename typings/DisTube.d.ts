@@ -166,7 +166,7 @@ declare class DisTube extends EventEmitter {
      * @param {Discord.Message} message The message from guild channel
      * @param {Song|Array<Song>} song Song to play
      * @throws {Error}
-     * @returns {Promise<Queue|true>}
+     * @returns {Promise<Queue|true>} `true` if queue is not generated
      */
     private _newQueue;
     /**

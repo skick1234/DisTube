@@ -61,7 +61,7 @@ declare class DisTubeHandler extends DisTubeBase {
      * @param {Discord.VoiceChannel} voice The string search for
      * @param {boolean} retried retried?
      * @throws {Error}
-     * @returns {Promise<Queue|true>}
+     * @returns {Promise<Queue|true>} `true` if queue is not generated
      */
     joinVoiceChannel(queue: Queue, voice: Discord.VoiceChannel, retried?: boolean): Promise<Queue | true>;
     /**
