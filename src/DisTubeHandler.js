@@ -89,7 +89,7 @@ class DisTubeHandler extends DisTubeBase {
    * @returns {Playlist}
    */
   async resolvePlaylist(message, playlist) {
-    if (typeof arg2 === "string") {
+    if (typeof playlist === "string") {
       playlist = await ytpl(playlist, { limit: Infinity });
       playlist.items = playlist.items.filter(v => !v.thumbnail.includes("no_thumbnail")).map(v => new Song(v, message.member));
     }
@@ -112,14 +112,14 @@ class DisTubeHandler extends DisTubeBase {
       throw Error("No valid video in the playlist");
     }
     const songs = playlist.songs;
-    let queue = this.getQueue(message);
+    let queue = this.distube.getQueue(message);
     if (queue) {
       queue.addToQueue(songs, skip);
       if (skip) queue.skip();
       else this.emit("addList", queue, playlist);
     } else {
-      queue = await this._newQueue(message, songs);
-      if (queue instanceof Queue) this.emit("playSong", queue, queue.songs[0]);
+      queue = await this.distube._newQueue(message, songs);
+      if (queue !== true) this.emit("playSong", queue, queue.songs[0]);
     }
   }
 

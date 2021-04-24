@@ -1,4 +1,5 @@
 const { formatDuration } = require("./util"),
+  // eslint-disable-next-line no-unused-vars
   Song = require("./Song"),
   // eslint-disable-next-line no-unused-vars
   Discord = require("discord.js");
@@ -30,7 +31,7 @@ class Playlist {
      */
     this.songs = Array.isArray(playlist) ? playlist : playlist.items || playlist.songs;
     if (!Array.isArray(this.songs) || !this.songs.length) throw new Error("Playlist is empty!");
-    this.songs.map(s => s instanceof Song && s._patchPlaylist(this, this.member));
+    this.songs.map(s => s.constructor.name === "Song" && s._patchPlaylist(this, this.member));
     /**
      * Playlist name.
      * @type {string}
@@ -54,8 +55,7 @@ class Playlist {
    * @type {number}
    */
   get duration() {
-    if (!this.songs[0]) return 0;
-    return this.songs.reduce((prev, next) => prev + next.duration, 0);
+    return this.songs?.reduce((prev, next) => prev + (next.duration || 0), 0) || 0;
   }
 
   /**
