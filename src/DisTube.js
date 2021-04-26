@@ -186,12 +186,12 @@ class DisTube extends EventEmitter {
       if (ytpl.validateID(song)) await this.handler.handlePlaylist(message, await this.handler.resolvePlaylist(message, song), skip);
       else {
         song = await this.handler.resolveSong(message, song);
+        if (!song) return;
         if (song instanceof Playlist) await this.handler.handlePlaylist(message, song, skip);
         else if (!this.options.nsfw && song.age_restricted && !message.channel.nsfw) {
           try { message.delete().catch(() => undefined) } catch { }
           throw new Error("Cannot play age-restricted content in non-NSFW channel.");
         }
-        if (!song) return;
         let queue = this.getQueue(message);
         if (queue) {
           queue.addToQueue(song, skip);
@@ -285,15 +285,18 @@ class DisTube extends EventEmitter {
    * @param {Object} options Search options
    * @param {number} [options.limit=10] Limit the results
    * @param {'video'|'playlist'} [options.type='video'] Type of search (`video` or `playlist`).
+   * @param {boolean} [options.safeSearch=false] Type of search (`video` or `playlist`).
    * @param {boolean} retried Retried?
    * @throws {Error}
    * @returns {Promise<Array<SearchResult>>} Array of results
    */
   async search(string, options = {}, retried = false) {
-    const opts = Object.assign({ type: "video", limit: 10 }, options);
-    if (!["video", "playlist"].includes(opts.type)) throw new Error("options.type must be 'video' or 'playlist'.");
+    const opts = Object.assign({ type: "video", limit: 10, safeSearch: false }, options);
+    if (typeof opts.type !== "string" || ["video", "playlist"].includes(opts.type)) throw new Error("options.type must be 'video' or 'playlist'.");
     if (typeof opts.limit !== "number") throw new Error("options.limit must be a number");
     if (opts.limit < 1) throw new Error("option.limit must be bigger or equal to 1");
+    if (typeof opts.safeSearch !== "boolean") throw new TypeError("options.safeSearch must be a boolean.");
+
     try {
       const search = await ytsr(string, opts);
       const results = search.items.map(i => new SearchResult(i));

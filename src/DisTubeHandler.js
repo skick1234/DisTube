@@ -131,10 +131,11 @@ class DisTubeHandler extends DisTubeBase {
    * @returns {Song} Song info
    */
   async searchSong(message, query) {
-    let results;
-    try {
-      results = await this.distube.search(query, { limit: this.options.searchSongs || 1 });
-    } catch {
+    const results = await this.distube.search(query, {
+      limit: this.options.searchSongs || 1,
+      safeSearch: this.options.nsfw ? false : !message.channel?.nsfw,
+    }).catch(() => undefined);
+    if (!results?.length) {
       this.emit("searchNoResult", message, query);
       return null;
     }

@@ -148,7 +148,7 @@ class Song {
 
   /**
    * @param {Playlist} playlist Playlist
-   * @param {Discord.GuildMember} member User requested
+   * @param {Discord.GuildMember} [member] User requested
    * @private
    * @returns {Song}
    */
@@ -160,6 +160,7 @@ class Song {
      */
     this.playlist = playlist;
     this.member = member;
+    this.user = this.member?.user;
     return this;
   }
 }
