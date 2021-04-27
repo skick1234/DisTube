@@ -934,7 +934,7 @@ class DisTube extends EventEmitter {
     }
     if (queue.repeatMode === 2 && !queue.skipped) queue.songs.push(queue.songs[0]);
     if (queue.songs.length <= 1 && (queue.skipped || !queue.repeatMode)) {
-      if (queue.autoplay) await this.addRelatedVideo(message);
+      if (queue.autoplay) try { await this.addRelatedVideo(message) } catch { this.emit("noRelated", message) }
       if (queue.songs.length <= 1) {
         this._deleteQueue(message);
         if (this.options.leaveOnFinish && !queue.stopped) queue.connection.channel.leave();
