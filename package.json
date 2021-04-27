@@ -1,12 +1,12 @@
 {
   "name": "distube",
-  "version": "2.8.12",
+  "version": "2.8.13",
   "description": "A Discord.js v12 module to simplify your music commands and play songs with audio filters on Discord without any API key. Support YouTube, SoundCloud, Bandcamp, Facebook, and 700+ more sites",
   "main": "src/DisTube.js",
   "typings": "typings/DisTube.d.ts",
   "scripts": {
     "types": "tsc -p .",
-    "djs/docgen": "npx docgen --source src --output docs/latest.json"
+    "djs/docgen": "npx docgen --source src --output docs/v2.json"
   },
   "repository": {
     "type": "git",
