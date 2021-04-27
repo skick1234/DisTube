@@ -375,6 +375,7 @@ class DisTube extends EventEmitter {
   _deleteQueue(queue) {
     if (!(queue instanceof Queue)) queue = this.getQueue(queue);
     if (!queue) return;
+    this.emit("deleteQueue", queue);
     if (queue.dispatcher) try { queue.dispatcher.destroy() } catch { }
     if (queue.stream) try { queue.stream.destroy() } catch { }
     this.guildQueues.delete(queue.id);
@@ -846,9 +847,24 @@ module.exports = DisTube;
  */
 
 /**
+ * Emitted when the bot is connected to the voice channel
+ *
+ * @event DisTube#connect
+ * @param {Queue} queue The guild queue
+ */
+
+
+/**
  * Emitted when the bot is disconnected to the voice channel
  *
  * @event DisTube#disconnect
+ * @param {Queue} queue The guild queue
+ */
+
+/**
+ * Emitted when a {@link Queue} is deleted with any reasons.
+ *
+ * @event DisTube#deleteQueue
  * @param {Queue} queue The guild queue
  */
 

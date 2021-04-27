@@ -217,6 +217,7 @@ class DisTubeHandler extends DisTubeBase {
   async joinVoiceChannel(queue, voice, retried = false) {
     try {
       queue.connection = await voice.join();
+      this.emit("connect", queue);
       queue.connection.on("disconnect", () => {
         this.emit("disconnect", queue);
         try { queue.stop() } catch { this.deleteQueue(queue) }

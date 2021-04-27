@@ -9,7 +9,7 @@ declare class DisTube extends EventEmitter {
 		listener: (queue: Queue, song: Song) => void
 	): this;
 	on(
-		event: "empty" | "finish" | "initQueue" | "noRelated" | "disconnect",
+		event: "empty" | "finish" | "initQueue" | "noRelated" | "disconnect" | "connect" | "deleteQueue",
 		listener: (queue: Queue) => void
 	): this;
 	on(
