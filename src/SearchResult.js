@@ -1,15 +1,16 @@
-const { toSecond } = require("./util");
+const { toSecond, formatDuration } = require("./util");
 
 /** Class representing a search result. */
 class SearchResult {
   constructor(info) {
+    this.source = "youtube";
     /**
      * Type of SearchResult (video or playlist)
      * @type {string}
      */
     this.type = info.type;
     /**
-     * Youtube video or playlist id
+     * YouTube video or playlist id
      * @type {string}
      */
     this.id = info.id;
@@ -30,25 +31,25 @@ class SearchResult {
     this.views = info.views;
     if (this.type === "video") {
       /**
-       * Video duration.
-       * @type {number|string|null}
+       * Indicates if the video is an active live.
+       * @type {boolean?}
        */
-      this.duration = toSecond(info.duration);
+      this.isLive = info.isLive;
+      /**
+       * Video duration.
+       * @type {number}
+       */
+      this.duration = this.isLive ? 0 : toSecond(info.duration);
       /**
        * Formatted duration string `hh:mm:ss` or `mm:ss`.
-       * @type {string?}
+       * @type {string}
        */
-      this.formattedDuration = info.duration;
+      this.formattedDuration = this.isLive ? "Live" : formatDuration(this.duration);
       /**
        * Video thumbnail.
        * @type {string?}
        */
       this.thumbnail = info.thumbnail;
-      /**
-       * Indicates if the video is an active live.
-       * @type {boolean?}
-       */
-      this.isLive = info.isLive;
     } else if (this.type !== "playlist") throw new TypeError("Unsupported info");
   }
 }

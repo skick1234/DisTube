@@ -2,13 +2,14 @@ export = SearchResult;
 /** Class representing a search result. */
 declare class SearchResult {
     constructor(info: any);
+    source: string;
     /**
      * Type of SearchResult (video or playlist)
      * @type {string}
      */
     type: string;
     /**
-     * Youtube video or playlist id
+     * YouTube video or playlist id
      * @type {string}
      */
     id: string;
@@ -28,23 +29,23 @@ declare class SearchResult {
      */
     views: number;
     /**
-     * Video duration.
-     * @type {number|string|null}
+     * Indicates if the video is an active live.
+     * @type {boolean?}
      */
-    duration: number | string | null;
+    isLive: boolean | null;
+    /**
+     * Video duration.
+     * @type {number}
+     */
+    duration: number;
     /**
      * Formatted duration string `hh:mm:ss` or `mm:ss`.
-     * @type {string?}
+     * @type {string}
      */
-    formattedDuration: string | null;
+    formattedDuration: string;
     /**
      * Video thumbnail.
      * @type {string?}
      */
     thumbnail: string | null;
-    /**
-     * Indicates if the video is an active live.
-     * @type {boolean?}
-     */
-    isLive: boolean | null;
 }

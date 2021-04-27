@@ -48,7 +48,7 @@ class Song {
    */
   _patch(info) {
     /**
-     * Youtube video id
+     * YouTube video id
      * @type {string}
      */
     this.id = info.videoId || info.id;
@@ -66,7 +66,7 @@ class Song {
      * Song duration.
      * @type {number}
      */
-    this.duration = toSecond(info.lengthSeconds || info._duration_raw || info.duration);
+    this.duration = this.isLive ? 0 : toSecond(info.lengthSeconds || info._duration_raw || info.duration);
     /**
      * Formatted duration string (`hh:mm:ss`, `mm:ss` or `Live`).
      * @type {string}

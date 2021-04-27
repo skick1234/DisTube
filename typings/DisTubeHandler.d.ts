@@ -16,7 +16,7 @@ declare class DisTubeHandler extends DisTubeBase {
     private emitError;
     /**
      * Delete a guild queue
-     * @param {Discord.Snowflake|Discord.Message|Queue} queue The message from guild channel | Queue
+     * @param {Discord.Snowflake|Discord.Message|Queue} queue A message from guild channel | Queue
      */
     deleteQueue(queue: Discord.Snowflake | Discord.Message | Queue): void;
     /**
@@ -60,14 +60,14 @@ declare class DisTubeHandler extends DisTubeBase {
     /**
      * Search for a song, fire {@link DisTube#event:error} if not found.
      * @async
-     * @param {Discord.Message} message The message from guild channel
+     * @param {Discord.Message} message A message from guild channel
      * @param {string} query The query string
      * @returns {Song} Song info
      */
     searchSong(message: Discord.Message, query: string): Song;
     /**
      * Join the voice channel
-     * @param {Queue} queue The message from guild channel
+     * @param {Queue} queue A message from guild channel
      * @param {Discord.VoiceChannel} voice The string search for
      * @param {boolean} retried retried?
      * @throws {Error}

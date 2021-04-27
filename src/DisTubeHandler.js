@@ -38,7 +38,7 @@ class DisTubeHandler extends DisTubeBase {
 
   /**
    * Delete a guild queue
-   * @param {Discord.Snowflake|Discord.Message|Queue} queue The message from guild channel | Queue
+   * @param {Discord.Snowflake|Discord.Message|Queue} queue A message from guild channel | Queue
    */
   deleteQueue(queue) {
     this.distube._deleteQueue(queue);
@@ -169,7 +169,7 @@ class DisTubeHandler extends DisTubeBase {
   /**
    * Search for a song, fire {@link DisTube#event:error} if not found.
    * @async
-   * @param {Discord.Message} message The message from guild channel
+   * @param {Discord.Message} message A message from guild channel
    * @param {string} query The query string
    * @returns {Song} Song info
    */
@@ -208,7 +208,7 @@ class DisTubeHandler extends DisTubeBase {
 
   /**
    * Join the voice channel
-   * @param {Queue} queue The message from guild channel
+   * @param {Queue} queue A message from guild channel
    * @param {Discord.VoiceChannel} voice The string search for
    * @param {boolean} retried retried?
    * @throws {Error}
@@ -261,12 +261,13 @@ class DisTubeHandler extends DisTubeBase {
     const filterArgs = [];
     queue.filters.forEach(filter => filterArgs.push(this.distube.filters[filter]));
     const encoderArgs = queue.filters?.length ? ["-af", filterArgs.join(",")] : null;
+    const seek = song.duration ? queue.beginTime : undefined;
     const streamOptions = {
       opusEncoded: true,
       filter: song.isLive ? "audioandvideo" : "audioonly",
       quality: "highestaudio",
       encoderArgs,
-      seek: queue.beginTime,
+      seek,
     };
     Object.assign(streamOptions, this.ytdlOptions);
     if (song.source === "youtube") return ytdl(song.info, streamOptions);

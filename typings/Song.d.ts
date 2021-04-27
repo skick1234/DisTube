@@ -36,7 +36,7 @@ declare class Song {
      */
     private _patch;
     /**
-     * Youtube video id
+     * YouTube video id
      * @type {string}
      */
     id: string;
@@ -124,7 +124,7 @@ declare class Song {
     chapters: Chapter[];
     /**
      * @param {Playlist} playlist Playlist
-     * @param {Discord.GuildMember} member User requested
+     * @param {Discord.GuildMember} [member] User requested
      * @private
      * @returns {Song}
      */

@@ -5,7 +5,7 @@
   "main": "src/DisTube.js",
   "typings": "typings/DisTube.d.ts",
   "scripts": {
-    "docgen": "npx docgen --source src --output docs/v3-beta.json",
+    "docgen": "npx docgen --source src --output docs/beta.json",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "types": "tsc -p ."
@@ -40,16 +40,16 @@
     "@distube/youtube-dl": "^2.0.0",
     "@distube/ytdl": "^2.0.5",
     "@distube/ytpl": "^1.0.11",
-    "@distube/ytsr": "^1.0.8",
+    "@distube/ytsr": "^1.0.9",
     "ytdl-core": "^4.5.0"
   },
   "devDependencies": {
     "@discordjs/opus": "^0.4.0",
-    "@types/node": "^14.14.41",
+    "@types/node": "^14.14.43",
     "discord.js": "^12.5.3",
     "discord.js-docgen": "github:distubejs/docgen",
-    "eslint": "^7.24.0",
-    "eslint-plugin-jsdoc": "^32.3.0",
+    "eslint": "^7.25.0",
+    "eslint-plugin-jsdoc": "^32.3.2",
     "typescript": "^4.2.4"
   },
   "peerDependencies": {

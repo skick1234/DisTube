@@ -104,3 +104,4 @@ package-lock.json
 docs
 
 .vscode
+test.js
