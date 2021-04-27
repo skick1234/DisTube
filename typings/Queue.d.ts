@@ -4,7 +4,7 @@ export = Queue;
  * @extends DisTubeBase
  */
 declare class Queue extends DisTubeBase {
-    constructor(distube: any, message: any, song: any);
+    constructor(distube: any, message: any, song: any, textChannel?: any);
     /**
      * Queue id (Guild id)
      * @type {Discord.Snowflake}
@@ -94,9 +94,9 @@ declare class Queue extends DisTubeBase {
     beginTime: number;
     /**
      * The text channel of the Queue. (Default: where the first command is called).
-     * @type {Discord.TextChannel}
+     * @type {Discord.TextChannel?}
      */
-    textChannel: Discord.TextChannel;
+    textChannel: Discord.TextChannel | null;
     /**
      * @type {DisTubeHandler}
      * @private

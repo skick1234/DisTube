@@ -55,60 +55,103 @@ class DisTubeHandler extends DisTubeBase {
   /**
    * Resolve a Song
    * @async
-   * @param {Discord.Message} message The message from guild channel
-   * @param {string|Song} song Youtube url | Search string | {@link Song}
-   * @returns {Promise<Song|Array<Song>>} Resolved Song
+   * @param {Discord.Message|Discord.GuildMember} message A message from guild channel | A guild member
+   * @param {string|Song|SearchResult|Playlist} song YouTube url | Search string | {@link Song}
+   * @returns {Promise<Song|Array<Song>|Playlist>} Resolved Song
    */
   async resolveSong(message, song) {
     if (!song) return null;
-    if (song instanceof Song) return song;
+    const member = message?.member || message;
+    if (!(member instanceof Discord.GuildMember)) throw new TypeError("message is not a Discord.Message or Discord.GuildMember.");
+    if (song instanceof Song || song instanceof Playlist) return song;
     if (song instanceof SearchResult) {
-      if (song.type === "video") return new Song(await this.getYouTubeInfo(song.url), message.member);
-      else if (song.type === "playlist") return this._resolvePlaylist(message, song.url);
+      if (song.type === "video") return new Song(await this.getYouTubeInfo(song.url), member);
+      else if (song.type === "playlist") return this.resolvePlaylist(message, song.url);
       throw new Error("Invalid SearchResult");
     }
-    if (typeof song === "object") return new Song(song, message.member);
-    if (ytdl.validateURL(song)) return new Song(await this.getYouTubeInfo(song), message.member);
+    if (typeof song === "object") return new Song(song, member);
+    if (ytdl.validateURL(song)) return new Song(await this.getYouTubeInfo(song), member);
     if (isURL(song)) {
-      for (const plugin of this.distube.extractorPlugins) if (await plugin.validate(song)) return plugin.resolve(song, message.member);
+      for (const plugin of this.distube.extractorPlugins) if (await plugin.validate(song)) return plugin.resolve(song, member);
       if (!this.options.youtubeDL) throw new Error("Not Supported URL!");
       const info = await youtube_dl(song, {
         dumpJson: true,
         noWarnings: true,
       }).catch(e => { throw new Error(`[youtube-dl] ${e.stderr || e}`) });
-      if (Array.isArray(info) && info.length > 0) return this.resolvePlaylist(message, info.map(i => new Song(i, message.member, i.extractor)));
-      return new Song(info, message.member, info.extractor);
+      if (Array.isArray(info) && info.length > 0) return this.resolvePlaylist(message, info.map(i => new Song(i, member, i.extractor)));
+      return new Song(info, member, info.extractor);
     }
-    return this.resolveSong(message, await this.searchSong(message, song));
+    if (typeof song !== "string") throw new TypeError("song is not a valid type");
+    if (message instanceof Discord.GuildMember) song = (await this.distube.search(song, { limit: 1 }))[0];
+    else song = await this.searchSong(message, song);
+    return this.resolveSong(message, song);
   }
 
   /**
    * Resole Song[] or url to a Playlist
-   * @param {Discord.Message} message The message from guild channel
+   * @param {Discord.Message|Discord.GuildMember} message A message from guild channel | A guild member
    * @param {Array<Song>|string} playlist Resolvable playlist
    * @returns {Playlist}
    */
   async resolvePlaylist(message, playlist) {
+    const member = message?.member || message;
+    if (!(member instanceof Discord.GuildMember)) throw new TypeError("message is not a Discord.Message or Discord.GuildMember.");
     if (typeof playlist === "string") {
       playlist = await ytpl(playlist, { limit: Infinity });
-      playlist.items = playlist.items.filter(v => !v.thumbnail.includes("no_thumbnail")).map(v => new Song(v, message.member));
+      playlist.items = playlist.items.filter(v => !v.thumbnail.includes("no_thumbnail")).map(v => new Song(v, member));
     }
-    if (!(playlist instanceof Playlist)) playlist = new Playlist(playlist, message.member);
+    if (!(playlist instanceof Playlist)) playlist = new Playlist(playlist, member);
     return playlist;
+  }
+
+  /**
+   * Create a custom playlist
+   * @async
+   * @param {Discord.Message|Discord.GuildMember} message A message from guild channel | A guild member
+   * @param {Array<string|Song|SearchResult>} songs Array of url, Song or SearchResult
+   * @param {Object} [properties={}] Additional properties such as `name`
+   * @param {boolean} [parallel=true] Whether or not fetch the songs in parallel
+   */
+  async createCustomPlaylist(message, songs, properties = {}, parallel = true) {
+    const member = message?.member || message;
+    if (!(member instanceof Discord.GuildMember)) throw new TypeError("message is not a Discord.Message or Discord.GuildMember.");
+    if (!Array.isArray(songs)) throw new TypeError("songs must be an array of url");
+    if (!songs.length) throw new Error("songs is an empty array");
+    songs = songs.filter(song => song instanceof Song || song instanceof SearchResult || isURL(song));
+    if (!songs.length) throw new Error("songs does not have any valid Song, SearchResult or url");
+    if (parallel) {
+      songs = songs.map(song => this.resolveSong(member, song).catch(() => undefined));
+      songs = await Promise.all(songs);
+    } else {
+      const resolved = [];
+      for (const song of songs) resolved.push(await this.resolveSong(member, song).catch(() => undefined));
+      songs = resolved;
+    }
+    songs = songs.filter(song => song);
+    return new Playlist(songs, member, properties);
   }
 
   /**
    * Play / add a playlist
    * @async
-   * @param {Discord.Message} message The message from guild channel
-   * @param {Playlist} playlist Youtube playlist url | a Playlist
-   * @param {boolean} skip Skip the current song
+   * @param {Discord.Message|Discord.VoiceChannel} message A message from guild channel | a voice channel
+   * @param {Playlist|string} playlist A YouTube playlist url | a Playlist
+   * @param {boolean} [textChannel] The default text channel of the queue
+   * @param {boolean} [skip=false] Skip the current song
    */
-  async handlePlaylist(message, playlist, skip = false) {
+  async handlePlaylist(message, playlist, textChannel = false, skip = false) {
+    if (typeof textChannel === "boolean") {
+      skip = textChannel;
+      textChannel = message?.channel;
+    }
     if (!playlist || !(playlist instanceof Playlist)) throw Error("Invalid Playlist");
-    if (!this.options.nsfw && !message.channel.nsfw) playlist.songs = playlist.songs.filter(s => !s.age_restricted);
+    if (message instanceof Discord.Message && !this.options.nsfw && !message.channel.nsfw) {
+      playlist.songs = playlist.songs.filter(s => !s.age_restricted);
+    }
     if (!playlist.songs.length) {
-      if (!this.options.nsfw && !message.channel.nsfw) throw new Error("No valid video in the playlist.\nMaybe age-restricted contents is filtered because you are in non-NSFW channel.");
+      if (message instanceof Discord.Message && !this.options.nsfw && !message.channel.nsfw) {
+        throw new Error("No valid video in the playlist.\nMaybe age-restricted contents is filtered because you are in non-NSFW channel.");
+      }
       throw Error("No valid video in the playlist");
     }
     const songs = playlist.songs;
@@ -118,7 +161,7 @@ class DisTubeHandler extends DisTubeBase {
       if (skip) queue.skip();
       else this.emit("addList", queue, playlist);
     } else {
-      queue = await this.distube._newQueue(message, songs);
+      queue = await this.distube._newQueue(message, songs, textChannel);
       if (queue !== true) this.emit("playSong", queue, queue.songs[0]);
     }
   }
@@ -353,6 +396,43 @@ class DisTubeHandler extends DisTubeBase {
         if (!e) this.emit("playSong", queue, queue.songs[0]);
       });
     } else try { queue.stop() } catch { this.deleteQueue(queue) }
+  }
+
+  /**
+   * Play a song from url without creating a {@link Queue}
+   * @param {Discord.VoiceChannel} voiceChannel The voice channel will be joined
+   * @param {string|Song|SearchResult} song YouTube url | {@link Song} | {@link SearchResult}
+   * @returns {Promise<Discord.StreamDispatcher>}
+   */
+  async playWithoutQueue(voiceChannel, song) {
+    if (!(voiceChannel instanceof Discord.VoiceChannel)) throw new TypeError("voiceChannel is not a Discord.VoiceChannel.");
+    try {
+      if (ytpl.validateID(song)) throw new Error("Cannot play a playlist with this method.");
+      song = await this.resolveSong(voiceChannel.guild.me, song);
+      if (!song) throw new Error("Cannot resolve this song.");
+      if (song instanceof Playlist || Array.isArray(song)) throw new Error("Cannot play a playlist with this method.");
+      const connection = await voiceChannel.join();
+      if (song.source === "youtube") await this.checkYouTubeInfo(song);
+      const streamOptions = {
+        opusEncoded: true,
+        filter: song.isLive ? "audioandvideo" : "audioonly",
+        quality: "highestaudio",
+      };
+      Object.assign(streamOptions, this.ytdlOptions);
+      let stream;
+      if (song.source === "youtube") stream = ytdl(song.info, streamOptions);
+      else stream = ytdl.arbitraryStream(song.streamURL, streamOptions);
+      const dispatcher = connection.play(stream, {
+        highWaterMark: 1,
+        type: "opus",
+        bitrate: "auto",
+      }).on("finish", () => { try { stream.destroy() } catch { } });
+      return dispatcher;
+    } catch (e) {
+      e.name = "playWithoutQueue";
+      e.message = `${song}\n${e.message}`;
+      throw e;
+    }
   }
 }
 

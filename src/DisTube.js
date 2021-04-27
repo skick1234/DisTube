@@ -210,6 +210,61 @@ class DisTube extends EventEmitter {
   }
 
   /**
+   * Play / add a song or playlist from url. Search and play a song if it is not a valid url.
+   * Emit {@link DisTube#addList}, {@link DisTube#addSong} or {@link DisTube#playSong} after executing
+   * @async
+   * @param {Discord.VoiceChannel} voiceChannel The voice channel will be joined
+   * @param {string|Song|SearchResult|Playlist} song YouTube url | Search string | {@link Song} | {@link SearchResult} | {@link Playlist}
+   * @param {Discord.TextChannel} [textChannel] The text channel of the queue
+   * @param {Discord.GuildMember} [member] Requested user (default is your bot)
+   * @example
+   * // Play by your bot, queue.textChannel will be textChannel
+   * distube.playVoiceChannel(voiceChannel, args.join(" "), textChannel);
+   * @example
+   * // Play by another member, queue.textChannel will be null
+   * distube.playVoiceChannel(voiceChannel, args.join(" "), member);
+   * @example
+   * // Play by another member, queue.textChannel will be textChannel
+   * distube.playVoiceChannel(voiceChannel, args.join(" "), textChannel, member);
+   */
+  async playVoiceChannel(voiceChannel, song, textChannel = voiceChannel?.guild?.me, member = voiceChannel?.guild?.me) {
+    if (!(voiceChannel instanceof Discord.VoiceChannel)) throw new TypeError("voiceChannel is not a Discord.VoiceChannel");
+    if (textChannel instanceof Discord.GuildMember) {
+      member = textChannel;
+      textChannel = null;
+    }
+    try {
+      if (typeof song === "string") {
+        for (const plugin of this.customPlugins) {
+          if (await plugin.validate(song)) {
+            await plugin.playVoiceChannel(voiceChannel, song, textChannel, member);
+            return;
+          }
+        }
+      }
+      if (song instanceof SearchResult && song.type === "playlist") song = song.url;
+      if (ytpl.validateID(song)) await this.handler.handlePlaylist(voiceChannel, await this.handler.resolvePlaylist(member, song));
+      else {
+        song = await this.handler.resolveSong(member, song);
+        if (!song) return;
+        if (song instanceof Playlist) await this.handler.handlePlaylist(member, song, textChannel);
+        let queue = this.getQueue(voiceChannel);
+        if (queue) {
+          queue.addToQueue(song);
+          this.emit("addSong", queue, song);
+        } else {
+          queue = await this._newQueue(voiceChannel, song, textChannel);
+          if (queue instanceof Queue) this.emit("playSong", queue, song);
+        }
+      }
+    } catch (e) {
+      e.name = "PlayVoiceChannel";
+      e.message = `${song}\n${e.message}`;
+      this.emitError(textChannel, e);
+    }
+  }
+
+  /**
    * Skip the playing song and play a song or playlist
    * @async
    * @param {Discord.Message} message The message from guild channel
@@ -252,24 +307,8 @@ class DisTube extends EventEmitter {
    *     distube.playCustomPlaylist(message, songs, { name: "My playlist name" }, false, false);
    */
   async playCustomPlaylist(message, songs, properties = {}, playSkip = false, parallel = true) {
-    if (!Array.isArray(songs)) throw new TypeError("songs must be an array of url");
-    if (!songs.length) throw new Error("songs is an empty array");
     try {
-      songs = songs.filter(song => song instanceof Song || song instanceof SearchResult || isURL(song));
-      if (!songs.length) throw new Error("songs does not have any valid Song, SearchResult or url");
-      if (parallel) {
-        songs = songs.map(song => this._resolveSong(message, song).catch(() => undefined));
-        songs = await Promise.all(songs);
-      } else {
-        const resolved = [];
-        for (const song of songs) {
-          // eslint-disable-next-line no-await-in-loop
-          resolved.push(await this._resolveSong(message, song).catch(() => undefined));
-        }
-        songs = resolved;
-      }
-      songs = songs.filter(song => song);
-      const playlist = new Playlist(songs, message.member, properties);
+      const playlist = this.handler.createCustomPlaylist(message, songs, properties, parallel);
       await this.handler.handlePlaylist(message, playlist, playSkip);
     } catch (e) {
       this.emitError(message.channel, e);
@@ -312,15 +351,17 @@ class DisTube extends EventEmitter {
    * Create a new guild queue
    * @async
    * @private
-   * @param {Discord.Message} message The message from guild channel
+   * @param {Discord.Message|Discord.VoiceChannel} message A message from guild channel | a voice channel
    * @param {Song|Array<Song>} song Song to play
+   * @param {Discord.TextChannel} textChannel A text channel of the queue
    * @throws {Error}
    * @returns {Promise<Queue|true>} `true` if queue is not generated
    */
-  _newQueue(message, song) {
-    const voice = message.member.voice.channel;
+  _newQueue(message, song, textChannel = message?.channel) {
+    const voice = message?.member?.voice?.channel || message;
     if (!voice) throw new Error("User is not in the voice channel.");
-    const queue = new Queue(this, message, song);
+    if (!(voice instanceof Discord.VoiceChannel)) throw new TypeError("message is not a Discord.Message or a Discord.VoiceChannel.");
+    const queue = new Queue(this, message, song, textChannel);
     this.emit("initQueue", queue);
     this.guildQueues.set(message.guild.id, queue);
     return this.handler.joinVoiceChannel(queue, voice);
@@ -341,7 +382,7 @@ class DisTube extends EventEmitter {
 
   /**
    * Get the guild queue
-   * @param {Discord.Snowflake|Discord.Message} message The guild ID or message from guild channel.
+   * @param {Discord.Snowflake|Discord.Message|Discord.VoiceChannel} message A guild ID | a message from guild channel | a voice channel.
    * @returns {Queue} The guild queue
    * @throws {Error}
    * @example
@@ -358,9 +399,9 @@ class DisTube extends EventEmitter {
    * });
    */
   getQueue(message) {
-    if (typeof message === "string") return this.guildQueues.get(message);
-    if (!message || !message.guild) throw TypeError("Parameter should be Discord.Message or server ID!");
-    return this.guildQueues.get(message.guild.id);
+    const guildID = message?.guild?.id || message;
+    if (typeof guildID !== "string") throw TypeError("Parameter should be a Discord.Message, a Discord.VoiceChannel or aserver ID!");
+    return this.guildQueues.get(guildID);
   }
 
   /**
@@ -646,7 +687,10 @@ class DisTube extends EventEmitter {
    * @private
    */
   emitError(channel, error) {
-    if (this.listeners("error").length) this.emit("error", channel, error);
+    if (!channel || !(channel instanceof Discord.TextChannel)) {
+      console.error(error);
+      console.warn("This is logged because <Queue>.textChannel is null");
+    } else if (this.listeners("error").length) this.emit("error", channel, error);
     else this.emit("error", error);
   }
 }

@@ -13,7 +13,7 @@ const { formatDuration } = require("./util"),
  * @extends DisTubeBase
  */
 class Queue extends DisTubeBase {
-  constructor(distube, message, song) {
+  constructor(distube, message, song, textChannel = null) {
     super(distube);
     /**
      * Queue id (Guild id)
@@ -106,9 +106,9 @@ class Queue extends DisTubeBase {
     this.beginTime = 0;
     /**
      * The text channel of the Queue. (Default: where the first command is called).
-     * @type {Discord.TextChannel}
+     * @type {Discord.TextChannel?}
      */
-    this.textChannel = message.channel;
+    this.textChannel = message?.channel || textChannel;
     /**
      * @type {DisTubeHandler}
      * @private

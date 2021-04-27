@@ -27,26 +27,36 @@ declare class DisTubeHandler extends DisTubeBase {
     /**
      * Resolve a Song
      * @async
-     * @param {Discord.Message} message The message from guild channel
-     * @param {string|Song} song Youtube url | Search string | {@link Song}
-     * @returns {Promise<Song|Array<Song>>} Resolved Song
+     * @param {Discord.Message|Discord.GuildMember} message A message from guild channel | A guild member
+     * @param {string|Song|SearchResult|Playlist} song YouTube url | Search string | {@link Song}
+     * @returns {Promise<Song|Array<Song>|Playlist>} Resolved Song
      */
-    resolveSong(message: Discord.Message, song: string | Song): Promise<Song | Array<Song>>;
+    resolveSong(message: Discord.Message | Discord.GuildMember, song: string | Song | SearchResult | Playlist): Promise<Song | Array<Song> | Playlist>;
     /**
      * Resole Song[] or url to a Playlist
-     * @param {Discord.Message} message The message from guild channel
+     * @param {Discord.Message|Discord.GuildMember} message A message from guild channel | A guild member
      * @param {Array<Song>|string} playlist Resolvable playlist
      * @returns {Playlist}
      */
-    resolvePlaylist(message: Discord.Message, playlist: Array<Song> | string): Playlist;
+    resolvePlaylist(message: Discord.Message | Discord.GuildMember, playlist: Array<Song> | string): Playlist;
+    /**
+     * Create a custom playlist
+     * @async
+     * @param {Discord.Message|Discord.GuildMember} message A message from guild channel | A guild member
+     * @param {Array<string|Song|SearchResult>} songs Array of url, Song or SearchResult
+     * @param {Object} [properties={}] Additional properties such as `name`
+     * @param {boolean} [parallel=true] Whether or not fetch the songs in parallel
+     */
+    createCustomPlaylist(message: Discord.Message | Discord.GuildMember, songs: Array<string | Song | SearchResult>, properties?: any, parallel?: boolean): Promise<Playlist>;
     /**
      * Play / add a playlist
      * @async
-     * @param {Discord.Message} message The message from guild channel
-     * @param {Playlist} playlist Youtube playlist url | a Playlist
-     * @param {boolean} skip Skip the current song
+     * @param {Discord.Message|Discord.VoiceChannel} message A message from guild channel | a voice channel
+     * @param {Playlist|string} playlist A YouTube playlist url | a Playlist
+     * @param {boolean} [textChannel] The default text channel of the queue
+     * @param {boolean} [skip=false] Skip the current song
      */
-    handlePlaylist(message: Discord.Message, playlist: Playlist, skip?: boolean): Promise<void>;
+    handlePlaylist(message: Discord.Message | Discord.VoiceChannel, playlist: Playlist | string, textChannel?: boolean, skip?: boolean): Promise<void>;
     /**
      * Search for a song, fire {@link DisTube#event:error} if not found.
      * @async
@@ -105,10 +115,18 @@ declare class DisTubeHandler extends DisTubeBase {
      * @param {Error} error error
      */
     private _handlePlayingError;
+    /**
+     * Play a song from url without creating a {@link Queue}
+     * @param {Discord.VoiceChannel} voiceChannel The voice channel will be joined
+     * @param {string|Song|SearchResult} song YouTube url | {@link Song} | {@link SearchResult}
+     * @returns {Promise<Discord.StreamDispatcher>}
+     */
+    playWithoutQueue(voiceChannel: Discord.VoiceChannel, song: string | Song | SearchResult): Promise<Discord.StreamDispatcher>;
 }
 import DisTubeBase = require("./DisTubeBase");
 import Discord = require("discord.js");
 import Queue = require("./Queue");
 import Song = require("./Song");
+import SearchResult = require("./SearchResult");
 import Playlist = require("./Playlist");
 import { opus } from "prism-media";
