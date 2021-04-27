@@ -69,6 +69,9 @@ module.exports = class DisTubeOptions {
     if (typeof options.emptyCooldown !== "number" || isNaN(options.emptyCooldown)) {
       throw new TypeError("DisTubeOptions.emptyCooldown must be a number");
     }
+    if (typeof options.searchSongs !== "number" || isNaN(options.emptyCooldown)) {
+      throw new TypeError("DisTubeOptions.searchSongs must be a number");
+    }
     if (!Array.isArray(options.plugins)) {
       throw new TypeError("DisTubeOptions.plugins must be an array of Plugin.");
     }

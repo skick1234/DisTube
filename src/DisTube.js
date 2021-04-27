@@ -35,7 +35,7 @@ const ytsr = require("@distube/ytsr"),
  * @prop {boolean} [leaveOnFinish=false] Whether or not leaving voice channel when the queue ends.
  * @prop {boolean} [leaveOnStop=true] Whether or not leaving voice channel after using {@link DisTube#stop|stop()} function.
  * @prop {boolean} [savePreviousSongs=true] Whether or not saving the previous songs of the queue and enable {@link DisTube#previous|previous()} method
- * @prop {number} [searchSongs=0] Whether or not searching for multiple songs to select manually; DisTube will play the first result if `false`
+ * @prop {number} [searchSongs=0] Limit of search results emits in {@link DisTube#event:searchResult} event when {@link DisTube#play|play()} method executed. If `searchSongs <= 1`, play the first result
  * @prop {string} [youtubeCookie=null] YouTube cookies. Read how to get it in {@link https://github.com/fent/node-ytdl-core/blob/997efdd5dd9063363f6ef668bb364e83970756e7/example/cookies.js#L6-L12|YTDL's Example}
  * @prop {string} [youtubeIdentityToken=null] If not given; ytdl-core will try to find it. You can find this by going to a video's watch page; viewing the source; and searching for "ID_TOKEN".
  * @prop {boolean} [youtubeDL=true] Whether or not using youtube-dl.
@@ -331,7 +331,7 @@ class DisTube extends EventEmitter {
    */
   async search(string, options = {}, retried = false) {
     const opts = Object.assign({ type: "video", limit: 10, safeSearch: false }, options);
-    if (typeof opts.type !== "string" || ["video", "playlist"].includes(opts.type)) throw new Error("options.type must be 'video' or 'playlist'.");
+    if (typeof opts.type !== "string" || !["video", "playlist"].includes(opts.type)) throw new Error("options.type must be 'video' or 'playlist'.");
     if (typeof opts.limit !== "number") throw new Error("options.limit must be a number");
     if (opts.limit < 1) throw new Error("option.limit must be bigger or equal to 1");
     if (typeof opts.safeSearch !== "boolean") throw new TypeError("options.safeSearch must be a boolean.");

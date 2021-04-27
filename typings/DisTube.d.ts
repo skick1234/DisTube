@@ -19,7 +19,7 @@ export = DisTube;
  * @prop {boolean} [leaveOnFinish=false] Whether or not leaving voice channel when the queue ends.
  * @prop {boolean} [leaveOnStop=true] Whether or not leaving voice channel after using {@link DisTube#stop|stop()} function.
  * @prop {boolean} [savePreviousSongs=true] Whether or not saving the previous songs of the queue and enable {@link DisTube#previous|previous()} method
- * @prop {number} [searchSongs=0] Whether or not searching for multiple songs to select manually; DisTube will play the first result if `false`
+ * @prop {number} [searchSongs=0] Limit of search results emits in {@link DisTube#event:searchResult} event when {@link DisTube#play|play()} method executed. If `searchSongs <= 1`, play the first result
  * @prop {string} [youtubeCookie=null] YouTube cookies. Read how to get it in {@link https://github.com/fent/node-ytdl-core/blob/997efdd5dd9063363f6ef668bb364e83970756e7/example/cookies.js#L6-L12|YTDL's Example}
  * @prop {string} [youtubeIdentityToken=null] If not given; ytdl-core will try to find it. You can find this by going to a video's watch page; viewing the source; and searching for "ID_TOKEN".
  * @prop {boolean} [youtubeDL=true] Whether or not using youtube-dl.
@@ -494,7 +494,7 @@ type DisTubeOptions = {
      */
     savePreviousSongs?: boolean;
     /**
-     * Whether or not searching for multiple songs to select manually; DisTube will play the first result if `false`
+     * Limit of search results emits in {@link DisTube#event:searchResult} event when {@link DisTube#play|play()} method executed. If `searchSongs <= 1`, play the first result
      */
     searchSongs?: number;
     /**
