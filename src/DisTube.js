@@ -366,8 +366,8 @@ class DisTube extends EventEmitter {
     let results = await this.search(name);
     let result = results[0];
     if (this.options.searchSongs) {
+      this.emit("searchResult", message, results);
       try {
-        this.emit("searchResult", message, results);
         let answers = await message.channel.awaitMessages(m => m.author.id === message.author.id, {
           max: 1,
           time: 60000,
