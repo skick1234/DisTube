@@ -38,6 +38,7 @@ class Playlist {
      * @type {Song[]}
      */
     this.songs = Array.isArray(playlist) ? playlist : playlist.items;
+    if (!Array.isArray(this.songs) || !this.songs.length) throw new Error("Playlist is empty!");
     /**
      * Playlist name.
      * @type {string}
