@@ -134,7 +134,7 @@ class DisTubeHandler extends DisTubeBase {
   /**
    * Play / add a playlist
    * @async
-   * @param {Discord.Message|Discord.VoiceChannel} message A message from guild channel | a voice channel
+   * @param {Discord.Message|Discord.VoiceChannel|Discord.StageChannel} message A message from guild channel | a voice channel
    * @param {Playlist|string} playlist A YouTube playlist url | a Playlist
    * @param {boolean} [textChannel] The default text channel of the queue
    * @param {boolean} [skip=false] Skip the current song
@@ -209,7 +209,7 @@ class DisTubeHandler extends DisTubeBase {
   /**
    * Join the voice channel
    * @param {Queue} queue A message from guild channel
-   * @param {Discord.VoiceChannel} voice The string search for
+   * @param {Discord.VoiceChannel|Discord.StageChannel} voice The string search for
    * @param {boolean} retried retried?
    * @throws {Error}
    * @returns {Promise<Queue|true>} `true` if queue is not generated
@@ -222,7 +222,7 @@ class DisTubeHandler extends DisTubeBase {
         this.emit("disconnect", queue);
         try { queue.stop() } catch { this.deleteQueue(queue) }
       }).on("error", e => {
-        e.message = `There is a problem with Discord Voice Connection.\nReason: ${e.message}`;
+        e.name = "VoiceConnection";
         this.emitError(queue.textChannel, e);
         try { queue.stop() } catch { this.deleteQueue(queue) }
       });
@@ -230,7 +230,7 @@ class DisTubeHandler extends DisTubeBase {
       return err || queue;
     } catch (e) {
       this.deleteQueue(queue);
-      e.message = `DisTube cannot join the voice channel!\nReason: ${e.message}`;
+      e.name = "JoinVoiceChannel";
       if (retried) throw e;
       return this.joinVoiceChannel(queue, voice, true);
     }
@@ -326,6 +326,7 @@ class DisTubeHandler extends DisTubeBase {
       if (song.source === "youtube") await this.checkYouTubeInfo(song);
       const stream = this.createStream(queue).on("error", e => {
         errorEmitted = true;
+        e.name = "Stream";
         e.message = `${e.message}\nID: ${song.id}\nName: ${song.name}`;
         this.emitError(queue.textChannel, e);
       });
@@ -390,6 +391,7 @@ class DisTubeHandler extends DisTubeBase {
   _handlePlayingError(queue, error = null) {
     const song = queue.songs.shift();
     if (error) {
+      error.name = "Playing";
       error.message = `${error.message}\nID: ${song.id}\nName: ${song.name}`;
       this.emitError(queue.textChannel, error);
     }
@@ -402,12 +404,14 @@ class DisTubeHandler extends DisTubeBase {
 
   /**
    * Play a song from url without creating a {@link Queue}
-   * @param {Discord.VoiceChannel} voiceChannel The voice channel will be joined
+   * @param {Discord.VoiceChannel|Discord.StageChannel} voiceChannel The voice channel will be joined
    * @param {string|Song|SearchResult} song YouTube url | {@link Song} | {@link SearchResult}
    * @returns {Promise<Discord.StreamDispatcher>}
    */
   async playWithoutQueue(voiceChannel, song) {
-    if (!(voiceChannel instanceof Discord.VoiceChannel)) throw new TypeError("voiceChannel is not a Discord.VoiceChannel.");
+    if (!["voice", "stage"].includes(voiceChannel?.type)) {
+      throw new TypeError("voiceChannel is not a Discord.VoiceChannel or a Discord.StageChannel.");
+    }
     try {
       if (ytpl.validateID(song)) throw new Error("Cannot play a playlist with this method.");
       song = await this.resolveSong(voiceChannel.guild.me, song);
@@ -432,7 +436,7 @@ class DisTubeHandler extends DisTubeBase {
       return dispatcher;
     } catch (e) {
       e.name = "playWithoutQueue";
-      e.message = `${song}\n${e.message}`;
+      e.message = `${song?.url || song}\n${e.message}`;
       throw e;
     }
   }

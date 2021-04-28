@@ -130,9 +130,9 @@ declare class Queue extends DisTubeBase {
     get formattedCurrentTime(): string;
     /**
      * The voice channel playing in.
-     * @type {Discord.VoiceChannel?}
+     * @type {Discord.VoiceChannel|Discord.StageChannel|null}
      */
-    get voiceChannel(): Discord.VoiceChannel;
+    get voiceChannel(): Discord.VoiceChannel | Discord.StageChannel;
     /**
      * Add a Song or an array of Song to the queue
      * @param {Song|Array<Song>} song Song to add

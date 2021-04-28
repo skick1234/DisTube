@@ -205,7 +205,7 @@ class DisTube extends EventEmitter {
       }
     } catch (e) {
       e.name = "Play";
-      e.message = `${song}\n${e.message}`;
+      e.message = `${song?.url || song}\n${e.message}`;
       this.emitError(message.channel, e);
     }
   }
@@ -214,7 +214,7 @@ class DisTube extends EventEmitter {
    * Play / add a song or playlist from url. Search and play a song if it is not a valid url.
    * Emit {@link DisTube#addList}, {@link DisTube#addSong} or {@link DisTube#playSong} after executing
    * @async
-   * @param {Discord.VoiceChannel} voiceChannel The voice channel will be joined
+   * @param {Discord.VoiceChannel|Discord.StageChannel} voiceChannel The voice channel will be joined
    * @param {string|Song|SearchResult|Playlist} song YouTube url | Search string | {@link Song} | {@link SearchResult} | {@link Playlist}
    * @param {Discord.TextChannel} [textChannel] The text channel of the queue
    * @param {Discord.GuildMember} [member] Requested user (default is your bot)
@@ -229,7 +229,9 @@ class DisTube extends EventEmitter {
    * distube.playVoiceChannel(voiceChannel, args.join(" "), textChannel, member);
    */
   async playVoiceChannel(voiceChannel, song, textChannel = voiceChannel?.guild?.me, member = voiceChannel?.guild?.me) {
-    if (!(voiceChannel instanceof Discord.VoiceChannel)) throw new TypeError("voiceChannel is not a Discord.VoiceChannel");
+    if (!["voice", "stage"].includes(voiceChannel?.type)) {
+      throw new TypeError("voiceChannel is not a Discord.VoiceChannel or a Discord.StageChannel.");
+    }
     if (textChannel instanceof Discord.GuildMember) {
       member = textChannel;
       textChannel = null;
@@ -260,7 +262,7 @@ class DisTube extends EventEmitter {
       }
     } catch (e) {
       e.name = "PlayVoiceChannel";
-      e.message = `${song}\n${e.message}`;
+      e.message = `${song?.url || song}\n${e.message}`;
       this.emitError(textChannel, e);
     }
   }
@@ -285,7 +287,7 @@ class DisTube extends EventEmitter {
       await this.play(message, song, true);
     } catch (e) {
       e.name = "PlaySkip";
-      e.message = `${song}\n${e.message}`;
+      e.message = `${song?.url || song}\n${e.message}`;
       this.emitError(message.channel, e);
     }
   }
@@ -352,7 +354,7 @@ class DisTube extends EventEmitter {
    * Create a new guild queue
    * @async
    * @private
-   * @param {Discord.Message|Discord.VoiceChannel} message A message from guild channel | a voice channel
+   * @param {Discord.Message|Discord.VoiceChannel|Discord.StageChannel} message A message from guild channel | a voice channel
    * @param {Song|Array<Song>} song Song to play
    * @param {Discord.TextChannel} textChannel A text channel of the queue
    * @throws {Error}
@@ -360,8 +362,10 @@ class DisTube extends EventEmitter {
    */
   _newQueue(message, song, textChannel = message?.channel) {
     const voice = message?.member?.voice?.channel || message;
-    if (!voice) throw new Error("User is not in the voice channel.");
-    if (!(voice instanceof Discord.VoiceChannel)) throw new TypeError("message is not a Discord.Message or a Discord.VoiceChannel.");
+    if (!voice || voice instanceof Discord.Message) throw new Error("User is not in a voice channel.");
+    if (!["voice", "stage"].includes(voice?.type)) {
+      throw new TypeError("User is not in a Discord.VoiceChannel or a Discord.StageChannel.");
+    }
     const queue = new Queue(this, message, song, textChannel);
     this.emit("initQueue", queue);
     this.guildQueues.set(message.guild.id, queue);
@@ -384,7 +388,7 @@ class DisTube extends EventEmitter {
 
   /**
    * Get the guild queue
-   * @param {Discord.Snowflake|Discord.Message|Discord.VoiceChannel} message A guild ID | a message from guild channel | a voice channel.
+   * @param {Discord.Snowflake|Discord.Message|Discord.VoiceChannel|Discord.StageChannel} message A guild ID | a message from guild channel | a voice channel.
    * @returns {Queue} The guild queue
    * @throws {Error}
    * @example
@@ -402,7 +406,7 @@ class DisTube extends EventEmitter {
    */
   getQueue(message) {
     const guildID = message?.guild?.id || message;
-    if (typeof guildID !== "string") throw TypeError("Parameter should be a Discord.Message, a Discord.VoiceChannel or aserver ID!");
+    if (typeof guildID !== "string") throw TypeError("Parameter should be a Discord.Message, a Discord.VoiceChannel or a server ID!");
     return this.guildQueues.get(guildID);
   }
 

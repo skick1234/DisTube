@@ -114,7 +114,7 @@ declare class DisTube extends EventEmitter {
      * Play / add a song or playlist from url. Search and play a song if it is not a valid url.
      * Emit {@link DisTube#addList}, {@link DisTube#addSong} or {@link DisTube#playSong} after executing
      * @async
-     * @param {Discord.VoiceChannel} voiceChannel The voice channel will be joined
+     * @param {Discord.VoiceChannel|Discord.StageChannel} voiceChannel The voice channel will be joined
      * @param {string|Song|SearchResult|Playlist} song YouTube url | Search string | {@link Song} | {@link SearchResult} | {@link Playlist}
      * @param {Discord.TextChannel} [textChannel] The text channel of the queue
      * @param {Discord.GuildMember} [member] Requested user (default is your bot)
@@ -128,7 +128,7 @@ declare class DisTube extends EventEmitter {
      * // Play by another member, queue.textChannel will be textChannel
      * distube.playVoiceChannel(voiceChannel, args.join(" "), textChannel, member);
      */
-    playVoiceChannel(voiceChannel: Discord.VoiceChannel, song: string | Song | SearchResult | Playlist, textChannel?: Discord.TextChannel, member?: Discord.GuildMember): Promise<void>;
+    playVoiceChannel(voiceChannel: Discord.VoiceChannel | Discord.StageChannel, song: string | Song | SearchResult | Playlist, textChannel?: Discord.TextChannel, member?: Discord.GuildMember): Promise<void>;
     /**
      * Skip the playing song and play a song or playlist
      * @async
@@ -185,7 +185,7 @@ declare class DisTube extends EventEmitter {
      * Create a new guild queue
      * @async
      * @private
-     * @param {Discord.Message|Discord.VoiceChannel} message A message from guild channel | a voice channel
+     * @param {Discord.Message|Discord.VoiceChannel|Discord.StageChannel} message A message from guild channel | a voice channel
      * @param {Song|Array<Song>} song Song to play
      * @param {Discord.TextChannel} textChannel A text channel of the queue
      * @throws {Error}
@@ -200,7 +200,7 @@ declare class DisTube extends EventEmitter {
     private _deleteQueue;
     /**
      * Get the guild queue
-     * @param {Discord.Snowflake|Discord.Message|Discord.VoiceChannel} message A guild ID | a message from guild channel | a voice channel.
+     * @param {Discord.Snowflake|Discord.Message|Discord.VoiceChannel|Discord.StageChannel} message A guild ID | a message from guild channel | a voice channel.
      * @returns {Queue} The guild queue
      * @throws {Error}
      * @example
@@ -216,7 +216,7 @@ declare class DisTube extends EventEmitter {
      *     }
      * });
      */
-    getQueue(message: Discord.Snowflake | Discord.Message | Discord.VoiceChannel): Queue;
+    getQueue(message: Discord.Snowflake | Discord.Message | Discord.VoiceChannel | Discord.StageChannel): Queue;
     /**
      * Pause the guild stream
      * @param {Discord.Snowflake|Discord.Message} message A message from guild channel

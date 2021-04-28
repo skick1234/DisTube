@@ -51,12 +51,12 @@ declare class DisTubeHandler extends DisTubeBase {
     /**
      * Play / add a playlist
      * @async
-     * @param {Discord.Message|Discord.VoiceChannel} message A message from guild channel | a voice channel
+     * @param {Discord.Message|Discord.VoiceChannel|Discord.StageChannel} message A message from guild channel | a voice channel
      * @param {Playlist|string} playlist A YouTube playlist url | a Playlist
      * @param {boolean} [textChannel] The default text channel of the queue
      * @param {boolean} [skip=false] Skip the current song
      */
-    handlePlaylist(message: Discord.Message | Discord.VoiceChannel, playlist: Playlist | string, textChannel?: boolean, skip?: boolean): Promise<void>;
+    handlePlaylist(message: Discord.Message | Discord.VoiceChannel | Discord.StageChannel, playlist: Playlist | string, textChannel?: boolean, skip?: boolean): Promise<void>;
     /**
      * Search for a song, fire {@link DisTube#event:error} if not found.
      * @async
@@ -68,12 +68,12 @@ declare class DisTubeHandler extends DisTubeBase {
     /**
      * Join the voice channel
      * @param {Queue} queue A message from guild channel
-     * @param {Discord.VoiceChannel} voice The string search for
+     * @param {Discord.VoiceChannel|Discord.StageChannel} voice The string search for
      * @param {boolean} retried retried?
      * @throws {Error}
      * @returns {Promise<Queue|true>} `true` if queue is not generated
      */
-    joinVoiceChannel(queue: Queue, voice: Discord.VoiceChannel, retried?: boolean): Promise<Queue | true>;
+    joinVoiceChannel(queue: Queue, voice: Discord.VoiceChannel | Discord.StageChannel, retried?: boolean): Promise<Queue | true>;
     /**
      * Get related songs
      * @async
@@ -117,11 +117,11 @@ declare class DisTubeHandler extends DisTubeBase {
     private _handlePlayingError;
     /**
      * Play a song from url without creating a {@link Queue}
-     * @param {Discord.VoiceChannel} voiceChannel The voice channel will be joined
+     * @param {Discord.VoiceChannel|Discord.StageChannel} voiceChannel The voice channel will be joined
      * @param {string|Song|SearchResult} song YouTube url | {@link Song} | {@link SearchResult}
      * @returns {Promise<Discord.StreamDispatcher>}
      */
-    playWithoutQueue(voiceChannel: Discord.VoiceChannel, song: string | Song | SearchResult): Promise<Discord.StreamDispatcher>;
+    playWithoutQueue(voiceChannel: Discord.VoiceChannel | Discord.StageChannel, song: string | Song | SearchResult): Promise<Discord.StreamDispatcher>;
 }
 import DisTubeBase = require("./DisTubeBase");
 import Discord = require("discord.js");

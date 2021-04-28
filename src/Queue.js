@@ -151,7 +151,7 @@ class Queue extends DisTubeBase {
   }
   /**
    * The voice channel playing in.
-   * @type {Discord.VoiceChannel?}
+   * @type {Discord.VoiceChannel|Discord.StageChannel}
    */
   get voiceChannel() {
     return this.connection?.voice?.channel;
