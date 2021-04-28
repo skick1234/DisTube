@@ -33,7 +33,7 @@ class DisTubeHandler extends DisTubeBase {
    * @private
    */
   emitError(channel, error) {
-    this.distube.emit(channel, error);
+    this.distube.emitError(channel, error);
   }
 
   /**
@@ -171,7 +171,7 @@ class DisTubeHandler extends DisTubeBase {
    * @async
    * @param {Discord.Message} message A message from guild channel
    * @param {string} query The query string
-   * @returns {Song} Song info
+   * @returns {Song?} Song info
    */
   async searchSong(message, query) {
     const results = await this.distube.search(query, {
@@ -189,12 +189,12 @@ class DisTubeHandler extends DisTubeBase {
         max: 1,
         time: this.options.searchCooldown * 1000,
         errors: ["time"],
-      });
-      if (!answers.first()) {
+      }).catch(() => undefined);
+      const ans = answers?.first();
+      if (!ans) {
         this.emit("searchCancel", message, query);
         return null;
       }
-      const ans = answers.first();
       const index = parseInt(ans.content, 10);
       if (isNaN(index) || index > results.length || index < 1) {
         this.emit("searchCancel", message, query);

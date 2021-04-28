@@ -3,3 +3,7 @@ node_modules/
 .github/
 .vscode/
 typings/events.d.ts
+.gitattributes
+.eslintrc.json
+tsconfig.json
+test.js
