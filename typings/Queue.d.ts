@@ -59,10 +59,10 @@ declare class Queue extends DisTubeBase {
      */
     playing: boolean;
     /**
-     * Pause the guild stream
-     * @returns {Queue} The guild queue
+     * Whether or not the stream is currently paused.
+     * @type {boolean}
      */
-    pause(): Queue;
+    paused: boolean;
     /**
      * Type of repeat mode (`0` is disabled, `1` is repeating a song, `2` is repeating all the queue).
      * Default value: `0` (disabled)
@@ -130,7 +130,7 @@ declare class Queue extends DisTubeBase {
     get formattedCurrentTime(): string;
     /**
      * The voice channel playing in.
-     * @type {Discord.VoiceChannel|Discord.StageChannel|null}
+     * @type {Discord.VoiceChannel|Discord.StageChannel}
      */
     get voiceChannel(): Discord.VoiceChannel | Discord.StageChannel;
     /**
@@ -141,6 +141,11 @@ declare class Queue extends DisTubeBase {
      * @returns {Queue}
      */
     addToQueue(song: Song | Array<Song>, unshift?: boolean): Queue;
+    /**
+     * Pause the guild stream
+     * @returns {Queue} The guild queue
+     */
+    pause(): Queue;
     /**
      * Resume the guild stream
      * @returns {Queue} The guild queue

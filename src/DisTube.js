@@ -618,7 +618,7 @@ class DisTube extends EventEmitter {
    */
   isPlaying(message) {
     const queue = this.getQueue(message);
-    return queue ? queue.playing || !queue.pause : false;
+    return queue ? queue.playing || !queue.paused : false;
   }
 
   /**
@@ -628,7 +628,7 @@ class DisTube extends EventEmitter {
    */
   isPaused(message) {
     const queue = this.getQueue(message);
-    return queue ? queue.pause : false;
+    return queue ? queue.paused : false;
   }
 
   /**

@@ -62,9 +62,9 @@ declare class DisTubeHandler extends DisTubeBase {
      * @async
      * @param {Discord.Message} message A message from guild channel
      * @param {string} query The query string
-     * @returns {Song} Song info
+     * @returns {Song?} Song info
      */
-    searchSong(message: Discord.Message, query: string): Song;
+    searchSong(message: Discord.Message, query: string): Song | null;
     /**
      * Join the voice channel
      * @param {Queue} queue A message from guild channel

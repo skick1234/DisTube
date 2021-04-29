@@ -74,7 +74,7 @@ class Queue extends DisTubeBase {
      * Whether or not the stream is currently paused.
      * @type {boolean}
      */
-    this.pause = false;
+    this.paused = false;
     /**
      * Type of repeat mode (`0` is disabled, `1` is repeating a song, `2` is repeating all the queue).
      * Default value: `0` (disabled)
@@ -180,7 +180,7 @@ class Queue extends DisTubeBase {
    */
   pause() {
     this.playing = false;
-    this.pause = true;
+    this.paused = true;
     this.dispatcher.pause();
     return this;
   }
@@ -190,7 +190,7 @@ class Queue extends DisTubeBase {
    */
   resume() {
     this.playing = true;
-    this.pause = false;
+    this.paused = false;
     this.dispatcher.resume();
     return this;
   }
