@@ -213,48 +213,45 @@ class DisTube extends EventEmitter {
   /**
    * Play / add a song or playlist from url. Search and play a song if it is not a valid url.
    * Emit {@link DisTube#addList}, {@link DisTube#addSong} or {@link DisTube#playSong} after executing
-   * @async
+   * @returns {Promise<void>}
    * @param {Discord.VoiceChannel|Discord.StageChannel} voiceChannel The voice channel will be joined
    * @param {string|Song|SearchResult|Playlist} song YouTube url | Search string | {@link Song} | {@link SearchResult} | {@link Playlist}
-   * @param {Discord.TextChannel} [textChannel] The text channel of the queue
-   * @param {Discord.GuildMember} [member] Requested user (default is your bot)
-   * @example
-   * // Play by your bot, queue.textChannel will be textChannel
-   * distube.playVoiceChannel(voiceChannel, args.join(" "), textChannel);
-   * @example
-   * // Play by another member, queue.textChannel will be null
-   * distube.playVoiceChannel(voiceChannel, args.join(" "), member);
-   * @example
-   * // Play by another member, queue.textChannel will be textChannel
-   * distube.playVoiceChannel(voiceChannel, args.join(" "), textChannel, member);
+   * @param {Object} [options] Optional options
+   * @param {Discord.GuildMember} [options.member] Requested user (default is your bot)
+   * @param {Discord.TextChannel} [options.textChannel] Default {@link Queue#textChannel} (if the queue wasn't created)
+   * @param {boolean} [options.skip] Skip the playing song (if exists)
    */
-  async playVoiceChannel(voiceChannel, song, textChannel = voiceChannel?.guild?.me, member = voiceChannel?.guild?.me) {
+  async playVoiceChannel(voiceChannel, song, options = {}) {
     if (!["voice", "stage"].includes(voiceChannel?.type)) {
       throw new TypeError("voiceChannel is not a Discord.VoiceChannel or a Discord.StageChannel.");
     }
-    if (textChannel instanceof Discord.GuildMember) {
-      member = textChannel;
-      textChannel = null;
-    }
+    const { textChannel, member, skip } = Object.assign({
+      member: voiceChannel.guild.me,
+      skip: false,
+    }, options);
     try {
       if (typeof song === "string") {
         for (const plugin of this.customPlugins) {
           if (await plugin.validate(song)) {
-            await plugin.playVoiceChannel(voiceChannel, song, textChannel, member);
+            await plugin.playVoiceChannel(voiceChannel, song, member, textChannel, skip);
             return;
           }
         }
       }
       if (song instanceof SearchResult && song.type === "playlist") song = song.url;
-      if (ytpl.validateID(song)) await this.handler.handlePlaylist(voiceChannel, await this.handler.resolvePlaylist(member, song));
+      if (ytpl.validateID(song)) song = await this.handler.resolvePlaylist(member, song);
       else {
         song = await this.handler.resolveSong(member, song);
         if (!song) return;
-        if (song instanceof Playlist) await this.handler.handlePlaylist(member, song, textChannel);
+        if (song instanceof Playlist) await this.handler.handlePlaylist(member, song, textChannel, skip);
+        else if (!this.options.nsfw && song.age_restricted && !textChannel?.nsfw) {
+          throw new Error("Cannot play age-restricted content in non-NSFW channel.");
+        }
         let queue = this.getQueue(voiceChannel);
         if (queue) {
-          queue.addToQueue(song);
-          this.emit("addSong", queue, song);
+          queue.addToQueue(song, skip);
+          if (skip) queue.skip();
+          else this.emit("addSong", queue, song);
         } else {
           queue = await this._newQueue(voiceChannel, song, textChannel);
           if (queue instanceof Queue) this.emit("playSong", queue, song);
