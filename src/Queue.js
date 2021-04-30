@@ -316,7 +316,6 @@ class Queue extends DisTubeBase {
   }
   /**
    * Add a related song to the queue
-   * @async
    * @param {Song} [song] A song to get the related one
    * @returns {Promise<Queue>} The guild queue
    * @throws {Error}

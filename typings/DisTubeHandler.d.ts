@@ -26,7 +26,6 @@ declare class DisTubeHandler extends DisTubeBase {
     getYouTubeInfo(url: string): Promise<any>;
     /**
      * Resolve a Song
-     * @async
      * @param {Discord.Message|Discord.GuildMember} message A message from guild channel | A guild member
      * @param {string|Song|SearchResult|Playlist} song YouTube url | Search string | {@link Song}
      * @returns {Promise<Song|Array<Song>|Playlist>} Resolved Song
@@ -36,12 +35,12 @@ declare class DisTubeHandler extends DisTubeBase {
      * Resole Song[] or url to a Playlist
      * @param {Discord.Message|Discord.GuildMember} message A message from guild channel | A guild member
      * @param {Array<Song>|string} playlist Resolvable playlist
-     * @returns {Playlist}
+     * @returns {Promise<Playlist>}
      */
-    resolvePlaylist(message: Discord.Message | Discord.GuildMember, playlist: Array<Song> | string): Playlist;
+    resolvePlaylist(message: Discord.Message | Discord.GuildMember, playlist: Array<Song> | string): Promise<Playlist>;
     /**
      * Create a custom playlist
-     * @async
+     * @returns {Promise<Playlist>}
      * @param {Discord.Message|Discord.GuildMember} message A message from guild channel | A guild member
      * @param {Array<string|Song|SearchResult>} songs Array of url, Song or SearchResult
      * @param {Object} [properties={}] Additional properties such as `name`
@@ -50,7 +49,7 @@ declare class DisTubeHandler extends DisTubeBase {
     createCustomPlaylist(message: Discord.Message | Discord.GuildMember, songs: Array<string | Song | SearchResult>, properties?: any, parallel?: boolean): Promise<Playlist>;
     /**
      * Play / add a playlist
-     * @async
+     * @returns {Promise<void>}
      * @param {Discord.Message|Discord.VoiceChannel|Discord.StageChannel} message A message from guild channel | a voice channel
      * @param {Playlist|string} playlist A YouTube playlist url | a Playlist
      * @param {boolean} [textChannel] The default text channel of the queue
@@ -59,12 +58,11 @@ declare class DisTubeHandler extends DisTubeBase {
     handlePlaylist(message: Discord.Message | Discord.VoiceChannel | Discord.StageChannel, playlist: Playlist | string, textChannel?: boolean, skip?: boolean): Promise<void>;
     /**
      * Search for a song, fire {@link DisTube#event:error} if not found.
-     * @async
      * @param {Discord.Message} message A message from guild channel
      * @param {string} query The query string
-     * @returns {Song?} Song info
+     * @returns {Promise<Song?>} Song info
      */
-    searchSong(message: Discord.Message, query: string): Song | null;
+    searchSong(message: Discord.Message, query: string): Promise<Song | null>;
     /**
      * Join the voice channel
      * @param {Queue} queue A message from guild channel
@@ -76,7 +74,6 @@ declare class DisTubeHandler extends DisTubeBase {
     joinVoiceChannel(queue: Queue, voice: Discord.VoiceChannel | Discord.StageChannel, retried?: boolean): Promise<Queue | true>;
     /**
      * Get related songs
-     * @async
      * @param {Song} song song
      * @returns {Array<ytdl.relatedVideo>} Related videos
      * @throws {NoRelated}
@@ -99,13 +96,14 @@ declare class DisTubeHandler extends DisTubeBase {
     /**
      * Play a song on voice connection
      * @param {Queue} queue The guild queue
-     * @returns {boolean} error?
+     * @returns {Promise<boolean>} error?
      */
-    playSong(queue: Queue): boolean;
+    playSong(queue: Queue): Promise<boolean>;
     /**
      * Handle the queue when a Song finish
      * @private
      * @param {Queue} queue queue
+     * @returns {Promise<void>}
      */
     private _handleSongFinish;
     /**

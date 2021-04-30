@@ -159,7 +159,7 @@ class DisTube extends EventEmitter {
   /**
    * Play / add a song or playlist from url. Search and play a song if it is not a valid url.
    * Emit {@link DisTube#addList}, {@link DisTube#addSong} or {@link DisTube#playSong} after executing
-   * @async
+   * @returns {Promise<void>}
    * @param {Discord.Message} message A message from guild channel
    * @param {string|Song|SearchResult|Playlist} song YouTube url | Search string | {@link Song} | {@link SearchResult} | {@link Playlist}
    * @param {boolean} skip Whether or not skipping the playing song
@@ -247,7 +247,7 @@ class DisTube extends EventEmitter {
 
   /**
    * Skip the playing song and play a song or playlist
-   * @async
+   * @returns {Promise<void>}
    * @param {Discord.Message} message A message from guild channel
    * @param {string|Song|SearchResult|Playlist} song YouTube url | Search string | {@link Song} | {@link SearchResult} | {@link Playlist}
    * @example
@@ -275,7 +275,7 @@ class DisTube extends EventEmitter {
    * {@link DisTube#event:playList} or {@link DisTube#event:addList} will be emitted
    * with `playlist`'s properties include `properties` parameter's properties such as
    * `user`, `songs`, `duration`, `formattedDuration`, `thumbnail` like {@link Playlist}
-   * @async
+   * @returns {Promise<void>}
    * @param {Discord.Message} message A message from guild channel
    * @param {Array<string|Song|SearchResult>} songs Array of url, Song or SearchResult
    * @param {Object} [properties={}] Additional properties such as `name`
@@ -300,7 +300,6 @@ class DisTube extends EventEmitter {
    * Search for a song.
    * You can customize how user answers instead of send a number.
    * Then use {@link DisTube#play|play(message, aResultFromSearch)} or {@link DisTube#playSkip|playSkip()} to play it.
-   * @async
    * @param {string} string The string search for
    * @param {Object} options Search options
    * @param {number} [options.limit=10] Limit the results
@@ -330,7 +329,6 @@ class DisTube extends EventEmitter {
 
   /**
    * Create a new guild queue
-   * @async
    * @private
    * @param {Discord.Message|Discord.VoiceChannel|Discord.StageChannel} message A message from guild channel | a voice channel
    * @param {Song|Array<Song>} song Song to play
