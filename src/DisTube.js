@@ -174,35 +174,16 @@ class DisTube extends EventEmitter {
    */
   async play(message, song, skip = false) {
     if (!song) return;
+    if (!(message instanceof Discord.Message)) throw new TypeError("message is not a Discord.Message.");
+    if (typeof skip !== "boolean") throw new TypeError("skip is not a boolean");
     try {
-      if (typeof song === "string") {
-        for (const plugin of this.customPlugins) {
-          if (await plugin.validate(song)) {
-            await plugin.play(message, song, skip);
-            return;
-          }
-        }
-      }
-      if (song instanceof SearchResult && song.type === "playlist") song = song.url;
-      if (ytpl.validateID(song)) await this.handler.handlePlaylist(message, await this.handler.resolvePlaylist(message, song), skip);
-      else {
-        song = await this.handler.resolveSong(message, song);
-        if (!song) return;
-        if (song instanceof Playlist) await this.handler.handlePlaylist(message, song, skip);
-        else if (!this.options.nsfw && song.age_restricted && !message.channel.nsfw) {
-          try { message.delete().catch(() => undefined) } catch { }
-          throw new Error("Cannot play age-restricted content in non-NSFW channel.");
-        }
-        let queue = this.getQueue(message);
-        if (queue) {
-          queue.addToQueue(song, skip);
-          if (skip) queue.skip();
-          else this.emit("addSong", queue, song);
-        } else {
-          queue = await this._newQueue(message, song);
-          if (queue instanceof Queue) this.emit("playSong", queue, song);
-        }
-      }
+      const voiceChannel = message.member.voice.channel;
+      if (!voiceChannel) throw new Error("User is not in any voice channel.");
+      await this.playVoiceChannel(voiceChannel, song, {
+        member: message.member,
+        textChannel: message.channel,
+        skip,
+      });
     } catch (e) {
       e.name = "Play";
       e.message = `${song?.url || song}\n${e.message}`;
@@ -233,7 +214,7 @@ class DisTube extends EventEmitter {
       if (typeof song === "string") {
         for (const plugin of this.customPlugins) {
           if (await plugin.validate(song)) {
-            await plugin.playVoiceChannel(voiceChannel, song, member, textChannel, skip);
+            await plugin.play(voiceChannel, song, member, textChannel, skip);
             return;
           }
         }

@@ -13,12 +13,13 @@ class CustomPlugin extends Plugin {
   }
   /**
    * Execute if the url is validated
-   * @param {Discord.Message} message Message
-   * @param {string} url URL
-   * @param {boolean} skip Skip?
-   * @returns {Promise<void>}
+   * @param {Discord.VoiceChannel|Discord.StageChannel} voiceChannel The voice channel will be joined
+   * @param {string} url Validated url
+   * @param {Discord.GuildMember} member Requested user
+   * @param {Discord.TextChannel?} textChannel Default {@link Queue#textChannel}
+   * @param {boolean} skip Skip the playing song (if exists)
    */
-  async play(message, url, skip) { }
+  async play(voiceChannel, url, member, textChannel, skip) { }
 }
 
 module.exports = CustomPlugin;
