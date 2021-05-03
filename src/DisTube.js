@@ -122,7 +122,7 @@ class DisTube extends EventEmitter {
               if (this.guildQueues.has(guildID) && isVoiceChannelEmpty(queue)) {
                 queue.connection.channel.leave();
                 this.emit("empty", queue);
-                this._deleteQueue(queue.textChannel.guild.id);
+                this._deleteQueue(queue);
               }
             }, this.options.emptyCooldown * 1000);
           }
@@ -185,7 +185,7 @@ class DisTube extends EventEmitter {
         skip,
       });
     } catch (e) {
-      e.name = "Play";
+      e.name = "PlayError";
       e.message = `${song?.url || song}\n${e.message}`;
       this.emitError(message.channel, e);
     }
@@ -238,7 +238,7 @@ class DisTube extends EventEmitter {
         }
       }
     } catch (e) {
-      e.name = "PlayVoiceChannel";
+      e.name = "PlayError";
       e.message = `${song?.url || song}\n${e.message}`;
       this.emitError(textChannel, e);
     }
@@ -258,15 +258,8 @@ class DisTube extends EventEmitter {
    *         distube.playSkip(message, args.join(" "));
    * });
    */
-  async playSkip(message, song) {
-    if (!song) return;
-    try {
-      await this.play(message, song, true);
-    } catch (e) {
-      e.name = "PlaySkip";
-      e.message = `${song?.url || song}\n${e.message}`;
-      this.emitError(message.channel, e);
-    }
+  playSkip(message, song) {
+    return this.play(message, song, true);
   }
 
   /**
@@ -683,7 +676,7 @@ DisTube.Song = Song;
 module.exports = DisTube;
 
 /**
- * Emitted after DisTube add playlist to guild queue
+ * Emitted after DisTube add a new playlist to the playing {@link Queue}
  *
  * @event DisTube#addList
  * @param {Queue} queue The guild queue
@@ -695,7 +688,7 @@ module.exports = DisTube;
  */
 
 /**
- *  Emitted after DisTube add new song to guild queue
+ *  Emitted after DisTube add a new song to the playing {@link Queue}
  *
  * @event DisTube#addSong
  * @param {Queue} queue The guild queue

@@ -324,7 +324,7 @@ class Queue extends DisTubeBase {
     const related = (await this.handler.getRelatedVideo(song))
       .find(v => !this.previousSongs.map(s => s.id).includes(v.id));
     if (!related) throw new Error("Cannot find any related songs.");
-    this.addToQueue(new Song(await this.handler.getYouTubeInfo(related.id), this.textChannel.guild.me));
+    this.addToQueue(new Song(await this.handler.getYouTubeInfo(related.id), this.voiceChannel?.guild?.me));
     return this;
   }
   /**

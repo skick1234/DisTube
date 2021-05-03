@@ -61,7 +61,6 @@ class DisTubeHandler extends DisTubeBase {
   async resolveSong(message, song) {
     if (!song) return null;
     const member = message?.member || message;
-    if (!(member instanceof Discord.GuildMember)) throw new TypeError("message is not a Discord.Message or Discord.GuildMember.");
     if (song instanceof Song || song instanceof Playlist) return song;
     if (song instanceof SearchResult) {
       if (song.type === "video") return new Song(await this.getYouTubeInfo(song.url), member);
@@ -94,7 +93,6 @@ class DisTubeHandler extends DisTubeBase {
    */
   async resolvePlaylist(message, playlist) {
     const member = message?.member || message;
-    if (!(member instanceof Discord.GuildMember)) throw new TypeError("message is not a Discord.Message or Discord.GuildMember.");
     if (typeof playlist === "string") {
       playlist = await ytpl(playlist, { limit: Infinity });
       playlist.items = playlist.items.filter(v => !v.thumbnail.includes("no_thumbnail")).map(v => new Song(v, member));
@@ -113,7 +111,6 @@ class DisTubeHandler extends DisTubeBase {
    */
   async createCustomPlaylist(message, songs, properties = {}, parallel = true) {
     const member = message?.member || message;
-    if (!(member instanceof Discord.GuildMember)) throw new TypeError("message is not a Discord.Message or Discord.GuildMember.");
     if (!Array.isArray(songs)) throw new TypeError("songs must be an array of url");
     if (!songs.length) throw new Error("songs is an empty array");
     songs = songs.filter(song => song instanceof Song || song instanceof SearchResult || isURL(song));
@@ -141,14 +138,14 @@ class DisTubeHandler extends DisTubeBase {
   async handlePlaylist(message, playlist, textChannel = false, skip = false) {
     if (typeof textChannel === "boolean") {
       skip = textChannel;
-      textChannel = message?.channel;
+      textChannel = message.channel;
     }
     if (!playlist || !(playlist instanceof Playlist)) throw Error("Invalid Playlist");
-    if (message instanceof Discord.Message && !this.options.nsfw && !message.channel.nsfw) {
+    if (this.options.nsfw && !textChannel?.nsfw) {
       playlist.songs = playlist.songs.filter(s => !s.age_restricted);
     }
     if (!playlist.songs.length) {
-      if (message instanceof Discord.Message && !this.options.nsfw && !message.channel.nsfw) {
+      if (this.options.nsfw && !textChannel?.nsfw) {
         throw new Error("No valid video in the playlist.\nMaybe age-restricted contents is filtered because you are in non-NSFW channel.");
       }
       throw Error("No valid video in the playlist");

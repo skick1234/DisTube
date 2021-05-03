@@ -10,9 +10,11 @@ declare class ExtractorPlugin extends Plugin {
      * Execute if the url is validated
      * @param {string} url URL
      * @param {Discord.GuildMember} member Requested user
-     * @returns {Promise<void>}
+     * @returns {Promise<Song|Song[]|Playlist>}
      */
-    resolve(url: string, member: Discord.GuildMember): Promise<void>;
+    resolve(url: string, member: Discord.GuildMember): Promise<Song | Song[] | Playlist>;
 }
 import Plugin = require("./Plugin");
 import Discord = require("discord.js");
+import Song = require("../Song");
+import Playlist = require("../Playlist");

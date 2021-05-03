@@ -18,6 +18,7 @@ class CustomPlugin extends Plugin {
    * @param {Discord.GuildMember} member Requested user
    * @param {Discord.TextChannel?} textChannel Default {@link Queue#textChannel}
    * @param {boolean} skip Skip the playing song (if exists)
+   * @returns {Promise<void>}
    */
   async play(voiceChannel, url, member, textChannel, skip) { }
 }
