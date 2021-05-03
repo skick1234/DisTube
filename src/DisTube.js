@@ -221,13 +221,12 @@ class DisTube extends EventEmitter {
       }
       if (song instanceof SearchResult && song.type === "playlist") song = song.url;
       if (ytpl.validateID(song)) song = await this.handler.resolvePlaylist(member, song);
-      else {
-        song = await this.handler.resolveSong(member, song);
-        if (!song) return;
-        if (song instanceof Playlist) await this.handler.handlePlaylist(member, song, textChannel, skip);
-        else if (!this.options.nsfw && song.age_restricted && !textChannel?.nsfw) {
-          throw new Error("Cannot play age-restricted content in non-NSFW channel.");
-        }
+      song = await this.handler.resolveSong(member, song);
+      if (!song) return;
+      if (song instanceof Playlist) await this.handler.handlePlaylist(voiceChannel, song, textChannel, skip);
+      else if (!this.options.nsfw && song.age_restricted && !textChannel?.nsfw) {
+        throw new Error("Cannot play age-restricted content in non-NSFW channel.");
+      } else {
         let queue = this.getQueue(voiceChannel);
         if (queue) {
           queue.addToQueue(song, skip);
