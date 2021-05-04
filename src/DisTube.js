@@ -671,7 +671,7 @@ class DisTube extends EventEmitter {
 
 DisTube.CustomPlugin = CustomPlugin;
 DisTube.ExtractorPlugin = ExtractorPlugin;
-DisTube.Playlist = require("./Playlist");
+DisTube.Playlist = Playlist;
 DisTube.Song = Song;
 module.exports = DisTube;
 
