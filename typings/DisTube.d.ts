@@ -109,7 +109,7 @@ declare class DisTube extends EventEmitter {
      *         distube.play(message, args.join(" "));
      * });
      */
-    play(message: Discord.Message, song: string | Song | SearchResult | Playlist, skip?: boolean): Promise<void>;
+    play(message: Discord.Message, song: string | Song | SearchResult | PlayList, skip?: boolean): Promise<void>;
     /**
      * Play / add a song or playlist from url. Search and play a song if it is not a valid url.
      * Emit {@link DisTube#addList}, {@link DisTube#addSong} or {@link DisTube#playSong} after executing
@@ -121,7 +121,7 @@ declare class DisTube extends EventEmitter {
      * @param {Discord.TextChannel} [options.textChannel] Default {@link Queue#textChannel} (if the queue wasn't created)
      * @param {boolean} [options.skip] Skip the playing song (if exists)
      */
-    playVoiceChannel(voiceChannel: Discord.VoiceChannel | Discord.StageChannel, song: string | Song | SearchResult | Playlist, options?: {
+    playVoiceChannel(voiceChannel: Discord.VoiceChannel | Discord.StageChannel, song: string | Song | SearchResult | PlayList, options?: {
         member?: Discord.GuildMember;
         textChannel?: Discord.TextChannel;
         skip?: boolean;
@@ -140,7 +140,7 @@ declare class DisTube extends EventEmitter {
      *         distube.playSkip(message, args.join(" "));
      * });
      */
-    playSkip(message: Discord.Message, song: string | Song | SearchResult | Playlist): Promise<void>;
+    playSkip(message: Discord.Message, song: string | Song | SearchResult | PlayList): Promise<void>;
     /**
      * Play or add array of video urls.
      * {@link DisTube#event:playList} or {@link DisTube#event:addList} will be emitted
@@ -511,8 +511,8 @@ type Filters = {
 };
 import Song = require("./Song");
 import SearchResult = require("./SearchResult");
-import Playlist = require("./Playlist");
+import PlayList = require("./Playlist");
 import CustomPlugin = require("./Plugin/CustomPlugin");
 import ExtractorPlugin = require("./Plugin/ExtractorPlugin");
-declare var Playlist: typeof Playlist;
+declare var Playlist: typeof PlayList;
 import Plugin = require("./Plugin/Plugin");
