@@ -120,11 +120,13 @@ declare class DisTube extends EventEmitter {
      * @param {Discord.GuildMember} [options.member] Requested user (default is your bot)
      * @param {Discord.TextChannel} [options.textChannel] Default {@link Queue#textChannel} (if the queue wasn't created)
      * @param {boolean} [options.skip] Skip the playing song (if exists)
+     * @param {Discord.Message} [options.message] Called message (For built-in search events. If this is {@link https://developer.mozilla.org/en-US/docs/Glossary/Falsy|falsy value}, it will play the first result instead)
      */
     playVoiceChannel(voiceChannel: Discord.VoiceChannel | Discord.StageChannel, song: string | Song | SearchResult | Playlist, options?: {
         member?: Discord.GuildMember;
         textChannel?: Discord.TextChannel;
         skip?: boolean;
+        message?: Discord.Message;
     }): Promise<void>;
     /**
      * Skip the playing song and play a song or playlist

@@ -183,6 +183,7 @@ class DisTube extends EventEmitter {
         member: message.member,
         textChannel: message.channel,
         skip,
+        message,
       });
     } catch (e) {
       e.name = "PlayError";
@@ -201,15 +202,19 @@ class DisTube extends EventEmitter {
    * @param {Discord.GuildMember} [options.member] Requested user (default is your bot)
    * @param {Discord.TextChannel} [options.textChannel] Default {@link Queue#textChannel} (if the queue wasn't created)
    * @param {boolean} [options.skip] Skip the playing song (if exists)
+   * @param {Discord.Message} [options.message] Called message (For built-in search events. If this is {@link https://developer.mozilla.org/en-US/docs/Glossary/Falsy|falsy value}, it will play the first result instead)
    */
   async playVoiceChannel(voiceChannel, song, options = {}) {
     if (!["voice", "stage"].includes(voiceChannel?.type)) {
       throw new TypeError("voiceChannel is not a Discord.VoiceChannel or a Discord.StageChannel.");
     }
-    const { textChannel, member, skip } = Object.assign({
+    const { textChannel, member, skip, message } = Object.assign({
       member: voiceChannel.guild.me,
       skip: false,
     }, options);
+    if (message && !(message instanceof Discord.Message)) {
+      throw new TypeError("options.message is not a Discord.Message or a falsy value.");
+    }
     try {
       if (typeof song === "string") {
         for (const plugin of this.customPlugins) {
@@ -221,7 +226,7 @@ class DisTube extends EventEmitter {
       }
       if (song instanceof SearchResult && song.type === "playlist") song = song.url;
       if (ytpl.validateID(song)) song = await this.handler.resolvePlaylist(member, song);
-      song = await this.handler.resolveSong(member, song);
+      song = await this.handler.resolveSong(message || member, song);
       if (!song) return;
       if (song instanceof Playlist) await this.handler.handlePlaylist(voiceChannel, song, textChannel, skip);
       else if (!this.options.nsfw && song.age_restricted && !textChannel?.nsfw) {
