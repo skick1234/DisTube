@@ -35,9 +35,10 @@ declare class DisTubeHandler extends DisTubeBase {
      * Resole Song[] or url to a Playlist
      * @param {Discord.Message|Discord.GuildMember} message A message from guild channel | A guild member
      * @param {Array<Song>|string} playlist Resolvable playlist
+     * @param {string} [source="youtube"] Playlist source
      * @returns {Promise<Playlist>}
      */
-    resolvePlaylist(message: Discord.Message | Discord.GuildMember, playlist: Array<Song> | string): Promise<Playlist>;
+    resolvePlaylist(message: Discord.Message | Discord.GuildMember, playlist: Array<Song> | string, source?: string): Promise<Playlist>;
     /**
      * Create a custom playlist
      * @returns {Promise<Playlist>}

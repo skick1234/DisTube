@@ -38,8 +38,8 @@
   },
   "homepage": "https://distube.js.org/",
   "dependencies": {
-    "@distube/youtube-dl": "^2.0.0",
-    "@distube/ytdl": "^2.0.5",
+    "@distube/youtube-dl": "^2.1.1",
+    "@distube/ytdl": "^2.0.6",
     "@distube/ytpl": "^1.0.11",
     "@distube/ytsr": "^1.0.9",
     "ytdl-core": "^4.7.0"

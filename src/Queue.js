@@ -39,7 +39,7 @@ class Queue extends DisTubeBase {
      * List of songs in the queue (The first one is the playing song)
      * @type {Array<Song>}
      */
-    this.songs = Array.isArray(song) ? song : [song];
+    this.songs = Array.isArray(song) ? [...song] : [song];
     if (this.options.savePreviousSongs) {
       /**
        * List of the previous songs.

@@ -19,7 +19,7 @@ class Playlist {
      * The source of the playlist
      * @type {string}
      */
-    this.source = playlist.source || properties.source || "youtube";
+    this.source = (playlist.source || properties.source || "youtube").toLowerCase();
     /**
      * User requested.
      * @type {Discord.GuildMember}
@@ -41,12 +41,12 @@ class Playlist {
      * Playlist name.
      * @type {string}
      */
-    this.name = playlist.name || playlist.title || this.songs[0].playlist_title || `${this.songs[0].name} and ${this.songs.length - 1} more songs.`;
+    this.name = playlist.name || playlist.title || `${this.songs[0].name} and ${this.songs.length - 1} more songs.`;
     /**
      * Playlist URL.
      * @type {string}
      */
-    this.url = playlist.url;
+    this.url = playlist.url || playlist.webpage_url;
     /**
      * Playlist thumbnail.
      * @type {string}

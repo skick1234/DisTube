@@ -73,10 +73,16 @@ class DisTubeHandler extends DisTubeBase {
       for (const plugin of this.distube.extractorPlugins) if (await plugin.validate(song)) return plugin.resolve(song, member);
       if (!this.options.youtubeDL) throw new Error("Not Supported URL!");
       const info = await youtube_dl(song, {
-        dumpJson: true,
+        dumpSingleJson: true,
         noWarnings: true,
+        noCallHome: true,
+        preferFreeFormats: true,
       }).catch(e => { throw new Error(`[youtube-dl] ${e.stderr || e}`) });
-      if (Array.isArray(info) && info.length > 0) return this.resolvePlaylist(message, info.map(i => new Song(i, member, i.extractor)));
+      if (Array.isArray(info.entries) && info.entries.length > 0) {
+        info.source = info.extractor.match(/\w+/)[0];
+        info.songs = info.entries.map(i => new Song(i, member, i.extractor));
+        return new Playlist(info, member);
+      }
       return new Song(info, member, info.extractor);
     }
     if (typeof song !== "string") throw new TypeError("song is not a valid type");
@@ -89,15 +95,16 @@ class DisTubeHandler extends DisTubeBase {
    * Resole Song[] or url to a Playlist
    * @param {Discord.Message|Discord.GuildMember} message A message from guild channel | A guild member
    * @param {Array<Song>|string} playlist Resolvable playlist
+   * @param {string} [source="youtube"] Playlist source
    * @returns {Promise<Playlist>}
    */
-  async resolvePlaylist(message, playlist) {
+  async resolvePlaylist(message, playlist, source = "youtube") {
     const member = message?.member || message;
     if (typeof playlist === "string") {
       playlist = await ytpl(playlist, { limit: Infinity });
       playlist.items = playlist.items.filter(v => !v.thumbnail.includes("no_thumbnail")).map(v => new Song(v, member));
     }
-    if (!(playlist instanceof Playlist)) playlist = new Playlist(playlist, member);
+    if (!(playlist instanceof Playlist)) playlist = new Playlist(playlist, member, { source });
     return playlist;
   }
 

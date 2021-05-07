@@ -18,7 +18,7 @@ class Song {
      * The source of the song
      * @type {string}
      */
-    this.source = src;
+    this.source = src.toLowerCase();
     /**
      * User requested
      * @type {Discord.GuildMember?}
