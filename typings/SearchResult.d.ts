@@ -48,4 +48,11 @@ declare class SearchResult {
      * @type {string?}
      */
     thumbnail: string | null;
+    /**
+     * Video/Playlist uploader
+     * @type {Object}
+     * @prop {string?} name Uploader name
+     * @prop {string?} url Uploader url
+     */
+    uploader: any;
 }

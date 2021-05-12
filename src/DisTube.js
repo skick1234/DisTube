@@ -109,23 +109,22 @@ class DisTube extends EventEmitter {
 
     if (this.options.leaveOnEmpty) {
       client.on("voiceStateUpdate", oldState => {
-        const queue = this.guildQueues.find(gQueue => gQueue.connection && gQueue.connection.channel.id === oldState.channelID);
+        if (!oldState?.channel) return;
+        const queue = this.guildQueues.find(gQueue => gQueue.connection?.channel === oldState.channel);
         if (!queue) return;
-        if (oldState?.channel) {
-          if (queue.emptyTimeout) {
-            clearTimeout(queue.emptyTimeout);
-            queue.emptyTimeout = null;
-          }
-          if (isVoiceChannelEmpty(queue)) {
-            queue.emptyTimeout = setTimeout(() => {
-              const guildID = queue.connection.channel.guild.id;
-              if (this.guildQueues.has(guildID) && isVoiceChannelEmpty(queue)) {
-                queue.connection.channel.leave();
-                this.emit("empty", queue);
-                this._deleteQueue(queue);
-              }
-            }, this.options.emptyCooldown * 1000);
-          }
+        if (queue.emptyTimeout) {
+          clearTimeout(queue.emptyTimeout);
+          queue.emptyTimeout = null;
+        }
+        if (isVoiceChannelEmpty(queue)) {
+          queue.emptyTimeout = setTimeout(() => {
+            const guildID = queue.connection.channel.guild.id;
+            if (this.guildQueues.has(guildID) && isVoiceChannelEmpty(queue)) {
+              queue.connection.channel.leave();
+              this.emit("empty", queue);
+              this._deleteQueue(queue);
+            }
+          }, this.options.emptyCooldown * 1000);
         }
       });
     }

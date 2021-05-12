@@ -3,11 +3,11 @@ export = Song;
 declare class Song {
     /**
      * Create a Song
-     * @param {ytdl.videoInfo|Object} info Raw info
+     * @param {ytdl.videoInfo|SearchResult|Object} info Raw info
      * @param {Discord.GuildMember} member Requested user
      * @param {string} src Song source
      */
-    constructor(info: ytdl.videoInfo | any, member?: Discord.GuildMember, src?: string);
+    constructor(info: ytdl.videoInfo | SearchResult | any, member?: Discord.GuildMember, src?: string);
     /**
      * The source of the song
      * @type {string}
@@ -24,17 +24,17 @@ declare class Song {
      */
     user: Discord.User | null;
     /**
+     * Patch data from ytdl-core
+     * @param {ytdl.videoInfo|SearchResult} info Video info
+     * @private
+     */
+    private _patchYouTube;
+    /**
      * `ytdl-core` raw info (If the song is from YouTube)
      * @type {ytdl.videoInfo?}
      * @private
      */
     private info;
-    /**
-     * Patch data
-     * @param {ytdl.MoreVideoDetails|Object} info Video info
-     * @private
-     */
-    private _patch;
     /**
      * YouTube video id
      * @type {string}
@@ -96,11 +96,6 @@ declare class Song {
      */
     dislikes: number;
     /**
-     * Song repost count
-     * @type {number}
-     */
-    reposts: number;
-    /**
      * Song uploader
      * @type {Object}
      * @prop {string?} name Uploader name
@@ -122,6 +117,17 @@ declare class Song {
      * @type {Chapter[]}
      */
     chapters: Chapter[];
+    /**
+     * Patch data from other source
+     * @param {Object} info Video info
+     * @private
+     */
+    private _patchOther;
+    /**
+     * Song repost count
+     * @type {number}
+     */
+    reposts: number;
     /**
      * @param {Playlist} playlist Playlist
      * @param {Discord.GuildMember} [member] User requested
@@ -151,3 +157,4 @@ type Chapter = {
     start_time: number;
 };
 import Playlist = require("./Playlist");
+import SearchResult = require("./SearchResult");

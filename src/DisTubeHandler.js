@@ -63,7 +63,7 @@ class DisTubeHandler extends DisTubeBase {
     const member = message?.member || message;
     if (song instanceof Song || song instanceof Playlist) return song;
     if (song instanceof SearchResult) {
-      if (song.type === "video") return new Song(await this.getYouTubeInfo(song.url), member);
+      if (song.type === "video") return new Song(song, member);
       else if (song.type === "playlist") return this.resolvePlaylist(message, song.url);
       throw new Error("Invalid SearchResult");
     }
@@ -130,8 +130,7 @@ class DisTubeHandler extends DisTubeBase {
       for (const song of songs) resolved.push(await this.resolveSong(member, song).catch(() => undefined));
       songs = resolved;
     }
-    songs = songs.filter(song => song);
-    return new Playlist(songs, member, properties);
+    return new Playlist(songs.filter(song => song), member, properties);
   }
 
   /**
@@ -281,6 +280,9 @@ class DisTubeHandler extends DisTubeBase {
       song.views = parseNumber(videoDetails.viewCount);
       song.likes = parseNumber(videoDetails.likes);
       song.dislikes = parseNumber(videoDetails.dislikes);
+      song.related = song.info.related_videos;
+      song.chapters = videoDetails.chapters;
+      song.age_restricted = videoDetails.age_restricted;
       if (song.info.formats.length) {
         song.streamURL = ytdl.chooseFormat(song.info.formats, {
           filter: song.isLive ? "audioandvideo" : "audioonly",
@@ -376,6 +378,7 @@ class DisTubeHandler extends DisTubeBase {
     const emitPlaySong = this._emitPlaySong(queue);
     if (!queue.prev && (queue.repeatMode !== 1 || queue.next)) {
       const prev = queue.songs.shift();
+      delete prev.info;
       if (this.options.savePreviousSongs) queue.previousSongs.push(prev);
     }
     queue.next = queue.prev = false;

@@ -51,7 +51,7 @@ class Playlist {
      * Playlist thumbnail.
      * @type {string}
      */
-    this.thumbnail = playlist.thumbnail || this.songs[0].thumbnail;
+    this.thumbnail = playlist.thumbnail?.url || playlist.thumbnail || this.songs[0].thumbnail;
     for (const [key, value] of Object.entries(properties)) this[key] = value;
   }
 

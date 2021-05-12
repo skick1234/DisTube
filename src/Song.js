@@ -1,6 +1,9 @@
 const { formatDuration, toSecond, parseNumber } = require("./util"),
-  ytdl = require("ytdl-core"),
   Playlist = require("./Playlist"),
+  // eslint-disable-next-line no-unused-vars
+  ytdl = require("ytdl-core"),
+  // eslint-disable-next-line no-unused-vars
+  SearchResult = require("./SearchResult"),
   // eslint-disable-next-line no-unused-vars
   Discord = require("discord.js");
 
@@ -8,7 +11,7 @@ const { formatDuration, toSecond, parseNumber } = require("./util"),
 class Song {
   /**
    * Create a Song
-   * @param {ytdl.videoInfo|Object} info Raw info
+   * @param {ytdl.videoInfo|SearchResult|Object} info Raw info
    * @param {Discord.GuildMember} member Requested user
    * @param {string} src Song source
    */
@@ -29,44 +32,48 @@ class Song {
      * @type {Discord.User?}
      */
     this.user = this.member?.user;
-    if (this.source === "youtube" && info.full) {
+    if (this.source === "youtube") this._patchYouTube(info);
+    else this._patchOther(info);
+  }
+
+  /**
+   * Patch data from ytdl-core
+   * @param {ytdl.videoInfo|SearchResult} info Video info
+   * @private
+   */
+  _patchYouTube(info) {
+    if (info.full) {
       /**
        * `ytdl-core` raw info (If the song is from YouTube)
        * @type {ytdl.videoInfo?}
        * @private
        */
       this.info = info;
-      info = info.videoDetails;
+      const err = require("ytdl-core/lib/utils").playError(info.player_response, ["UNPLAYABLE", "LIVE_STREAM_OFFLINE", "LOGIN_REQUIRED"]);
+      if (err) throw err;
+      if (!info.formats?.length) throw new Error("This video is unavailable");
     }
-    this._patch(info);
-  }
-
-  /**
-   * Patch data
-   * @param {ytdl.MoreVideoDetails|Object} info Video info
-   * @private
-   */
-  _patch(info) {
+    const details = info.videoDetails || info;
     /**
      * YouTube video id
      * @type {string}
      */
-    this.id = info.videoId || info.id;
+    this.id = details.videoId || details.id;
     /**
      * Song name aka video title.
      * @type {string}
      */
-    this.name = info.title || info.name;
+    this.name = details.title || details.name;
     /**
      * Indicates if the video is an active live.
      * @type {boolean}
      */
-    this.isLive = info.isLive || info.is_live || false;
+    this.isLive = !!details.isLive;
     /**
      * Song duration.
      * @type {number}
      */
-    this.duration = this.isLive ? 0 : toSecond(info.lengthSeconds || info._duration_raw || info.duration);
+    this.duration = this.isLive ? 0 : toSecond(details.lengthSeconds || details.duration);
     /**
      * Formatted duration string (`hh:mm:ss`, `mm:ss` or `Live`).
      * @type {string}
@@ -76,7 +83,7 @@ class Song {
      * Song URL.
      * @type {string}
      */
-    this.url = this.source === "youtube" ? `https://www.youtube.com/watch?v=${this.id}` : info.webpage_url || info.url;
+    this.url = `https://www.youtube.com/watch?v=${this.id}`;
     /**
      * Stream / Download URL.
      * @type {string?}
@@ -84,13 +91,13 @@ class Song {
     this.streamURL = this.info?.formats.length ? ytdl.chooseFormat(this.info.formats, {
       filter: this.isLive ? "audioandvideo" : "audioonly",
       quality: "highestaudio",
-    }).url : info.url;
+    }).url : null;
     /**
      * Song thumbnail.
      * @type {string?}
      */
-    this.thumbnail = info.thumbnails?.sort((a, b) => b.width - a.width)[0].url ||
-      info.thumbnail?.url || info.thumbnail || null;
+    this.thumbnail = details.thumbnails?.sort((a, b) => b.width - a.width)[0].url ||
+      details.thumbnail?.url || details.thumbnail || null;
     /**
      * Related videos (Only available with YouTube video)
      * @type {Array<ytdl.relatedVideo>?}
@@ -100,22 +107,17 @@ class Song {
      * Song views count
      * @type {number}
      */
-    this.views = parseNumber(info.viewCount || info.view_count || info.views);
+    this.views = parseNumber(details.viewCount);
     /**
      * Song like count
      * @type {number}
      */
-    this.likes = parseNumber(info.likes || info.like_count);
+    this.likes = parseNumber(details.likes);
     /**
      * Song dislike count
      * @type {number}
      */
-    this.dislikes = parseNumber(info.dislikes || info.dislike_count);
-    /**
-     * Song repost count
-     * @type {number}
-     */
-    this.reposts = parseNumber(info.repost_count);
+    this.dislikes = parseNumber(details.dislikes);
     /**
      * Song uploader
      * @type {Object}
@@ -123,18 +125,14 @@ class Song {
      * @prop {string?} url Uploader url
      */
     this.uploader = {
-      name: info.author?.name || info.uploader || null,
-      url: info.author?.channel_url || info.uploader_url || null,
+      name: info.uploader?.name || details.author?.name || null,
+      url: info.uploader?.url || details.author?.channel_url || details.author?.url || null,
     };
     /**
      * Whether or not an age-restricted content
      * @type {boolean}
      */
-    this.age_restricted = info.age_restricted ||
-      (info.age_limit && parseNumber(info.age_limit) >= 18) ||
-      (typeof info.media?.notice === "string" && (
-        info.media.notice.includes("Age-restricted") || info.media.notice.includes("age-restricted")
-      )) || false;
+    this.age_restricted = !!details.age_restricted;
     /**
      * @typedef {Object} Chapter
      * @prop {string} title Chapter title
@@ -145,6 +143,37 @@ class Song {
      * @type {Chapter[]}
      */
     this.chapters = info.chapters || [];
+  }
+
+  /**
+   * Patch data from other source
+   * @param {Object} info Video info
+   * @private
+   */
+  _patchOther(info) {
+    this.id = info.id;
+    this.name = info.title || info.name;
+    this.isLive = Boolean(info.is_live || info.isLive);
+    this.duration = this.isLive ? 0 : toSecond(info._duration_raw || info.duration);
+    this.formattedDuration = this.isLive ? "Live" : formatDuration(this.duration);
+    this.url = info.webpage_url || info.url;
+    this.streamURL = info.streamURL || info.url || this.url || null;
+    this.thumbnail = info.thumbnail?.url || info.thumbnail || null;
+    this.related = info.related || null;
+    this.views = parseNumber(info.view_count || info.views);
+    this.likes = parseNumber(info.like_count || info.likes);
+    this.dislikes = parseNumber(info.dislike_count || info.dislikes);
+    /**
+     * Song repost count
+     * @type {number}
+     */
+    this.reposts = parseNumber(info.repost_count);
+    this.uploader = {
+      name: info.uploader || null,
+      url: info.uploader_url || null,
+    };
+    this.age_restricted = !!info.age_limit && parseNumber(info.age_limit) >= 18;
+    this.chapters = [];
   }
 
   /**
@@ -161,7 +190,7 @@ class Song {
      */
     this.playlist = playlist;
     this.member = member;
-    this.user = this.member?.user;
+    this.user = member?.user;
     return this;
   }
 }
