@@ -285,7 +285,7 @@ class DisTube extends EventEmitter {
    */
   async playCustomPlaylist(message, songs, properties = {}, playSkip = false, parallel = true) {
     try {
-      const playlist = this.handler.createCustomPlaylist(message, songs, properties, parallel);
+      const playlist = await this.handler.createCustomPlaylist(message, songs, properties, parallel);
       await this.handler.handlePlaylist(message, playlist, playSkip);
     } catch (e) {
       this.emitError(message.channel, e);
