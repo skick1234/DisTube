@@ -1,11 +1,9 @@
 const { formatDuration } = require("./util"),
   Song = require("./Song"),
   DisTubeBase = require("./DisTubeBase"),
-  // eslint-disable-next-line no-unused-vars
+  DisTube = require("./DisTube"),
   Discord = require("discord.js"),
-  // eslint-disable-next-line no-unused-vars
   { Readable } = require("stream"),
-  // eslint-disable-next-line no-unused-vars
   DisTubeHandler = require("./DisTubeHandler");
 
 /**
@@ -13,6 +11,13 @@ const { formatDuration } = require("./util"),
  * @extends DisTubeBase
  */
 class Queue extends DisTubeBase {
+  /**
+   * Create a queue
+   * @param {DisTube} distube DisTube
+   * @param {Discord.Message|Discord.VoiceChannel|Discord.StageChannel} message Message
+   * @param {Song|Song[]} song First song(s)
+   * @param {Discord.TextChannel?} textChannel Default text channel
+   */
   constructor(distube, message, song, textChannel = null) {
     super(distube);
     /**
@@ -161,7 +166,7 @@ class Queue extends DisTubeBase {
    * @param {Song|Array<Song>} song Song to add
    * @param {boolean} [unshift=false] Unshift?
    * @throws {Error}
-   * @returns {Queue}
+   * @returns {Queue} The guild queue
    */
   addToQueue(song, unshift = false) {
     const isArray = Array.isArray(song);
@@ -259,7 +264,7 @@ class Queue extends DisTubeBase {
    * The previous one is -1, -2,...
    * @param {number} num The song number to play
    * @returns {Queue} The guild queue
-   * @throws {InvalidSong} if `num` is invalid number (0 < num < {@link Queue#songs}.length)
+   * @throws {Error} if `num` is invalid number (0 < num < {@link Queue#songs}.length)
    */
   jump(num) {
     if (num > this.songs.length || -num > this.previousSongs.length || num === 0) throw new RangeError("InvalidSong");
@@ -307,7 +312,7 @@ class Queue extends DisTubeBase {
   /**
    * Set the playing time to another position
    * @param {number} time Time in seconds
-   * @returns {Queue}
+   * @returns {Queue} The guild queue
    */
   seek(time) {
     this.beginTime = time;

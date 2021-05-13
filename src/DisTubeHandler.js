@@ -6,13 +6,11 @@ const ytdl = require("@distube/ytdl"),
   { parseNumber, isURL } = require("./util"),
   youtube_dl = require("@distube/youtube-dl"),
   DisTubeBase = require("./DisTubeBase"),
+  Discord = require("discord.js"),
   // eslint-disable-next-line no-unused-vars
   Queue = require("./Queue"),
   // eslint-disable-next-line no-unused-vars
-  { opus } = require("prism-media"),
-  // eslint-disable-next-line no-unused-vars
-  Discord = require("discord.js");
-
+  { opus } = require("prism-media");
 
 /**
  * DisTube's Handler
@@ -46,9 +44,11 @@ class DisTubeHandler extends DisTubeBase {
 
   /**
    * @param {string} url url
+   * @param {boolean} [basic=false] getBasicInfo?
    * @returns {Promise<ytdl.videoInfo>}
    */
-  getYouTubeInfo(url) {
+  getYouTubeInfo(url, basic = false) {
+    if (basic) return ytdl.getBasicInfo(url, this.ytdlOptions);
     return ytdl.getInfo(url, this.ytdlOptions);
   }
 
@@ -175,8 +175,9 @@ class DisTubeHandler extends DisTubeBase {
    * @returns {Promise<Song?>} Song info
    */
   async searchSong(message, query) {
+    const limit = this.options.searchSongs > 1 ? this.options.searchSongs : 1;
     const results = await this.distube.search(query, {
-      limit: this.options.searchSongs || 1,
+      limit,
       safeSearch: this.options.nsfw ? false : !message.channel?.nsfw,
     }).catch(() => undefined);
     if (!results?.length) {
@@ -184,7 +185,7 @@ class DisTubeHandler extends DisTubeBase {
       return null;
     }
     let result = results[0];
-    if (this.options.searchSongs && this.options.searchSongs > 1) {
+    if (limit > 1) {
       this.emit("searchResult", message, results, query);
       const answers = await message.channel.awaitMessages(m => m.author.id === message.author.id, {
         max: 1,
@@ -241,13 +242,13 @@ class DisTubeHandler extends DisTubeBase {
    * Get related songs
    * @param {Song} song song
    * @returns {Array<ytdl.relatedVideo>} Related videos
-   * @throws {NoRelated}
+   * @throws {Error} NoRelated
    */
   async getRelatedVideo(song) {
     if (song.source !== "youtube") throw new Error("NoRelated");
     let related = song.related;
-    if (!related) related = (await ytdl.getBasicInfo(song.url, this.ytdlOptions)).related_videos;
-    if (!related || !related.length) throw new Error("NoRelated");
+    if (!related) related = (await this.getYouTubeInfo(song.url, true)).related_videos;
+    if (!related?.length) throw new Error("NoRelated");
     return related;
   }
 
@@ -304,10 +305,7 @@ class DisTubeHandler extends DisTubeBase {
   _emitPlaySong(queue) {
     if (
       !this.options.emitNewSongOnly ||
-      (
-        queue.repeatMode !== 1 &&
-        queue.songs[0]?.id !== queue.songs[1]?.id
-      )
+      (queue.repeatMode !== 1 && queue.songs[0]?.id !== queue.songs[1]?.id)
     ) return true;
     return false;
   }

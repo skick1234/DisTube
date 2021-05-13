@@ -145,7 +145,7 @@ declare class DisTube extends EventEmitter {
     playSkip(message: Discord.Message, song: string | Song | SearchResult | Playlist): Promise<void>;
     /**
      * Play or add array of video urls.
-     * {@link DisTube#event:playList} or {@link DisTube#event:addList} will be emitted
+     * {@link DisTube#event:playSong} or {@link DisTube#event:addList} will be emitted
      * with `playlist`'s properties include `properties` parameter's properties such as
      * `user`, `songs`, `duration`, `formattedDuration`, `thumbnail` like {@link Playlist}
      * @returns {Promise<void>}
@@ -313,7 +313,7 @@ declare class DisTube extends EventEmitter {
      * @param {Discord.Snowflake|Discord.Message} message A message from guild channel
      * @param {number} num The song number to play
      * @returns {Queue} The guild queue
-     * @throws {InvalidSong} if `num` is invalid number (0 < num < {@link Queue#songs}.length)
+     * @throws {Error} if `num` is invalid number (0 < num < {@link Queue#songs}.length)
      * @example
      * client.on('message', (message) => {
      *     if (!message.content.startsWith(config.prefix)) return;
@@ -405,7 +405,7 @@ declare class DisTube extends EventEmitter {
      * Set the playing time to another position
      * @param {Discord.Snowflake|Discord.Message} message A message from guild channel
      * @param {number} time Time in seconds
-     * @returns {Queue}
+     * @returns {Queue} Seeked queue
      * @example
      * client.on('message', message => {
      *     if (!message.content.startsWith(config.prefix)) return;
@@ -461,7 +461,7 @@ declare class DisTube extends EventEmitter {
     ): this;
 }
 declare namespace DisTube {
-    export { CustomPlugin, ExtractorPlugin, Playlist, Song, Filters, DisTubeOptions };
+    export { CustomPlugin, ExtractorPlugin, Playlist, Song, Queue, SearchResult, Filters, DisTubeOptions };
 }
 import { EventEmitter } from "events";
 import Discord = require("discord.js");

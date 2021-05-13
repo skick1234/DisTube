@@ -2,7 +2,7 @@ export = CustomPlugin;
 /**
  * Custom Plugin
  * @extends Plugin
-*/
+ */
 declare class CustomPlugin extends Plugin {
     /** Create a custom plugin */
     constructor();

@@ -5,7 +5,7 @@ const Plugin = require("./Plugin"),
 /**
  * Custom Plugin
  * @extends Plugin
-*/
+ */
 class CustomPlugin extends Plugin {
   /** Create a custom plugin */
   constructor() {

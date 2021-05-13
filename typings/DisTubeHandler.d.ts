@@ -21,9 +21,10 @@ declare class DisTubeHandler extends DisTubeBase {
     deleteQueue(queue: Discord.Snowflake | Discord.Message | Queue): void;
     /**
      * @param {string} url url
+     * @param {boolean} [basic=false] getBasicInfo?
      * @returns {Promise<ytdl.videoInfo>}
      */
-    getYouTubeInfo(url: string): Promise<any>;
+    getYouTubeInfo(url: string, basic?: boolean): Promise<any>;
     /**
      * Resolve a Song
      * @param {Discord.Message|Discord.GuildMember} message A message from guild channel | A guild member
@@ -77,7 +78,7 @@ declare class DisTubeHandler extends DisTubeBase {
      * Get related songs
      * @param {Song} song song
      * @returns {Array<ytdl.relatedVideo>} Related videos
-     * @throws {NoRelated}
+     * @throws {Error} NoRelated
      */
     getRelatedVideo(song: Song): Array<any>;
     /**

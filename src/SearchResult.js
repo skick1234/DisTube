@@ -2,6 +2,10 @@ const { toSecond, formatDuration } = require("./util");
 
 /** Class representing a search result. */
 class SearchResult {
+  /**
+   * Create a search result
+   * @param {Object} info ytsr result
+   */
   constructor(info) {
     this.source = "youtube";
     /**

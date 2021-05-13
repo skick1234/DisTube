@@ -46,7 +46,7 @@
   },
   "devDependencies": {
     "@discordjs/opus": "^0.5.0",
-    "@types/node": "^15.0.2",
+    "@types/node": "^15.0.3",
     "discord.js": "github:discordjs/discord.js",
     "discord.js-docgen": "github:distubejs/docgen",
     "eslint": "^7.26.0",

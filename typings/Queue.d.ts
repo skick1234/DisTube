@@ -4,7 +4,14 @@ export = Queue;
  * @extends DisTubeBase
  */
 declare class Queue extends DisTubeBase {
-    constructor(distube: any, message: any, song: any, textChannel?: any);
+    /**
+     * Create a queue
+     * @param {DisTube} distube DisTube
+     * @param {Discord.Message|Discord.VoiceChannel|Discord.StageChannel} message Message
+     * @param {Song|Song[]} song First song(s)
+     * @param {Discord.TextChannel?} textChannel Default text channel
+     */
+    constructor(distube: DisTube, message: Discord.Message | Discord.VoiceChannel | Discord.StageChannel, song: Song | Song[], textChannel?: Discord.TextChannel | null);
     /**
      * Queue id (Guild id)
      * @type {Discord.Snowflake}
@@ -138,7 +145,7 @@ declare class Queue extends DisTubeBase {
      * @param {Song|Array<Song>} song Song to add
      * @param {boolean} [unshift=false] Unshift?
      * @throws {Error}
-     * @returns {Queue}
+     * @returns {Queue} The guild queue
      */
     addToQueue(song: Song | Array<Song>, unshift?: boolean): Queue;
     /**
@@ -184,7 +191,7 @@ declare class Queue extends DisTubeBase {
      * The previous one is -1, -2,...
      * @param {number} num The song number to play
      * @returns {Queue} The guild queue
-     * @throws {InvalidSong} if `num` is invalid number (0 < num < {@link Queue#songs}.length)
+     * @throws {Error} if `num` is invalid number (0 < num < {@link Queue#songs}.length)
      */
     jump(num: number): Queue;
     /**
@@ -206,7 +213,7 @@ declare class Queue extends DisTubeBase {
     /**
      * Set the playing time to another position
      * @param {number} time Time in seconds
-     * @returns {Queue}
+     * @returns {Queue} The guild queue
      */
     seek(time: number): Queue;
     /**
@@ -225,3 +232,4 @@ declare class Queue extends DisTubeBase {
 import DisTubeBase = require("./DisTubeBase");
 import Discord = require("discord.js");
 import Song = require("./Song");
+import DisTube = require("./DisTube");

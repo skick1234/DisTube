@@ -1,10 +1,7 @@
 const { formatDuration, toSecond, parseNumber } = require("./util"),
   Playlist = require("./Playlist"),
-  // eslint-disable-next-line no-unused-vars
   ytdl = require("ytdl-core"),
-  // eslint-disable-next-line no-unused-vars
   SearchResult = require("./SearchResult"),
-  // eslint-disable-next-line no-unused-vars
   Discord = require("discord.js");
 
 /** Class representing a song. */

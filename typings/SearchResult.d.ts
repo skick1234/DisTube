@@ -1,6 +1,10 @@
 export = SearchResult;
 /** Class representing a search result. */
 declare class SearchResult {
+    /**
+     * Create a search result
+     * @param {Object} info ytsr result
+     */
     constructor(info: any);
     source: string;
     /**

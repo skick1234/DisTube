@@ -9,7 +9,6 @@ const ytsr = require("@distube/ytsr"),
   DisTubeOption = require("./DisTubeOptions"),
   DisTubeHandler = require("./DisTubeHandler"),
   Song = require("./Song"),
-  // eslint-disable-next-line no-unused-vars
   Plugin = require("./Plugin/Plugin"),
   CustomPlugin = require("./Plugin/CustomPlugin"),
   ExtractorPlugin = require("./Plugin/ExtractorPlugin");
@@ -268,7 +267,7 @@ class DisTube extends EventEmitter {
 
   /**
    * Play or add array of video urls.
-   * {@link DisTube#event:playList} or {@link DisTube#event:addList} will be emitted
+   * {@link DisTube#event:playSong} or {@link DisTube#event:addList} will be emitted
    * with `playlist`'s properties include `properties` parameter's properties such as
    * `user`, `songs`, `duration`, `formattedDuration`, `thumbnail` like {@link Playlist}
    * @returns {Promise<void>}
@@ -517,7 +516,7 @@ class DisTube extends EventEmitter {
    * @param {Discord.Snowflake|Discord.Message} message A message from guild channel
    * @param {number} num The song number to play
    * @returns {Queue} The guild queue
-   * @throws {InvalidSong} if `num` is invalid number (0 < num < {@link Queue#songs}.length)
+   * @throws {Error} if `num` is invalid number (0 < num < {@link Queue#songs}.length)
    * @example
    * client.on('message', (message) => {
    *     if (!message.content.startsWith(config.prefix)) return;
@@ -642,7 +641,7 @@ class DisTube extends EventEmitter {
    * Set the playing time to another position
    * @param {Discord.Snowflake|Discord.Message} message A message from guild channel
    * @param {number} time Time in seconds
-   * @returns {Queue}
+   * @returns {Queue} Seeked queue
    * @example
    * client.on('message', message => {
    *     if (!message.content.startsWith(config.prefix)) return;
@@ -677,6 +676,8 @@ DisTube.CustomPlugin = CustomPlugin;
 DisTube.ExtractorPlugin = ExtractorPlugin;
 DisTube.Playlist = Playlist;
 DisTube.Song = Song;
+DisTube.Queue = Queue;
+DisTube.SearchResult = SearchResult;
 module.exports = DisTube;
 
 /**
@@ -830,7 +831,6 @@ module.exports = DisTube;
  * @param {Queue} queue The guild queue
  */
 
-
 /**
  * Emitted when the bot is disconnected to the voice channel
  *
@@ -852,4 +852,3 @@ module.exports = DisTube;
  * @param {Queue} queue The guild queue
  * @param {Song} song Finished song
  */
-

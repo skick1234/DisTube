@@ -1,24 +1,22 @@
 {
-    "files": ["src/DisTube.js"],
-    "exclude": [
-        "node_modules"
+  "files": ["src/DisTube.js"],
+  "exclude": ["node_modules"],
+  "compilerOptions": {
+    "module": "commonjs",
+    "target": "esnext",
+    "lib": [
+      "esnext",
+      "esnext.array",
+      "esnext.asynciterable",
+      "esnext.intl",
+      "esnext.symbol"
     ],
-    "compilerOptions": {
-        "module": "commonjs",
-        "target": "esnext",
-        "lib": [
-            "esnext",
-            "esnext.array",
-            "esnext.asynciterable",
-            "esnext.intl",
-            "esnext.symbol"
-        ],
-        "outDir": "typings/",
-        "moduleResolution": "node",
-        "allowJs": true,
-        "declaration": true,
-        "skipLibCheck": true,
-        "emitDeclarationOnly": true,
-        "skipDefaultLibCheck": true
-    }
+    "outDir": "typings/",
+    "moduleResolution": "node",
+    "allowJs": true,
+    "declaration": true,
+    "skipLibCheck": true,
+    "emitDeclarationOnly": true,
+    "skipDefaultLibCheck": true
+  }
 }
