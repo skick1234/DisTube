@@ -275,27 +275,6 @@ class DisTubeHandler extends DisTubeBase {
     return ytdl.arbitraryStream(song.streamURL, streamOptions);
   }
 
-  async checkYouTubeInfo(song) {
-    if (!song.info) {
-      const { videoDetails } = song.info = await this.getYouTubeInfo(song.url);
-      song.views = parseNumber(videoDetails.viewCount);
-      song.likes = parseNumber(videoDetails.likes);
-      song.dislikes = parseNumber(videoDetails.dislikes);
-      song.related = song.info.related_videos;
-      song.chapters = videoDetails.chapters;
-      song.age_restricted = videoDetails.age_restricted;
-      if (song.info.formats.length) {
-        song.streamURL = ytdl.chooseFormat(song.info.formats, {
-          filter: song.isLive ? "audioandvideo" : "audioonly",
-          quality: "highestaudio",
-        }).url;
-      }
-    }
-    const err = require("ytdl-core/lib/utils").playError(song.info.player_response, ["UNPLAYABLE", "LIVE_STREAM_OFFLINE", "LOGIN_REQUIRED"]);
-    if (err) throw err;
-    if (!song.info.formats.length) throw new Error("This video is unavailable");
-  }
-
   /**
    * Whether or not emit playSong event
    * @param {Queue} queue Queue
@@ -324,7 +303,12 @@ class DisTubeHandler extends DisTubeBase {
     const song = queue.songs[0];
     try {
       let errorEmitted = false;
-      if (song.source === "youtube") await this.checkYouTubeInfo(song);
+      if (song.source === "youtube" && !song.info) song._patchYouTube(await this.getYouTubeInfo(song.url));
+      else {
+        for (const plugin of this.distube.extractorPlugins.concat(this.distube.customPlugins)) {
+          if (await plugin.validate(song.url)) song.streamURL = await plugin.getStreamURL(song.url);
+        }
+      }
       const stream = this.createStream(queue).on("error", e => {
         errorEmitted = true;
         e.name = "Stream";

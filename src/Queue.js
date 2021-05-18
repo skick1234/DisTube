@@ -177,6 +177,8 @@ class Queue extends DisTubeBase {
       else this.songs.unshift(playing, song);
     } else if (isArray) this.songs.push(...song);
     else this.songs.push(song);
+    if (isArray) song.map(s => delete s.info);
+    else delete song.info;
     return this;
   }
   /**
@@ -303,7 +305,7 @@ class Queue extends DisTubeBase {
   setFilter(filter) {
     if (filter === false) this.filters = [];
     else if (!Object.prototype.hasOwnProperty.call(this.distube.filters, filter)) throw new TypeError(`${filter} is not a filter name.`);
-    else if (this.filters.includes(filter)) this.filters = this.filters.filter(f => f !== filter);
+    else if (this.filters.includes(filter)) this.filters.splice(this.filters.indexOf(filter), 1);
     else this.filters.push(filter);
     this.beginTime = this.currentTime;
     this.handler.playSong(this);

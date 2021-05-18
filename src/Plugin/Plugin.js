@@ -31,6 +31,12 @@ class Plugin {
    * @returns {Promise<boolean>}
    */
   async validate(url) { return false }
+  /**
+   * Get the stream url from {@link Song#url}. Returns {@link Song#url} by default. Not needed if the plugin plays song from YouTube.
+   * @param {string} url Input url
+   * @returns {Promise<string>}
+   */
+  async getStreamURL(url) { return url }
 }
 
 module.exports = Plugin;
