@@ -197,7 +197,7 @@ class DisTube extends EventEmitter {
    * @param {Discord.GuildMember} [options.member] Requested user (default is your bot)
    * @param {Discord.TextChannel} [options.textChannel] Default {@link Queue#textChannel} (if the queue wasn't created)
    * @param {boolean} [options.skip] Skip the playing song (if exists)
-   * @param {Discord.Message} [options.message] Called message (For built-in search events. If this is {@link https://developer.mozilla.org/en-US/docs/Glossary/Falsy|falsy value}, it will play the first result instead)
+   * @param {Discord.Message} [options.message] Called message (For built-in search events. If this is a {@link https://developer.mozilla.org/en-US/docs/Glossary/Falsy|falsy value}, it will play the first result instead)
    */
   async playVoiceChannel(voiceChannel, song, options = {}) {
     if (!["voice", "stage"].includes(voiceChannel?.type)) {
@@ -296,12 +296,11 @@ class DisTube extends EventEmitter {
    * @param {Object} options Search options
    * @param {number} [options.limit=10] Limit the results
    * @param {'video'|'playlist'} [options.type='video'] Type of search (`video` or `playlist`).
-   * @param {boolean} [options.safeSearch=false] Type of search (`video` or `playlist`).
-   * @param {boolean} retried Retried?
+   * @param {boolean} [options.safeSearch=false] Whether or not use safe search (YouTube restricted mode)
    * @throws {Error}
    * @returns {Promise<Array<SearchResult>>} Array of results
    */
-  async search(string, options = {}, retried = false) {
+  async search(string, options = {}) {
     const opts = Object.assign({ type: "video", limit: 10, safeSearch: false }, options);
     if (typeof opts.type !== "string" || !["video", "playlist"].includes(opts.type)) throw new Error("options.type must be 'video' or 'playlist'.");
     if (typeof opts.limit !== "number") throw new Error("options.limit must be a number");
@@ -314,8 +313,9 @@ class DisTube extends EventEmitter {
       if (results.length === 0) throw Error("No result!");
       return results;
     } catch (e) {
-      if (retried) throw e;
-      return this.search(string, options, true);
+      if (options.retried) throw e;
+      options.retried = true;
+      return this.search(string, options);
     }
   }
 
@@ -751,7 +751,7 @@ module.exports = DisTube;
  * @event DisTube#noRelated
  * @param {Queue} queue The guild queue
  * @example
- * distube.on("noRelated", queue => queue.textChannel.send("Can't find related video to play. Stop playing music."));
+ * distube.on("noRelated", queue => queue.textChannel.send("Can't find related video to play."));
  */
 
 /**

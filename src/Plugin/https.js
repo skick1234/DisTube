@@ -18,7 +18,7 @@ class HTTPSPlugin extends ExtractorPlugin {
   resolve(url, member) {
     url = url.replace(/\/+$/, "");
     return new Song({
-      name: url.substring(url.lastIndexOf("/") + 1).replace(/((\?|#).*)?$/, ""),
+      name: url.substring(url.lastIndexOf("/") + 1).replace(/((\?|#).*)?$/, "") || url,
       url,
     }, member, "https");
   }

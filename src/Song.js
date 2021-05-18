@@ -41,7 +41,7 @@ class Song {
   _patchYouTube(info) {
     if (info.full) {
       /**
-       * `ytdl-core` raw info (If the song is from YouTube)
+       * `ytdl-core` raw info (If the song is playing)
        * @type {ytdl.videoInfo?}
        * @private
        */
@@ -85,7 +85,7 @@ class Song {
      * Stream / Download URL.
      * @type {string?}
      */
-    this.streamURL = this.info?.formats.length ? ytdl.chooseFormat(this.info.formats, {
+    this.streamURL = this.info?.formats?.length ? ytdl.chooseFormat(this.info.formats, {
       filter: this.isLive ? "audioandvideo" : "audioonly",
       quality: "highestaudio",
     }).url : null;

@@ -5,7 +5,6 @@ const Discord = require("discord.js");
 
 /** @private */
 class DisTubeBase {
-  /** @param {DisTube} distube distube */
   constructor(distube) {
     /**
      * DisTube
