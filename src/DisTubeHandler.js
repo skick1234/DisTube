@@ -3,8 +3,7 @@ const ytdl = require("@distube/ytdl"),
   Song = require("./Song"),
   SearchResult = require("./SearchResult"),
   Playlist = require("./Playlist"),
-  { parseNumber, isURL } = require("./util"),
-  youtube_dl = require("@distube/youtube-dl"),
+  { isURL } = require("./util"),
   DisTubeBase = require("./DisTubeBase"),
   Discord = require("discord.js"),
   // eslint-disable-next-line no-unused-vars
@@ -71,19 +70,7 @@ class DisTubeHandler extends DisTubeBase {
     if (ytdl.validateURL(song)) return new Song(await this.getYouTubeInfo(song), member);
     if (isURL(song)) {
       for (const plugin of this.distube.extractorPlugins) if (await plugin.validate(song)) return plugin.resolve(song, member);
-      if (!this.options.youtubeDL) throw new Error("Not Supported URL!");
-      const info = await youtube_dl(song, {
-        dumpSingleJson: true,
-        noWarnings: true,
-        noCallHome: true,
-        preferFreeFormats: true,
-      }).catch(e => { throw new Error(`[youtube-dl] ${e.stderr || e}`) });
-      if (Array.isArray(info.entries) && info.entries.length > 0) {
-        info.source = info.extractor.match(/\w+/)[0];
-        info.songs = info.entries.map(i => new Song(i, member, i.extractor));
-        return new Playlist(info, member);
-      }
-      return new Song(info, member, info.extractor);
+      throw new Error("Not Supported URL!");
     }
     if (typeof song !== "string") throw new TypeError("song is not a valid type");
     if (message instanceof Discord.GuildMember) song = (await this.distube.search(song, { limit: 1 }))[0];

@@ -128,17 +128,14 @@ class DisTube extends EventEmitter {
       });
     }
 
-    if (this.options.updateYouTubeDL) {
-      require("@distube/youtube-dl/src/download")()
-        .then(version => console.log(`[DisTube] Updated youtube-dl to ${version}!`))
-        .catch(console.error)
-        .catch(() => console.log("[DisTube] Unable to update youtube-dl, using default version."));
-    }
-
     // Default plugin
     const HTTPPlugin = require("./Plugin/http"),
       HTTPSPlugin = require("./Plugin/https");
     this.options.plugins.push(new HTTPPlugin(), new HTTPSPlugin());
+    if (this.options.youtubeDL) {
+      const YouTubeDLPlugin = require("./Plugin/youtube-dl");
+      this.options.plugins.push(new YouTubeDLPlugin(this.options.updateYouTubeDL));
+    }
     this.options.plugins.map(p => p.init(this));
     /**
      * Extractor Plugins
