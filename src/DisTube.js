@@ -602,7 +602,7 @@ class DisTube extends EventEmitter {
   /**
    * Add related song to the queue
    * @param {Discord.Snowflake|Discord.Message} message A message from guild channel
-   * @returns {Promise<Queue>} The guild queue
+   * @returns {Queue} The guild queue
    */
   addRelatedSong(message) {
     const queue = this.getQueue(message);

@@ -19,16 +19,7 @@ class Song {
      * @type {string}
      */
     this.source = src.toLowerCase();
-    /**
-     * User requested
-     * @type {Discord.GuildMember?}
-     */
-    this.member = member;
-    /**
-     * User requested
-     * @type {Discord.User?}
-     */
-    this.user = this.member?.user;
+    this._patchMember(member);
     if (this.source === "youtube") this._patchYouTube(info);
     else this._patchOther(info);
   }
@@ -70,7 +61,7 @@ class Song {
      * Song duration.
      * @type {number}
      */
-    this.duration = this.isLive ? 0 : toSecond(details.lengthSeconds || details.duration);
+    this.duration = this.isLive ? 0 : toSecond(details.lengthSeconds || details.length_seconds || details.duration);
     /**
      * Formatted duration string (`hh:mm:ss`, `mm:ss` or `Live`).
      * @type {string}
@@ -96,15 +87,15 @@ class Song {
     this.thumbnail = details.thumbnails?.sort((a, b) => b.width - a.width)[0].url ||
       details.thumbnail?.url || details.thumbnail || null;
     /**
-     * Related videos (Only available with YouTube video)
-     * @type {Array<ytdl.relatedVideo>?}
+     * Related songs
+     * @type {Array<Song>}
      */
-    this.related = this.info?.related_videos;
+    this.related = this.info?.related_videos.map(v => new Song(v)) || [];
     /**
      * Song views count
      * @type {number}
      */
-    this.views = parseNumber(details.viewCount);
+    this.views = parseNumber(details.viewCount || details.view_count);
     /**
      * Song like count
      * @type {number}
@@ -156,7 +147,7 @@ class Song {
     this.url = info.webpage_url || info.url;
     this.streamURL = info.streamURL || info.url || this.url || null;
     this.thumbnail = info.thumbnail?.url || info.thumbnail || null;
-    this.related = info.related || null;
+    this.related = info.related || [];
     this.views = parseNumber(info.view_count || info.views);
     this.likes = parseNumber(info.like_count || info.likes);
     this.dislikes = parseNumber(info.dislike_count || info.dislikes);
@@ -164,18 +155,18 @@ class Song {
      * Song repost count
      * @type {number}
      */
-    this.reposts = parseNumber(info.repost_count);
+    this.reposts = parseNumber(info.repost_count || info.reposts);
     this.uploader = {
       name: info.uploader || null,
       url: info.uploader_url || null,
     };
     this.age_restricted = !!info.age_limit && parseNumber(info.age_limit) >= 18;
-    this.chapters = [];
+    this.chapters = info.chapters || [];
   }
 
   /**
    * @param {Playlist} playlist Playlist
-   * @param {Discord.GuildMember} [member] User requested
+   * @param {Discord.GuildMember} [member] Requested user
    * @private
    * @returns {Song}
    */
@@ -186,7 +177,24 @@ class Song {
      * @type {Playlist?}
      */
     this.playlist = playlist;
+    return this._patchMember(member);
+  }
+
+  /**
+   * @param {Discord.GuildMember} [member] Requested user
+   * @private
+   * @returns {Song}
+   */
+  _patchMember(member = this.member) {
+    /**
+     * User requested
+     * @type {Discord.GuildMember?}
+     */
     this.member = member;
+    /**
+     * User requested
+     * @type {Discord.User?}
+     */
     this.user = member?.user;
     return this;
   }

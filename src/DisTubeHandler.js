@@ -226,20 +226,6 @@ class DisTubeHandler extends DisTubeBase {
   }
 
   /**
-   * Get related songs
-   * @param {Song} song song
-   * @returns {Array<ytdl.relatedVideo>} Related videos
-   * @throws {Error} NoRelated
-   */
-  async getRelatedVideo(song) {
-    if (song.source !== "youtube") throw new Error("NoRelated");
-    let related = song.related;
-    if (!related) related = (await this.getYouTubeInfo(song.url, true)).related_videos;
-    if (!related?.length) throw new Error("NoRelated");
-    return related;
-  }
-
-  /**
    * Create a ytdl stream
    * @param {Queue} queue Queue
    * @returns {opus.Encoder}
@@ -336,7 +322,7 @@ class DisTubeHandler extends DisTubeBase {
       else queue.songs.unshift(queue.previousSongs.pop());
     }
     if (queue.songs.length <= 1 && (queue.next || !queue.repeatMode)) {
-      if (queue.autoplay) try { await queue.addRelatedVideo() } catch { this.emit("noRelated", queue) }
+      if (queue.autoplay) try { await queue.addRelatedSong() } catch { this.emit("noRelated", queue) }
       if (queue.songs.length <= 1) {
         if (this.options.leaveOnFinish) queue.connection.channel.leave();
         if (!queue.autoplay) this.emit("finish", queue);
