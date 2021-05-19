@@ -219,10 +219,10 @@ declare class Queue extends DisTubeBase {
     /**
      * Add a related song to the queue
      * @param {Song} [song] A song to get the related one
-     * @returns {Promise<Queue>} The guild queue
+     * @returns {Queue} The guild queue
      * @throws {Error}
      */
-    addRelatedVideo(song?: Song): Promise<Queue>;
+    addRelatedSong(song?: Song): Queue;
     /**
      * Toggle autoplay mode
      * @returns {boolean} Autoplay mode state

@@ -14,23 +14,13 @@ declare class Song {
      */
     source: string;
     /**
-     * User requested
-     * @type {Discord.GuildMember?}
-     */
-    member: Discord.GuildMember | null;
-    /**
-     * User requested
-     * @type {Discord.User?}
-     */
-    user: Discord.User | null;
-    /**
      * Patch data from ytdl-core
      * @param {ytdl.videoInfo|SearchResult} info Video info
      * @private
      */
     private _patchYouTube;
     /**
-     * `ytdl-core` raw info (If the song is from YouTube)
+     * `ytdl-core` raw info (If the song is playing)
      * @type {ytdl.videoInfo?}
      * @private
      */
@@ -76,10 +66,10 @@ declare class Song {
      */
     thumbnail: string | null;
     /**
-     * Related videos (Only available with YouTube video)
-     * @type {Array<ytdl.relatedVideo>?}
+     * Related songs
+     * @type {Array<Song>}
      */
-    related: Array<ytdl.relatedVideo> | null;
+    related: Array<Song>;
     /**
      * Song views count
      * @type {number}
@@ -130,7 +120,7 @@ declare class Song {
     reposts: number;
     /**
      * @param {Playlist} playlist Playlist
-     * @param {Discord.GuildMember} [member] User requested
+     * @param {Discord.GuildMember} [member] Requested user
      * @private
      * @returns {Song}
      */
@@ -140,12 +130,26 @@ declare class Song {
      * @type {Playlist?}
      */
     playlist: Playlist | null;
+    /**
+     * @param {Discord.GuildMember} [member] Requested user
+     * @private
+     * @returns {Song}
+     */
+    private _patchMember;
+    /**
+     * User requested
+     * @type {Discord.GuildMember?}
+     */
+    member: Discord.GuildMember | null;
+    /**
+     * User requested
+     * @type {Discord.User?}
+     */
+    user: Discord.User | null;
 }
 declare namespace Song {
     export { Chapter };
 }
-import Discord = require("discord.js");
-import ytdl = require("ytdl-core");
 type Chapter = {
     /**
      * Chapter title
@@ -157,4 +161,6 @@ type Chapter = {
     start_time: number;
 };
 import Playlist = require("./Playlist");
+import Discord = require("discord.js");
+import ytdl = require("ytdl-core");
 import SearchResult = require("./SearchResult");

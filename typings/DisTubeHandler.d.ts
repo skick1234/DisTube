@@ -5,7 +5,6 @@ export = DisTubeHandler;
  * @private
  */
 declare class DisTubeHandler extends DisTubeBase {
-    constructor(distube: any);
     ytdlOptions: any;
     /**
      * Emit error event
@@ -75,19 +74,11 @@ declare class DisTubeHandler extends DisTubeBase {
      */
     joinVoiceChannel(queue: Queue, voice: Discord.VoiceChannel | Discord.StageChannel, retried?: boolean): Promise<Queue | true>;
     /**
-     * Get related songs
-     * @param {Song} song song
-     * @returns {Array<ytdl.relatedVideo>} Related videos
-     * @throws {Error} NoRelated
-     */
-    getRelatedVideo(song: Song): Array<any>;
-    /**
      * Create a ytdl stream
      * @param {Queue} queue Queue
      * @returns {opus.Encoder}
      */
     createStream(queue: Queue): opus.Encoder;
-    checkYouTubeInfo(song: any): Promise<void>;
     /**
      * Whether or not emit playSong event
      * @param {Queue} queue Queue

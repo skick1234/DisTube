@@ -27,5 +27,11 @@ declare class Plugin {
      * @returns {Promise<boolean>}
      */
     validate(url: string): Promise<boolean>;
+    /**
+     * Get the stream url from {@link Song#url}. Returns {@link Song#url} by default. Not needed if the plugin plays song from YouTube.
+     * @param {string} url Input url
+     * @returns {Promise<string>}
+     */
+    getStreamURL(url: string): Promise<string>;
 }
 import DisTube = require("../DisTube");

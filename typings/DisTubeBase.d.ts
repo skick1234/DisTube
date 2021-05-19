@@ -1,8 +1,7 @@
 export = DisTubeBase;
 /** @private */
 declare class DisTubeBase {
-    /** @param {DisTube} distube distube */
-    constructor(distube: DisTube);
+    constructor(distube: any);
     /**
      * DisTube
      * @type {DisTube}
@@ -28,4 +27,3 @@ declare class DisTubeBase {
      */
     private emit;
 }
-import DisTube = require("./DisTube");

@@ -538,7 +538,6 @@ class DisTube extends EventEmitter {
    * @param {Discord.Snowflake|Discord.Message} message A message from guild channel
    * @param {number} mode The repeat modes `(0: disabled, 1: Repeat a song, 2: Repeat all the queue)`
    * @returns {number} The new repeat mode
-   *
    * @example
    * client.on('message', (message) => {
    *     if (!message.content.startsWith(config.prefix)) return;
