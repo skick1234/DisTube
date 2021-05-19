@@ -327,7 +327,7 @@ class Queue extends DisTubeBase {
    * @returns {Promise<Queue>} The guild queue
    * @throws {Error}
    */
-  async addRelatedVideo(song = this.songs[0]) {
+  async addRelatedSong(song = this.songs[0]) {
     const related = (await this.handler.getRelatedVideo(song))
       .find(v => !this.previousSongs.map(s => s.id).includes(v.id));
     if (!related) throw new Error("Cannot find any related songs.");

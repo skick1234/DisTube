@@ -604,10 +604,10 @@ class DisTube extends EventEmitter {
    * @param {Discord.Snowflake|Discord.Message} message A message from guild channel
    * @returns {Promise<Queue>} The guild queue
    */
-  addRelatedVideo(message) {
+  addRelatedSong(message) {
     const queue = this.getQueue(message);
     if (!queue) throw new Error("Cannot find the playing queue.");
-    return queue.addRelatedVideo();
+    return queue.addRelatedSong();
   }
 
   /**
