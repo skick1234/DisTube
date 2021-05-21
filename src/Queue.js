@@ -324,13 +324,13 @@ class Queue extends DisTubeBase {
   /**
    * Add a related song to the queue
    * @param {Song} [song] A song to get the related one
-   * @returns {Queue} The guild queue
+   * @returns {Promise<Queue>} The guild queue
    * @throws {Error}
    */
-  addRelatedSong(song = this.songs[0]) {
+  async addRelatedSong(song = this.songs[0]) {
     const related = song.related[0];
     if (!related || !(related instanceof Song)) throw new Error("Cannot find any related songs.");
-    this.addToQueue(related._patchMember(this.voiceChannel?.guild?.me));
+    this.addToQueue(await this.handler.resolveSong(this.voiceChannel?.guild?.me, related.url));
     return this;
   }
   /**
