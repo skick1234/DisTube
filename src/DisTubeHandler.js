@@ -276,12 +276,11 @@ class DisTubeHandler extends DisTubeBase {
     const song = queue.songs[0];
     try {
       let errorEmitted = false;
-      if (song.source === "youtube" && !song.info) song._patchYouTube(await this.getYouTubeInfo(song.url));
-      else {
+      if (song.source !== "youtube") {
         for (const plugin of this.distube.extractorPlugins.concat(this.distube.customPlugins)) {
           if (await plugin.validate(song.url)) song.streamURL = await plugin.getStreamURL(song.url);
         }
-      }
+      } else if (!song.info) song._patchYouTube(await this.getYouTubeInfo(song.url));
       const stream = this.createStream(queue).on("error", e => {
         errorEmitted = true;
         e.name = "Stream";
