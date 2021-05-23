@@ -45,13 +45,11 @@ class Queue extends DisTubeBase {
      * @type {Array<Song>}
      */
     this.songs = Array.isArray(song) ? [...song] : [song];
-    if (this.options.savePreviousSongs) {
-      /**
-       * List of the previous songs.
-       * @type {Array<Song>?}
-       */
-      this.previousSongs = [];
-    }
+    /**
+     * List of the previous songs.
+     * @type {Array<Song>?}
+     */
+    this.previousSongs = [];
     /**
      * Whether stream is currently stopped.
      * @type {boolean}
@@ -266,17 +264,17 @@ class Queue extends DisTubeBase {
    * The previous one is -1, -2,...
    * @param {number} num The song number to play
    * @returns {Queue} The guild queue
-   * @throws {Error} if `num` is invalid number (0 < num < {@link Queue#songs}.length)
+   * @throws {Error} if `num` is invalid number
    */
   jump(num) {
     if (num > this.songs.length || -num > this.previousSongs.length || num === 0) throw new RangeError("InvalidSong");
     if (num > 0) {
       this.songs = this.songs.splice(num - 1);
       this.next = true;
-    } else if (num === -1) this.prev = true;
+    } else if (!this.distube.options.savePreviousSongs) throw new RangeError("InvalidSong");
     else {
-      this.songs.unshift(...this.previousSongs.splice(num + 1));
       this.prev = true;
+      if (num !== -1) this.songs.unshift(...this.previousSongs.splice(num + 1));
     }
     if (this.dispatcher) this.dispatcher.end();
     return this;
