@@ -211,7 +211,9 @@ class DisTubeHandler extends DisTubeBase {
         this.emit("disconnect", queue);
         try { queue.stop() } catch { this.deleteQueue(queue) }
       }).on("error", e => {
-        e.name = "VoiceConnection";
+        try {
+          e.name = "VoiceConnection";
+        } catch { }
         this.emitError(queue.textChannel, e);
         try { queue.stop() } catch { this.deleteQueue(queue) }
       });
@@ -219,7 +221,9 @@ class DisTubeHandler extends DisTubeBase {
       return err || queue;
     } catch (e) {
       this.deleteQueue(queue);
-      e.name = "JoinVoiceChannel";
+      try {
+        e.name = "JoinVoiceChannel";
+      } catch { }
       if (retried) throw e;
       return this.joinVoiceChannel(queue, voice, true);
     }
@@ -283,8 +287,10 @@ class DisTubeHandler extends DisTubeBase {
       } else if (!song.info) song._patchYouTube(await this.getYouTubeInfo(song.url));
       const stream = this.createStream(queue).on("error", e => {
         errorEmitted = true;
-        e.name = "Stream";
-        e.message = `${e.message}\nID: ${song.id}\nName: ${song.name}`;
+        try {
+          e.name = "Stream";
+          e.message = `${e.message}\nID: ${song.id}\nName: ${song.name}`;
+        } catch { }
         this.emitError(queue.textChannel, e);
       });
       queue.dispatcher = queue.connection.play(stream, {
@@ -334,6 +340,7 @@ class DisTubeHandler extends DisTubeBase {
       const prev = queue.songs.shift();
       delete prev.info;
       if (this.options.savePreviousSongs) queue.previousSongs.push(prev);
+      else queue.previousSongs.push({ id: prev.id });
     }
     queue.next = queue.prev = false;
     queue.beginTime = 0;
@@ -350,8 +357,10 @@ class DisTubeHandler extends DisTubeBase {
   _handlePlayingError(queue, error = null) {
     const song = queue.songs.shift();
     if (error) {
-      error.name = "Playing";
-      error.message = `${error.message}\nID: ${song.id}\nName: ${song.name}`;
+      try {
+        error.name = "Playing";
+        error.message = `${error.message}\nID: ${song.id}\nName: ${song.name}`;
+      } catch { }
       this.emitError(queue.textChannel, error);
     }
     if (queue.songs.length > 0) {
@@ -394,8 +403,10 @@ class DisTubeHandler extends DisTubeBase {
       }).on("finish", () => { try { stream.destroy() } catch { } });
       return dispatcher;
     } catch (e) {
-      e.name = "playWithoutQueue";
-      e.message = `${song?.url || song}\n${e.message}`;
+      try {
+        e.name = "playWithoutQueue";
+        e.message = `${song?.url || song}\n${e.message}`;
+      } catch { }
       throw e;
     }
   }

@@ -332,7 +332,6 @@ declare class DisTube extends EventEmitter {
      * @param {Discord.Snowflake|Discord.Message} message A message from guild channel
      * @param {number} mode The repeat modes `(0: disabled, 1: Repeat a song, 2: Repeat all the queue)`
      * @returns {number} The new repeat mode
-     *
      * @example
      * client.on('message', (message) => {
      *     if (!message.content.startsWith(config.prefix)) return;
@@ -378,9 +377,9 @@ declare class DisTube extends EventEmitter {
     /**
      * Add related song to the queue
      * @param {Discord.Snowflake|Discord.Message} message A message from guild channel
-     * @returns {Queue} The guild queue
+     * @returns {Promise<Queue>} The guild queue
      */
-    addRelatedSong(message: Discord.Snowflake | Discord.Message): Queue;
+    addRelatedSong(message: Discord.Snowflake | Discord.Message): Promise<Queue>;
     /**
      * Enable or disable a filter of the queue.
      * Available filters: {@link Filters}

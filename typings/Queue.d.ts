@@ -191,7 +191,7 @@ declare class Queue extends DisTubeBase {
      * The previous one is -1, -2,...
      * @param {number} num The song number to play
      * @returns {Queue} The guild queue
-     * @throws {Error} if `num` is invalid number (0 < num < {@link Queue#songs}.length)
+     * @throws {Error} if `num` is invalid number
      */
     jump(num: number): Queue;
     /**
@@ -219,10 +219,10 @@ declare class Queue extends DisTubeBase {
     /**
      * Add a related song to the queue
      * @param {Song} [song] A song to get the related one
-     * @returns {Queue} The guild queue
+     * @returns {Promise<Queue>} The guild queue
      * @throws {Error}
      */
-    addRelatedSong(song?: Song): Queue;
+    addRelatedSong(song?: Song): Promise<Queue>;
     /**
      * Toggle autoplay mode
      * @returns {boolean} Autoplay mode state

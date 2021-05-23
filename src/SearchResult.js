@@ -62,8 +62,8 @@ class SearchResult {
      * @prop {string?} url Uploader url
      */
     this.uploader = {
-      name: (info.author || info.owner).name || null,
-      url: (info.author || info.owner).url || null,
+      name: (info.author || info.owner)?.name || null,
+      url: (info.author || info.owner)?.url || null,
     };
   }
 }

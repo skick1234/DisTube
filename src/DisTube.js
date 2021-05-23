@@ -181,8 +181,10 @@ class DisTube extends EventEmitter {
         message,
       });
     } catch (e) {
-      e.name = "PlayError";
-      e.message = `${song?.url || song}\n${e.message}`;
+      try {
+        e.name = "PlayError";
+        e.message = `${song?.url || song}\n${e.message}`;
+      } catch { }
       this.emitError(message.channel, e);
     }
   }
@@ -238,8 +240,10 @@ class DisTube extends EventEmitter {
         }
       }
     } catch (e) {
-      e.name = "PlayError";
-      e.message = `${song?.url || song}\n${e.message}`;
+      try {
+        e.name = "PlayError";
+        e.message = `${song?.url || song}\n${e.message}`;
+      } catch { }
       this.emitError(textChannel, e);
     }
   }

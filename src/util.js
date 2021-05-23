@@ -59,7 +59,9 @@ module.exports.isURL = string => {
 };
 
 module.exports.isVoiceChannelEmpty = queue => {
-  const voiceChannel = queue.connection.channel;
-  const members = voiceChannel.members.filter(m => !m.user.bot);
-  return !members.size;
+  try {
+    const voiceChannel = queue.connection.channel;
+    const members = voiceChannel.members.filter(m => !m.user.bot);
+    return !members.size;
+  } catch { return false }
 };
