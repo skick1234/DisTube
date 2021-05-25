@@ -284,8 +284,13 @@ class DisTubeHandler extends DisTubeBase {
       if (song.source !== "youtube") {
         for (const plugin of this.distube.extractorPlugins.concat(this.distube.customPlugins)) {
           if (await plugin.validate(url)) {
-            song.streamURL = await plugin.getStreamURL(url);
-            song.related = await plugin.getRelatedSongs(url);
+            const info = [
+              plugin.getStreamURL(url),
+              plugin.getRelatedSongs(url),
+            ];
+            const result = await Promise.all(info);
+            song.streamURL = result[0];
+            song.related = result[1];
           }
         }
       } else if (!song.info) song._patchYouTube(await this.getYouTubeInfo(url));
