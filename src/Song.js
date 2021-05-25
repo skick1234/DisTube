@@ -145,7 +145,7 @@ class Song {
     this.duration = this.isLive ? 0 : toSecond(info._duration_raw || info.duration);
     this.formattedDuration = this.isLive ? "Live" : formatDuration(this.duration);
     this.url = info.webpage_url || info.url;
-    this.streamURL = info.streamURL || info.url || this.url || null;
+    this.streamURL = null;
     this.thumbnail = info.thumbnail?.url || info.thumbnail || null;
     this.related = info.related || [];
     this.views = parseNumber(info.view_count || info.views);

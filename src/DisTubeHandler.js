@@ -281,7 +281,8 @@ class DisTubeHandler extends DisTubeBase {
     try {
       let errorEmitted = false;
       const { url } = song;
-      if (song.source !== "youtube") {
+      if (song.source === "youtube" && !song.info) song._patchYouTube(await this.getYouTubeInfo(url));
+      if (song.source !== "youtube" && !song.streamURL) {
         for (const plugin of this.distube.extractorPlugins.concat(this.distube.customPlugins)) {
           if (await plugin.validate(url)) {
             const info = [
@@ -291,9 +292,10 @@ class DisTubeHandler extends DisTubeBase {
             const result = await Promise.all(info);
             song.streamURL = result[0];
             song.related = result[1];
+            break;
           }
         }
-      } else if (!song.info) song._patchYouTube(await this.getYouTubeInfo(url));
+      }
       const stream = this.createStream(queue).on("error", e => {
         errorEmitted = true;
         try {
@@ -348,6 +350,7 @@ class DisTubeHandler extends DisTubeBase {
     if (!queue.prev && (queue.repeatMode !== 1 || queue.next)) {
       const prev = queue.songs.shift();
       delete prev.info;
+      delete prev.streamURL;
       if (this.options.savePreviousSongs) queue.previousSongs.push(prev);
       else queue.previousSongs.push({ id: prev.id });
     }
