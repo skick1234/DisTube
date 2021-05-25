@@ -1,5 +1,6 @@
 /* eslint-disable */
 const DisTube = require("../DisTube");
+const { Song } = DisTube;
 
 /**
  * DisTube Plugin
@@ -37,6 +38,12 @@ class Plugin {
    * @returns {Promise<string>}
    */
   async getStreamURL(url) { return url }
+  /**
+   * (Optional) Get related songs from a supported url (Not needed to add {@link Song#related} because it will be added with this function later})
+   * @param {string} url Input url
+   * @returns {Promise<Song[]>}
+   */
+  async getRelatedSongs(url) { return [] }
 }
 
 module.exports = Plugin;

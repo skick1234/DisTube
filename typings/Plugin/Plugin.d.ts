@@ -33,5 +33,11 @@ declare class Plugin {
      * @returns {Promise<string>}
      */
     getStreamURL(url: string): Promise<string>;
+    /**
+     * (Optional) Get related songs from a supported url (Not needed to add {@link Song#related} because it will be added with this function later})
+     * @param {string} url Input url
+     * @returns {Promise<Song[]>}
+     */
+    getRelatedSongs(url: string): Promise<typeof import("../Song")[]>;
 }
 import DisTube = require("../DisTube");

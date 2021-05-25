@@ -14,7 +14,7 @@ class ExtractorPlugin extends Plugin {
     super("extractor");
   }
   /**
-   * Execute if the url is validated
+   * Execute if the url is validated (Not needed to add {@link Song#related} because it will be added with {@link Plugin#getRelatedSongs})
    * @param {string} url URL
    * @param {Discord.GuildMember} member Requested user
    * @returns {Promise<Song|Song[]|Playlist>}
