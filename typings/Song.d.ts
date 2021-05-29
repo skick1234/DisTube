@@ -106,7 +106,16 @@ declare class Song {
      * Chapters information (YouTube only)
      * @type {Chapter[]}
      */
-    chapters: Chapter[];
+    chapters: {
+        /**
+         * Chapter title
+         */
+        title: string;
+        /**
+         * Chapter start time in seconds
+         */
+        start_time: number;
+    }[];
     /**
      * Patch data from other source
      * @param {Object} info Video info
@@ -147,19 +156,6 @@ declare class Song {
      */
     user: Discord.User | null;
 }
-declare namespace Song {
-    export { Chapter };
-}
-type Chapter = {
-    /**
-     * Chapter title
-     */
-    title: string;
-    /**
-     * Chapter start time in seconds
-     */
-    start_time: number;
-};
 import Playlist = require("./Playlist");
 import Discord = require("discord.js");
 import ytdl = require("ytdl-core");

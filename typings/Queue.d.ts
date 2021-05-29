@@ -217,12 +217,11 @@ declare class Queue extends DisTubeBase {
      */
     seek(time: number): Queue;
     /**
-     * Add a related song to the queue
-     * @param {Song} [song] A song to get the related one
+     * Add a related song of the playing song to the queue
      * @returns {Promise<Queue>} The guild queue
      * @throws {Error}
      */
-    addRelatedSong(song?: Song): Promise<Queue>;
+    addRelatedSong(): Promise<Queue>;
     /**
      * Toggle autoplay mode
      * @returns {boolean} Autoplay mode state

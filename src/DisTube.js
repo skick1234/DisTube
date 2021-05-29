@@ -25,6 +25,11 @@ const ytsr = require("@distube/ytsr"),
  */
 
 /**
+ * Data that resolves to give a {@link Queue} object.
+ * @typedef {Discord.Snowflake|Discord.Message|Discord.VoiceChannel|Discord.StageChannel|Discord.VoiceState|string} QueueResolvable
+ */
+
+/**
  * DisTube options.
  * @typedef {Object} DisTubeOptions
  * @prop {Array<Plugin>} [plugins] DisTube plugins.
@@ -365,7 +370,7 @@ class DisTube extends EventEmitter {
 
   /**
    * Get the guild queue
-   * @param {Discord.Snowflake|Discord.Message|Discord.VoiceChannel|Discord.StageChannel} message A guild ID | a message from guild channel | a voice channel.
+   * @param {QueueResolvable} queue The queue resolvable type
    * @returns {Queue} The guild queue
    * @throws {Error}
    * @example
@@ -381,9 +386,9 @@ class DisTube extends EventEmitter {
    *     }
    * });
    */
-  getQueue(message) {
-    const guildID = message?.guild?.id || message;
-    if (typeof guildID !== "string") throw TypeError("Parameter should be a Discord.Message, a Discord.VoiceChannel or a server ID!");
+  getQueue(queue) {
+    const guildID = queue?.guild?.id || queue;
+    if (typeof guildID !== "string") throw TypeError("Parameter must be a QueueResolvable!");
     return this.guildQueues.get(guildID);
   }
 
@@ -782,7 +787,7 @@ module.exports = DisTube;
  * and DisTube cannot find any results for the query
  *
  * @event DisTube#searchNoResult
- * @param {Discord.Message} message A message called play method
+ * @param {Discord.Message} message The user message called play method
  * @param {string} query The search query
  * @example
  * // DisTubeOptions.searchSongs > 0
@@ -794,7 +799,7 @@ module.exports = DisTube;
  * and the search canceled due to user's next message is invalid number or timeout
  *
  * @event DisTube#searchCancel
- * @param {Discord.Message} message A message called play method
+ * @param {Discord.Message} message The user message called play method
  * @param {string} query The search query
  * @example
  * // DisTubeOptions.searchSongs > 0
@@ -807,7 +812,7 @@ module.exports = DisTube;
  * DisTube will wait for user's next message to choose song manually.
  *
  * @event DisTube#searchResult
- * @param {Discord.Message} message A message called play method
+ * @param {Discord.Message} message The user message called play method
  * @param {Array<SearchResult>} results Searched results
  * @param {string} query The search query
  * @example
@@ -819,15 +824,12 @@ module.exports = DisTube;
 
 /**
  * Emitted when {@link DisTubeOptions|DisTubeOptions.searchSongs} bigger than 0
- * and the user chose a search result to play
+ * and after the user chose a search result to play
  *
  * @event DisTube#searchDone
- * @param {Discord.Message} message A message called play method
- * @param {Discord.Message} answer The answer message
+ * @param {Discord.Message} message The user message called play method
+ * @param {Discord.Message} answer The answered message of user
  * @param {string} query The search query
- * @example
- * // DisTubeOptions.searchSongs > 0
- * distube.on("searchCancel", (message) => message.channel.send(`Searching canceled`));
  */
 
 /**

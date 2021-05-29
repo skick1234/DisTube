@@ -11,11 +11,15 @@ export = DisTube;
  * @see {@link DefaultFilters}
  */
 /**
+ * Data that resolves to give a {@link Queue} object.
+ * @typedef {Discord.Snowflake|Discord.Message|Discord.VoiceChannel|Discord.StageChannel|Discord.VoiceState|string} QueueResolvable
+ */
+/**
  * DisTube options.
  * @typedef {Object} DisTubeOptions
  * @prop {Array<Plugin>} [plugins] DisTube plugins.
  * @prop {boolean} [emitNewSongOnly=false] If `true`, {@link DisTube#event:playSong} will not be emitted when looping a song or next song is the same as the previous one
- * @prop {boolean} [leaveOnEmpty=true] Whether or not leaving voice channel if channel is empty in 60s. (Avoid accident leaving)
+ * @prop {boolean} [leaveOnEmpty=true] Whether or not leaving voice channel if the voice channel is empty after {@link DisTubeOptions}.emptyCooldown seconds.
  * @prop {boolean} [leaveOnFinish=false] Whether or not leaving voice channel when the queue ends.
  * @prop {boolean} [leaveOnStop=true] Whether or not leaving voice channel after using {@link DisTube#stop|stop()} function.
  * @prop {boolean} [savePreviousSongs=true] Whether or not saving the previous songs of the queue and enable {@link DisTube#previous|previous()} method
@@ -196,7 +200,7 @@ declare class DisTube extends EventEmitter {
     private _deleteQueue;
     /**
      * Get the guild queue
-     * @param {Discord.Snowflake|Discord.Message|Discord.VoiceChannel|Discord.StageChannel} message A guild ID | a message from guild channel | a voice channel.
+     * @param {QueueResolvable} queue The queue resolvable type
      * @returns {Queue} The guild queue
      * @throws {Error}
      * @example
@@ -212,7 +216,7 @@ declare class DisTube extends EventEmitter {
      *     }
      * });
      */
-    getQueue(message: Discord.Snowflake | Discord.Message | Discord.VoiceChannel | Discord.StageChannel): Queue;
+    getQueue(queue: QueueResolvable): Queue;
     /**
      * Pause the guild stream
      * @param {Discord.Snowflake|Discord.Message} message A message from guild channel
@@ -459,7 +463,7 @@ declare class DisTube extends EventEmitter {
     ): this;
 }
 declare namespace DisTube {
-    export { CustomPlugin, ExtractorPlugin, Playlist, Song, Queue, SearchResult, Filters, DisTubeOptions };
+    export { CustomPlugin, ExtractorPlugin, Playlist, Song, Queue, SearchResult, Filters, QueueResolvable, DisTubeOptions };
 }
 import { EventEmitter } from "events";
 import Discord = require("discord.js");
@@ -473,11 +477,11 @@ type DisTubeOptions = {
      */
     plugins?: Array<Plugin>;
     /**
-     * If `true`, {@link DisTube#event:playSong} will not be emitted when looping a song or next song is the same as the previous one
+     * If `true`, {@link DisTube #event:playSong} will not be emitted when looping a song or next song is the same as the previous one
      */
     emitNewSongOnly?: boolean;
     /**
-     * Whether or not leaving voice channel if channel is empty in 60s. (Avoid accident leaving)
+     * Whether or not leaving voice channel if the voice channel is empty after {@link DisTubeOptions }.emptyCooldown seconds.
      */
     leaveOnEmpty?: boolean;
     /**
@@ -485,19 +489,19 @@ type DisTubeOptions = {
      */
     leaveOnFinish?: boolean;
     /**
-     * Whether or not leaving voice channel after using {@link DisTube#stop|stop()} function.
+     * Whether or not leaving voice channel after using {@link DisTube #stop|stop()} function.
      */
     leaveOnStop?: boolean;
     /**
-     * Whether or not saving the previous songs of the queue and enable {@link DisTube#previous|previous()} method
+     * Whether or not saving the previous songs of the queue and enable {@link DisTube #previous|previous()} method
      */
     savePreviousSongs?: boolean;
     /**
-     * Limit of search results emits in {@link DisTube#event:searchResult} event when {@link DisTube#play|play()} method executed. If `searchSongs <= 1`, play the first result
+     * Limit of search results emits in {@link DisTube #event:searchResult} event when {@link DisTube #play|play()} method executed. If `searchSongs <= 1`, play the first result
      */
     searchSongs?: number;
     /**
-     * YouTube cookies. Read how to get it in {@link https://github.com/fent/node-ytdl-core/blob/997efdd5dd9063363f6ef668bb364e83970756e7/example/cookies.js#L6-L12|YTDL's Example}
+     * YouTube cookies. Read how to get it in {@link https ://github.com/fent/node-ytdl-core/blob/997efdd5dd9063363f6ef668bb364e83970756e7/example/cookies.js#L6-L12|YTDL's Example}
      */
     youtubeCookie?: string;
     /**
@@ -513,7 +517,7 @@ type DisTubeOptions = {
      */
     updateYouTubeDL?: boolean;
     /**
-     * Override {@link DefaultFilters} or add more ffmpeg filters. Example=`{ "Filter name"="Filter value"; "8d"="apulsator=hz=0.075" }`
+     * Override {@link DefaultFilters } or add more ffmpeg filters. Example=`{ "Filter name"="Filter value"; "8d"="apulsator=hz=0.075" }`
      */
     customFilters?: Filters;
     /**
@@ -548,6 +552,10 @@ type Filters = {
 import Song = require("./Song");
 import SearchResult = require("./SearchResult");
 import Playlist = require("./Playlist");
+/**
+ * Data that resolves to give a {@link Queue } object.
+ */
+type QueueResolvable = Discord.Snowflake | Discord.Message | Discord.VoiceChannel | Discord.StageChannel | Discord.VoiceState | string;
 import CustomPlugin = require("./Plugin/CustomPlugin");
 import ExtractorPlugin = require("./Plugin/ExtractorPlugin");
 import Plugin = require("./Plugin/Plugin");

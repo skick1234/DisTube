@@ -113,6 +113,12 @@ declare class DisTubeHandler extends DisTubeBase {
      * @returns {Promise<Discord.StreamDispatcher>}
      */
     playWithoutQueue(voiceChannel: Discord.VoiceChannel | Discord.StageChannel, song: string | Song | SearchResult): Promise<Discord.StreamDispatcher>;
+    /**
+     * Check if the voice channel is empty
+     * @param {Discord.VoiceState} voiceState voiceState
+     * @returns {boolean}
+     */
+    isVoiceChannelEmpty(voiceState: Discord.VoiceState): boolean;
 }
 import DisTubeBase = require("./DisTubeBase");
 import Discord = require("discord.js");
