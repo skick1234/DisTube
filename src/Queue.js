@@ -85,6 +85,7 @@ class Queue {
      * @type {number}
      */
     this.beginTime = 0;
+    this.previousSongs = [];
   }
   /**
    * Formatted duration string.

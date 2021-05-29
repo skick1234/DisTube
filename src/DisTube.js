@@ -764,9 +764,15 @@ class DisTube extends EventEmitter {
       return queue;
     }
     let related = song.related;
-    if (!related) related = (await ytdl.getBasicInfo(song.url, { requestOptions: this.requestOptions })).related_videos;
-    if (related && related[0]) this._addToQueue(message, new Song(await ytdl.getInfo(related[0].id, { requestOptions: this.requestOptions }), this.client.user, true));
-    else this.emit("noRelated", message);
+    if (!Array.isArray(related)) related = (await ytdl.getBasicInfo(song.url, { requestOptions: this.requestOptions })).related_videos;
+    if (Array.isArray(related)) {
+      const relatedVideo = related.find(s => !queue.previousSongs.includes(s.id));
+      if (!relatedVideo && !relatedVideo.id) {
+        this.emit("noRelated", message);
+        return queue;
+      }
+      this._addToQueue(message, new Song(await ytdl.getInfo(relatedVideo.id, { requestOptions: this.requestOptions }), this.client.user, true));
+    } else this.emit("noRelated", message);
     return queue;
   }
 
@@ -943,7 +949,10 @@ class DisTube extends EventEmitter {
       }
     }
     const emitSong = this._emitPlaySong(queue);
-    if (queue.repeatMode !== 1 || queue.skipped) queue.songs.shift();
+    if (queue.repeatMode !== 1 || queue.skipped) {
+      const { id } = queue.songs.shift();
+      queue.previousSongs.push(id);
+    }
     queue.skipped = false;
     queue.beginTime = 0;
     await this._playSong(message);
