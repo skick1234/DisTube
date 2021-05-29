@@ -422,6 +422,17 @@ class DisTubeHandler extends DisTubeBase {
       throw e;
     }
   }
+  /**
+   * Check if the voice channel is empty
+   * @param {Discord.VoiceState} voiceState voiceState
+   * @returns {boolean}
+   */
+  isVoiceChannelEmpty(voiceState) {
+    const voiceChannel = voiceState.guild?.me?.voice?.channel;
+    if (!voiceChannel) return false;
+    const members = voiceChannel.members.filter(m => !m.user.bot);
+    return !members.size;
+  }
 }
 
 module.exports = DisTubeHandler;

@@ -4,7 +4,6 @@ const ytsr = require("@distube/ytsr"),
   Queue = require("./Queue"),
   SearchResult = require("./SearchResult"),
   Playlist = require("./Playlist"),
-  { isVoiceChannelEmpty } = require("./util"),
   Discord = require("discord.js"),
   DisTubeOption = require("./DisTubeOptions"),
   DisTubeHandler = require("./DisTubeHandler"),
@@ -30,7 +29,7 @@ const ytsr = require("@distube/ytsr"),
  * @typedef {Object} DisTubeOptions
  * @prop {Array<Plugin>} [plugins] DisTube plugins.
  * @prop {boolean} [emitNewSongOnly=false] If `true`, {@link DisTube#event:playSong} will not be emitted when looping a song or next song is the same as the previous one
- * @prop {boolean} [leaveOnEmpty=true] Whether or not leaving voice channel if channel is empty in 60s. (Avoid accident leaving)
+ * @prop {boolean} [leaveOnEmpty=true] Whether or not leaving voice channel if the voice channel is empty after {@link DisTubeOptions}.emptyCooldown seconds.
  * @prop {boolean} [leaveOnFinish=false] Whether or not leaving voice channel when the queue ends.
  * @prop {boolean} [leaveOnStop=true] Whether or not leaving voice channel after using {@link DisTube#stop|stop()} function.
  * @prop {boolean} [savePreviousSongs=true] Whether or not saving the previous songs of the queue and enable {@link DisTube#previous|previous()} method
@@ -109,17 +108,23 @@ class DisTube extends EventEmitter {
     if (this.options.leaveOnEmpty) {
       client.on("voiceStateUpdate", oldState => {
         if (!oldState?.channel) return;
-        const queue = this.guildQueues.find(gQueue => gQueue.connection?.channel === oldState.channel);
-        if (!queue) return;
+        const queue = this.getQueue(oldState);
+        if (!queue) {
+          if (this.handler.isVoiceChannelEmpty(oldState)) {
+            setTimeout(() => {
+              if (!this.getQueue(oldState) && this.handler.isVoiceChannelEmpty(oldState)) oldState.guild.me?.voice?.channel?.leave();
+            }, this.options.emptyCooldown * 1000);
+          }
+          return;
+        }
         if (queue.emptyTimeout) {
           clearTimeout(queue.emptyTimeout);
           queue.emptyTimeout = null;
         }
-        if (isVoiceChannelEmpty(queue)) {
+        if (this.handler.isVoiceChannelEmpty(oldState)) {
           queue.emptyTimeout = setTimeout(() => {
-            const guildID = queue.connection.channel.guild.id;
-            if (this.guildQueues.has(guildID) && isVoiceChannelEmpty(queue)) {
-              queue.connection.channel.leave();
+            if (this.handler.isVoiceChannelEmpty(oldState)) {
+              oldState.guild.me?.voice?.channel?.leave();
               this.emit("empty", queue);
               this._deleteQueue(queue);
             }
@@ -705,7 +710,8 @@ module.exports = DisTube;
  */
 
 /**
- * Emitted when there is no user in VoiceChannel and {@link DisTubeOptions}.leaveOnEmpty is `true`.
+ * Emitted when there is no user in the voice channel, {@link DisTubeOptions}.leaveOnEmpty is `true` and there is a playing queue.
+ * If there is no playing queue (stopped and {@link DisTubeOptions}.leaveOnStop is `false`), it will leave the channel without emitting this event.
  *
  * @event DisTube#empty
  * @param {Queue} queue The guild queue
