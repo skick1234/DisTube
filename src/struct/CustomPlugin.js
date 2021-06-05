@@ -17,10 +17,11 @@ class CustomPlugin extends Plugin {
    * @param {string} url Validated url
    * @param {Discord.GuildMember} member Requested user
    * @param {Discord.TextChannel?} textChannel Default {@link Queue#textChannel}
-   * @param {boolean} skip Skip the playing song (if exists)
+   * @param {boolean} skip Skip the playing song (if exists) and play the added song/playlist instantly
+   * @param {boolean} unshift Add the song/playlist to the beginning of the queue (after the playing song if exists)
    * @returns {Promise<void>}
    */
-  async play(voiceChannel, url, member, textChannel, skip) { }
+  async play(voiceChannel, url, member, textChannel, skip, unshift) { }
 }
 
 module.exports = CustomPlugin;

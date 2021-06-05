@@ -110,7 +110,9 @@ declare class DisTube extends EventEmitter {
      * @returns {Promise<void>}
      * @param {Discord.Message} message A message from guild channel
      * @param {string|Song|SearchResult|Playlist} song YouTube url | Search string | {@link Song} | {@link SearchResult} | {@link Playlist}
-     * @param {boolean} skip Whether or not skipping the playing song
+     * @param {Object} [options] Optional options
+     * @param {boolean} [options.skip=false] Skip the playing song (if exists) and play the added song/playlist instantly
+     * @param {boolean} [options.unshift=false] Add the song/playlist to the beginning of the queue (after the playing song if exists)
      * @example
      * client.on('message', (message) => {
      *     if (!message.content.startsWith(config.prefix)) return;
@@ -120,7 +122,10 @@ declare class DisTube extends EventEmitter {
      *         distube.play(message, args.join(" "));
      * });
      */
-    play(message: Discord.Message, song: string | Song | SearchResult | Playlist, skip?: boolean): Promise<void>;
+    play(message: Discord.Message, song: string | Song | SearchResult | Playlist, options?: {
+        skip?: boolean;
+        unshift?: boolean;
+    }): Promise<void>;
     /**
      * Play / add a song or playlist from url. Search and play a song if it is not a valid url.
      * Emit {@link DisTube#addList}, {@link DisTube#addSong} or {@link DisTube#playSong} after executing
@@ -142,21 +147,6 @@ declare class DisTube extends EventEmitter {
         message?: Discord.Message;
     }): Promise<void>;
     /**
-     * Skip the playing song and play a song or playlist
-     * @returns {Promise<void>}
-     * @param {Discord.Message} message A message from guild channel
-     * @param {string|Song|SearchResult|Playlist} song YouTube url | Search string | {@link Song} | {@link SearchResult} | {@link Playlist}
-     * @example
-     * client.on('message', (message) => {
-     *     if (!message.content.startsWith(config.prefix)) return;
-     *     const args = message.content.slice(config.prefix.length).trim().split(/ +/g);
-     *     const command = args.shift();
-     *     if (command == "playSkip")
-     *         distube.playSkip(message, args.join(" "));
-     * });
-     */
-    playSkip(message: Discord.Message, song: string | Song | SearchResult | Playlist): Promise<void>;
-    /**
      * Play or add array of video urls.
      * {@link DisTube#event:playSong} or {@link DisTube#event:addList} will be emitted
      * with `playlist`'s properties include `properties` parameter's properties such as
@@ -165,15 +155,21 @@ declare class DisTube extends EventEmitter {
      * @param {Discord.Message} message A message from guild channel
      * @param {Array<string|Song|SearchResult>} songs Array of url, Song or SearchResult
      * @param {Object} [properties={}] Additional properties such as `name`
-     * @param {boolean} [playSkip=false] Whether or not play this playlist instantly
-     * @param {boolean} [parallel=true] Whether or not fetch the songs in parallel
+     * @param {Object} [options] Optional options
+     * @param {boolean} [options.skip=false] Skip the playing song (if exists) and play the added song/playlist instantly
+     * @param {boolean} [options.unshift=false] Add the song/playlist to the beginning of the queue (after the playing song if exists)
+     * @param {boolean} [options.parallel=true] Whether or not fetch the songs in parallel
      * @example
      *     let songs = ["https://www.youtube.com/watch?v=xxx", "https://www.youtube.com/watch?v=yyy"];
      *     distube.playCustomPlaylist(message, songs, { name: "My playlist name" });
      *     // Fetching custom playlist sequentially (reduce lag for low specs)
      *     distube.playCustomPlaylist(message, songs, { name: "My playlist name" }, false, false);
      */
-    playCustomPlaylist(message: Discord.Message, songs: Array<string | Song | SearchResult>, properties?: any, playSkip?: boolean, parallel?: boolean): Promise<void>;
+    playCustomPlaylist(message: Discord.Message, songs: Array<string | Song | SearchResult>, properties?: any, options?: {
+        skip?: boolean;
+        unshift?: boolean;
+        parallel?: boolean;
+    }): Promise<void>;
     /**
      * Search for a song.
      * You can customize how user answers instead of send a number.

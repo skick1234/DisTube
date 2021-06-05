@@ -174,7 +174,9 @@ class DisTube extends EventEmitter {
    * @returns {Promise<void>}
    * @param {Discord.Message} message A message from guild channel
    * @param {string|Song|SearchResult|Playlist} song YouTube url | Search string | {@link Song} | {@link SearchResult} | {@link Playlist}
-   * @param {boolean} skip Whether or not skipping the playing song
+   * @param {Object} [options] Optional options
+   * @param {boolean} [options.skip=false] Skip the playing song (if exists) and play the added song/playlist instantly
+   * @param {boolean} [options.unshift=false] Add the song/playlist to the beginning of the queue (after the playing song if exists)
    * @example
    * client.on('message', (message) => {
    *     if (!message.content.startsWith(config.prefix)) return;
@@ -184,11 +186,14 @@ class DisTube extends EventEmitter {
    *         distube.play(message, args.join(" "));
    * });
    */
-  async play(message, song, skip = false) {
+  async play(message, song, options = {}) {
     if (!song) return;
     if (!(message instanceof Discord.Message)) throw new TypeError("message is not a Discord.Message.");
-    if (typeof skip !== "boolean") throw new TypeError("skip is not a boolean");
+    if (typeof options !== "object" || Array.isArray(options)) {
+      throw new TypeError("options must be an object.");
+    }
     try {
+      const { skip, unshift } = Object.assign({ skip: false, unshift: false }, options);
       const voiceChannel = message.member.voice.channel;
       if (!voiceChannel) throw new Error("User is not in any voice channel.");
       await this.playVoiceChannel(voiceChannel, song, {
@@ -196,6 +201,7 @@ class DisTube extends EventEmitter {
         textChannel: message.channel,
         skip,
         message,
+        unshift,
       });
     } catch (e) {
       try {
@@ -271,24 +277,6 @@ class DisTube extends EventEmitter {
   }
 
   /**
-   * Skip the playing song and play a song or playlist
-   * @returns {Promise<void>}
-   * @param {Discord.Message} message A message from guild channel
-   * @param {string|Song|SearchResult|Playlist} song YouTube url | Search string | {@link Song} | {@link SearchResult} | {@link Playlist}
-   * @example
-   * client.on('message', (message) => {
-   *     if (!message.content.startsWith(config.prefix)) return;
-   *     const args = message.content.slice(config.prefix.length).trim().split(/ +/g);
-   *     const command = args.shift();
-   *     if (command == "playSkip")
-   *         distube.playSkip(message, args.join(" "));
-   * });
-   */
-  playSkip(message, song) {
-    return this.play(message, song, true);
-  }
-
-  /**
    * Play or add array of video urls.
    * {@link DisTube#event:playSong} or {@link DisTube#event:addList} will be emitted
    * with `playlist`'s properties include `properties` parameter's properties such as
@@ -297,18 +285,28 @@ class DisTube extends EventEmitter {
    * @param {Discord.Message} message A message from guild channel
    * @param {Array<string|Song|SearchResult>} songs Array of url, Song or SearchResult
    * @param {Object} [properties={}] Additional properties such as `name`
-   * @param {boolean} [playSkip=false] Whether or not play this playlist instantly
-   * @param {boolean} [parallel=true] Whether or not fetch the songs in parallel
+   * @param {Object} [options] Optional options
+   * @param {boolean} [options.skip=false] Skip the playing song (if exists) and play the added song/playlist instantly
+   * @param {boolean} [options.unshift=false] Add the song/playlist to the beginning of the queue (after the playing song if exists)
+   * @param {boolean} [options.parallel=true] Whether or not fetch the songs in parallel
    * @example
    *     let songs = ["https://www.youtube.com/watch?v=xxx", "https://www.youtube.com/watch?v=yyy"];
    *     distube.playCustomPlaylist(message, songs, { name: "My playlist name" });
    *     // Fetching custom playlist sequentially (reduce lag for low specs)
    *     distube.playCustomPlaylist(message, songs, { name: "My playlist name" }, false, false);
    */
-  async playCustomPlaylist(message, songs, properties = {}, playSkip = false, parallel = true) {
+  async playCustomPlaylist(message, songs, properties = {}, options = {}) {
     try {
+      if (typeof options !== "object" || Array.isArray(options)) {
+        throw new TypeError("options must be an object.");
+      }
+      const { skip, unshift, parallel } = Object.assign({
+        skip: false,
+        unshift: false,
+        parallel: true,
+      }, options);
       const playlist = await this.handler.createCustomPlaylist(message, songs, properties, parallel);
-      await this.handler.handlePlaylist(message, playlist, playSkip);
+      await this.handler.handlePlaylist(message, playlist, skip, unshift);
     } catch (e) {
       this.emitError(message.channel, e);
     }

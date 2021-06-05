@@ -12,10 +12,11 @@ declare class CustomPlugin extends Plugin {
      * @param {string} url Validated url
      * @param {Discord.GuildMember} member Requested user
      * @param {Discord.TextChannel?} textChannel Default {@link Queue#textChannel}
-     * @param {boolean} skip Skip the playing song (if exists)
+     * @param {boolean} skip Skip the playing song (if exists) and play the added song/playlist instantly
+     * @param {boolean} unshift Add the song/playlist to the beginning of the queue (after the playing song if exists)
      * @returns {Promise<void>}
      */
-    play(voiceChannel: Discord.VoiceChannel | Discord.StageChannel, url: string, member: Discord.GuildMember, textChannel: Discord.TextChannel | null, skip: boolean): Promise<void>;
+    play(voiceChannel: Discord.VoiceChannel | Discord.StageChannel, url: string, member: Discord.GuildMember, textChannel: Discord.TextChannel | null, skip: boolean, unshift: boolean): Promise<void>;
 }
 import Plugin = require("./Plugin");
 import Discord = require("discord.js");
