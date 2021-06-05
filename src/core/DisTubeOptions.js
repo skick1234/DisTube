@@ -1,5 +1,3 @@
-const { clone } = require("../struct/Util");
-
 module.exports = class DisTubeOptions {
   constructor(options) {
     const defaultOptions = {
@@ -22,8 +20,7 @@ module.exports = class DisTubeOptions {
       plugins: [],
       nsfw: false,
     };
-    const opt = Object.assign(defaultOptions, clone(options));
-    for (const key in opt) this[key] = opt[key];
+    Object.assign(this, defaultOptions, options);
     this._validateOptions();
   }
 

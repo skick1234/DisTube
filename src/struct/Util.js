@@ -53,21 +53,6 @@ class Util {
     return Number(input) || 0;
   }
   /**
-   * Clone an array or object
-   * @param {Object} obj source
-   * @returns {Object}
-   */
-  static clone(obj) {
-    if (typeof obj === "function") return obj;
-    const result = Array.isArray(obj) ? [] : {};
-    for (const key in obj) {
-      const value = obj[key];
-      if (typeof value === "object") result[key] = Util.clone(value);
-      else result[key] = value;
-    }
-    return result;
-  }
-  /**
    * Check if the string is an URL
    * @param {string} string input
    * @returns {boolean}
