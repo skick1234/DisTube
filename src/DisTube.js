@@ -213,18 +213,23 @@ class DisTube extends EventEmitter {
    * @param {Discord.VoiceChannel|Discord.StageChannel} voiceChannel The voice channel will be joined
    * @param {string|Song|SearchResult|Playlist} song YouTube url | Search string | {@link Song} | {@link SearchResult} | {@link Playlist}
    * @param {Object} [options] Optional options
+   * @param {boolean} [options.skip=false] Skip the playing song (if exists) and play the added song/playlist instantly
+   * @param {boolean} [options.unshift=false] Add the song/playlist to the beginning of the queue (after the playing song if exists)
    * @param {Discord.GuildMember} [options.member] Requested user (default is your bot)
    * @param {Discord.TextChannel} [options.textChannel=null] Default {@link Queue#textChannel} (if the queue wasn't created)
-   * @param {boolean} [options.skip] Skip the playing song (if exists)
    * @param {Discord.Message} [options.message] Called message (For built-in search events. If this is a {@link https://developer.mozilla.org/en-US/docs/Glossary/Falsy|falsy value}, it will play the first result instead)
    */
   async playVoiceChannel(voiceChannel, song, options = {}) {
     if (!["voice", "stage"].includes(voiceChannel?.type)) {
       throw new TypeError("voiceChannel is not a Discord.VoiceChannel or a Discord.StageChannel.");
     }
-    const { textChannel, member, skip, message } = Object.assign({
+    if (typeof options !== "object" || Array.isArray(options)) {
+      throw new TypeError("options must be an object.");
+    }
+    const { textChannel, member, skip, message, unshift } = Object.assign({
       member: voiceChannel.guild.me,
       skip: false,
+      unshift: false,
     }, options);
     if (message && !(message instanceof Discord.Message)) {
       throw new TypeError("options.message is not a Discord.Message or a falsy value.");
@@ -233,7 +238,7 @@ class DisTube extends EventEmitter {
       if (typeof song === "string") {
         for (const plugin of this.customPlugins) {
           if (await plugin.validate(song)) {
-            await plugin.play(voiceChannel, song, member, textChannel, skip);
+            await plugin.play(voiceChannel, song, member, textChannel, skip, unshift);
             return;
           }
         }
@@ -242,13 +247,13 @@ class DisTube extends EventEmitter {
       if (ytpl.validateID(song)) song = await this.handler.resolvePlaylist(member, song);
       song = await this.handler.resolveSong(message || member, song);
       if (!song) return;
-      if (song instanceof Playlist) await this.handler.handlePlaylist(voiceChannel, song, textChannel, skip);
+      if (song instanceof Playlist) await this.handler.handlePlaylist(voiceChannel, song, textChannel, skip, unshift);
       else if (!this.options.nsfw && song.age_restricted && !textChannel?.nsfw) {
         throw new Error("Cannot play age-restricted content in non-NSFW channel.");
       } else {
         let queue = this.getQueue(voiceChannel);
         if (queue) {
-          queue.addToQueue(song, skip);
+          queue.addToQueue(song, skip || unshift);
           if (skip) queue.skip();
           else this.emit("addSong", queue, song);
         } else {

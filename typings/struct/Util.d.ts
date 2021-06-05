@@ -20,12 +20,6 @@ declare class Util {
      */
     static parseNumber(input: any): number;
     /**
-     * Clone an array or object
-     * @param {Object} obj source
-     * @returns {Object}
-     */
-    static clone(obj: any): any;
-    /**
      * Check if the string is an URL
      * @param {string} string input
      * @returns {boolean}

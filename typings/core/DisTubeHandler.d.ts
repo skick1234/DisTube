@@ -54,9 +54,10 @@ declare class DisTubeHandler extends DisTubeBase {
      * @param {Discord.Message|Discord.VoiceChannel|Discord.StageChannel} message A message from guild channel | a voice channel
      * @param {Playlist|string} playlist A YouTube playlist url | a Playlist
      * @param {boolean} [textChannel] The default text channel of the queue
-     * @param {boolean} [skip=false] Skip the current song
+     * @param {boolean} [skip=false] Skip the playing song (if exists) and play the added playlist instantly
+     * @param {boolean} [unshift=false] Add the playlist to the beginning of the queue (after the playing song if exists)
      */
-    handlePlaylist(message: Discord.Message | Discord.VoiceChannel | Discord.StageChannel, playlist: Playlist | string, textChannel?: boolean, skip?: boolean): Promise<void>;
+    handlePlaylist(message: Discord.Message | Discord.VoiceChannel | Discord.StageChannel, playlist: Playlist | string, textChannel?: boolean, skip?: boolean, unshift?: boolean): Promise<void>;
     /**
      * Search for a song, fire {@link DisTube#event:error} if not found.
      * @param {Discord.Message} message A message from guild channel

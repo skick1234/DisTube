@@ -116,7 +116,7 @@ class DisTubeHandler extends DisTubeBase {
       for (const song of songs) resolved.push(await this.resolveSong(member, song).catch(() => undefined));
       songs = resolved;
     }
-    return new Playlist(songs.filter(song => song), member, properties);
+    return new Playlist(songs.filter(Boolean), member, properties);
   }
 
   /**
@@ -125,10 +125,12 @@ class DisTubeHandler extends DisTubeBase {
    * @param {Discord.Message|Discord.VoiceChannel|Discord.StageChannel} message A message from guild channel | a voice channel
    * @param {Playlist|string} playlist A YouTube playlist url | a Playlist
    * @param {boolean} [textChannel] The default text channel of the queue
-   * @param {boolean} [skip=false] Skip the current song
+   * @param {boolean} [skip=false] Skip the playing song (if exists) and play the added playlist instantly
+   * @param {boolean} [unshift=false] Add the playlist to the beginning of the queue (after the playing song if exists)
    */
-  async handlePlaylist(message, playlist, textChannel = false, skip = false) {
+  async handlePlaylist(message, playlist, textChannel = false, skip = false, unshift = false) {
     if (typeof textChannel === "boolean") {
+      unshift = skip;
       skip = textChannel;
       textChannel = message.channel;
     }
@@ -145,7 +147,7 @@ class DisTubeHandler extends DisTubeBase {
     const songs = playlist.songs;
     let queue = this.distube.getQueue(message);
     if (queue) {
-      queue.addToQueue(songs, skip);
+      queue.addToQueue(songs, skip || unshift);
       if (skip) queue.skip();
       else this.emit("addList", queue, playlist);
     } else {

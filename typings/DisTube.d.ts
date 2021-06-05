@@ -128,15 +128,17 @@ declare class DisTube extends EventEmitter {
      * @param {Discord.VoiceChannel|Discord.StageChannel} voiceChannel The voice channel will be joined
      * @param {string|Song|SearchResult|Playlist} song YouTube url | Search string | {@link Song} | {@link SearchResult} | {@link Playlist}
      * @param {Object} [options] Optional options
+     * @param {boolean} [options.skip=false] Skip the playing song (if exists) and play the added song/playlist instantly
+     * @param {boolean} [options.unshift=false] Add the song/playlist to the beginning of the queue (after the playing song if exists)
      * @param {Discord.GuildMember} [options.member] Requested user (default is your bot)
      * @param {Discord.TextChannel} [options.textChannel=null] Default {@link Queue#textChannel} (if the queue wasn't created)
-     * @param {boolean} [options.skip] Skip the playing song (if exists)
      * @param {Discord.Message} [options.message] Called message (For built-in search events. If this is a {@link https://developer.mozilla.org/en-US/docs/Glossary/Falsy|falsy value}, it will play the first result instead)
      */
     playVoiceChannel(voiceChannel: Discord.VoiceChannel | Discord.StageChannel, song: string | Song | SearchResult | Playlist, options?: {
+        skip?: boolean;
+        unshift?: boolean;
         member?: Discord.GuildMember;
         textChannel?: Discord.TextChannel;
-        skip?: boolean;
         message?: Discord.Message;
     }): Promise<void>;
     /**
