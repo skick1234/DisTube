@@ -62,7 +62,7 @@ class Util {
     const result = Array.isArray(obj) ? [] : {};
     for (const key in obj) {
       const value = obj[key];
-      if (typeof value === "object") result[key] = this.clone(value);
+      if (typeof value === "object") result[key] = Util.clone(value);
       else result[key] = value;
     }
     return result;
