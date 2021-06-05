@@ -39,7 +39,7 @@ declare class DisTube extends EventEmitter {
 }
 import { EventEmitter } from "events";
 import Discord = require("discord.js");
-import Queue = require("./Queue");
-import Song = require("./Song");
-import SearchResult = require("./SearchResult");
-import Playlist = require("./Playlist");
+import Queue = require("./struct/Queue");
+import Song = require("./struct/Song");
+import SearchResult = require("./struct/SearchResult");
+import Playlist = require("./struct/Playlist");

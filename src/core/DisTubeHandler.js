@@ -1,15 +1,14 @@
-const ytdl = require("@distube/ytdl"),
+const ytdl = require("ytdl-core"),
   ytpl = require("@distube/ytpl"),
-  Song = require("./Song"),
-  SearchResult = require("./SearchResult"),
-  Playlist = require("./Playlist"),
-  { isURL } = require("./util"),
+  Song = require("../struct/Song"),
+  SearchResult = require("../struct/SearchResult"),
+  Playlist = require("../struct/Playlist"),
+  { isURL } = require("../struct/Util"),
   DisTubeBase = require("./DisTubeBase"),
   Discord = require("discord.js"),
-  // eslint-disable-next-line no-unused-vars
-  Queue = require("./Queue"),
-  // eslint-disable-next-line no-unused-vars
-  { opus } = require("prism-media");
+  Queue = require("../struct/Queue"),
+  DisTubeStream = require("./DisTubeStream"),
+  { Transform } = require("stream");
 
 /**
  * DisTube's Handler
@@ -232,24 +231,18 @@ class DisTubeHandler extends DisTubeBase {
   /**
    * Create a ytdl stream
    * @param {Queue} queue Queue
-   * @returns {opus.Encoder}
+   * @returns {Transform}
    */
   createStream(queue) {
     const song = queue.songs[0];
     const filterArgs = [];
     queue.filters.forEach(filter => filterArgs.push(this.distube.filters[filter]));
-    const encoderArgs = queue.filters?.length ? ["-af", filterArgs.join(",")] : null;
+    const FFmpegArgs = queue.filters?.length ? ["-af", filterArgs.join(",")] : null;
     const seek = song.duration ? queue.beginTime : undefined;
-    const streamOptions = {
-      opusEncoded: true,
-      filter: song.isLive ? "audioandvideo" : "audioonly",
-      quality: "highestaudio",
-      encoderArgs,
-      seek,
-    };
+    const streamOptions = { FFmpegArgs, seek };
     Object.assign(streamOptions, this.ytdlOptions);
-    if (song.source === "youtube") return ytdl(song.info, streamOptions);
-    return ytdl.arbitraryStream(song.streamURL, streamOptions);
+    if (song.source === "youtube") return DisTubeStream.YouTube(song.info, streamOptions);
+    return DisTubeStream.DirectLink(song.streamURL, streamOptions);
   }
 
   /**
@@ -382,46 +375,6 @@ class DisTubeHandler extends DisTubeBase {
     } else try { queue.stop() } catch { this.deleteQueue(queue) }
   }
 
-  /**
-   * Play a song from url without creating a {@link Queue}
-   * @param {Discord.VoiceChannel|Discord.StageChannel} voiceChannel The voice channel will be joined
-   * @param {string|Song|SearchResult} song YouTube url | {@link Song} | {@link SearchResult}
-   * @returns {Promise<Discord.StreamDispatcher>}
-   */
-  async playWithoutQueue(voiceChannel, song) {
-    if (!["voice", "stage"].includes(voiceChannel?.type)) {
-      throw new TypeError("voiceChannel is not a Discord.VoiceChannel or a Discord.StageChannel.");
-    }
-    try {
-      if (ytpl.validateID(song)) throw new Error("Cannot play a playlist with this method.");
-      song = await this.resolveSong(voiceChannel.guild.me, song);
-      if (!song) throw new Error("Cannot resolve this song.");
-      if (song instanceof Playlist || Array.isArray(song)) throw new Error("Cannot play a playlist with this method.");
-      const connection = await voiceChannel.join();
-      if (song.source === "youtube") await this.checkYouTubeInfo(song);
-      const streamOptions = {
-        opusEncoded: true,
-        filter: song.isLive ? "audioandvideo" : "audioonly",
-        quality: "highestaudio",
-      };
-      Object.assign(streamOptions, this.ytdlOptions);
-      let stream;
-      if (song.source === "youtube") stream = ytdl(song.info, streamOptions);
-      else stream = ytdl.arbitraryStream(song.streamURL, streamOptions);
-      const dispatcher = connection.play(stream, {
-        highWaterMark: 1,
-        type: "opus",
-        bitrate: "auto",
-      }).on("finish", () => { try { stream.destroy() } catch { } });
-      return dispatcher;
-    } catch (e) {
-      try {
-        e.name = "playWithoutQueue";
-        e.message = `${song?.url || song}\n${e.message}`;
-      } catch { }
-      throw e;
-    }
-  }
   /**
    * Check if the voice channel is empty
    * @param {Discord.VoiceState} voiceState voiceState

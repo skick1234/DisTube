@@ -16,5 +16,5 @@ declare class ExtractorPlugin extends Plugin {
 }
 import Plugin = require("./Plugin");
 import Discord = require("discord.js");
-import Song = require("../Song");
-import Playlist = require("../Playlist");
+import Song = require("./Song");
+import Playlist = require("./Playlist");

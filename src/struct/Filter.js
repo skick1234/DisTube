@@ -1,3 +1,4 @@
+/* eslint-disable */
 /**
  * Default DisTube audio filters.
  * @typedef {Object} DefaultFilters
@@ -19,7 +20,7 @@
  */
 module.exports = {
   "3d": "apulsator=hz=0.125",
-  bassboost: "bass=g=10,dynaudnorm=f=150:g=15",
+  bassboost: "bass=g=10",
   echo: "aecho=0.8:0.9:1000:0.3",
   flanger: "flanger",
   gate: "agate",

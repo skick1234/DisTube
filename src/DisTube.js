@@ -1,23 +1,23 @@
 const ytsr = require("@distube/ytsr"),
   ytpl = require("@distube/ytpl"),
   { EventEmitter } = require("events"),
-  Queue = require("./Queue"),
-  SearchResult = require("./SearchResult"),
-  Playlist = require("./Playlist"),
   Discord = require("discord.js"),
-  DisTubeOption = require("./DisTubeOptions"),
-  DisTubeHandler = require("./DisTubeHandler"),
-  Song = require("./Song"),
-  Plugin = require("./Plugin/Plugin"),
-  CustomPlugin = require("./Plugin/CustomPlugin"),
-  ExtractorPlugin = require("./Plugin/ExtractorPlugin");
+  DisTubeOption = require("./core/DisTubeOptions"),
+  DisTubeHandler = require("./core/DisTubeHandler"),
+  Queue = require("./struct/Queue"),
+  SearchResult = require("./struct/SearchResult"),
+  Song = require("./struct/Song"),
+  Playlist = require("./struct/Playlist"),
+  Plugin = require("./struct/Plugin"),
+  CustomPlugin = require("./struct/CustomPlugin"),
+  ExtractorPlugin = require("./struct/ExtractorPlugin");
 
 /**
  * FFmpeg Filters
  * ```
  * {
  *   "Filter Name": "Filter Value",
- *   "bassboost":   "bass=g=10,dynaudnorm=f=150:g=15"
+ *   "bassboost":   "bass=g=10"
  * }
  * ```
  * @typedef {Object.<string, string>} Filters
@@ -25,8 +25,15 @@ const ytsr = require("@distube/ytsr"),
  */
 
 /**
- * Data that resolves to give a {@link Queue} object.
- * @typedef {Discord.Snowflake|Discord.Message|Discord.VoiceChannel|Discord.StageChannel|Discord.VoiceState|string} QueueResolvable
+ * Data that resolves to give a {@link Queue} object. This can be:
+ * - A {@link Queue}
+ * - A guild ID string
+ * - A {@link https://discord.js.org/#/docs/main/master/class/Snowflake|Snowflake}
+ * - A {@link https://discord.js.org/#/docs/main/master/class/Message|Message}
+ * - A {@link https://discord.js.org/#/docs/main/master/class/VoiceChannel|VoiceChannel}
+ * - A {@link https://discord.js.org/#/docs/main/master/class/StageChannel|StageChannel}
+ * - A {@link https://discord.js.org/#/docs/main/master/class/VoiceState|VoiceState}
+ * @typedef {Queue|Discord.Snowflake|Discord.Message|Discord.VoiceChannel|Discord.StageChannel|Discord.VoiceState|string} QueueResolvable
  */
 
 /**
@@ -107,7 +114,7 @@ class DisTube extends EventEmitter {
      * DisTube filters
      * @type {Filters}
      */
-    this.filters = require("./Filter");
+    this.filters = require("./struct/Filter");
     if (typeof this.options.customFilters === "object") Object.assign(this.filters, this.options.customFilters);
 
     if (this.options.leaveOnEmpty) {
@@ -139,11 +146,11 @@ class DisTube extends EventEmitter {
     }
 
     // Default plugin
-    const HTTPPlugin = require("./Plugin/http"),
-      HTTPSPlugin = require("./Plugin/https");
+    const HTTPPlugin = require("./plugins/http"),
+      HTTPSPlugin = require("./plugins/https");
     this.options.plugins.push(new HTTPPlugin(), new HTTPSPlugin());
     if (this.options.youtubeDL) {
-      const YouTubeDLPlugin = require("./Plugin/youtube-dl");
+      const YouTubeDLPlugin = require("./plugins/youtube-dl");
       this.options.plugins.push(new YouTubeDLPlugin(this.options.updateYouTubeDL));
     }
     this.options.plugins.map(p => p.init(this));
@@ -207,7 +214,7 @@ class DisTube extends EventEmitter {
    * @param {string|Song|SearchResult|Playlist} song YouTube url | Search string | {@link Song} | {@link SearchResult} | {@link Playlist}
    * @param {Object} [options] Optional options
    * @param {Discord.GuildMember} [options.member] Requested user (default is your bot)
-   * @param {Discord.TextChannel} [options.textChannel] Default {@link Queue#textChannel} (if the queue wasn't created)
+   * @param {Discord.TextChannel} [options.textChannel=null] Default {@link Queue#textChannel} (if the queue wasn't created)
    * @param {boolean} [options.skip] Skip the playing song (if exists)
    * @param {Discord.Message} [options.message] Called message (For built-in search events. If this is a {@link https://developer.mozilla.org/en-US/docs/Glossary/Falsy|falsy value}, it will play the first result instead)
    */
@@ -342,7 +349,7 @@ class DisTube extends EventEmitter {
    * @throws {Error}
    * @returns {Promise<Queue|true>} `true` if queue is not generated
    */
-  _newQueue(message, song, textChannel = message?.channel) {
+  _newQueue(message, song, textChannel = message.channel) {
     const voice = message?.member?.voice?.channel || message;
     if (!voice || voice instanceof Discord.Message) throw new Error("User is not in a voice channel.");
     if (!["voice", "stage"].includes(voice?.type)) {
@@ -357,21 +364,21 @@ class DisTube extends EventEmitter {
   /**
    * Delete a guild queue
    * @private
-   * @param {Discord.Snowflake|Discord.Message|Queue} queue A message from guild channel | Queue
+   * @param {QueueResolvable} queue The type can be resolved to give a {@link Queue}
    */
   _deleteQueue(queue) {
-    if (!(queue instanceof Queue)) queue = this.getQueue(queue);
-    if (!queue) return;
-    this.emit("deleteQueue", queue);
-    if (queue.dispatcher) try { queue.dispatcher.destroy() } catch { }
-    if (queue.stream) try { queue.stream.destroy() } catch { }
-    this.guildQueues.delete(queue.id);
+    const q = this.getQueue(queue);
+    if (!q) return;
+    this.emit("deleteQueue", q);
+    if (q.dispatcher) try { q.dispatcher.destroy() } catch { }
+    if (q.stream) try { q.stream.destroy() } catch { }
+    this.guildQueues.delete(q.id);
   }
 
   /**
    * Get the guild queue
-   * @param {QueueResolvable} queue The queue resolvable type
-   * @returns {Queue} The guild queue
+   * @param {QueueResolvable} queue The type can be resolved to give a {@link Queue}
+   * @returns {Queue}
    * @throws {Error}
    * @example
    * client.on('message', (message) => {
@@ -387,38 +394,43 @@ class DisTube extends EventEmitter {
    * });
    */
   getQueue(queue) {
+    if (queue instanceof Queue) return queue;
     const guildID = queue?.guild?.id || queue;
-    if (typeof guildID !== "string") throw TypeError("Parameter must be a QueueResolvable!");
+    if (
+      typeof guildID !== "string" ||
+      !guildID.match(/^\d+$/) ||
+      guildID.length <= 15
+    ) throw TypeError("The parameter must be a QueueResolvable!");
     return this.guildQueues.get(guildID);
   }
 
   /**
    * Pause the guild stream
-   * @param {Discord.Snowflake|Discord.Message} message A message from guild channel
+   * @param {QueueResolvable} queue The type can be resolved to give a {@link Queue}
    * @returns {Queue} The guild queue
    * @throws {Error}
    */
-  pause(message) {
-    const queue = this.getQueue(message);
-    if (!queue) throw new Error("Cannot find the playing queue.");
-    return queue.pause();
+  pause(queue) {
+    const q = this.getQueue(queue);
+    if (!q) throw new Error("Cannot find the playing queue.");
+    return q.pause();
   }
 
   /**
    * Resume the guild stream
-   * @param {Discord.Snowflake|Discord.Message} message A message from guild channel
+   * @param {QueueResolvable} queue The type can be resolved to give a {@link Queue}
    * @returns {Queue} The guild queue
    * @throws {Error}
    */
-  resume(message) {
-    const queue = this.getQueue(message);
-    if (!queue) throw new Error("Cannot find the playing queue.");
-    return queue.resume();
+  resume(queue) {
+    const q = this.getQueue(queue);
+    if (!q) throw new Error("Cannot find the playing queue.");
+    return q.resume();
   }
 
   /**
    * Stop the guild stream
-   * @param {Discord.Snowflake|Discord.Message} message A message from guild channel or Queue
+   * @param {QueueResolvable} queue The type can be resolved to give a {@link Queue}
    * @throws {Error}
    * @example
    * client.on('message', (message) => {
@@ -431,15 +443,15 @@ class DisTube extends EventEmitter {
    *     }
    * });
    */
-  stop(message) {
-    const queue = this.getQueue(message);
-    if (!queue) throw new Error("Cannot find the playing queue.");
-    queue.stop();
+  stop(queue) {
+    const q = this.getQueue(queue);
+    if (!q) throw new Error("Cannot find the playing queue.");
+    q.stop();
   }
 
   /**
    * Set the guild stream's volume
-   * @param {Discord.Snowflake|Discord.Message} message A message from guild channel
+   * @param {QueueResolvable} queue The type can be resolved to give a {@link Queue}
    * @param {number} percent The percentage of volume you want to set
    * @returns {Queue} The guild queue
    * @throws {Error}
@@ -449,19 +461,18 @@ class DisTube extends EventEmitter {
    *     const args = message.content.slice(config.prefix.length).trim().split(/ +/g);
    *     const command = args.shift();
    *     if (command == "volume")
-   *         distube.setVolume(message, args[0]);
+   *         distube.setVolume(message, Number(args[0]));
    * });
    */
-  setVolume(message, percent) {
-    const queue = this.getQueue(message);
-    if (!queue) throw new Error("Cannot find the playing queue.");
-    return queue.setVolume(percent);
+  setVolume(queue, percent) {
+    const q = this.getQueue(queue);
+    if (!q) throw new Error("Cannot find the playing queue.");
+    return q.setVolume(percent);
   }
 
   /**
    * Skip the playing song
-   *
-   * @param {Discord.Snowflake|Discord.Message} message A message from guild channel
+   * @param {QueueResolvable} queue The type can be resolved to give a {@link Queue}
    * @returns {Queue} The guild queue
    * @throws {Error}
    * @example
@@ -473,16 +484,15 @@ class DisTube extends EventEmitter {
    *         distube.skip(message);
    * });
    */
-  skip(message) {
-    const queue = this.getQueue(message);
-    if (!queue) throw new Error("Cannot find the playing queue.");
-    return queue.skip();
+  skip(queue) {
+    const q = this.getQueue(queue);
+    if (!q) throw new Error("Cannot find the playing queue.");
+    return q.skip();
   }
 
   /**
    * Play the previous song
-   *
-   * @param {Discord.Snowflake|Discord.Message} message A message from guild channel
+   * @param {QueueResolvable} queue The type can be resolved to give a {@link Queue}
    * @returns {Queue} The guild queue
    * @throws {Error}
    * @example
@@ -494,16 +504,16 @@ class DisTube extends EventEmitter {
    *         distube.previous(message);
    * });
    */
-  previous(message) {
+  previous(queue) {
     if (!this.options.savePreviousSongs) throw new Error("Disabled");
-    const queue = this.getQueue(message);
-    if (!queue) throw new Error("Cannot find the playing queue.");
-    return queue.previous();
+    const q = this.getQueue(queue);
+    if (!q) throw new Error("Cannot find the playing queue.");
+    return q.previous();
   }
 
   /**
    * Shuffle the guild queue songs
-   * @param {Discord.Snowflake|Discord.Message} message A message from guild channel
+   * @param {QueueResolvable} queue The type can be resolved to give a {@link Queue}
    * @returns {Queue} The guild queue
    * @example
    * client.on('message', (message) => {
@@ -514,17 +524,17 @@ class DisTube extends EventEmitter {
    *         distube.shuffle(message);
    * });
    */
-  shuffle(message) {
-    const queue = this.getQueue(message);
-    if (!queue) throw new Error("Cannot find the playing queue.");
-    return queue.shuffle();
+  shuffle(queue) {
+    const q = this.getQueue(queue);
+    if (!q) throw new Error("Cannot find the playing queue.");
+    return q.shuffle();
   }
 
   /**
    * Jump to the song number in the queue.
    * The next one is 1, 2,...
    * The previous one is -1, -2,...
-   * @param {Discord.Snowflake|Discord.Message} message A message from guild channel
+   * @param {QueueResolvable} queue The type can be resolved to give a {@link Queue}
    * @param {number} num The song number to play
    * @returns {Queue} The guild queue
    * @throws {Error} if `num` is invalid number (0 < num < {@link Queue#songs}.length)
@@ -538,18 +548,17 @@ class DisTube extends EventEmitter {
    *             .catch(err => message.channel.send("Invalid song number."));
    * });
    */
-  jump(message, num) {
-    const queue = this.getQueue(message);
-    if (!queue) throw new Error("Cannot find the playing queue.");
-    return queue.jump(num);
+  jump(queue, num) {
+    const q = this.getQueue(queue);
+    if (!q) throw new Error("Cannot find the playing queue.");
+    return q.jump(num);
   }
 
   /**
    * Set the repeat mode of the guild queue.
    * Turn off if repeat mode is the same value as new mode.
    * Toggle mode: `mode = null` `(0 -> 1 -> 2 -> 0...)`
-   *
-   * @param {Discord.Snowflake|Discord.Message} message A message from guild channel
+   * @param {QueueResolvable} queue The type can be resolved to give a {@link Queue}
    * @param {number} mode The repeat modes `(0: disabled, 1: Repeat a song, 2: Repeat all the queue)`
    * @returns {number} The new repeat mode
    * @example
@@ -564,15 +573,15 @@ class DisTube extends EventEmitter {
    *     }
    * });
    */
-  setRepeatMode(message, mode = null) {
-    const queue = this.getQueue(message);
-    if (!queue) throw new Error("Cannot find the playing queue.");
-    return queue.setRepeatMode(mode);
+  setRepeatMode(queue, mode = null) {
+    const q = this.getQueue(queue);
+    if (!q) throw new Error("Cannot find the playing queue.");
+    return q.setRepeatMode(mode);
   }
 
   /**
    * Toggle autoplay mode
-   * @param {Discord.Snowflake|Discord.Message} message A message from guild channel
+   * @param {QueueResolvable} queue The type can be resolved to give a {@link Queue}
    * @returns {boolean} Autoplay mode state
    * @throws {Error}
    * @example
@@ -586,48 +595,27 @@ class DisTube extends EventEmitter {
    *     }
    * });
    */
-  toggleAutoplay(message) {
-    const queue = this.getQueue(message);
-    if (!queue) throw new Error("Cannot find the playing queue.");
-    return queue.toggleAutoplay();
-  }
-
-  /**
-   * Whether or not a guild is playing music.
-   * @param {Discord.Snowflake|Discord.Message} message A message from guild channel to check
-   * @returns {boolean} Whether or not the guild is playing song(s)
-   */
-  isPlaying(message) {
-    const queue = this.getQueue(message);
-    return queue ? queue.playing || !queue.paused : false;
-  }
-
-  /**
-   * Whether or not the guild queue is paused
-   * @param {Discord.Snowflake|Discord.Message} message A message from guild channel to check
-   * @returns {boolean} Whether or not the guild queue is paused
-   */
-  isPaused(message) {
-    const queue = this.getQueue(message);
-    return queue ? queue.paused : false;
+  toggleAutoplay(queue) {
+    const q = this.getQueue(queue);
+    if (!q) throw new Error("Cannot find the playing queue.");
+    return q.toggleAutoplay();
   }
 
   /**
    * Add related song to the queue
-   * @param {Discord.Snowflake|Discord.Message} message A message from guild channel
+   * @param {QueueResolvable} queue The type can be resolved to give a {@link Queue}
    * @returns {Promise<Queue>} The guild queue
    */
-  addRelatedSong(message) {
-    const queue = this.getQueue(message);
-    if (!queue) throw new Error("Cannot find the playing queue.");
-    return queue.addRelatedSong();
+  addRelatedSong(queue) {
+    const q = this.getQueue(queue);
+    if (!q) throw new Error("Cannot find the playing queue.");
+    return q.addRelatedSong();
   }
 
   /**
    * Enable or disable a filter of the queue.
    * Available filters: {@link Filters}
-   *
-   * @param {Discord.Snowflake|Discord.Message} message A message from guild channel
+   * @param {QueueResolvable} queue The type can be resolved to give a {@link Queue}
    * @param {string|false} filter A filter name, `false` to clear all the filters
    * @returns {Array<string>} Enabled filters.
    * @example
@@ -641,15 +629,15 @@ class DisTube extends EventEmitter {
    *     }
    * });
    */
-  setFilter(message, filter) {
-    const queue = this.getQueue(message);
-    if (!queue) throw new Error("Cannot find the playing queue.");
-    return queue.setFilter(filter);
+  setFilter(queue, filter) {
+    const q = this.getQueue(queue);
+    if (!q) throw new Error("Cannot find the playing queue.");
+    return q.setFilter(filter);
   }
 
   /**
    * Set the playing time to another position
-   * @param {Discord.Snowflake|Discord.Message} message A message from guild channel
+   * @param {QueueResolvable} queue The type can be resolved to give a {@link Queue}
    * @param {number} time Time in seconds
    * @returns {Queue} Seeked queue
    * @example
@@ -661,10 +649,10 @@ class DisTube extends EventEmitter {
    *         distube.seek(message, Number(args[0]));
    * });
    */
-  seek(message, time) {
-    const queue = this.getQueue(message);
-    if (!queue) throw new Error("Cannot find the playing queue.");
-    return queue.seek(time);
+  seek(queue, time) {
+    const q = this.getQueue(queue);
+    if (!q) throw new Error("Cannot find the playing queue.");
+    return q.seek(time);
   }
 
   /**
@@ -688,6 +676,7 @@ DisTube.Playlist = Playlist;
 DisTube.Song = Song;
 DisTube.Queue = Queue;
 DisTube.SearchResult = SearchResult;
+DisTube.Util = require("./struct/Util");
 module.exports = DisTube;
 
 /**

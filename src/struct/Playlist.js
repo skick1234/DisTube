@@ -1,7 +1,5 @@
-const { formatDuration } = require("./util"),
-  // eslint-disable-next-line no-unused-vars
+const { formatDuration } = require("./Util"),
   Song = require("./Song"),
-  // eslint-disable-next-line no-unused-vars
   Discord = require("discord.js");
 
 /** Class representing a playlist. */

@@ -1,4 +1,4 @@
-const { formatDuration, toSecond, parseNumber } = require("./util"),
+const { formatDuration, toSecond, parseNumber } = require("./Util"),
   Playlist = require("./Playlist"),
   ytdl = require("ytdl-core"),
   SearchResult = require("./SearchResult"),

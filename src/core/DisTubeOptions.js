@@ -1,31 +1,29 @@
-const { mergeObject } = require("./util");
-const defaultOptions = {
-  emitNewSongOnly: false,
-  leaveOnEmpty: true,
-  leaveOnFinish: false,
-  leaveOnStop: true,
-  savePreviousSongs: true,
-  youtubeDL: true,
-  updateYouTubeDL: true,
-  searchSongs: 0,
-  youtubeCookie: null,
-  youtubeIdentityToken: null,
-  customFilters: {},
-  ytdlOptions: {
-    highWaterMark: 1 << 24,
-  },
-  searchCooldown: 60,
-  emptyCooldown: 60,
-  plugins: [],
-  nsfw: false,
-};
+const { clone } = require("../struct/Util");
 
 module.exports = class DisTubeOptions {
   constructor(options) {
-    const opt = mergeObject(defaultOptions, options);
-    for (const key in opt) {
-      this[key] = opt[key];
-    }
+    const defaultOptions = {
+      emitNewSongOnly: false,
+      leaveOnEmpty: true,
+      leaveOnFinish: false,
+      leaveOnStop: true,
+      savePreviousSongs: true,
+      youtubeDL: true,
+      updateYouTubeDL: true,
+      searchSongs: 0,
+      youtubeCookie: null,
+      youtubeIdentityToken: null,
+      customFilters: {},
+      ytdlOptions: {
+        highWaterMark: 1 << 24,
+      },
+      searchCooldown: 60,
+      emptyCooldown: 60,
+      plugins: [],
+      nsfw: false,
+    };
+    const opt = Object.assign(defaultOptions, clone(options));
+    for (const key in opt) this[key] = opt[key];
     this._validateOptions();
   }
 

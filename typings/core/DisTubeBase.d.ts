@@ -21,7 +21,7 @@ declare class DisTubeBase {
      */
     private client;
     /**
-     * Redirect emitter
+     * Emit the {@link DisTube} of this base
      * @private
      * @param  {...any} args arguments
      */

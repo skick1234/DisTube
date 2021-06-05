@@ -41,4 +41,4 @@ declare class Plugin {
     getRelatedSongs(url: string): Promise<Song[]>;
 }
 import DisTube = require("../DisTube");
-import Song = require("../Song");
+import Song = require("./Song");

@@ -1,5 +1,5 @@
 // eslint-disable-next-line no-unused-vars
-const DisTube = require("./DisTube");
+const DisTube = require("../DisTube");
 // eslint-disable-next-line no-unused-vars
 const Discord = require("discord.js");
 
@@ -26,7 +26,7 @@ class DisTubeBase {
     this.client = this.distube.client;
   }
   /**
-   * Redirect emitter
+   * Emit the {@link DisTube} of this base
    * @private
    * @param  {...any} args arguments
    */

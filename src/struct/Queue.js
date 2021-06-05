@@ -1,10 +1,10 @@
-const { formatDuration } = require("./util"),
+const { formatDuration } = require("./Util"),
   Song = require("./Song"),
-  DisTubeBase = require("./DisTubeBase"),
-  DisTube = require("./DisTube"),
+  DisTube = require("../DisTube"),
   Discord = require("discord.js"),
   { Readable } = require("stream"),
-  DisTubeHandler = require("./DisTubeHandler");
+  DisTubeBase = require("../core/DisTubeBase"),
+  DisTubeHandler = require("../core/DisTubeHandler");
 
 /**
  * Represents a queue.
@@ -47,7 +47,7 @@ class Queue extends DisTubeBase {
     this.songs = Array.isArray(song) ? [...song] : [song];
     /**
      * List of the previous songs.
-     * @type {Array<Song>?}
+     * @type {Array<Song>}
      */
     this.previousSongs = [];
     /**
@@ -119,7 +119,7 @@ class Queue extends DisTubeBase {
     this.handler = this.distube.handler;
     /**
      * Timeout for checking empty channel
-     * @type {NodeJS.Timeout?}
+     * @type {*}
      * @private
      */
     this.emptyTimeout = null;

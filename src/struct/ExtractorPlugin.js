@@ -1,8 +1,8 @@
 /* eslint-disable */
 const Plugin = require("./Plugin");
 const Discord = require("discord.js");
-const Song = require("../Song");
-const Playlist = require("../Playlist");
+const Song = require("./Song");
+const Playlist = require("./Playlist");
 
 /**
  * Extractor Plugin

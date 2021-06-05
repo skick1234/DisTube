@@ -4,15 +4,22 @@ export = DisTube;
  * ```
  * {
  *   "Filter Name": "Filter Value",
- *   "bassboost":   "bass=g=10,dynaudnorm=f=150:g=15"
+ *   "bassboost":   "bass=g=10"
  * }
  * ```
  * @typedef {Object.<string, string>} Filters
  * @see {@link DefaultFilters}
  */
 /**
- * Data that resolves to give a {@link Queue} object.
- * @typedef {Discord.Snowflake|Discord.Message|Discord.VoiceChannel|Discord.StageChannel|Discord.VoiceState|string} QueueResolvable
+ * Data that resolves to give a {@link Queue} object. This can be:
+ * - A {@link Queue}
+ * - A guild ID string
+ * - A {@link https://discord.js.org/#/docs/main/master/class/Snowflake|Snowflake}
+ * - A {@link https://discord.js.org/#/docs/main/master/class/Message|Message}
+ * - A {@link https://discord.js.org/#/docs/main/master/class/VoiceChannel|VoiceChannel}
+ * - A {@link https://discord.js.org/#/docs/main/master/class/StageChannel|StageChannel}
+ * - A {@link https://discord.js.org/#/docs/main/master/class/VoiceState|VoiceState}
+ * @typedef {Queue|Discord.Snowflake|Discord.Message|Discord.VoiceChannel|Discord.StageChannel|Discord.VoiceState|string} QueueResolvable
  */
 /**
  * DisTube options.
@@ -122,7 +129,7 @@ declare class DisTube extends EventEmitter {
      * @param {string|Song|SearchResult|Playlist} song YouTube url | Search string | {@link Song} | {@link SearchResult} | {@link Playlist}
      * @param {Object} [options] Optional options
      * @param {Discord.GuildMember} [options.member] Requested user (default is your bot)
-     * @param {Discord.TextChannel} [options.textChannel] Default {@link Queue#textChannel} (if the queue wasn't created)
+     * @param {Discord.TextChannel} [options.textChannel=null] Default {@link Queue#textChannel} (if the queue wasn't created)
      * @param {boolean} [options.skip] Skip the playing song (if exists)
      * @param {Discord.Message} [options.message] Called message (For built-in search events. If this is a {@link https://developer.mozilla.org/en-US/docs/Glossary/Falsy|falsy value}, it will play the first result instead)
      */
@@ -195,13 +202,13 @@ declare class DisTube extends EventEmitter {
     /**
      * Delete a guild queue
      * @private
-     * @param {Discord.Snowflake|Discord.Message|Queue} queue A message from guild channel | Queue
+     * @param {QueueResolvable} queue The type can be resolved to give a {@link Queue}
      */
     private _deleteQueue;
     /**
      * Get the guild queue
-     * @param {QueueResolvable} queue The queue resolvable type
-     * @returns {Queue} The guild queue
+     * @param {QueueResolvable} queue The type can be resolved to give a {@link Queue}
+     * @returns {Queue}
      * @throws {Error}
      * @example
      * client.on('message', (message) => {
@@ -219,21 +226,21 @@ declare class DisTube extends EventEmitter {
     getQueue(queue: QueueResolvable): Queue;
     /**
      * Pause the guild stream
-     * @param {Discord.Snowflake|Discord.Message} message A message from guild channel
+     * @param {QueueResolvable} queue The type can be resolved to give a {@link Queue}
      * @returns {Queue} The guild queue
      * @throws {Error}
      */
-    pause(message: Discord.Snowflake | Discord.Message): Queue;
+    pause(queue: QueueResolvable): Queue;
     /**
      * Resume the guild stream
-     * @param {Discord.Snowflake|Discord.Message} message A message from guild channel
+     * @param {QueueResolvable} queue The type can be resolved to give a {@link Queue}
      * @returns {Queue} The guild queue
      * @throws {Error}
      */
-    resume(message: Discord.Snowflake | Discord.Message): Queue;
+    resume(queue: QueueResolvable): Queue;
     /**
      * Stop the guild stream
-     * @param {Discord.Snowflake|Discord.Message} message A message from guild channel or Queue
+     * @param {QueueResolvable} queue The type can be resolved to give a {@link Queue}
      * @throws {Error}
      * @example
      * client.on('message', (message) => {
@@ -246,10 +253,10 @@ declare class DisTube extends EventEmitter {
      *     }
      * });
      */
-    stop(message: Discord.Snowflake | Discord.Message): void;
+    stop(queue: QueueResolvable): void;
     /**
      * Set the guild stream's volume
-     * @param {Discord.Snowflake|Discord.Message} message A message from guild channel
+     * @param {QueueResolvable} queue The type can be resolved to give a {@link Queue}
      * @param {number} percent The percentage of volume you want to set
      * @returns {Queue} The guild queue
      * @throws {Error}
@@ -259,14 +266,13 @@ declare class DisTube extends EventEmitter {
      *     const args = message.content.slice(config.prefix.length).trim().split(/ +/g);
      *     const command = args.shift();
      *     if (command == "volume")
-     *         distube.setVolume(message, args[0]);
+     *         distube.setVolume(message, Number(args[0]));
      * });
      */
-    setVolume(message: Discord.Snowflake | Discord.Message, percent: number): Queue;
+    setVolume(queue: QueueResolvable, percent: number): Queue;
     /**
      * Skip the playing song
-     *
-     * @param {Discord.Snowflake|Discord.Message} message A message from guild channel
+     * @param {QueueResolvable} queue The type can be resolved to give a {@link Queue}
      * @returns {Queue} The guild queue
      * @throws {Error}
      * @example
@@ -278,11 +284,10 @@ declare class DisTube extends EventEmitter {
      *         distube.skip(message);
      * });
      */
-    skip(message: Discord.Snowflake | Discord.Message): Queue;
+    skip(queue: QueueResolvable): Queue;
     /**
      * Play the previous song
-     *
-     * @param {Discord.Snowflake|Discord.Message} message A message from guild channel
+     * @param {QueueResolvable} queue The type can be resolved to give a {@link Queue}
      * @returns {Queue} The guild queue
      * @throws {Error}
      * @example
@@ -294,10 +299,10 @@ declare class DisTube extends EventEmitter {
      *         distube.previous(message);
      * });
      */
-    previous(message: Discord.Snowflake | Discord.Message): Queue;
+    previous(queue: QueueResolvable): Queue;
     /**
      * Shuffle the guild queue songs
-     * @param {Discord.Snowflake|Discord.Message} message A message from guild channel
+     * @param {QueueResolvable} queue The type can be resolved to give a {@link Queue}
      * @returns {Queue} The guild queue
      * @example
      * client.on('message', (message) => {
@@ -308,12 +313,12 @@ declare class DisTube extends EventEmitter {
      *         distube.shuffle(message);
      * });
      */
-    shuffle(message: Discord.Snowflake | Discord.Message): Queue;
+    shuffle(queue: QueueResolvable): Queue;
     /**
      * Jump to the song number in the queue.
      * The next one is 1, 2,...
      * The previous one is -1, -2,...
-     * @param {Discord.Snowflake|Discord.Message} message A message from guild channel
+     * @param {QueueResolvable} queue The type can be resolved to give a {@link Queue}
      * @param {number} num The song number to play
      * @returns {Queue} The guild queue
      * @throws {Error} if `num` is invalid number (0 < num < {@link Queue#songs}.length)
@@ -327,13 +332,12 @@ declare class DisTube extends EventEmitter {
      *             .catch(err => message.channel.send("Invalid song number."));
      * });
      */
-    jump(message: Discord.Snowflake | Discord.Message, num: number): Queue;
+    jump(queue: QueueResolvable, num: number): Queue;
     /**
      * Set the repeat mode of the guild queue.
      * Turn off if repeat mode is the same value as new mode.
      * Toggle mode: `mode = null` `(0 -> 1 -> 2 -> 0...)`
-     *
-     * @param {Discord.Snowflake|Discord.Message} message A message from guild channel
+     * @param {QueueResolvable} queue The type can be resolved to give a {@link Queue}
      * @param {number} mode The repeat modes `(0: disabled, 1: Repeat a song, 2: Repeat all the queue)`
      * @returns {number} The new repeat mode
      * @example
@@ -348,10 +352,10 @@ declare class DisTube extends EventEmitter {
      *     }
      * });
      */
-    setRepeatMode(message: Discord.Snowflake | Discord.Message, mode?: number): number;
+    setRepeatMode(queue: QueueResolvable, mode?: number): number;
     /**
      * Toggle autoplay mode
-     * @param {Discord.Snowflake|Discord.Message} message A message from guild channel
+     * @param {QueueResolvable} queue The type can be resolved to give a {@link Queue}
      * @returns {boolean} Autoplay mode state
      * @throws {Error}
      * @example
@@ -365,30 +369,17 @@ declare class DisTube extends EventEmitter {
      *     }
      * });
      */
-    toggleAutoplay(message: Discord.Snowflake | Discord.Message): boolean;
-    /**
-     * Whether or not a guild is playing music.
-     * @param {Discord.Snowflake|Discord.Message} message A message from guild channel to check
-     * @returns {boolean} Whether or not the guild is playing song(s)
-     */
-    isPlaying(message: Discord.Snowflake | Discord.Message): boolean;
-    /**
-     * Whether or not the guild queue is paused
-     * @param {Discord.Snowflake|Discord.Message} message A message from guild channel to check
-     * @returns {boolean} Whether or not the guild queue is paused
-     */
-    isPaused(message: Discord.Snowflake | Discord.Message): boolean;
+    toggleAutoplay(queue: QueueResolvable): boolean;
     /**
      * Add related song to the queue
-     * @param {Discord.Snowflake|Discord.Message} message A message from guild channel
+     * @param {QueueResolvable} queue The type can be resolved to give a {@link Queue}
      * @returns {Promise<Queue>} The guild queue
      */
-    addRelatedSong(message: Discord.Snowflake | Discord.Message): Promise<Queue>;
+    addRelatedSong(queue: QueueResolvable): Promise<Queue>;
     /**
      * Enable or disable a filter of the queue.
      * Available filters: {@link Filters}
-     *
-     * @param {Discord.Snowflake|Discord.Message} message A message from guild channel
+     * @param {QueueResolvable} queue The type can be resolved to give a {@link Queue}
      * @param {string|false} filter A filter name, `false` to clear all the filters
      * @returns {Array<string>} Enabled filters.
      * @example
@@ -402,10 +393,10 @@ declare class DisTube extends EventEmitter {
      *     }
      * });
      */
-    setFilter(message: Discord.Snowflake | Discord.Message, filter: string | false): Array<string>;
+    setFilter(queue: QueueResolvable, filter: string | false): Array<string>;
     /**
      * Set the playing time to another position
-     * @param {Discord.Snowflake|Discord.Message} message A message from guild channel
+     * @param {QueueResolvable} queue The type can be resolved to give a {@link Queue}
      * @param {number} time Time in seconds
      * @returns {Queue} Seeked queue
      * @example
@@ -417,7 +408,7 @@ declare class DisTube extends EventEmitter {
      *         distube.seek(message, Number(args[0]));
      * });
      */
-    seek(message: Discord.Snowflake | Discord.Message, time: number): Queue;
+    seek(queue: QueueResolvable, time: number): Queue;
     /**
      * Emit error event
      * @param {Discord.TextChannel} channel Text channel where the error is encountered.
@@ -463,11 +454,11 @@ declare class DisTube extends EventEmitter {
     ): this;
 }
 declare namespace DisTube {
-    export { CustomPlugin, ExtractorPlugin, Playlist, Song, Queue, SearchResult, Filters, QueueResolvable, DisTubeOptions };
+    export { CustomPlugin, ExtractorPlugin, Playlist, Song, Queue, SearchResult, Util, Filters, QueueResolvable, DisTubeOptions };
 }
 import { EventEmitter } from "events";
 import Discord = require("discord.js");
-import Queue = require("./Queue");
+import Queue = require("./struct/Queue");
 /**
  * DisTube options.
  */
@@ -542,20 +533,28 @@ type DisTubeOptions = {
  * ```
  * {
  *   "Filter Name": "Filter Value",
- *   "bassboost":   "bass=g=10,dynaudnorm=f=150:g=15"
+ *   "bassboost":   "bass=g=10"
  * }
  * ```
  */
 type Filters = {
     [x: string]: string;
 };
-import Song = require("./Song");
-import SearchResult = require("./SearchResult");
-import Playlist = require("./Playlist");
+import Song = require("./struct/Song");
+import SearchResult = require("./struct/SearchResult");
+import Playlist = require("./struct/Playlist");
 /**
- * Data that resolves to give a {@link Queue } object.
+ * Data that resolves to give a {@link Queue } object. This can be:
+ * - A {@link Queue }
+ * - A guild ID string
+ * - A {@link https ://discord.js.org/#/docs/main/master/class/Snowflake|Snowflake}
+ * - A {@link https ://discord.js.org/#/docs/main/master/class/Message|Message}
+ * - A {@link https ://discord.js.org/#/docs/main/master/class/VoiceChannel|VoiceChannel}
+ * - A {@link https ://discord.js.org/#/docs/main/master/class/StageChannel|StageChannel}
+ * - A {@link https ://discord.js.org/#/docs/main/master/class/VoiceState|VoiceState}
  */
-type QueueResolvable = Discord.Snowflake | Discord.Message | Discord.VoiceChannel | Discord.StageChannel | Discord.VoiceState | string;
-import CustomPlugin = require("./Plugin/CustomPlugin");
-import ExtractorPlugin = require("./Plugin/ExtractorPlugin");
-import Plugin = require("./Plugin/Plugin");
+type QueueResolvable = Queue | Discord.Snowflake | Discord.Message | Discord.VoiceChannel | Discord.StageChannel | Discord.VoiceState | string;
+import CustomPlugin = require("./struct/CustomPlugin");
+import ExtractorPlugin = require("./struct/ExtractorPlugin");
+declare var Util: typeof import("./struct/Util");
+import Plugin = require("./struct/Plugin");

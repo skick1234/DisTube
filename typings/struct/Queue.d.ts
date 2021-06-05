@@ -39,9 +39,9 @@ declare class Queue extends DisTubeBase {
     songs: Array<Song>;
     /**
      * List of the previous songs.
-     * @type {Array<Song>?}
+     * @type {Array<Song>}
      */
-    previousSongs: Array<Song> | null;
+    previousSongs: Array<Song>;
     /**
      * Whether stream is currently stopped.
      * @type {boolean}
@@ -111,7 +111,7 @@ declare class Queue extends DisTubeBase {
     private handler;
     /**
      * Timeout for checking empty channel
-     * @type {NodeJS.Timeout?}
+     * @type {*}
      * @private
      */
     private emptyTimeout;
@@ -228,7 +228,7 @@ declare class Queue extends DisTubeBase {
      */
     toggleAutoplay(): boolean;
 }
-import DisTubeBase = require("./DisTubeBase");
+import DisTubeBase = require("../core/DisTubeBase");
 import Discord = require("discord.js");
 import Song = require("./Song");
-import DisTube = require("./DisTube");
+import DisTube = require("../DisTube");

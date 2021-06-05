@@ -23,7 +23,7 @@ declare class DisTubeHandler extends DisTubeBase {
      * @param {boolean} [basic=false] getBasicInfo?
      * @returns {Promise<ytdl.videoInfo>}
      */
-    getYouTubeInfo(url: string, basic?: boolean): Promise<any>;
+    getYouTubeInfo(url: string, basic?: boolean): Promise<ytdl.videoInfo>;
     /**
      * Resolve a Song
      * @param {Discord.Message|Discord.GuildMember} message A message from guild channel | A guild member
@@ -76,9 +76,9 @@ declare class DisTubeHandler extends DisTubeBase {
     /**
      * Create a ytdl stream
      * @param {Queue} queue Queue
-     * @returns {opus.Encoder}
+     * @returns {Transform}
      */
-    createStream(queue: Queue): opus.Encoder;
+    createStream(queue: Queue): Transform;
     /**
      * Whether or not emit playSong event
      * @param {Queue} queue Queue
@@ -107,13 +107,6 @@ declare class DisTubeHandler extends DisTubeBase {
      */
     private _handlePlayingError;
     /**
-     * Play a song from url without creating a {@link Queue}
-     * @param {Discord.VoiceChannel|Discord.StageChannel} voiceChannel The voice channel will be joined
-     * @param {string|Song|SearchResult} song YouTube url | {@link Song} | {@link SearchResult}
-     * @returns {Promise<Discord.StreamDispatcher>}
-     */
-    playWithoutQueue(voiceChannel: Discord.VoiceChannel | Discord.StageChannel, song: string | Song | SearchResult): Promise<Discord.StreamDispatcher>;
-    /**
      * Check if the voice channel is empty
      * @param {Discord.VoiceState} voiceState voiceState
      * @returns {boolean}
@@ -122,8 +115,9 @@ declare class DisTubeHandler extends DisTubeBase {
 }
 import DisTubeBase = require("./DisTubeBase");
 import Discord = require("discord.js");
-import Queue = require("./Queue");
-import Song = require("./Song");
-import SearchResult = require("./SearchResult");
-import Playlist = require("./Playlist");
-import { opus } from "prism-media";
+import Queue = require("../struct/Queue");
+import ytdl = require("ytdl-core");
+import Song = require("../struct/Song");
+import SearchResult = require("../struct/SearchResult");
+import Playlist = require("../struct/Playlist");
+import { Transform } from "stream";

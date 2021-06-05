@@ -14,17 +14,16 @@
 
 A Discord.js module to simplify your music commands and play songs with audio filters on Discord without any API key.
 
-[DisTube Support Server](https://discord.gg/feaDd9h) - [Frequently Asked Questions](https://github.com/skick1234/DisTube/wiki/Frequently-Asked-Questions)
+[DisTube Support Server](https://discord.gg/feaDd9h) - [Frequently Asked Questions](https://discord.gg/feaDd9h)
 
 ## Features
 
-- Build on discord.js v12
+- Build on discord.js v13
 - Easily to use and customize
 - Support YouTube, SoundCloud, Facebook, and [700+ more sites](https://ytdl-org.github.io/youtube-dl/supportedsites.html)
 - Audio filters (bassboost, nightcore, vaporwave,...)
-- Autoplay related YouTube songs
-- Prebuilt server queue
-- Multiple servers compatible
+- Autoplay related songs
+- Plugin system to support more sites
 
 ## Installation
 
@@ -35,10 +34,10 @@ npm install distube
 ### Requirement
 
 - Node v14.x or higher
-- [discord.js](https://discord.js.org) v12 / master branch (v13)
-- [FFmpeg](https://www.ffmpeg.org/download.html) - `npm install ffmpeg-static`
+- [discord.js](https://discord.js.org) v12 or **v13 _(Recommended)_**
+- [FFmpeg](https://www.ffmpeg.org/download.html)
 - [@discordjs/opus](https://github.com/discordjs/opus) - `npm install @discordjs/opus`
-- [python](https://www.python.org/) _(For [`youtube-dl`](http://ytdl-org.github.io/youtube-dl/) to support [700+ more sites](https://ytdl-org.github.io/youtube-dl/supportedsites.html).)_
+- [python](https://www.python.org/) _(Optional - For [`youtube-dl`](https://youtube-dl.org/) to support [700+ more sites](https://ytdl-org.github.io/youtube-dl/supportedsites.html).)_
 
 ## Documentation
 
@@ -49,3 +48,10 @@ Read DisTube's definitions, properties and events details in the [Documentation 
 - [DisTube Bot](https://skick.xyz/DisTube) - A music bot with reaction controller, filters, DJ mode, user's custom playlist and voting.
 - [DisTube Example](https://github.com/distubejs/example) - Example bot with simple command handler.
 - [DisTube Guide](https://distube.js.org/guide) - How to build a music bot from scratch.
+
+## Dependencies
+
+- [node-ytdl-core](https://github.com/fent/node-ytdl-core): YouTube scraper
+- [node-ytsr](https://github.com/TimeForANinja/node-ytsr): YouTube search scraper ([DisTube Fork](https://github.com/distubejs/ytsr))
+- [node-ytpl](https://github.com/TimeForANinja/node-ytpl): YouTube playlist resolver ([DisTube Fork](https://github.com/distubejs/ytpl))
+- [youtube-dl-exec](https://github.com/microlinkhq/youtube-dl-exec): [`youtube-dl`](https://youtube-dl.org/) wrapper

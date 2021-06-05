@@ -1,4 +1,4 @@
-const { toSecond, formatDuration } = require("./util");
+const { toSecond, formatDuration } = require("./Util");
 
 /** Class representing a search result. */
 class SearchResult {

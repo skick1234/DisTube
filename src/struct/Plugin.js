@@ -1,6 +1,6 @@
 /* eslint-disable */
 const DisTube = require("../DisTube");
-const Song = require("../Song");
+const Song = require("./Song");
 
 /**
  * DisTube Plugin
