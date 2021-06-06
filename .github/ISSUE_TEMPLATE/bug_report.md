@@ -1,17 +1,17 @@
 ---
 name: Bug report
-about: Create a report to help us improve
+about: Create a report to help us improve (Check the FAQ in readme and created issues first)
 title: ''
 labels: bug
 assignees: ''
 
 ---
 
-**Describe the bug**
-A clear and concise description of what the bug is.
+**Please describe your problem in as much detail as possible:**
 
-**Expected behavior**
-A clear and concise description of what you expected to happen.
+**Further information:**
 
-**Additional context**
-Add any other context about the problem here.
+- DisTube version:
+- discord.js version:
+- Node.js version:
+- Operating system:
