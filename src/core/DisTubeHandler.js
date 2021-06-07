@@ -33,14 +33,6 @@ class DisTubeHandler extends DisTubeBase {
   }
 
   /**
-   * Delete a guild queue
-   * @param {Discord.Snowflake|Discord.Message|Queue} queue A message from guild channel | Queue
-   */
-  deleteQueue(queue) {
-    this.distube._deleteQueue(queue);
-  }
-
-  /**
    * @param {string} url url
    * @param {boolean} [basic=false] getBasicInfo?
    * @returns {Promise<ytdl.videoInfo>}
@@ -205,29 +197,26 @@ class DisTubeHandler extends DisTubeBase {
    * @returns {Promise<Queue|true>} `true` if queue is not generated
    */
   async joinVoiceChannel(queue, voice, retried = false) {
-    try {
-      queue.connection = await voice.join();
-      this.emit("connect", queue);
-      queue.connection.on("disconnect", () => {
-        this.emit("disconnect", queue);
-        try { queue.stop() } catch { this.deleteQueue(queue) }
-      }).on("error", e => {
-        try {
-          e.name = "VoiceConnection";
-        } catch { }
-        this.emitError(queue.textChannel, e);
-        try { queue.stop() } catch { this.deleteQueue(queue) }
-      });
-      const err = await this.playSong(queue);
-      return err || queue;
-    } catch (e) {
-      this.deleteQueue(queue);
-      try {
-        e.name = "JoinVoiceChannel";
-      } catch { }
-      if (retried) throw e;
-      return this.joinVoiceChannel(queue, voice, true);
-    }
+    queue.connection = await voice.join().catch(e => {
+      if (retried) {
+        queue.stop();
+        try { e.name = "JoinVCError" } catch { }
+        throw e;
+      }
+      return undefined;
+    });
+    if (!queue.connection) return this.joinVoiceChannel(queue, voice, true);
+    this.emit("connect", queue);
+    queue.connection.on("disconnect", () => {
+      this.emit("disconnect", queue);
+      queue.stop();
+    }).on("error", e => {
+      try { e.name = "ConnectionError" } catch { }
+      this.emitError(queue.textChannel, e);
+      queue.stop();
+    });
+    const err = await this.playSong(queue);
+    return err || queue;
   }
 
   /**
@@ -269,7 +258,7 @@ class DisTubeHandler extends DisTubeBase {
   async playSong(queue) {
     if (!queue) return true;
     if (!queue.songs.length) {
-      this.deleteQueue(queue);
+      queue.stop();
       return true;
     }
     const song = queue.songs[0];
@@ -291,10 +280,10 @@ class DisTubeHandler extends DisTubeBase {
           }
         }
       }
-      const stream = this.createStream(queue).on("error", e => {
+      const stream = this.createStream(queue).once("error", e => {
         errorEmitted = true;
         try {
-          e.name = "Stream";
+          e.name = "StreamError";
           e.message = `${e.message}\nID: ${song.id}\nName: ${song.name}`;
         } catch { }
         this.emitError(queue.textChannel, e);
@@ -304,9 +293,9 @@ class DisTubeHandler extends DisTubeBase {
         type: "opus",
         volume: queue.volume / 100,
         bitrate: "auto",
-      }).on("finish", () => { this._handleSongFinish(queue) })
-        .on("error", e => { this._handlePlayingError(queue, errorEmitted ? null : e) });
-      if (queue.stream) queue.stream.destroy();
+      }).once("close", () => { this._handleSongFinish(queue) })
+        .once("error", e => { this._handlePlayingError(queue, errorEmitted ? null : e) });
+      queue.stream?.destroy();
       queue.stream = stream;
       return false;
     } catch (e) {
@@ -323,10 +312,7 @@ class DisTubeHandler extends DisTubeBase {
    */
   async _handleSongFinish(queue) {
     this.emit("finishSong", queue, queue.songs[0]);
-    if (queue.stopped) {
-      this.deleteQueue(queue);
-      return;
-    }
+    if (queue.stopped) return;
     if (queue.repeatMode === 2 && !queue.prev) queue.songs.push(queue.songs[0]);
     if (queue.prev) {
       if (queue.repeatMode === 2) queue.songs.unshift(queue.songs.pop());
@@ -337,7 +323,7 @@ class DisTubeHandler extends DisTubeBase {
       if (queue.songs.length <= 1) {
         if (this.options.leaveOnFinish) queue.voiceChannel?.leave();
         if (!queue.autoplay) this.emit("finish", queue);
-        this.deleteQueue(queue);
+        queue.stop();
         return;
       }
     }
@@ -365,7 +351,7 @@ class DisTubeHandler extends DisTubeBase {
     const song = queue.songs.shift();
     if (error) {
       try {
-        error.name = "Playing";
+        error.name = "PlayingError";
         error.message = `${error.message}\nID: ${song.id}\nName: ${song.name}`;
       } catch { }
       this.emitError(queue.textChannel, error);
@@ -374,7 +360,7 @@ class DisTubeHandler extends DisTubeBase {
       this.playSong(queue).then(e => {
         if (!e) this.emit("playSong", queue, queue.songs[0]);
       });
-    } else try { queue.stop() } catch { this.deleteQueue(queue) }
+    } else queue.stop();
   }
 
   /**

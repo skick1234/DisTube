@@ -8,6 +8,7 @@ const { formatDuration, toSecond, parseNumber } = require("./Util"),
  * Class representing a song.
  * <info>If {@link Song} is added from a YouTube {@link SearchResult} or {@link Playlist}, some info will be missing to save your resources.
  * It will be filled when emitting {@link DisTube#playSong} event.
+ *
  * Missing info: {@link Song#likes}, {@link Song#dislikes}, {@link Song#streamURL}, {@link Song#related}, {@link Song#chapters}, {@link Song#age_restricted}</info>
  */
 class Song {

@@ -138,7 +138,7 @@ class DisTube extends EventEmitter {
             if (this.handler.isVoiceChannelEmpty(oldState)) {
               oldState.guild.me?.voice?.channel?.leave();
               this.emit("empty", queue);
-              this._deleteQueue(queue);
+              queue.stop();
             }
           }, this.options.emptyCooldown * 1000);
         }
@@ -372,9 +372,9 @@ class DisTube extends EventEmitter {
     const q = this.getQueue(queue);
     if (!q) return;
     this.emit("deleteQueue", q);
-    if (q.dispatcher) try { q.dispatcher.destroy() } catch { }
-    if (q.stream) try { q.stream.destroy() } catch { }
     this.guildQueues.delete(q.id);
+    try { q.dispatcher?.destroy() } catch { }
+    try { q.stream?.destroy() } catch { }
   }
 
   /**

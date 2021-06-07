@@ -204,8 +204,9 @@ class Queue extends DisTubeBase {
    */
   stop() {
     this.stopped = true;
-    try { this.dispatcher?.end() } catch { }
+    try { this.dispatcher?.destroy() } catch { }
     if (this.options.leaveOnStop) try { this.voiceChannel?.leave() } catch { }
+    this.distube._deleteQueue(this);
   }
   /**
    * Set the guild stream's volume
@@ -228,7 +229,7 @@ class Queue extends DisTubeBase {
     if (this.songs.length <= 1 && !this.autoplay) throw new Error("There is no song to skip.");
     const song = this.songs[1];
     this.next = true;
-    this.dispatcher.end();
+    this.dispatcher?.destroy();
     return song;
   }
 
@@ -242,7 +243,7 @@ class Queue extends DisTubeBase {
     if (this.previousSongs?.length === 0 && this.repeatMode !== 2) throw new Error("There is no previous song.");
     const song = this.repeatMode === 2 ? this.songs[this.songs.length - 1] : this.previousSongs[this.previousSongs.length - 1];
     this.prev = true;
-    this.dispatcher.end();
+    this.dispatcher?.destroy();
     return song;
   }
   /**
@@ -276,7 +277,7 @@ class Queue extends DisTubeBase {
       this.prev = true;
       if (num !== -1) this.songs.unshift(...this.previousSongs.splice(num + 1));
     }
-    if (this.dispatcher) this.dispatcher.end();
+    this.dispatcher?.destroy();
     return this;
   }
   /**
