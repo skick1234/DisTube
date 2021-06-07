@@ -4,7 +4,12 @@ const { formatDuration, toSecond, parseNumber } = require("./Util"),
   SearchResult = require("./SearchResult"),
   Discord = require("discord.js");
 
-/** Class representing a song. */
+/**
+ * Class representing a song.
+ * <info>If {@link Song} is added from a YouTube {@link SearchResult} or {@link Playlist}, some info will be missing to save your resources.
+ * It will be filled when emitting {@link DisTube#playSong} event.
+ * Missing info: {@link Song#likes}, {@link Song#dislikes}, {@link Song#streamURL}, {@link Song#related}, {@link Song#chapters}, {@link Song#age_restricted}</info>
+ */
 class Song {
   /**
    * Create a Song
@@ -79,7 +84,7 @@ class Song {
     this.streamURL = this.info?.formats?.length ? ytdl.chooseFormat(this.info.formats, {
       filter: this.isLive ? "audioandvideo" : "audioonly",
       quality: "highestaudio",
-    }).url : null;
+    }).url : details.streamURL || null;
     /**
      * Song thumbnail.
      * @type {string?}
@@ -90,12 +95,12 @@ class Song {
      * Related songs
      * @type {Array<Song>}
      */
-    this.related = this.info?.related_videos.map(v => new Song(v)) || [];
+    this.related = this.info?.related_videos.map(v => new Song(v)) || details.related || [];
     /**
      * Song views count
      * @type {number}
      */
-    this.views = parseNumber(details.viewCount || details.view_count);
+    this.views = parseNumber(details.viewCount || details.view_count || details.views);
     /**
      * Song like count
      * @type {number}
