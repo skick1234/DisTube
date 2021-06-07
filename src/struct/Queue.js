@@ -157,7 +157,7 @@ class Queue extends DisTubeBase {
    * @type {Discord.VoiceChannel|Discord.StageChannel}
    */
   get voiceChannel() {
-    return this.connection?.voice?.channel;
+    return this.connection?.channel;
   }
   /**
    * Add a Song or an array of Song to the queue
@@ -205,7 +205,7 @@ class Queue extends DisTubeBase {
   stop() {
     this.stopped = true;
     try { this.dispatcher?.end() } catch { }
-    if (this.options.leaveOnStop) try { this.connection?.channel?.leave() } catch { }
+    if (this.options.leaveOnStop) try { this.voiceChannel?.leave() } catch { }
   }
   /**
    * Set the guild stream's volume

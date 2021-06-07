@@ -1,0 +1,6 @@
+- name: Plugin
+  files:
+    - name: Plugin List
+      path: list.md
+    - name: Plugin Development
+      path: dev.md

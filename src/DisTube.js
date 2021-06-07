@@ -54,7 +54,7 @@ const ytsr = require("@distube/ytsr"),
  * @prop {Object} [ytdlOptions] `ytdl-core` options
  * @prop {number} [searchCooldown=60] Built-in search cooldown in seconds (When searchSongs is bigger than 0)
  * @prop {number} [emptyCooldown=60] Built-in leave on empty cooldown in seconds (When leaveOnEmpty is true)
- * @prop {boolean} [nsfw=false] Whether or not playing age-restricted content in non-NSFW channel
+ * @prop {boolean} [nsfw=false] Whether or not playing age-restricted content and disabling safe search in non-NSFW channel.
  */
 
 /**
@@ -123,18 +123,18 @@ class DisTube extends EventEmitter {
         const queue = this.getQueue(oldState);
         if (!queue) {
           if (this.handler.isVoiceChannelEmpty(oldState)) {
-            setTimeout(() => {
+            client.setTimeout(() => {
               if (!this.getQueue(oldState) && this.handler.isVoiceChannelEmpty(oldState)) oldState.guild.me?.voice?.channel?.leave();
             }, this.options.emptyCooldown * 1000);
           }
           return;
         }
         if (queue.emptyTimeout) {
-          clearTimeout(queue.emptyTimeout);
+          client.clearTimeout(queue.emptyTimeout);
           queue.emptyTimeout = null;
         }
         if (this.handler.isVoiceChannelEmpty(oldState)) {
-          queue.emptyTimeout = setTimeout(() => {
+          queue.emptyTimeout = client.setTimeout(() => {
             if (this.handler.isVoiceChannelEmpty(oldState)) {
               oldState.guild.me?.voice?.channel?.leave();
               this.emit("empty", queue);
@@ -169,8 +169,7 @@ class DisTube extends EventEmitter {
   }
 
   /**
-   * Play / add a song or playlist from url. Search and play a song if it is not a valid url.
-   * Emit {@link DisTube#addList}, {@link DisTube#addSong} or {@link DisTube#playSong} after executing
+   * Shorthand method for {@link DisTube#playVoiceChannel}
    * @returns {Promise<void>}
    * @param {Discord.Message} message A message from guild channel
    * @param {string|Song|SearchResult|Playlist} song YouTube url | Search string | {@link Song} | {@link SearchResult} | {@link Playlist}
@@ -802,6 +801,8 @@ module.exports = DisTube;
  * Emitted when {@link DisTubeOptions|DisTubeOptions.searchSongs} bigger than 0
  * and song param of {@link DisTube#play|play()} is invalid url.
  * DisTube will wait for user's next message to choose song manually.
+ * <info>{@link https://support.google.com/youtube/answer/7354993|Safe search} is enabled
+ * if {@link DisTubeOptions}.nsfw is disabled and the message's channel is not a nsfw channel.</info>
  *
  * @event DisTube#searchResult
  * @param {Discord.Message} message The user message called play method

@@ -39,7 +39,7 @@ export = DisTube;
  * @prop {Object} [ytdlOptions] `ytdl-core` options
  * @prop {number} [searchCooldown=60] Built-in search cooldown in seconds (When searchSongs is bigger than 0)
  * @prop {number} [emptyCooldown=60] Built-in leave on empty cooldown in seconds (When leaveOnEmpty is true)
- * @prop {boolean} [nsfw=false] Whether or not playing age-restricted content in non-NSFW channel
+ * @prop {boolean} [nsfw=false] Whether or not playing age-restricted content and disabling safe search in non-NSFW channel.
  */
 /**
  * DisTube class
@@ -105,8 +105,7 @@ declare class DisTube extends EventEmitter {
      */
     private customPlugins;
     /**
-     * Play / add a song or playlist from url. Search and play a song if it is not a valid url.
-     * Emit {@link DisTube#addList}, {@link DisTube#addSong} or {@link DisTube#playSong} after executing
+     * Shorthand method for {@link DisTube#playVoiceChannel}
      * @returns {Promise<void>}
      * @param {Discord.Message} message A message from guild channel
      * @param {string|Song|SearchResult|Playlist} song YouTube url | Search string | {@link Song} | {@link SearchResult} | {@link Playlist}
@@ -522,7 +521,7 @@ type DisTubeOptions = {
      */
     emptyCooldown?: number;
     /**
-     * Whether or not playing age-restricted content in non-NSFW channel
+     * Whether or not playing age-restricted content and disabling safe search in non-NSFW channel.
      */
     nsfw?: boolean;
 };

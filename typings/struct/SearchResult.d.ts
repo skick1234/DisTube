@@ -8,7 +8,7 @@ declare class SearchResult {
     constructor(info: any);
     source: string;
     /**
-     * Type of SearchResult (video or playlist)
+     * Type of SearchResult (`video` or `playlist`)
      * @type {string}
      */
     type: string;
@@ -28,32 +28,32 @@ declare class SearchResult {
      */
     url: string;
     /**
-     * Video / Playlist views count
+     * Video or playlist views count
      * @type {number}
      */
     views: number;
     /**
-     * Indicates if the video is an active live.
+     * [Video only] Indicates if the video is an active live.
      * @type {boolean?}
      */
     isLive: boolean | null;
     /**
-     * Video duration.
+     * [Video only] Video duration.
      * @type {number}
      */
     duration: number;
     /**
-     * Formatted duration string `hh:mm:ss` or `mm:ss`.
+     * [Video only] Formatted duration string `hh:mm:ss` or `mm:ss`.
      * @type {string}
      */
     formattedDuration: string;
     /**
-     * Video thumbnail.
+     * [Video only] Video thumbnail.
      * @type {string?}
      */
     thumbnail: string | null;
     /**
-     * Video/Playlist uploader
+     * Video or playlist uploader
      * @type {Object}
      * @prop {string?} name Uploader name
      * @prop {string?} url Uploader url

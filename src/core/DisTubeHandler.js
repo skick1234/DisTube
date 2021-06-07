@@ -335,7 +335,7 @@ class DisTubeHandler extends DisTubeBase {
     if (queue.songs.length <= 1 && (queue.next || !queue.repeatMode)) {
       if (queue.autoplay) try { await queue.addRelatedSong() } catch { this.emit("noRelated", queue) }
       if (queue.songs.length <= 1) {
-        if (this.options.leaveOnFinish) queue.connection.channel.leave();
+        if (this.options.leaveOnFinish) queue.voiceChannel?.leave();
         if (!queue.autoplay) this.emit("finish", queue);
         this.deleteQueue(queue);
         return;
