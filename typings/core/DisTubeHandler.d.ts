@@ -14,11 +14,6 @@ declare class DisTubeHandler extends DisTubeBase {
      */
     private emitError;
     /**
-     * Delete a guild queue
-     * @param {Discord.Snowflake|Discord.Message|Queue} queue A message from guild channel | Queue
-     */
-    deleteQueue(queue: Discord.Snowflake | Discord.Message | Queue): void;
-    /**
      * @param {string} url url
      * @param {boolean} [basic=false] getBasicInfo?
      * @returns {Promise<ytdl.videoInfo>}
@@ -115,10 +110,10 @@ declare class DisTubeHandler extends DisTubeBase {
     isVoiceChannelEmpty(voiceState: Discord.VoiceState): boolean;
 }
 import DisTubeBase = require("./DisTubeBase");
-import Discord = require("discord.js");
-import Queue = require("../struct/Queue");
 import ytdl = require("ytdl-core");
+import Discord = require("discord.js");
 import Song = require("../struct/Song");
 import SearchResult = require("../struct/SearchResult");
 import Playlist = require("../struct/Playlist");
+import Queue = require("../struct/Queue");
 import { Transform } from "stream";
