@@ -147,7 +147,7 @@ class DisTubeHandler extends DisTubeBase {
     const songs = playlist.songs;
     let queue = this.distube.getQueue(message);
     if (queue) {
-      queue.addToQueue(songs, skip || unshift);
+      queue.addToQueue(songs, skip || unshift ? 1 : -1);
       if (skip) queue.skip();
       else this.emit("addList", queue, playlist);
     } else {

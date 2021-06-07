@@ -143,11 +143,11 @@ declare class Queue extends DisTubeBase {
     /**
      * Add a Song or an array of Song to the queue
      * @param {Song|Array<Song>} song Song to add
-     * @param {boolean} [unshift=false] Unshift?
+     * @param {boolean} [position=-1] Position to add, < 0 to add to the end of the queue
      * @throws {Error}
      * @returns {Queue} The guild queue
      */
-    addToQueue(song: Song | Array<Song>, unshift?: boolean): Queue;
+    addToQueue(song: Song | Array<Song>, position?: boolean): Queue;
     /**
      * Pause the guild stream
      * @returns {Queue} The guild queue

@@ -259,7 +259,7 @@ class DisTube extends EventEmitter {
       } else {
         let queue = this.getQueue(voiceChannel);
         if (queue) {
-          queue.addToQueue(song, skip || unshift);
+          queue.addToQueue(song, skip || unshift ? 1 : -1);
           if (skip) queue.skip();
           else this.emit("addSong", queue, song);
         } else {

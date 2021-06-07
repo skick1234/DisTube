@@ -162,19 +162,19 @@ class Queue extends DisTubeBase {
   /**
    * Add a Song or an array of Song to the queue
    * @param {Song|Array<Song>} song Song to add
-   * @param {boolean} [unshift=false] Unshift?
+   * @param {boolean} [position=-1] Position to add, < 0 to add to the end of the queue
    * @throws {Error}
    * @returns {Queue} The guild queue
    */
-  addToQueue(song, unshift = false) {
+  addToQueue(song, position = -1) {
     const isArray = Array.isArray(song);
     if (!song || (isArray && !song.length)) throw new Error("No Song provided.");
-    if (unshift) {
-      const playing = this.songs.shift();
-      if (isArray) this.songs.unshift(playing, ...song);
-      else this.songs.unshift(playing, song);
-    } else if (isArray) this.songs.push(...song);
-    else this.songs.push(song);
+    if (position === 0) throw new SyntaxError("Cannot add Song before the playing Song.");
+    if (position < 0) {
+      if (isArray) this.songs.push(...song);
+      else this.songs.push(song);
+    } else if (isArray) this.songs.splice(position, 0, ...song);
+    else this.songs.splice(position, 0, song);
     if (isArray) song.map(s => delete s.info);
     else delete song.info;
     return this;
