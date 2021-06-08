@@ -435,19 +435,11 @@ declare class DisTube extends EventEmitter {
     ): this;
     on(
         event: "searchResult",
-        listener: (
-            message: Discord.Message,
-            results: SearchResult[],
-            query: string
-        ) => void
+        listener: (message: Discord.Message, results: SearchResult[], query: string) => void
     ): this;
     on(
         event: "searchDone",
-        listener: (
-            message: Discord.Message,
-            answer: Discord.Message,
-            query: string
-        ) => void
+        listener: (message: Discord.Message, answer: Discord.Message, query: string) => void
     ): this;
 }
 declare namespace DisTube {

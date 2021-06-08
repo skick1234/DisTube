@@ -774,14 +774,12 @@ module.exports = DisTube;
  */
 
 /**
- * Emitted when {@link DisTubeOptions|DisTubeOptions.searchSongs} bigger than 0
- * and DisTube cannot find any results for the query
+ * Emitted when DisTube cannot find any results for the query
  *
  * @event DisTube#searchNoResult
  * @param {Discord.Message} message The user message called play method
  * @param {string} query The search query
  * @example
- * // DisTubeOptions.searchSongs > 0
  * distube.on("searchNoResult", (message, query) => message.channel.send(`No result found for ${query}!`));
  */
 

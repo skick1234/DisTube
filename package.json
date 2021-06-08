@@ -40,13 +40,13 @@
   "dependencies": {
     "@distube/youtube-dl": "^2.1.1",
     "@distube/ytpl": "^1.0.11",
-    "@distube/ytsr": "^1.1.0",
+    "@distube/ytsr": "^1.1.1",
     "ytdl-core": "^4.8.2"
   },
   "devDependencies": {
     "@discordjs/opus": "^0.5.0",
     "@distube/docgen": "github:distubejs/docgen",
-    "@types/node": "^15.12.1",
+    "@types/node": "^15.12.2",
     "discord.js": "github:discordjs/discord.js",
     "eslint": "^7.28.0",
     "eslint-plugin-jsdoc": "^35.1.3",
