@@ -186,7 +186,7 @@ class Queue extends DisTubeBase {
   pause() {
     this.playing = false;
     this.paused = true;
-    this.dispatcher.pause();
+    this.dispatcher?.pause();
     return this;
   }
   /**
@@ -196,7 +196,13 @@ class Queue extends DisTubeBase {
   resume() {
     this.playing = true;
     this.paused = false;
-    this.dispatcher.resume();
+    const [major, minor] = process.version.match(/\d+/g);
+    // TODO: Remove it after https://github.com/discordjs/discord.js/issues/5300 is fixed
+    if (Number(major) > 14 || (Number(major) === 14 && Number(minor) >= 17)) {
+      this.dispatcher?.resume();
+      this.dispatcher?.pause();
+    }
+    this.dispatcher?.resume();
     return this;
   }
   /**
