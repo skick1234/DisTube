@@ -261,6 +261,8 @@ class DisTubeHandler extends DisTubeBase {
       queue.stop();
       return true;
     }
+    queue.playing = true;
+    queue.paused = false;
     const song = queue.songs[0];
     try {
       let errorEmitted = false;

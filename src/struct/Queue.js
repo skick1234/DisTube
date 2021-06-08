@@ -184,6 +184,7 @@ class Queue extends DisTubeBase {
    * @returns {Queue} The guild queue
    */
   pause() {
+    if (this.paused) throw new Error("The queue has been paused already.");
     this.playing = false;
     this.paused = true;
     this.dispatcher?.pause();
@@ -194,6 +195,7 @@ class Queue extends DisTubeBase {
    * @returns {Queue} The guild queue
    */
   resume() {
+    if (this.playing) throw new Error("The queue has been playing already.");
     this.playing = true;
     this.paused = false;
     const [major, minor] = process.version.match(/\d+/g);
@@ -274,6 +276,7 @@ class Queue extends DisTubeBase {
    * @throws {Error} if `num` is invalid number
    */
   jump(num) {
+    if (typeof num !== "number") throw new TypeError("num must be a number.");
     if (num > this.songs.length || -num > this.previousSongs.length || num === 0) throw new RangeError("InvalidSong");
     if (num > 0) {
       this.songs = this.songs.splice(num - 1);
@@ -294,6 +297,7 @@ class Queue extends DisTubeBase {
    * @returns {number} The new repeat mode
    */
   setRepeatMode(mode = null) {
+    if (mode !== null && typeof mode !== "number") throw new TypeError("mode must be a number or null.");
     mode = parseInt(mode, 10);
     if (!mode && mode !== 0) this.repeatMode = (this.repeatMode + 1) % 3;
     else if (this.repeatMode === mode) this.repeatMode = 0;
