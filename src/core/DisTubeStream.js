@@ -30,7 +30,7 @@ const createStream = (url, options = {}) => {
     "-ar", "48000",
     "-ac", "2",
   ];
-  if (typeof options.seek === "number") args.push("-ss", options.seek.toString());
+  if (typeof options.seek === "number" && options.seek > 0) args.push("-ss", options.seek.toString());
   if (Array.isArray(options.FFmpegArgs)) args.push(...options.FFmpegArgs);
   const transcoder = new FFmpeg({ args, shell: false });
   const encoder = new opus.Encoder({ rate: 48000, channels: 2, frameSize: 960 });
@@ -51,11 +51,11 @@ module.exports = class DisTubeStream {
     if (info.videoDetails.lengthSeconds !== 0) options.filter = "audioonly";
     else options.filter = "audioandvideo";
     const filter = format =>
+      format.audioSampleRate === "48000" &&
       format.codecs === "opus" &&
-      format.container === "webm" &&
-      format.audioSampleRate === 48000;
-    const format = info.formats.find(filter);
-    if (format && info.videoDetails.lengthSeconds !== 0 && !options?.seek && !options?.FFmpegArgs?.length) {
+      format.container === "webm";
+    const format = false //info.formats.find(filter);
+    if (format && info.videoDetails.lengthSeconds > 0 && options.seek <= 0 && !options.FFmpegArgs?.length) {
       return pipeline([
         ytdl.downloadFromInfo(info, { ...options, filter }),
         new opus.WebmDemuxer(),
