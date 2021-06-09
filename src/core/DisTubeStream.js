@@ -54,7 +54,7 @@ module.exports = class DisTubeStream {
       format.audioSampleRate === "48000" &&
       format.codecs === "opus" &&
       format.container === "webm";
-    const format = false //info.formats.find(filter);
+    const format = info.formats.find(filter);
     if (format && info.videoDetails.lengthSeconds > 0 && options.seek <= 0 && !options.FFmpegArgs?.length) {
       return pipeline([
         ytdl.downloadFromInfo(info, { ...options, filter }),
