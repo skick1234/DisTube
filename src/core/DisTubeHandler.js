@@ -314,7 +314,10 @@ class DisTubeHandler extends DisTubeBase {
    */
   async _handleSongFinish(queue) {
     this.emit("finishSong", queue, queue.songs[0]);
-    if (queue.stopped) return;
+    if (queue.stopped || queue.sought) {
+      queue.stopped = queue.sought = false;
+      return;
+    }
     if (queue.repeatMode === 2 && !queue.prev) queue.songs.push(queue.songs[0]);
     if (queue.prev) {
       if (queue.repeatMode === 2) queue.songs.unshift(queue.songs.pop());

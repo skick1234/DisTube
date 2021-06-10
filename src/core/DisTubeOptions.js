@@ -13,7 +13,7 @@ module.exports = class DisTubeOptions {
       youtubeIdentityToken: null,
       customFilters: {},
       ytdlOptions: {
-        highWaterMark: 1 << 24,
+        highWaterMark: 1 << 25,
       },
       searchCooldown: 60,
       emptyCooldown: 60,

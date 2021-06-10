@@ -123,6 +123,7 @@ class Queue extends DisTubeBase {
      * @private
      */
     this.emptyTimeout = null;
+    this.sought = false;
   }
   /**
    * Formatted duration string.
@@ -317,6 +318,7 @@ class Queue extends DisTubeBase {
     else if (this.filters.includes(filter)) this.filters.splice(this.filters.indexOf(filter), 1);
     else this.filters.push(filter);
     this.beginTime = this.currentTime;
+    this.sought = true;
     this.handler.playSong(this);
     return this.filters;
   }
@@ -327,6 +329,7 @@ class Queue extends DisTubeBase {
    */
   seek(time) {
     this.beginTime = time;
+    this.sought = true;
     this.handler.playSong(this);
     return this;
   }

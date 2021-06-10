@@ -20,9 +20,6 @@ const nextBestFormat = (formats, isLive) => {
 
 const createStream = (url, options = {}) => {
   const args = [
-    "-reconnect", "1",
-    "-reconnect_streamed", "1",
-    "-reconnect_delay_max", "5",
     "-i", url,
     "-analyzeduration", "0",
     "-loglevel", "0",
