@@ -1,73 +1,36 @@
-const ytsr = require("@distube/ytsr"),
-  ytpl = require("@distube/ytpl"),
-  { EventEmitter } = require("events"),
-  Discord = require("discord.js"),
-  DisTubeOption = require("./core/DisTubeOptions"),
-  DisTubeHandler = require("./core/DisTubeHandler"),
-  Queue = require("./struct/Queue"),
-  SearchResult = require("./struct/SearchResult"),
-  Song = require("./struct/Song"),
-  Playlist = require("./struct/Playlist"),
-  Plugin = require("./struct/Plugin"),
-  CustomPlugin = require("./struct/CustomPlugin"),
-  ExtractorPlugin = require("./struct/ExtractorPlugin");
+import { EventEmitter } from "events";
+import ytpl from "@distube/ytpl";
+import ytsr from "@distube/ytsr";
+import * as Discord from "discord.js";
+import { Options, DisTubeHandler } from "./core";
+import { Queue, SearchResult, Song, Playlist, CustomPlugin, ExtractorPlugin } from "./struct";
+import { Filters, DisTubeOptions, QueueResolvable } from "./types";
+import { HTTPPlugin, HTTPSPlugin, YouTubeDLPlugin } from "./plugins";
+import { DefaultFilters } from "./constants";
+import { VoiceConnection } from "@discordjs/voice";
 
-/**
- * FFmpeg Filters
- * ```
- * {
- *   "Filter Name": "Filter Value",
- *   "bassboost":   "bass=g=10"
- * }
- * ```
- * @typedef {Object.<string, string>} Filters
- * @see {@link DefaultFilters}
- */
-
-/**
- * Data that resolves to give a {@link Queue} object. This can be:
- * - A {@link Queue}
- * - A guild ID string
- * - A {@link https://discord.js.org/#/docs/main/master/class/Snowflake|Snowflake}
- * - A {@link https://discord.js.org/#/docs/main/master/class/Message|Message}
- * - A {@link https://discord.js.org/#/docs/main/master/class/VoiceChannel|VoiceChannel}
- * - A {@link https://discord.js.org/#/docs/main/master/class/StageChannel|StageChannel}
- * - A {@link https://discord.js.org/#/docs/main/master/class/VoiceState|VoiceState}
- * @typedef {Queue|Discord.Snowflake|Discord.Message|Discord.VoiceChannel|Discord.StageChannel|Discord.VoiceState|string} QueueResolvable
- */
-
-/**
- * DisTube options.
- * @typedef {Object} DisTubeOptions
- * @prop {Array<Plugin>} [plugins] DisTube plugins.
- * @prop {boolean} [emitNewSongOnly=false] If `true`, {@link DisTube#event:playSong} will not be emitted when looping a song or next song is the same as the previous one
- * @prop {boolean} [leaveOnEmpty=true] Whether or not leaving voice channel if the voice channel is empty after {@link DisTubeOptions}.emptyCooldown seconds.
- * @prop {boolean} [leaveOnFinish=false] Whether or not leaving voice channel when the queue ends.
- * @prop {boolean} [leaveOnStop=true] Whether or not leaving voice channel after using {@link DisTube#stop|stop()} function.
- * @prop {boolean} [savePreviousSongs=true] Whether or not saving the previous songs of the queue and enable {@link DisTube#previous|previous()} method
- * @prop {number} [searchSongs=0] Limit of search results emits in {@link DisTube#event:searchResult} event when {@link DisTube#play|play()} method executed. If `searchSongs <= 1`, play the first result
- * @prop {string} [youtubeCookie=null] YouTube cookies. Read how to get it in {@link https://github.com/fent/node-ytdl-core/blob/997efdd5dd9063363f6ef668bb364e83970756e7/example/cookies.js#L6-L12|YTDL's Example}
- * @prop {string} [youtubeIdentityToken=null] If not given; ytdl-core will try to find it. You can find this by going to a video's watch page; viewing the source; and searching for "ID_TOKEN".
- * @prop {boolean} [youtubeDL=true] Whether or not using youtube-dl.
- * @prop {boolean} [updateYouTubeDL=true] Whether or not updating youtube-dl automatically.
- * @prop {Filters} [customFilters] Override {@link DefaultFilters} or add more ffmpeg filters. Example=`{ "Filter name"="Filter value"; "8d"="apulsator=hz=0.075" }`
- * @prop {Object} [ytdlOptions] `ytdl-core` options
- * @prop {number} [searchCooldown=60] Built-in search cooldown in seconds (When searchSongs is bigger than 0)
- * @prop {number} [emptyCooldown=60] Built-in leave on empty cooldown in seconds (When leaveOnEmpty is true)
- * @prop {boolean} [nsfw=false] Whether or not playing age-restricted content and disabling safe search in non-NSFW channel.
- */
-
+declare interface DisTube {
+  handler: DisTubeHandler;
+  options: Options;
+  client: Discord.Client;
+  guildQueues: Discord.Collection<string, Queue>;
+  connections: Discord.Collection<string, VoiceConnection>;
+  extractorPlugins: ExtractorPlugin[];
+  customPlugins: CustomPlugin[];
+  filters: Filters;
+  on(event: "addList", listener: (queue: Queue, playlist: Playlist) => void): this;
+  on(event: "addSong" | "playSong" | "finishSong", listener: (queue: Queue, song: Song) => void): this;
+  on(event: "empty" | "finish" | "initQueue" | "noRelated" | "disconnect" | "connect" | "deleteQueue", listener: (queue: Queue) => void): this;
+  on(event: "error", listener: (channel: Discord.TextChannel, error: Error) => void): this;
+  on(event: "searchNoResult" | "searchCancel", listener: (message: Discord.Message, query: string) => void): this;
+  on(event: "searchResult", listener: (message: Discord.Message, results: SearchResult[], query: string) => void): this;
+  on(event: "searchDone", listener: (message: Discord.Message, answer: Discord.Message, query: string) => void): this;
+}
 /**
  * DisTube class
  * @extends EventEmitter
  */
 class DisTube extends EventEmitter {
-  /**
-   * DisTube's current version.
-   * @type {string}
-   */
-  get version() { return require("../package.json").version }
-  static get version() { return require("../package.json").version }
   /**
    * Create a new DisTube class.
    * @param {Discord.Client} client Discord.JS client
@@ -81,42 +44,41 @@ class DisTube extends EventEmitter {
    * // client.DisTube = distube // make it access easily
    * client.login("Your Discord Bot Token")
    */
-  constructor(client, otp = {}) {
+  constructor(client: Discord.Client, otp: DisTubeOptions = {}) {
     super();
     if (!client || typeof client.user === "undefined") throw new TypeError("Invalid Discord.Client");
-
     /**
      * Discord.JS client
      * @type {Discord.Client}
      */
     this.client = client;
-
     /**
      * Collection of guild queues
      * @type {Discord.Collection<string, Queue>}
      */
     this.guildQueues = new Discord.Collection();
-
+    /**
+     * Collection of voice connections
+     * @type {Discord.Collection<string, VoiceConnection>}
+     */
+    this.connections = new Discord.Collection();
     /**
      * DisTube options
      * @type {DisTubeOptions}
      */
-    this.options = new DisTubeOption(otp);
-
+    this.options = new Options(otp);
     /**
      * DisTube's Handler
      * @type {DisTubeHandler}
      * @private
      */
     this.handler = new DisTubeHandler(this);
-
     /**
      * DisTube filters
      * @type {Filters}
      */
-    this.filters = require("./struct/Filter");
+    this.filters = DefaultFilters;
     if (typeof this.options.customFilters === "object") Object.assign(this.filters, this.options.customFilters);
-
     if (this.options.leaveOnEmpty) {
       client.on("voiceStateUpdate", oldState => {
         if (!oldState?.channel) return;
@@ -124,48 +86,53 @@ class DisTube extends EventEmitter {
         if (!queue) {
           if (this.handler.isVoiceChannelEmpty(oldState)) {
             client.setTimeout(() => {
-              if (!this.getQueue(oldState) && this.handler.isVoiceChannelEmpty(oldState)) oldState.guild.me?.voice?.channel?.leave();
-            }, this.options.emptyCooldown * 1000);
+              const guildID = oldState.guild.id;
+              if (
+                !this.getQueue(oldState) &&
+                this.connections.has(guildID) &&
+                this.handler.isVoiceChannelEmpty(oldState)
+              ) {
+                this.connections.get(guildID)?.destroy();
+                this.connections.delete(guildID);
+              }
+            }, this.options.emptyCooldown * 1e3);
           }
           return;
         }
         if (queue.emptyTimeout) {
           client.clearTimeout(queue.emptyTimeout);
-          queue.emptyTimeout = null;
+          delete queue.emptyTimeout;
         }
         if (this.handler.isVoiceChannelEmpty(oldState)) {
           queue.emptyTimeout = client.setTimeout(() => {
             if (this.handler.isVoiceChannelEmpty(oldState)) {
-              oldState.guild.me?.voice?.channel?.leave();
+              try { queue.connection?.destroy() } catch { }
+              this.connections.delete(queue.id);
               this.emit("empty", queue);
               queue.stop();
             }
-          }, this.options.emptyCooldown * 1000);
+          }, this.options.emptyCooldown * 1e3);
         }
       });
     }
-
     // Default plugin
-    const HTTPPlugin = require("./plugins/http"),
-      HTTPSPlugin = require("./plugins/https");
     this.options.plugins.push(new HTTPPlugin(), new HTTPSPlugin());
     if (this.options.youtubeDL) {
-      const YouTubeDLPlugin = require("./plugins/youtube-dl");
       this.options.plugins.push(new YouTubeDLPlugin(this.options.updateYouTubeDL));
     }
     this.options.plugins.map(p => p.init(this));
     /**
      * Extractor Plugins
-     * @type {Array<ExtractorPlugin>}
+     * @type {ExtractorPlugin[]}
      * @private
      */
-    this.extractorPlugins = this.options.plugins.filter(p => p.type === "extractor");
+    this.extractorPlugins = this.options.plugins.filter(p => p.type === "extractor") as ExtractorPlugin[];
     /**
      * Custom Plugins
-     * @type {Array<CustomPlugin>}
+     * @type {CustomPlugin[]}
      * @private
      */
-    this.customPlugins = this.options.plugins.filter(p => p.type === "custom");
+    this.customPlugins = this.options.plugins.filter(p => p.type === "custom") as CustomPlugin[];
   }
 
   /**
@@ -185,19 +152,21 @@ class DisTube extends EventEmitter {
    *         distube.play(message, args.join(" "));
    * });
    */
-  async play(message, song, options = {}) {
+  async play(message: Discord.Message, song: string | Song | SearchResult | Playlist, options: { skip?: boolean, unshift?: boolean } = {}): Promise<void> {
     if (!song) return;
     if (!(message instanceof Discord.Message)) throw new TypeError("message is not a Discord.Message.");
     if (typeof options !== "object" || Array.isArray(options)) {
       throw new TypeError("options must be an object.");
     }
+    const textChannel = message.channel as Discord.TextChannel;
     try {
       const { skip, unshift } = Object.assign({ skip: false, unshift: false }, options);
-      const voiceChannel = message.member.voice.channel;
+      const member = (message.member as Discord.GuildMember);
+      const voiceChannel = member.voice.channel;
       if (!voiceChannel) throw new Error("User is not in any voice channel.");
       await this.playVoiceChannel(voiceChannel, song, {
-        member: message.member,
-        textChannel: message.channel,
+        member,
+        textChannel,
         skip,
         message,
         unshift,
@@ -205,9 +174,9 @@ class DisTube extends EventEmitter {
     } catch (e) {
       try {
         e.name = "PlayError";
-        e.message = `${song?.url || song}\n${e.message}`;
+        e.message = `${(song as Song).url || song}\n${e.message}`;
       } catch { }
-      this.emitError(message.channel, e);
+      this.emitError(textChannel, e);
     }
   }
 
@@ -224,7 +193,17 @@ class DisTube extends EventEmitter {
    * @param {Discord.TextChannel} [options.textChannel=null] Default {@link Queue#textChannel} (if the queue wasn't created)
    * @param {Discord.Message} [options.message] Called message (For built-in search events. If this is a {@link https://developer.mozilla.org/en-US/docs/Glossary/Falsy|falsy value}, it will play the first result instead)
    */
-  async playVoiceChannel(voiceChannel, song, options = {}) {
+  async playVoiceChannel(
+    voiceChannel: Discord.VoiceChannel | Discord.StageChannel,
+    song: string | Song | SearchResult | Playlist | null,
+    options: {
+      skip?: boolean,
+      unshift?: boolean,
+      member?: Discord.GuildMember,
+      textChannel?: Discord.TextChannel,
+      message?: Discord.Message
+    } = {},
+  ): Promise<void> {
     if (!["voice", "stage"].includes(voiceChannel?.type)) {
       throw new TypeError("voiceChannel is not a Discord.VoiceChannel or a Discord.StageChannel.");
     }
@@ -236,40 +215,40 @@ class DisTube extends EventEmitter {
       skip: false,
       unshift: false,
     }, options);
-    if (message && !(message instanceof Discord.Message)) {
+    if (message && !(message as any instanceof Discord.Message)) {
       throw new TypeError("options.message is not a Discord.Message or a falsy value.");
     }
     try {
       if (typeof song === "string") {
         for (const plugin of this.customPlugins) {
           if (await plugin.validate(song)) {
-            await plugin.play(voiceChannel, song, member, textChannel, skip, unshift);
+            await plugin.play(voiceChannel, song, member, textChannel as Discord.TextChannel, skip, unshift);
             return;
           }
         }
       }
       if (song instanceof SearchResult && song.type === "playlist") song = song.url;
-      if (ytpl.validateID(song)) song = await this.handler.resolvePlaylist(member, song);
+      if (typeof song === "string" && ytpl.validateID(song)) song = await this.handler.resolvePlaylist(member, song);
       song = await this.handler.resolveSong(message || member, song);
       if (!song) return;
       if (song instanceof Playlist) await this.handler.handlePlaylist(voiceChannel, song, textChannel, skip, unshift);
-      else if (!this.options.nsfw && song.age_restricted && !textChannel?.nsfw) {
+      else if (!this.options.nsfw && (song as Song).age_restricted && !textChannel?.nsfw) {
         throw new Error("Cannot play age-restricted content in non-NSFW channel.");
       } else {
-        let queue = this.getQueue(voiceChannel);
+        const queue = this.getQueue(voiceChannel);
         if (queue) {
-          queue.addToQueue(song, skip || unshift ? 1 : -1);
+          queue.addToQueue((song as Song), skip || unshift ? 1 : -1);
           if (skip) queue.skip();
           else this.emit("addSong", queue, song);
         } else {
-          queue = await this._newQueue(voiceChannel, song, textChannel);
-          if (queue instanceof Queue) this.emit("playSong", queue, song);
+          const newQueue = await this._newQueue(voiceChannel, (song as Song), textChannel);
+          if (newQueue instanceof Queue) this.emit("playSong", newQueue, song);
         }
       }
     } catch (e) {
       try {
         e.name = "PlayError";
-        e.message = `${song?.url || song}\n${e.message}`;
+        e.message = `${(song as Song)?.url || song}\n${e.message}`;
       } catch { }
       this.emitError(textChannel, e);
     }
@@ -294,7 +273,12 @@ class DisTube extends EventEmitter {
    *     // Fetching custom playlist sequentially (reduce lag for low specs)
    *     distube.playCustomPlaylist(message, songs, { name: "My playlist name" }, false, false);
    */
-  async playCustomPlaylist(message, songs, properties = {}, options = {}) {
+  async playCustomPlaylist(
+    message: Discord.Message,
+    songs: Array<string | Song | SearchResult>,
+    properties: any = {},
+    options: { skip?: boolean, unshift?: boolean, parallel?: boolean } = {},
+  ): Promise<void> {
     try {
       if (typeof options !== "object" || Array.isArray(options)) {
         throw new TypeError("options must be an object.");
@@ -307,14 +291,14 @@ class DisTube extends EventEmitter {
       const playlist = await this.handler.createCustomPlaylist(message, songs, properties, parallel);
       await this.handler.handlePlaylist(message, playlist, skip, unshift);
     } catch (e) {
-      this.emitError(message.channel, e);
+      this.emitError(message.channel as Discord.TextChannel, e);
     }
   }
 
   /**
    * Search for a song.
    * You can customize how user answers instead of send a number.
-   * Then use {@link DisTube#play|play(message, aResultFromSearch)} or {@link DisTube#playSkip|playSkip()} to play it.
+   * Then use {@link DisTube#play} or {@link DisTube#playSkip} to play it.
    * @param {string} string The string search for
    * @param {Object} options Search options
    * @param {number} [options.limit=10] Limit the results
@@ -323,7 +307,7 @@ class DisTube extends EventEmitter {
    * @throws {Error}
    * @returns {Promise<Array<SearchResult>>} Array of results
    */
-  async search(string, options = {}) {
+  async search(string: string, options: { type?: "video" | "playlist", limit?: number, safeSearch?: boolean, retried?: boolean } = {}): Promise<Array<SearchResult>> {
     const opts = Object.assign({ type: "video", limit: 10, safeSearch: false }, options);
     if (typeof opts.type !== "string" || !["video", "playlist"].includes(opts.type)) throw new Error("options.type must be 'video' or 'playlist'.");
     if (typeof opts.limit !== "number") throw new Error("options.limit must be a number");
@@ -346,20 +330,24 @@ class DisTube extends EventEmitter {
    * Create a new guild queue
    * @private
    * @param {Discord.Message|Discord.VoiceChannel|Discord.StageChannel} message A message from guild channel | a voice channel
-   * @param {Song|Array<Song>} song Song to play
+   * @param {Song|Song[]} song Song to play
    * @param {Discord.TextChannel} textChannel A text channel of the queue
    * @throws {Error}
    * @returns {Promise<Queue|true>} `true` if queue is not generated
    */
-  _newQueue(message, song, textChannel = message.channel) {
-    const voice = message?.member?.voice?.channel || message;
+  _newQueue(
+    message: Discord.Message | Discord.VoiceChannel | Discord.StageChannel,
+    song: Song | Song[],
+    textChannel: Discord.TextChannel = (message as Discord.Message).channel as Discord.TextChannel,
+  ): Promise<Queue | true> {
+    const voice = (message as Discord.Message)?.member?.voice?.channel || message;
     if (!voice || voice instanceof Discord.Message) throw new Error("User is not in a voice channel.");
     if (!["voice", "stage"].includes(voice?.type)) {
       throw new TypeError("User is not in a Discord.VoiceChannel or a Discord.StageChannel.");
     }
     const queue = new Queue(this, message, song, textChannel);
     this.emit("initQueue", queue);
-    this.guildQueues.set(message.guild.id, queue);
+    this.guildQueues.set((message.guild as Discord.Guild).id, queue);
     return this.handler.joinVoiceChannel(queue, voice);
   }
 
@@ -368,19 +356,17 @@ class DisTube extends EventEmitter {
    * @private
    * @param {QueueResolvable} queue The type can be resolved to give a {@link Queue}
    */
-  _deleteQueue(queue) {
+  _deleteQueue(queue: QueueResolvable): void {
     const q = this.getQueue(queue);
     if (!q) return;
     this.emit("deleteQueue", q);
     this.guildQueues.delete(q.id);
-    try { q.dispatcher?.destroy() } catch { }
-    try { q.stream?.destroy() } catch { }
   }
 
   /**
    * Get the guild queue
    * @param {QueueResolvable} queue The type can be resolved to give a {@link Queue}
-   * @returns {Queue}
+   * @returns {Queue?}
    * @throws {Error}
    * @example
    * client.on('message', (message) => {
@@ -395,9 +381,11 @@ class DisTube extends EventEmitter {
    *     }
    * });
    */
-  getQueue(queue) {
+  getQueue(queue: QueueResolvable): Queue | undefined {
     if (queue instanceof Queue) return queue;
-    const guildID = queue?.guild?.id || queue;
+    let guildID: string | undefined;
+    if (typeof queue === "string") guildID = queue;
+    else guildID = queue?.guild?.id;
     if (
       typeof guildID !== "string" ||
       !guildID.match(/^\d+$/) ||
@@ -412,7 +400,7 @@ class DisTube extends EventEmitter {
    * @returns {Queue} The guild queue
    * @throws {Error}
    */
-  pause(queue) {
+  pause(queue: QueueResolvable): Queue {
     const q = this.getQueue(queue);
     if (!q) throw new Error("Cannot find the playing queue.");
     return q.pause();
@@ -424,7 +412,7 @@ class DisTube extends EventEmitter {
    * @returns {Queue} The guild queue
    * @throws {Error}
    */
-  resume(queue) {
+  resume(queue: QueueResolvable): Queue {
     const q = this.getQueue(queue);
     if (!q) throw new Error("Cannot find the playing queue.");
     return q.resume();
@@ -445,7 +433,7 @@ class DisTube extends EventEmitter {
    *     }
    * });
    */
-  stop(queue) {
+  stop(queue: QueueResolvable): void {
     const q = this.getQueue(queue);
     if (!q) throw new Error("Cannot find the playing queue.");
     q.stop();
@@ -466,7 +454,7 @@ class DisTube extends EventEmitter {
    *         distube.setVolume(message, Number(args[0]));
    * });
    */
-  setVolume(queue, percent) {
+  setVolume(queue: QueueResolvable, percent: number): Queue {
     const q = this.getQueue(queue);
     if (!q) throw new Error("Cannot find the playing queue.");
     return q.setVolume(percent);
@@ -475,7 +463,7 @@ class DisTube extends EventEmitter {
   /**
    * Skip the playing song
    * @param {QueueResolvable} queue The type can be resolved to give a {@link Queue}
-   * @returns {Queue} The guild queue
+   * @returns {Song} The new Song will be played
    * @throws {Error}
    * @example
    * client.on('message', (message) => {
@@ -486,7 +474,7 @@ class DisTube extends EventEmitter {
    *         distube.skip(message);
    * });
    */
-  skip(queue) {
+  skip(queue: QueueResolvable): Song {
     const q = this.getQueue(queue);
     if (!q) throw new Error("Cannot find the playing queue.");
     return q.skip();
@@ -495,7 +483,7 @@ class DisTube extends EventEmitter {
   /**
    * Play the previous song
    * @param {QueueResolvable} queue The type can be resolved to give a {@link Queue}
-   * @returns {Queue} The guild queue
+   * @returns {Song} The new Song will be played
    * @throws {Error}
    * @example
    * client.on('message', (message) => {
@@ -506,7 +494,7 @@ class DisTube extends EventEmitter {
    *         distube.previous(message);
    * });
    */
-  previous(queue) {
+  previous(queue: QueueResolvable): Song {
     if (!this.options.savePreviousSongs) throw new Error("Disabled");
     const q = this.getQueue(queue);
     if (!q) throw new Error("Cannot find the playing queue.");
@@ -526,7 +514,7 @@ class DisTube extends EventEmitter {
    *         distube.shuffle(message);
    * });
    */
-  shuffle(queue) {
+  shuffle(queue: QueueResolvable): Queue {
     const q = this.getQueue(queue);
     if (!q) throw new Error("Cannot find the playing queue.");
     return q.shuffle();
@@ -550,7 +538,7 @@ class DisTube extends EventEmitter {
    *             .catch(err => message.channel.send("Invalid song number."));
    * });
    */
-  jump(queue, num) {
+  jump(queue: QueueResolvable, num: number): Queue {
     const q = this.getQueue(queue);
     if (!q) throw new Error("Cannot find the playing queue.");
     return q.jump(num);
@@ -561,7 +549,7 @@ class DisTube extends EventEmitter {
    * Turn off if repeat mode is the same value as new mode.
    * Toggle mode: `mode = null` `(0 -> 1 -> 2 -> 0...)`
    * @param {QueueResolvable} queue The type can be resolved to give a {@link Queue}
-   * @param {number} mode The repeat modes `(0: disabled, 1: Repeat a song, 2: Repeat all the queue)`
+   * @param {number?} [mode=null] The repeat modes `(0: disabled, 1: Repeat a song, 2: Repeat all the queue)`
    * @returns {number} The new repeat mode
    * @example
    * client.on('message', (message) => {
@@ -575,7 +563,7 @@ class DisTube extends EventEmitter {
    *     }
    * });
    */
-  setRepeatMode(queue, mode = null) {
+  setRepeatMode(queue: QueueResolvable, mode: number | null = null): number {
     const q = this.getQueue(queue);
     if (!q) throw new Error("Cannot find the playing queue.");
     return q.setRepeatMode(mode);
@@ -597,7 +585,7 @@ class DisTube extends EventEmitter {
    *     }
    * });
    */
-  toggleAutoplay(queue) {
+  toggleAutoplay(queue: QueueResolvable): boolean {
     const q = this.getQueue(queue);
     if (!q) throw new Error("Cannot find the playing queue.");
     return q.toggleAutoplay();
@@ -608,7 +596,7 @@ class DisTube extends EventEmitter {
    * @param {QueueResolvable} queue The type can be resolved to give a {@link Queue}
    * @returns {Promise<Queue>} The guild queue
    */
-  addRelatedSong(queue) {
+  addRelatedSong(queue: QueueResolvable): Promise<Queue> {
     const q = this.getQueue(queue);
     if (!q) throw new Error("Cannot find the playing queue.");
     return q.addRelatedSong();
@@ -631,7 +619,7 @@ class DisTube extends EventEmitter {
    *     }
    * });
    */
-  setFilter(queue, filter) {
+  setFilter(queue: QueueResolvable, filter: string | false): Array<string> {
     const q = this.getQueue(queue);
     if (!q) throw new Error("Cannot find the playing queue.");
     return q.setFilter(filter);
@@ -651,7 +639,7 @@ class DisTube extends EventEmitter {
    *         distube.seek(message, Number(args[0]));
    * });
    */
-  seek(queue, time) {
+  seek(queue: QueueResolvable, time: number): Queue {
     const q = this.getQueue(queue);
     if (!q) throw new Error("Cannot find the playing queue.");
     return q.seek(time);
@@ -659,11 +647,11 @@ class DisTube extends EventEmitter {
 
   /**
    * Emit error event
-   * @param {Discord.TextChannel} channel Text channel where the error is encountered.
+   * @param {Discord.TextChannel?} channel Text channel where the error is encountered.
    * @param {Error} error error
    * @private
    */
-  emitError(channel, error) {
+  emitError(channel: Discord.TextChannel | any, error: Error): void {
     if (!channel || !(channel instanceof Discord.TextChannel)) {
       console.error(error);
       console.warn("This is logged because <Queue>.textChannel is null");
@@ -672,13 +660,8 @@ class DisTube extends EventEmitter {
   }
 }
 
-DisTube.CustomPlugin = CustomPlugin;
-DisTube.ExtractorPlugin = ExtractorPlugin;
-DisTube.Playlist = Playlist;
-DisTube.Song = Song;
-DisTube.Queue = Queue;
-DisTube.SearchResult = SearchResult;
-DisTube.Util = require("./struct/Util");
+export { Options as DisTubeOptions, Song, Playlist, CustomPlugin, ExtractorPlugin, Queue, SearchResult, DisTube };
+export default DisTube;
 module.exports = DisTube;
 
 /**

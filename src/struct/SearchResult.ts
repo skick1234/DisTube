@@ -1,12 +1,30 @@
-const { toSecond, formatDuration } = require("./Util");
+import { Video, Playlist } from "@distube/ytsr";
+import { toSecond, formatDuration } from "../Util";
 
 /** Class representing a search result. */
-class SearchResult {
+export class SearchResult {
+  source: "youtube";
+  type: "video" | "playlist";
+  id: string;
+  name: string;
+  url: string;
+  views?: number;
+  isLive?: boolean;
+  duration?: number;
+  formattedDuration?: string;
+  thumbnail?: string;
+  /** Video or playlist uploader */
+  uploader: {
+    /** Uploader name */
+    name?: string;
+    /** Uploader url */
+    url?: string;
+  };
   /**
    * Create a search result
    * @param {Object} info ytsr result
    */
-  constructor(info) {
+  constructor(info: Video | Playlist) {
     this.source = "youtube";
     /**
      * Type of SearchResult (`video` or `playlist`)
@@ -28,12 +46,13 @@ class SearchResult {
      * @type {string}
      */
     this.url = info.url;
-    /**
-     * Video or playlist views count
-     * @type {number}
-     */
-    this.views = info.views;
     if (this.type === "video") {
+      info = info as Video;
+      /**
+       * [Video only] Video or playlist views count
+       * @type {number}
+       */
+      this.views = info.views;
       /**
        * [Video only] Indicates if the video is an active live.
        * @type {boolean?}
@@ -56,16 +75,16 @@ class SearchResult {
       this.thumbnail = info.thumbnail;
     } else if (this.type !== "playlist") throw new TypeError("Unsupported info");
     /**
-     * Video or playlist uploader
+     * Song uploader
      * @type {Object}
      * @prop {string?} name Uploader name
      * @prop {string?} url Uploader url
      */
     this.uploader = {
-      name: (info.author || info.owner)?.name || null,
-      url: (info.author || info.owner)?.url || null,
+      name: ((info as Video).author || (info as Playlist).owner)?.name,
+      url: ((info as Video).author || (info as Playlist).owner)?.url,
     };
   }
 }
 
-module.exports = SearchResult;
+export default SearchResult;

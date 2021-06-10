@@ -1,6 +1,11 @@
 {
-  "plugins": ["jsdoc"],
-  "extends": ["eslint:recommended", "plugin:jsdoc/recommended"],
+  "parser": "@typescript-eslint/parser",
+  "plugins": ["@typescript-eslint"],
+  "extends": [
+    "eslint:recommended",
+    "plugin:@typescript-eslint/eslint-recommended",
+    "plugin:@typescript-eslint/recommended"
+  ],
   "parserOptions": {
     "ecmaVersion": 11,
     "sourceType": "module"
@@ -10,16 +15,12 @@
     "node": true
   },
   "rules": {
+    "@typescript-eslint/indent": ["error", 2],
+    "@typescript-eslint/no-explicit-any": 0,
+    "@typescript-eslint/explicit-module-boundary-types": 0,
     "jsdoc/newline-after-description": 0,
     "jsdoc/require-returns-description": 0,
     "no-compare-neg-zero": "error",
-    "no-extra-parens": [
-      "warn",
-      "all",
-      {
-        "nestedBinaryExpressions": false
-      }
-    ],
     "no-template-curly-in-string": "error",
     "no-unsafe-negation": "error",
     "valid-jsdoc": [

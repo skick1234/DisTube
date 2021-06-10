@@ -1,20 +1,25 @@
-/* eslint-disable */
-const DisTube = require("../DisTube");
-const Song = require("./Song");
+/* eslint-disable require-await, @typescript-eslint/no-unused-vars */
+import DisTube from "../DisTube";
+import Song from "./Song";
+import DisTubeHandler from "../core/DisTubeHandler";
 
 /**
  * DisTube Plugin
  * @private
  */
-class Plugin {
-  constructor(type) {
+export class Plugin {
+  /** Type of the plugin */
+  type: "custom" | "extractor";
+  distube!: DisTube;
+  handler!: DisTubeHandler;
+  constructor(type: "custom" | "extractor") {
     /**
-     * Type of plugin (`"custom"` | `"extractor"`)
-     * @type {string}
+     * Type of the plugin
+     * @type {"custom"|"extractor"}
      */
     this.type = type;
   }
-  init(distube) {
+  init(distube: DisTube) {
     /**
      * DisTube
      * @type {DisTube}
@@ -31,19 +36,19 @@ class Plugin {
    * @param {string} url Input url
    * @returns {Promise<boolean>}
    */
-  async validate(url) { return false }
+  async validate(url: string): Promise<boolean> { return false }
   /**
    * Get the stream url from {@link Song#url}. Returns {@link Song#url} by default. Not needed if the plugin plays song from YouTube.
    * @param {string} url Input url
    * @returns {Promise<string>}
    */
-  async getStreamURL(url) { return url }
+  async getStreamURL(url: string): Promise<string> { return url }
   /**
    * (Optional) Get related songs from a supported url (Not needed to add {@link Song#related} and member is `null` because it will be added with this function later)
    * @param {string} url Input url
    * @returns {Promise<Song[]>}
    */
-  async getRelatedSongs(url) { return [] }
+  async getRelatedSongs(url: string): Promise<Song[]> { return [] }
 }
 
-module.exports = Plugin;
+export default Plugin;

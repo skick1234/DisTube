@@ -1,8 +1,10 @@
-const { formatDuration, toSecond, parseNumber } = require("./Util"),
-  Playlist = require("./Playlist"),
-  ytdl = require("ytdl-core"),
-  SearchResult = require("./SearchResult"),
-  Discord = require("discord.js");
+import { formatDuration, toSecond, parseNumber } from "../Util";
+import Playlist from "./Playlist";
+import ytdl from "ytdl-core";
+import SearchResult from "./SearchResult";
+import Discord from "discord.js";
+import { Chapter, OtherSongInfo } from "../types";
+
 
 /**
  * Class representing a song.
@@ -11,14 +13,45 @@ const { formatDuration, toSecond, parseNumber } = require("./Util"),
  *
  * Missing info: {@link Song#likes}, {@link Song#dislikes}, {@link Song#streamURL}, {@link Song#related}, {@link Song#chapters}, {@link Song#age_restricted}</info>
  */
-class Song {
+export class Song {
+  source: string;
+  info?: ytdl.videoInfo;
+  member?: Discord.GuildMember;
+  user?: Discord.User;
+  id!: string;
+  name!: string;
+  isLive!: boolean;
+  duration!: number;
+  formattedDuration!: string;
+  url!: string;
+  streamURL?: string;
+  thumbnail?: string;
+  related!: Song[];
+  views!: number;
+  likes!: number;
+  dislikes!: number;
+  /** Song uploader */
+  uploader!: {
+    /** Uploader name */
+    name?: string;
+    /** Uploader url */
+    url?: string;
+  };
+  age_restricted!: boolean;
+  chapters!: Chapter[];
+  reposts!: number;
+  playlist?: Playlist;
   /**
    * Create a Song
-   * @param {ytdl.videoInfo|SearchResult|Object} info Raw info
-   * @param {Discord.GuildMember} member Requested user
+   * @param {ytdl.videoInfo|SearchResult|OtherSongInfo} info Raw info
+   * @param {Discord.GuildMember?} member Requested user
    * @param {string} src Song source
    */
-  constructor(info, member = null, src = "youtube") {
+  constructor(
+    info: ytdl.videoInfo | SearchResult | OtherSongInfo | ytdl.relatedVideo,
+    member?: Discord.GuildMember,
+    src = "youtube",
+  ) {
     if (typeof src !== "string") throw new TypeError("Source must be a string");
     /**
      * The source of the song
@@ -26,23 +59,20 @@ class Song {
      */
     this.source = src.toLowerCase();
     this._patchMember(member);
-    if (this.source === "youtube") this._patchYouTube(info);
-    else this._patchOther(info);
+    if (this.source === "youtube") this._patchYouTube(info as ytdl.videoInfo);
+    else this._patchOther(info as OtherSongInfo);
   }
 
-  /**
-   * Patch data from ytdl-core
-   * @param {ytdl.videoInfo|SearchResult} info Video info
-   * @private
-   */
-  _patchYouTube(info) {
-    if (info.full) {
+  _patchYouTube(i: ytdl.videoInfo | SearchResult) {
+    const info = i as any;
+    if ((info as any).full === true) {
       /**
        * `ytdl-core` raw info (If the song is playing)
        * @type {ytdl.videoInfo?}
        * @private
        */
       this.info = info;
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
       const err = require("ytdl-core/lib/utils").playError(info.player_response, ["UNPLAYABLE", "LIVE_STREAM_OFFLINE", "LOGIN_REQUIRED"]);
       if (err) throw err;
       if (!info.formats?.length) throw new Error("This video is unavailable");
@@ -85,16 +115,16 @@ class Song {
     this.streamURL = this.info?.formats?.length ? ytdl.chooseFormat(this.info.formats, {
       filter: this.isLive ? "audioandvideo" : "audioonly",
       quality: "highestaudio",
-    }).url : details.streamURL || null;
+    }).url : details.streamURL;
     /**
      * Song thumbnail.
      * @type {string?}
      */
-    this.thumbnail = details.thumbnails?.sort((a, b) => b.width - a.width)[0].url ||
-      details.thumbnail?.url || details.thumbnail || null;
+    this.thumbnail = details.thumbnails?.sort((a: any, b: any) => b.width - a.width)[0].url ||
+      details.thumbnail?.url || details.thumbnail;
     /**
      * Related songs
-     * @type {Array<Song>}
+     * @type {Song[]}
      */
     this.related = this.info?.related_videos.map(v => new Song(v)) || details.related || [];
     /**
@@ -119,8 +149,8 @@ class Song {
      * @prop {string?} url Uploader url
      */
     this.uploader = {
-      name: info.uploader?.name || details.author?.name || null,
-      url: info.uploader?.url || details.author?.channel_url || details.author?.url || null,
+      name: info.uploader?.name || details.author?.name,
+      url: info.uploader?.url || details.author?.channel_url || details.author?.url,
     };
     /**
      * Whether or not an age-restricted content
@@ -136,35 +166,36 @@ class Song {
      * Chapters information (YouTube only)
      * @type {Chapter[]}
      */
-    this.chapters = info.chapters || [];
-  }
-
-  /**
-   * Patch data from other source
-   * @param {Object} info Video info
-   * @private
-   */
-  _patchOther(info) {
-    this.id = info.id;
-    this.name = info.title || info.name;
-    this.isLive = Boolean(info.is_live || info.isLive);
-    this.duration = this.isLive ? 0 : toSecond(info._duration_raw || info.duration);
-    this.formattedDuration = this.isLive ? "Live" : formatDuration(this.duration);
-    this.url = info.webpage_url || info.url;
-    this.streamURL = null;
-    this.thumbnail = info.thumbnail?.url || info.thumbnail || null;
-    this.related = info.related || [];
-    this.views = parseNumber(info.view_count || info.views);
-    this.likes = parseNumber(info.like_count || info.likes);
-    this.dislikes = parseNumber(info.dislike_count || info.dislikes);
+    this.chapters = details.chapters || [];
     /**
      * Song repost count
      * @type {number}
      */
+    this.reposts = 0;
+  }
+
+  /**
+   * Patch data from other source
+   * @param {OtherSongInfo} info Video info
+   * @private
+   */
+  private _patchOther(info: OtherSongInfo) {
+    if (info.id) this.id = info.id;
+    if (info.title) this.name = info.title;
+    else if (info.name) this.name = info.name;
+    this.isLive = Boolean(info.is_live || info.isLive);
+    this.duration = this.isLive ? 0 : toSecond(info._duration_raw || info.duration);
+    this.formattedDuration = this.isLive ? "Live" : formatDuration(this.duration);
+    this.url = info.webpage_url || info.url;
+    this.thumbnail = info.thumbnail;
+    this.related = info.related || [];
+    this.views = parseNumber(info.view_count || info.views);
+    this.likes = parseNumber(info.like_count || info.likes);
+    this.dislikes = parseNumber(info.dislike_count || info.dislikes);
     this.reposts = parseNumber(info.repost_count || info.reposts);
     this.uploader = {
-      name: info.uploader || null,
-      url: info.uploader_url || null,
+      name: info.uploader,
+      url: info.uploader_url,
     };
     this.age_restricted = !!info.age_limit && parseNumber(info.age_limit) >= 18;
     this.chapters = info.chapters || [];
@@ -176,7 +207,7 @@ class Song {
    * @private
    * @returns {Song}
    */
-  _patchPlaylist(playlist, member = this.member) {
+  _patchPlaylist(playlist: Playlist, member?: Discord.GuildMember): Song {
     if (!(playlist instanceof Playlist)) throw new TypeError("playlist is not a valid Playlist");
     /**
      * The playlist added this song
@@ -191,19 +222,21 @@ class Song {
    * @private
    * @returns {Song}
    */
-  _patchMember(member = this.member) {
-    /**
-     * User requested
-     * @type {Discord.GuildMember?}
-     */
-    this.member = member;
-    /**
-     * User requested
-     * @type {Discord.User?}
-     */
-    this.user = member?.user;
+  _patchMember(member?: Discord.GuildMember): Song {
+    if (member) {
+      /**
+       * User requested
+       * @type {Discord.GuildMember?}
+       */
+      this.member = member;
+      /**
+       * User requested
+       * @type {Discord.User?}
+       */
+      this.user = member?.user;
+    }
     return this;
   }
 }
 
-module.exports = Song;
+export default Song;

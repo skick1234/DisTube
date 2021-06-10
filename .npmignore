@@ -8,3 +8,4 @@ typings/events.d.ts
 .eslintrc.json
 tsconfig.json
 test.js
+src/

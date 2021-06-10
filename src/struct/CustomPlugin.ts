@@ -1,12 +1,12 @@
-/* eslint-disable */
-const Plugin = require("./Plugin"),
-  Discord = require("discord.js");
+/* eslint-disable @typescript-eslint/no-unused-vars */
+import Plugin from "./Plugin";
+import Discord from "discord.js";
 
 /**
  * Custom Plugin
  * @extends Plugin
  */
-class CustomPlugin extends Plugin {
+export class CustomPlugin extends Plugin {
   /** Create a custom plugin */
   constructor() {
     super("custom");
@@ -21,7 +21,16 @@ class CustomPlugin extends Plugin {
    * @param {boolean} unshift Add the song/playlist to the beginning of the queue (after the playing song if exists)
    * @returns {Promise<void>}
    */
-  async play(voiceChannel, url, member, textChannel, skip, unshift) { }
+  async play(
+    voiceChannel: Discord.VoiceChannel | Discord.StageChannel,
+    url: string,
+    member: Discord.GuildMember,
+    textChannel: Discord.TextChannel | null,
+    skip: boolean,
+    unshift: boolean,
+  ): Promise<void> {
+    // Template
+  }
 }
 
-module.exports = CustomPlugin;
+export default CustomPlugin;
