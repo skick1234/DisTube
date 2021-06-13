@@ -1,11 +1,14 @@
-import DisTube, { DisTubeOptions } from "../DisTube";
-import Discord from "discord.js";
+import DisTube from "../DisTube";
+import { Client } from "discord.js";
+import { DisTubeVoiceManager, Options, QueueManager } from ".";
 
 /** @private */
 export class DisTubeBase {
   distube: DisTube;
-  options: DisTubeOptions;
-  client: Discord.Client;
+  options: Options;
+  client: Client;
+  voices: DisTubeVoiceManager;
+  queues: QueueManager;
   constructor(distube: DisTube) {
     /**
      * DisTube
@@ -25,6 +28,18 @@ export class DisTubeBase {
      * @private
      */
     this.client = this.distube.client;
+    /**
+     * The voice manager
+     * @type {DisTubeVoiceManager}
+     * @private
+     */
+    this.voices = this.distube.voices;
+    /**
+     * The queue manager
+     * @type {DisTubeVoiceManager}
+     * @private
+     */
+    this.queues = this.distube.queues;
   }
   /**
    * Emit the {@link DisTube} of this base

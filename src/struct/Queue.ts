@@ -1,33 +1,18 @@
-import { formatDuration } from "../Util";
-import Song from "./Song";
 import DisTube from "../DisTube";
-import Discord from "discord.js";
-import { Readable } from "stream";
-import { DisTubeBase, DisTubeHandler } from "../core";
-import SearchResult from "./SearchResult";
-import { AudioPlayer, AudioResource, VoiceConnection } from "@discordjs/voice";
+import { DisTubeBase, DisTubeHandler, DisTubeVoice } from "../core";
+import { SearchResult, Song, formatDuration } from "..";
+import { GuildMember, Snowflake, TextChannel } from "discord.js";
 
 /**
  * Represents a queue.
  * @extends DisTubeBase
  */
 export class Queue extends DisTubeBase {
-  id: Discord.Snowflake;
+  id: Snowflake;
   /**
-   * Audio Player
-   * @type {AudioPlayer?}
+   * Voice connection of this queue
    */
-  audioPlayer?: AudioPlayer;
-  /**
-   * Voice connection.
-   * @type {VoiceConnection?}
-   */
-  connection?: VoiceConnection;
-  /**
-   * Stream volume. Default value: `50`.
-   * @type {number}
-   */
-  volume: number;
+  voice: DisTubeVoice;
   /**
    * List of songs in the queue (The first one is the playing song)
    * @type {Song[]}
@@ -93,7 +78,7 @@ export class Queue extends DisTubeBase {
    * The text channel of the Queue. (Default: where the first command is called).
    * @type {Discord.TextChannel?}
    */
-  textChannel: any;
+  textChannel?: TextChannel;
   /**
    * @type {DisTubeHandler}
    * @private
@@ -106,38 +91,31 @@ export class Queue extends DisTubeBase {
    */
   emptyTimeout?: NodeJS.Timeout;
   /**
-   * Audio Resource
+   * Client's member of this queue's guild
    */
-  audioResource?: AudioResource;
-  /** Client's member of this queue's guild */
-  private clientMember: Discord.GuildMember;
+  private clientMember: GuildMember;
   /**
    * Create a queue
    * @param {DisTube} distube DisTube
-   * @param {Discord.Message|Discord.VoiceChannel|Discord.StageChannel} message Message
+   * @param {DisTubeVoice} voice Voice connection
    * @param {Song|Song[]} song First song(s)
    * @param {Discord.TextChannel?} textChannel Default text channel
    */
-  constructor(distube: DisTube, message: Discord.Message | Discord.VoiceChannel | Discord.StageChannel, song: Song | Song[], textChannel: Discord.TextChannel | null = null) {
+  constructor(distube: DisTube, voice: DisTubeVoice, song: Song | Song[], textChannel?: TextChannel) {
     super(distube);
-    this.clientMember = (message.guild as Discord.Guild).me as Discord.GuildMember;
+    this.clientMember = voice.channel.guild?.me as GuildMember;
+    /**
+     * Voice connection of this queue.
+     * @type {DisTubeVoice}
+     */
+    this.voice = voice;
     /**
      * Queue id (Guild id)
      * @type {Discord.Snowflake}
      */
-    this.id = (message.guild as Discord.Guild).id;
+    this.id = voice.id;
     /**
-     * Audio Player.
-     * @type {AudioPlayer?}
-     */
-    this.audioPlayer = undefined;
-    /**
-     * Voice connection.
-     * @type {VoiceConnection?}
-     */
-    this.connection = undefined;
-    /**
-     * Stream volume. Default value: `50`.
+     * Get or set the stream volume. Default value: `50`.
      * @type {number}
      */
     this.volume = 50;
@@ -206,7 +184,7 @@ export class Queue extends DisTubeBase {
      * The text channel of the Queue. (Default: where the first command is called).
      * @type {Discord.TextChannel?}
      */
-    this.textChannel = (message as Discord.Message)?.channel as Discord.TextChannel || textChannel;
+    this.textChannel = textChannel;
     /**
      * @type {DisTubeHandler}
      * @private
@@ -218,11 +196,6 @@ export class Queue extends DisTubeBase {
      * @private
      */
     this.emptyTimeout = undefined;
-    /**
-     * Audio resource
-     * @type {AudioResource}
-     */
-    this.audioResource = undefined;
   }
   /**
    * Formatted duration string.
@@ -243,7 +216,7 @@ export class Queue extends DisTubeBase {
    * @type {number}
    */
   get currentTime() {
-    return this.audioResource ? (this.audioResource.playbackDuration / 1e3) + this.beginTime : 0;
+    return this.voice ? this.voice.playbackDuration + this.beginTime : 0;
   }
   /**
    * Formatted {@link Queue#currentTime} string.
@@ -258,6 +231,12 @@ export class Queue extends DisTubeBase {
    */
   get voiceChannel() {
     return this.clientMember.voice.channel;
+  }
+  get volume() {
+    return this.voice.volume;
+  }
+  set volume(value: number) {
+    this.voice.volume = value;
   }
   /**
    * Add a Song or an array of Song to the queue
@@ -287,7 +266,7 @@ export class Queue extends DisTubeBase {
     if (this.paused) throw new Error("The queue has been paused already.");
     this.playing = false;
     this.paused = true;
-    this.audioPlayer?.pause();
+    this.voice.pause();
     return this;
   }
   /**
@@ -298,20 +277,8 @@ export class Queue extends DisTubeBase {
     if (this.playing) throw new Error("The queue has been playing already.");
     this.playing = true;
     this.paused = false;
-    this.audioPlayer?.unpause();
+    this.voice.unpause();
     return this;
-  }
-  /**
-   * Stop the guild stream
-   */
-  stop() {
-    this.stopped = true;
-    try { this.audioPlayer?.stop() } catch { }
-    if (this.options.leaveOnStop) {
-      try { this.connection?.destroy() } catch { }
-      this.distube.connections.delete(this.id);
-    }
-    this.distube._deleteQueue(this);
   }
   /**
    * Set the guild stream's volume
@@ -321,7 +288,7 @@ export class Queue extends DisTubeBase {
   setVolume(percent: number): Queue {
     if (typeof percent !== "number") throw new Error("Volume percent must be a number.");
     this.volume = percent;
-    this.audioResource?.volume?.setVolume(this.volume / 100);
+    if (this.voice) this.voice.volume = this.volume;
     return this;
   }
 
@@ -334,7 +301,7 @@ export class Queue extends DisTubeBase {
     if (this.songs.length <= 1 && !this.autoplay) throw new Error("There is no song to skip.");
     const song = this.songs[1];
     this.next = true;
-    this.audioPlayer?.stop();
+    this.voice.stop();
     return song;
   }
 
@@ -348,7 +315,7 @@ export class Queue extends DisTubeBase {
     if (this.previousSongs?.length === 0 && this.repeatMode !== 2) throw new Error("There is no previous song.");
     const song = this.repeatMode === 2 ? this.songs[this.songs.length - 1] : this.previousSongs[this.previousSongs.length - 1];
     this.prev = true;
-    this.audioPlayer?.stop();
+    this.voice.stop();
     return song;
   }
   /**
@@ -384,7 +351,7 @@ export class Queue extends DisTubeBase {
       this.prev = true;
       if (num !== -1) this.songs.unshift(...this.previousSongs.splice(num + 1));
     }
-    this.audioPlayer?.stop();
+    this.voice.stop();
     return this;
   }
   /**
@@ -440,12 +407,22 @@ export class Queue extends DisTubeBase {
     return this;
   }
   /**
-   * Toggle autoplay mode
-   * @returns {boolean} Autoplay mode state
+   * Stop the guild stream
    */
-  toggleAutoplay(): boolean {
-    this.autoplay = !this.autoplay;
-    return this.autoplay;
+  stop() {
+    this.stopped = true;
+    this.voice.stop();
+    if (this.options.leaveOnStop) this.voice.leave();
+    this.delete();
+  }
+  /**
+   * Delete the queue
+   */
+  delete() {
+    this.songs = [];
+    this.previousSongs = [];
+    this.distube.queues.delete(this.id);
+    this.emit("deleteQueue", this);
   }
 }
 

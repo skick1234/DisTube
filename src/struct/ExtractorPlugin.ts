@@ -1,8 +1,5 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
-import Plugin from "./Plugin";
-import Discord from "discord.js";
-import Song from "./Song";
-import Playlist from "./Playlist";
+import { GuildMember } from "discord.js";
+import { Playlist, Plugin, Song } from ".";
 
 /**
  * Extractor Plugin
@@ -19,11 +16,8 @@ export class ExtractorPlugin extends Plugin {
    * @param {Discord.GuildMember} member Requested user
    * @returns {Promise<Song|Song[]|Playlist>}
    */
-  // eslint-disable-next-line require-await
-  async resolve(
-    url: string,
-    member: Discord.GuildMember,
-  ): Promise<Song | Playlist> {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars, require-await
+  async resolve(url: string, member: GuildMember): Promise<Song | Playlist> {
     return undefined as unknown as Song;
   }
 }

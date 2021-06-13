@@ -1,9 +1,8 @@
-import { formatDuration, toSecond, parseNumber } from "../Util";
-import Playlist from "./Playlist";
 import ytdl from "ytdl-core";
-import SearchResult from "./SearchResult";
-import Discord from "discord.js";
-import { Chapter, OtherSongInfo } from "../types";
+import Playlist from "./Playlist";
+import { SearchResult } from ".";
+import { GuildMember, User } from "discord.js";
+import { Chapter, OtherSongInfo, formatDuration, parseNumber, toSecond } from "..";
 
 
 /**
@@ -16,8 +15,8 @@ import { Chapter, OtherSongInfo } from "../types";
 export class Song {
   source: string;
   info?: ytdl.videoInfo;
-  member?: Discord.GuildMember;
-  user?: Discord.User;
+  member?: GuildMember;
+  user?: User;
   id!: string;
   name!: string;
   isLive!: boolean;
@@ -49,7 +48,7 @@ export class Song {
    */
   constructor(
     info: ytdl.videoInfo | SearchResult | OtherSongInfo | ytdl.relatedVideo,
-    member?: Discord.GuildMember,
+    member?: GuildMember,
     src = "youtube",
   ) {
     if (typeof src !== "string") throw new TypeError("Source must be a string");
@@ -64,6 +63,7 @@ export class Song {
   }
 
   _patchYouTube(i: ytdl.videoInfo | SearchResult) {
+    // FIXME
     const info = i as any;
     if ((info as any).full === true) {
       /**
@@ -207,7 +207,7 @@ export class Song {
    * @private
    * @returns {Song}
    */
-  _patchPlaylist(playlist: Playlist, member?: Discord.GuildMember): Song {
+  _patchPlaylist(playlist: Playlist, member?: GuildMember): Song {
     if (!(playlist instanceof Playlist)) throw new TypeError("playlist is not a valid Playlist");
     /**
      * The playlist added this song
@@ -222,7 +222,7 @@ export class Song {
    * @private
    * @returns {Song}
    */
-  _patchMember(member?: Discord.GuildMember): Song {
+  _patchMember(member?: GuildMember): Song {
     if (member) {
       /**
        * User requested

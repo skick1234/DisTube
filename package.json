@@ -9,6 +9,7 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "build": "tsc",
+    "build:check": "tsc --noEmit --incremental false",
     "publish:alpha": "npm publish --tag alpha"
   },
   "repository": {
@@ -38,7 +39,7 @@
   },
   "homepage": "https://distube.js.org/",
   "dependencies": {
-    "@distube/youtube-dl": "^2.1.1",
+    "@distube/youtube-dl": "^2.2.2",
     "@distube/ytpl": "^1.0.12",
     "@distube/ytsr": "^1.1.2",
     "ytdl-core": "^4.8.2"
@@ -52,13 +53,13 @@
     "@typescript-eslint/parser": "^4.26.1",
     "discord.js": "github:discordjs/discord.js",
     "eslint": "^7.28.0",
-    "eslint-plugin-jsdoc": "^35.1.3",
+    "eslint-plugin-jsdoc": "^35.2.0",
     "sodium": "github:skick1234/node-sodium",
     "typescript": "^4.3.2"
   },
   "peerDependencies": {
     "@discordjs/opus": "*",
-    "@discordjs/voice": "<1.0.0",
+    "@discordjs/voice": "<1",
     "discord.js": "12||13||^13.0.0-0"
   },
   "engines": {

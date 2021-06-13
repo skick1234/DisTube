@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import Plugin from "./Plugin";
+import { Plugin } from ".";
 import Discord from "discord.js";
 
 /**
@@ -22,10 +22,10 @@ export class CustomPlugin extends Plugin {
    * @returns {Promise<void>}
    */
   async play(
-    voiceChannel: Discord.VoiceChannel | Discord.StageChannel,
+    voiceChannel: VoiceChannel | StageChannel,
     url: string,
-    member: Discord.GuildMember,
-    textChannel: Discord.TextChannel | null,
+    member: GuildMember,
+    textChannel: TextChannel | null,
     skip: boolean,
     unshift: boolean,
   ): Promise<void> {

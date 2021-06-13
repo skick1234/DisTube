@@ -1,8 +1,7 @@
-import { formatDuration } from "../Util";
 import Song from "./Song";
-import Discord from "discord.js";
+import { GuildMember, User } from "discord.js";
 import ytpl from "@distube/ytpl";
-import { PlaylistInfo } from "../types";
+import { PlaylistInfo, formatDuration } from "..";
 
 /**
  * Class representing a playlist.
@@ -10,8 +9,8 @@ import { PlaylistInfo } from "../types";
  */
 export class Playlist implements PlaylistInfo {
   source: string;
-  member?: Discord.GuildMember;
-  user?: Discord.User;
+  member?: GuildMember;
+  user?: User;
   songs: Song[];
   name: string;
   url?: string;
@@ -23,9 +22,10 @@ export class Playlist implements PlaylistInfo {
    * @param {Discord.GuildMember} member Requested user
    * @param {Object} properties Custom properties
    */
-  constructor(playlist: Song[] | ytpl.result | PlaylistInfo, member?: Discord.GuildMember, properties: any = {}) {
+  constructor(playlist: Song[] | ytpl.result | PlaylistInfo, member?: GuildMember, properties: any = {}) {
     if (typeof playlist !== "object") throw new TypeError("playlist must be an array of Song or an object.");
     if (typeof properties !== "object") throw new TypeError("Custom properties must be an object.");
+    // FIXME
     const info = playlist as any;
     /**
      * The source of the playlist

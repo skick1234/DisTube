@@ -1,6 +1,6 @@
 import ytdl from "ytdl-core";
 import { FFmpeg, opus } from "prism-media";
-import { pipeline, Readable } from "stream";
+import { Readable, pipeline } from "stream";
 
 interface StreamOptions extends ytdl.downloadOptions {
   /**

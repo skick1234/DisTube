@@ -1,4 +1,4 @@
-import { DisTubeOptions, Filters } from "./types";
+import { DisTubeOptions, Filters } from ".";
 
 /**
  * Default DisTube audio filters.

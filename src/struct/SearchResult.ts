@@ -1,5 +1,5 @@
-import { Video, Playlist } from "@distube/ytsr";
-import { toSecond, formatDuration } from "../Util";
+import { Playlist, Video } from "@distube/ytsr";
+import { formatDuration, toSecond } from "..";
 
 /** Class representing a search result. */
 export class SearchResult {

@@ -1,6 +1,6 @@
 import ytdl from "ytdl-core";
-import { CustomPlugin, ExtractorPlugin } from "../DisTube";
-import { Filters, DisTubeOptions } from "../types";
+import { CustomPlugin, DisTubeOptions, ExtractorPlugin, Filters } from "..";
+
 export class Options {
   /** DisTube plugins.*/
   plugins: (CustomPlugin | ExtractorPlugin)[];

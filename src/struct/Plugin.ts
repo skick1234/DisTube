@@ -1,7 +1,7 @@
 /* eslint-disable require-await, @typescript-eslint/no-unused-vars */
 import DisTube from "../DisTube";
-import Song from "./Song";
-import DisTubeHandler from "../core/DisTubeHandler";
+import { Song } from ".";
+import { DisTubeHandler } from "../core";
 
 /**
  * DisTube Plugin
