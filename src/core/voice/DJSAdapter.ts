@@ -9,12 +9,10 @@ function trackClient(client: Client) {
   if (trackedClients.has(client)) return;
   trackedClients.add(client);
   client.ws.on(Constants.WSEvents.VOICE_SERVER_UPDATE, (payload: GatewayVoiceServerUpdateDispatchData) => {
-    console.log("VOICE_SERVER_UPDATE", payload);
     adapters.get(payload.guild_id)?.onVoiceServerUpdate(payload);
   });
   client.ws.on(Constants.WSEvents.VOICE_STATE_UPDATE, (payload: GatewayVoiceStateUpdateDispatchData) => {
     if (payload.guild_id && payload.session_id && payload.user_id === client.user?.id) {
-      console.log("VOICE_STATE_UPDATE", payload);
       adapters.get(payload.guild_id)?.onVoiceStateUpdate(payload);
     }
   });

@@ -74,7 +74,6 @@ export class QueueManager {
       queue.delete();
       this.distube.emit("error", error);
     }).on("error", error => {
-      console.log("AudioPlayerError");
       this._handlePlayingError(queue, error);
     }).on("finish", () => {
       this._handleSongFinish(queue);
