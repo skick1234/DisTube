@@ -5,14 +5,20 @@ import { Collection, StageChannel, VoiceChannel } from "discord.js";
  * Manages voice connections for {@link DisTube}
  */
 export class DisTubeVoiceManager {
-  voices: Collection<string, DisTubeVoice>;
+  collection: Collection<string, DisTubeVoice>;
   constructor() {
     /**
      * A collection of {@link DisTubeVoice}
      * @type {Discord.Collection<string, DisTubeVoice>}
      */
-    this.voices = new Collection();
+    this.collection = new Collection();
   }
+  /**
+   * Create a {@link DisTubeVoice}
+   * @param {Discord.VoiceChannel|Discord.StageChannel} channel A voice channel to join
+   * @returns {DisTubeVoice}
+   * @private
+   */
   create(channel: VoiceChannel | StageChannel): DisTubeVoice {
     const existing = this.get(channel.guild.id);
     if (existing) return existing;
@@ -32,11 +38,11 @@ export class DisTubeVoiceManager {
     return new DisTubeVoice(this, channel).join();
   }
   /**
-   * Leave the voice channel in the guild
+   * Leave the connected voice channel in a guild
    * @param {string} id Guild ID
    */
   leave(id: string) {
-    this.voices.get(id)?.leave();
+    this.collection.get(id)?.leave();
   }
   /**
    * Get a {@link DisTubeVoice} from a guild ID
@@ -44,7 +50,7 @@ export class DisTubeVoiceManager {
    * @returns {DisTubeVoice?}
    */
   get(id: string): DisTubeVoice | undefined {
-    return this.voices.get(id);
+    return this.collection.get(id);
   }
 }
 

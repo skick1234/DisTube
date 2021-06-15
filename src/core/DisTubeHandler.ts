@@ -2,8 +2,8 @@ import ytdl from "ytdl-core";
 import ytpl from "@distube/ytpl";
 import DisTube from "../DisTube";
 import { Readable } from "stream";
-import { DisTubeBase } from ".";
-import { DisTubeStream, OtherSongInfo, Playlist, Queue, SearchResult, Song, isURL } from "..";
+import { DisTubeBase, DisTubeStream } from ".";
+import { OtherSongInfo, Playlist, Queue, SearchResult, Song, isURL } from "..";
 import { GuildMember, Message, StageChannel, TextChannel, VoiceChannel, VoiceState } from "discord.js";
 
 /**

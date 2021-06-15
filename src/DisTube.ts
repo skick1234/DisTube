@@ -4,9 +4,8 @@ import { checkIntents, isURL } from "./Util";
 import { EventEmitter } from "events";
 import { Client, GuildMember, Message, StageChannel, TextChannel, VoiceChannel } from "discord.js";
 import {
-  CustomPlugin, DefaultFilters, DisTubeError, DisTubeHandler, DisTubeOptions,
-  DisTubeVoiceManager, ExtractorPlugin, Filters, HTTPPlugin, HTTPSPlugin, Options,
-  Playlist, Queue, QueueManager, QueueResolvable, SearchResult, Song, YouTubeDLPlugin,
+  CustomPlugin, DefaultFilters, DisTubeError, DisTubeHandler, DisTubeOptions, DisTubeVoiceManager, ExtractorPlugin, Filters,
+  HTTPPlugin, HTTPSPlugin, Options, Playlist, Queue, QueueManager, QueueResolvable, SearchResult, Song, YouTubeDLPlugin,
 } from ".";
 
 declare interface DisTube {

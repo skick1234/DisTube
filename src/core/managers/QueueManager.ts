@@ -1,25 +1,16 @@
 import DisTube from "../../DisTube";
-import { DisTubeVoiceManager, Options } from "..";
-import { DisTubeError, DisTubeHandler, Queue, QueueResolvable, Song } from "../..";
-import { Client, Collection, StageChannel, TextChannel, VoiceChannel } from "discord.js";
+import DisTubeBase from "../DisTubeBase";
+import { DisTubeError, Queue, QueueResolvable, Song } from "../..";
+import { Collection, StageChannel, TextChannel, VoiceChannel } from "discord.js";
 
 /**
  * Queue manager
  */
-export class QueueManager {
-  client: Client;
-  distube: DisTube;
-  options: Options;
-  handler: DisTubeHandler;
-  queues: Collection<string, Queue>;
-  voices: DisTubeVoiceManager;
+export class QueueManager extends DisTubeBase {
+  collection: Collection<string, Queue>;
   constructor(distube: DisTube) {
-    this.distube = distube;
-    this.options = this.distube.options;
-    this.client = this.distube.client;
-    this.voices = this.distube.voices;
-    this.handler = this.distube.handler;
-    this.queues = new Collection();
+    super(distube);
+    this.collection = new Collection();
   }
   emit(eventName: string, ...args: any[]): boolean {
     return this.distube.emit(eventName, ...args);
@@ -41,7 +32,7 @@ export class QueueManager {
    * @returns {Promise<Queue>}
    */
   async create(channel: VoiceChannel | StageChannel, song: Song[] | Song, textChannel?: TextChannel): Promise<Queue> {
-    if (this.queues.has(channel.guild.id)) throw new DisTubeError("This guild has a Queue already", "QueueExist");
+    if (this.collection.has(channel.guild.id)) throw new DisTubeError("This guild has a Queue already", "QueueExist");
     if (!channel.joinable) {
       if (channel.full) throw new DisTubeError("The voice channel is full.", "JoinError");
       else throw new DisTubeError("You do not have permission to join this voice channel.", "JoinError");
@@ -50,12 +41,12 @@ export class QueueManager {
     const queue = new Queue(this.distube, voice, song, textChannel);
     this._voiceEventHandler(queue);
     await voice.join();
-    this.queues.set(queue.id, queue);
+    this.collection.set(queue.id, queue);
     return queue;
   }
   delete(queue: QueueResolvable) {
     const q = this.get(queue);
-    if (q) this.queues.delete(q.id);
+    if (q) this.collection.delete(q.id);
   }
   get(queue: QueueResolvable): Queue | undefined {
     if (queue instanceof Queue) return queue;
@@ -67,7 +58,7 @@ export class QueueManager {
       !guildID.match(/^\d+$/) ||
       guildID.length <= 15
     ) throw TypeError("The parameter must be a QueueResolvable!");
-    return this.queues.get(guildID);
+    return this.collection.get(guildID);
   }
   private _voiceEventHandler(queue: Queue) {
     queue.voice.on("disconnect", error => {

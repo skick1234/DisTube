@@ -95,16 +95,15 @@ export class DisTubeVoice extends EventEmitter {
       if (this.connection.state.status !== VoiceConnectionStatus.Destroyed) this.connection.destroy();
       throw new DisTubeError("DisTube cannot connect to the voice channel after 30 seconds.");
     }
-    this.voiceManager.voices.set(this.id, this);
+    this.voiceManager.collection.set(this.id, this);
     return this;
   }
   /**
    * Leave the voice channel of this connection
    */
   leave() {
-    this.audioPlayer.stop();
-    this.connection.destroy();
-    this.voiceManager.voices.delete(this.id);
+    if (this.connection.state.status !== VoiceConnectionStatus.Destroyed) this.connection.destroy();
+    this.voiceManager.collection.delete(this.id);
   }
   /**
    * Stop the playing stream

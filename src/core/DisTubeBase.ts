@@ -1,14 +1,11 @@
 import DisTube from "../DisTube";
+import DisTubeHandler from "./DisTubeHandler";
 import { Client } from "discord.js";
 import { DisTubeVoiceManager, Options, QueueManager } from ".";
 
 /** @private */
 export class DisTubeBase {
   distube: DisTube;
-  options: Options;
-  client: Client;
-  voices: DisTubeVoiceManager;
-  queues: QueueManager;
   constructor(distube: DisTube) {
     /**
      * DisTube
@@ -16,30 +13,6 @@ export class DisTubeBase {
      * @private
      */
     this.distube = distube;
-    /**
-     * DisTube options
-     * @type {DisTubeOptions}
-     * @private
-     */
-    this.options = this.distube.options;
-    /**
-     * Discord.js client
-     * @type {Discord.Client}
-     * @private
-     */
-    this.client = this.distube.client;
-    /**
-     * The voice manager
-     * @type {DisTubeVoiceManager}
-     * @private
-     */
-    this.voices = this.distube.voices;
-    /**
-     * The queue manager
-     * @type {DisTubeVoiceManager}
-     * @private
-     */
-    this.queues = this.distube.queues;
   }
   /**
    * Emit the {@link DisTube} of this base
@@ -50,6 +23,51 @@ export class DisTubeBase {
    */
   emit(eventName: string, ...args: any[]): boolean {
     return this.distube.emit(eventName, ...args);
+  }
+  /**
+   * The queue manager
+   * @type {QueueManager}
+   * @readonly
+   * @private
+   */
+  get queues(): QueueManager {
+    return this.distube.queues;
+  }
+  /**
+   * The voice manager
+   * @type {DisTubeVoiceManager}
+   * @readonly
+   * @private
+   */
+  get voices(): DisTubeVoiceManager {
+    return this.distube.voices;
+  }
+  /**
+   * Discord.js client
+   * @type {Discord.Client}
+   * @readonly
+   * @private
+   */
+  get client(): Client {
+    return this.distube.client;
+  }
+  /**
+   * DisTube options
+   * @type {DisTubeOptions}
+   * @readonly
+   * @private
+   */
+  get options(): Options {
+    return this.distube.options;
+  }
+  /**
+   * DisTube handler
+   * @type {DisTubeHandler}
+   * @readonly
+   * @private
+   */
+  get handler(): DisTubeHandler {
+    return this.distube.handler;
   }
 }
 

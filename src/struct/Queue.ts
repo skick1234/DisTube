@@ -80,11 +80,6 @@ export class Queue extends DisTubeBase {
    */
   textChannel?: TextChannel;
   /**
-   * @type {DisTubeHandler}
-   * @private
-   */
-  handler: DisTubeHandler;
-  /**
    * Timeout for checking empty channel
    * @type {NodeJS.Timeout?}
    * @private
@@ -186,11 +181,6 @@ export class Queue extends DisTubeBase {
      */
     this.textChannel = textChannel;
     /**
-     * @type {DisTubeHandler}
-     * @private
-     */
-    this.handler = this.distube.handler;
-    /**
      * Timeout for checking empty channel
      * @type {*}
      * @private
@@ -286,9 +276,7 @@ export class Queue extends DisTubeBase {
    * @returns {Queue} The guild queue
    */
   setVolume(percent: number): Queue {
-    if (typeof percent !== "number") throw new Error("Volume percent must be a number.");
     this.volume = percent;
-    if (this.voice) this.voice.volume = this.volume;
     return this;
   }
 
@@ -423,6 +411,14 @@ export class Queue extends DisTubeBase {
     this.previousSongs = [];
     this.distube.queues.delete(this.id);
     this.emit("deleteQueue", this);
+  }
+  /**
+   * Toggle autoplay mode
+   * @returns {boolean} Autoplay mode state
+   */
+  toggleAutoplay(): boolean {
+    this.autoplay = !this.autoplay;
+    return this.autoplay;
   }
 }
 
