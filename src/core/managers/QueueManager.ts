@@ -49,8 +49,8 @@ export class QueueManager {
     const voice = this.distube.voices.create(channel);
     const queue = new Queue(this.distube, voice, song, textChannel);
     this._voiceEventHandler(queue);
-    this.queues.set(queue.id, queue);
     await voice.join();
+    this.queues.set(queue.id, queue);
     return queue;
   }
   delete(queue: QueueResolvable) {

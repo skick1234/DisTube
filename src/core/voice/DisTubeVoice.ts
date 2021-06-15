@@ -3,7 +3,7 @@ import { EventEmitter } from "events";
 import { DisTubeVoiceManager } from "./DisTubeVoiceManager";
 import { DisTubeError, createDiscordJSAdapter } from "../..";
 import { Snowflake, StageChannel, VoiceChannel } from "discord.js";
-import { AudioPlayer, AudioPlayerStatus, AudioResource, VoiceConnection, VoiceConnectionState, VoiceConnectionStatus, createAudioPlayer, createAudioResource, entersState, joinVoiceChannel } from "@discordjs/voice";
+import { AudioPlayer, AudioPlayerStatus, AudioResource, VoiceConnection, VoiceConnectionState, VoiceConnectionStatus, createAudioPlayer, createAudioResource, entersState, joinVoiceChannel, VoiceConnectionDisconnectReason } from "@discordjs/voice";
 
 export declare interface DisTubeVoice {
   id: Snowflake;
@@ -30,17 +30,25 @@ export class DisTubeVoice extends EventEmitter {
         delete this.audioResource;
         this.emit("finish");
       }
-    }).on("error", error => this.emit("error", error));
+    }).on("error", error => { this.emit("error", error) });
     this.channel = channel;
     this.connection.on("stateChange", (_, newState: VoiceConnectionState) => {
       if (newState.status === VoiceConnectionStatus.Disconnected) {
-        entersState(this.connection, VoiceConnectionStatus.Ready, 30e3).catch(() => {
-          if (this.connection.state.status !== VoiceConnectionStatus.Destroyed) {
-            this.emit("disconnect", new DisTubeError("Cannot reconnect to the voice channel in 30s.", "ConnectionError"));
-            this.leave();
-          }
-        });
-      }
+        if (
+          newState.reason === VoiceConnectionDisconnectReason.WebSocketClose &&
+          newState.closeCode === 4014
+        ) {
+          entersState(this.connection, VoiceConnectionStatus.Connecting, 15e3)
+            .catch(() => this.leave());
+        } else if (this.connection.reconnectAttempts < 3) {
+          setTimeout(() => {
+            this.connection.reconnect();
+          }, (this.connection.reconnectAttempts + 1) * 5e3).unref();
+        } else {
+          this.emit("disconnect", new DisTubeError("Cannot reconnect to the voice channel in 15s.", "ConnectionError"));
+          this.leave();
+        }
+      } else if (newState.status === VoiceConnectionStatus.Destroyed) this.stop();
     }).on("error", error => {
       if (this.connection.state.status === VoiceConnectionStatus.Destroyed) return;
       if (this.connection.state.status === VoiceConnectionStatus.Disconnected) {
@@ -84,6 +92,7 @@ export class DisTubeVoice extends EventEmitter {
     try {
       await entersState(this.connection, VoiceConnectionStatus.Ready, 30e3);
     } catch {
+      if (this.connection.state.status !== VoiceConnectionStatus.Destroyed) this.connection.destroy();
       throw new DisTubeError("DisTube cannot connect to the voice channel after 30 seconds.");
     }
     this.voiceManager.voices.set(this.id, this);
