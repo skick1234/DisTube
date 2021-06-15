@@ -1,4 +1,6 @@
 import { URL } from "url";
+import { DisTubeError } from ".";
+import { BitFieldResolvable, Intents, IntentsString } from "discord.js";
 
 const formatInt = (int: number) => int < 10 ? `0${int}` : int;
 
@@ -65,4 +67,14 @@ export function isURL(string: string): boolean {
     ) return false;
   } catch { return false }
   return true;
+}
+/**
+ * Check if the Client has enough intents to using DisTube
+ * @param {BitFieldResolvable<IntentsString, number>} bitfield bitfield
+ */
+export function checkIntents(bitfield: BitFieldResolvable<IntentsString, number>): void {
+  const intents = new Intents(bitfield);
+  if (!intents.has("GUILD_VOICE_STATES")) {
+    throw new DisTubeError("GUILD_VOICE_STATES intent must be provided for the Client", "MissingIntents");
+  }
 }

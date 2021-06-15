@@ -1,6 +1,6 @@
 import ytpl from "@distube/ytpl";
 import ytsr from "@distube/ytsr";
-import { isURL } from "./Util";
+import { checkIntents, isURL } from "./Util";
 import { EventEmitter } from "events";
 import { Client, GuildMember, Message, StageChannel, TextChannel, VoiceChannel } from "discord.js";
 import {
@@ -52,6 +52,7 @@ class DisTube extends EventEmitter {
      * @type {Discord.Client}
      */
     this.client = client;
+    checkIntents(client.options.intents);
     /**
      * Voice connections manager
      * @type {DisTubeVoiceManager}
