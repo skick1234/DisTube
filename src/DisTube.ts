@@ -632,7 +632,7 @@ class DisTube extends EventEmitter {
     else {
       console.error(error);
       console.warn("Unhandled 'error' event. See: https://distube.js.org/#/docs/DisTube/alpha/class/DisTube?scrollTo=e-error and https://nodejs.org/api/events.html#events_error_events");
-    };
+    }
   }
 }
 

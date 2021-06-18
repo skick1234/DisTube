@@ -100,6 +100,7 @@ export class Queue extends DisTubeBase {
     super(distube);
     /**
      * The client user as a `GuildMember` of this queue's guild
+     * @type {Discord.GuildMember}
      */
     this.clientMember = voice.channel.guild?.me as GuildMember;
     /**
