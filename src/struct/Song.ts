@@ -14,7 +14,7 @@ import { Chapter, OtherSongInfo, formatDuration, parseNumber, toSecond } from ".
  */
 export class Song {
   source: string;
-  info?: ytdl.videoInfo;
+  formats?: ytdl.videoFormat[];
   member?: GuildMember;
   user?: User;
   id!: string;
@@ -67,11 +67,11 @@ export class Song {
     const info = i as any;
     if ((info as any).full === true) {
       /**
-       * `ytdl-core` raw info (If the song is playing)
-       * @type {ytdl.videoInfo?}
+       * Stream formats (Available if the song is playing)
+       * @type {ytdl.videoFormat[]?}
        * @private
        */
-      this.info = info;
+      this.formats = info.formats;
       // eslint-disable-next-line @typescript-eslint/no-var-requires
       const err = require("ytdl-core/lib/utils").playError(info.player_response, ["UNPLAYABLE", "LIVE_STREAM_OFFLINE", "LOGIN_REQUIRED"]);
       if (err) throw err;
@@ -109,13 +109,10 @@ export class Song {
      */
     this.url = `https://www.youtube.com/watch?v=${this.id}`;
     /**
-     * Stream / Download URL.
+     * Stream / Download URL (Available if the song is playing)
      * @type {string?}
      */
-    this.streamURL = this.info?.formats?.length ? ytdl.chooseFormat(this.info.formats, {
-      filter: this.isLive ? "audioandvideo" : "audioonly",
-      quality: "highestaudio",
-    }).url : details.streamURL;
+    this.streamURL = undefined;
     /**
      * Song thumbnail.
      * @type {string?}
@@ -126,7 +123,7 @@ export class Song {
      * Related songs
      * @type {Song[]}
      */
-    this.related = this.info?.related_videos.map(v => new Song(v)) || details.related || [];
+    this.related = info?.related_videos?.map((v: any) => new Song(v)) || details.related || [];
     /**
      * Song views count
      * @type {number}

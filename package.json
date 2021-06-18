@@ -46,7 +46,7 @@
   },
   "devDependencies": {
     "@discordjs/opus": "^0.5.0",
-    "@discordjs/voice": "^0.4.0",
+    "@discordjs/voice": "^0.5.0",
     "@distube/docgen": "github:distubejs/docgen",
     "@types/node": "^15.12.2",
     "@typescript-eslint/eslint-plugin": "^4.27.0",
@@ -59,7 +59,7 @@
   },
   "peerDependencies": {
     "@discordjs/opus": "*",
-    "@discordjs/voice": "^0.4.0 <1",
+    "@discordjs/voice": "^0.5.0",
     "discord.js": "12||13||^13.0.0-0"
   },
   "engines": {

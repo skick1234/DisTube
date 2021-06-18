@@ -47,7 +47,7 @@ class DisTube extends EventEmitter {
     super();
     if (!client || typeof client.user === "undefined") throw new TypeError("Invalid Client");
     /**
-     * JS client
+     * Discord.JS client
      * @type {Discord.Client}
      */
     this.client = client;
@@ -56,7 +56,7 @@ class DisTube extends EventEmitter {
      * Voice connections manager
      * @type {DisTubeVoiceManager}
      */
-    this.voices = new DisTubeVoiceManager();
+    this.voices = new DisTubeVoiceManager(this);
     /**
      * DisTube options
      * @type {DisTubeOptions}
@@ -340,7 +340,7 @@ class DisTube extends EventEmitter {
     }
     const queue = await this.queues.create(voice, song, textChannel);
     this.emit("initQueue", queue);
-    const err = await this.handler.playSong(queue);
+    const err = await this.queues.playSong(queue);
     return err ? err : queue;
   }
 

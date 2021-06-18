@@ -1,5 +1,5 @@
 import DisTube from "../DisTube";
-import { DisTubeBase, DisTubeHandler, DisTubeVoice } from "../core";
+import { DisTubeBase, DisTubeVoice } from "../core";
 import { SearchResult, Song, formatDuration } from "..";
 import { GuildMember, Snowflake, TextChannel } from "discord.js";
 
@@ -86,11 +86,11 @@ export class Queue extends DisTubeBase {
    */
   emptyTimeout?: NodeJS.Timeout;
   /**
-   * Client's member of this queue's guild
+   * The client user as a `GuildMember` of this queue's guild
    */
-  private clientMember: GuildMember;
+  clientMember: GuildMember;
   /**
-   * Create a queue
+   * Create a queue for the guild
    * @param {DisTube} distube DisTube
    * @param {DisTubeVoice} voice Voice connection
    * @param {Song|Song[]} song First song(s)
@@ -98,6 +98,9 @@ export class Queue extends DisTubeBase {
    */
   constructor(distube: DisTube, voice: DisTubeVoice, song: Song | Song[], textChannel?: TextChannel) {
     super(distube);
+    /**
+     * The client user as a `GuildMember` of this queue's guild
+     */
     this.clientMember = voice.channel.guild?.me as GuildMember;
     /**
      * Voice connection of this queue.
@@ -244,8 +247,8 @@ export class Queue extends DisTubeBase {
       else this.songs.push(song as Song);
     } else if (isArray) this.songs.splice(position, 0, ...song as Song[]);
     else this.songs.splice(position, 0, song as Song);
-    if (isArray) (song as Song[]).map(s => delete s.info);
-    else delete (song as Song).info;
+    if (isArray) (song as Song[]).map(s => delete s.formats);
+    else delete (song as Song).formats;
     return this;
   }
   /**
@@ -334,7 +337,7 @@ export class Queue extends DisTubeBase {
     if (num > 0) {
       this.songs = this.songs.splice(num - 1);
       this.next = true;
-    } else if (!this.distube.options.savePreviousSongs) throw new RangeError("InvalidSong");
+    } else if (!this.options.savePreviousSongs) throw new RangeError("InvalidSong");
     else {
       this.prev = true;
       if (num !== -1) this.songs.unshift(...this.previousSongs.splice(num + 1));
@@ -369,7 +372,7 @@ export class Queue extends DisTubeBase {
     else if (this.filters.includes(filter)) this.filters.splice(this.filters.indexOf(filter), 1);
     else this.filters.push(filter);
     this.beginTime = this.currentTime;
-    this.handler.playSong(this);
+    this.queues.playSong(this);
     return this.filters;
   }
   /**
@@ -379,7 +382,7 @@ export class Queue extends DisTubeBase {
    */
   seek(time: number): Queue {
     this.beginTime = time;
-    this.handler.playSong(this);
+    this.queues.playSong(this);
     return this;
   }
   /**
@@ -409,7 +412,7 @@ export class Queue extends DisTubeBase {
   delete() {
     this.songs = [];
     this.previousSongs = [];
-    this.distube.queues.delete(this.id);
+    this.queues.delete(this.id);
     this.emit("deleteQueue", this);
   }
   /**

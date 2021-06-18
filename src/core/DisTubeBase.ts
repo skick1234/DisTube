@@ -1,6 +1,6 @@
 import DisTube from "../DisTube";
 import DisTubeHandler from "./DisTubeHandler";
-import { Client } from "discord.js";
+import { Client, TextChannel } from "discord.js";
 import { DisTubeVoiceManager, Options, QueueManager } from ".";
 
 /** @private */
@@ -23,6 +23,15 @@ export class DisTubeBase {
    */
   emit(eventName: string, ...args: any[]): boolean {
     return this.distube.emit(eventName, ...args);
+  }
+  /**
+   * Emit error event
+   * @param {Error} error error
+   * @param {Discord.TextChannel?} channel Text channel where the error is encountered.
+   * @private
+   */
+  emitError(error: Error, channel?: TextChannel) {
+    this.distube.emitError(error, channel);
   }
   /**
    * The queue manager

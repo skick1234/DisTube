@@ -1,69 +1,57 @@
-import DisTube from "../../DisTube";
-import DisTubeBase from "../DisTubeBase";
+import { BaseManager } from ".";
 import { DisTubeError, Queue, QueueResolvable, Song } from "../..";
-import { Collection, StageChannel, TextChannel, VoiceChannel } from "discord.js";
+import { StageChannel, TextChannel, VoiceChannel } from "discord.js";
 
 /**
  * Queue manager
  */
-export class QueueManager extends DisTubeBase {
-  collection: Collection<string, Queue>;
-  constructor(distube: DisTube) {
-    super(distube);
-    this.collection = new Collection();
-  }
-  emit(eventName: string, ...args: any[]): boolean {
-    return this.distube.emit(eventName, ...args);
-  }
-  /**
-   * Emit error event
-   * @param {Error} error error
-   * @param {Discord.TextChannel?} channel Text channel where the error is encountered.
-   * @private
-   */
-  emitError(error: Error, channel?: TextChannel) {
-    this.distube.emitError(error, channel);
-  }
+export class QueueManager extends BaseManager<Queue, QueueResolvable> {
   /**
    * Create a {@link Queue}
+   * @private
    * @param {Discord.VoiceChannel|Discord.StageChannel} channel A voice channel
    * @param {Song|Song[]} song First song
    * @param {Discord.TextChannel} textChannel Default text channel
    * @returns {Promise<Queue>}
    */
   async create(channel: VoiceChannel | StageChannel, song: Song[] | Song, textChannel?: TextChannel): Promise<Queue> {
-    if (this.collection.has(channel.guild.id)) throw new DisTubeError("This guild has a Queue already", "QueueExist");
+    if (this.has(channel.guild.id)) throw new DisTubeError("This guild has a Queue already", "QueueExist");
     if (!channel.joinable) {
       if (channel.full) throw new DisTubeError("The voice channel is full.", "JoinError");
       else throw new DisTubeError("You do not have permission to join this voice channel.", "JoinError");
     }
-    const voice = this.distube.voices.create(channel);
+    const voice = this.voices.create(channel);
     const queue = new Queue(this.distube, voice, song, textChannel);
     this._voiceEventHandler(queue);
     await voice.join();
-    this.collection.set(queue.id, queue);
+    this.add(queue.id, queue);
     return queue;
   }
-  delete(queue: QueueResolvable) {
-    const q = this.get(queue);
-    if (q) this.collection.delete(q.id);
-  }
-  get(queue: QueueResolvable): Queue | undefined {
-    if (queue instanceof Queue) return queue;
-    let guildID: string | undefined;
-    if (typeof queue === "string") guildID = queue;
-    else guildID = queue?.guild?.id;
-    if (
-      typeof guildID !== "string" ||
-      !guildID.match(/^\d+$/) ||
-      guildID.length <= 15
-    ) throw TypeError("The parameter must be a QueueResolvable!");
-    return this.collection.get(guildID);
-  }
+  /**
+   * Get a Queue from a QueueManager with a QueueResolvable.
+   * @method get
+   * @memberof QueueManager
+   * @instance
+   * @param {QueueResolvable} queue The queue resolvable to resolve
+   * @returns {Queue?}
+   */
+  /**
+   * Get a Queue from a QueueManager with a QueueResolvable.
+   * @private
+   * @method delete
+   * @memberof QueueManager
+   * @instance
+   * @param {QueueResolvable} queue The queue resolvable to resolve
+   */
+  /**
+   * Listen to DisTubeVoice events and handle the Queue
+   * @private
+   * @param {Queue} queue Queue
+   */
   private _voiceEventHandler(queue: Queue) {
     queue.voice.on("disconnect", error => {
       queue.delete();
-      this.distube.emit("error", error);
+      this.emit("error", error);
     }).on("error", error => {
       this._handlePlayingError(queue, error);
     }).on("finish", () => {
@@ -76,7 +64,7 @@ export class QueueManager extends DisTubeBase {
    * @param {Queue} queue queue
    * @returns {Promise<void>}
    */
-  async _handleSongFinish(queue: Queue): Promise<void> {
+  private async _handleSongFinish(queue: Queue): Promise<void> {
     this.emit("finishSong", queue, queue.songs[0]);
     if (queue.stopped) return;
     if (queue.repeatMode === 2 && !queue.prev) queue.songs.push(queue.songs[0]);
@@ -96,14 +84,14 @@ export class QueueManager extends DisTubeBase {
     const emitPlaySong = this._emitPlaySong(queue);
     if (!queue.prev && (queue.repeatMode !== 1 || queue.next)) {
       const prev = queue.songs.shift() as Song;
-      delete prev.info;
+      delete prev.formats;
       delete prev.streamURL;
       if (this.options.savePreviousSongs) queue.previousSongs.push(prev);
       else queue.previousSongs.push({ id: prev.id } as Song);
     }
     queue.next = queue.prev = false;
     queue.beginTime = 0;
-    const err = await this.handler.playSong(queue);
+    const err = await this.playSong(queue);
     if (!err && emitPlaySong) this.emit("playSong", queue, queue.songs[0]);
   }
   /**
@@ -112,7 +100,7 @@ export class QueueManager extends DisTubeBase {
    * @param {Queue} queue queue
    * @param {Error} error error
    */
-  _handlePlayingError(queue: Queue, error: Error) {
+  private _handlePlayingError(queue: Queue, error: Error) {
     const song = queue.songs.shift() as Song;
     try {
       error.name = "PlayingError";
@@ -120,10 +108,51 @@ export class QueueManager extends DisTubeBase {
     } catch { }
     this.emitError(error, queue.textChannel);
     if (queue.songs.length > 0) {
-      this.handler.playSong(queue).then(e => {
+      this.playSong(queue).then(e => {
         if (!e) this.emit("playSong", queue, queue.songs[0]);
       });
     } else queue.stop();
+  }
+
+  /**
+   * Play a song on voice connection
+   * @private
+   * @param {Queue} queue The guild queue
+   * @returns {Promise<boolean>} error?
+   */
+  async playSong(queue: Queue): Promise<boolean> {
+    if (!queue) return true;
+    if (!queue.songs.length) {
+      queue.stop();
+      return true;
+    }
+    queue.playing = true;
+    queue.paused = false;
+    const song = queue.songs[0];
+    try {
+      const { url } = song;
+      if (song.source === "youtube" && !song.formats) song._patchYouTube(await this.handler.getYouTubeInfo(url));
+      if (song.source !== "youtube" && !song.streamURL) {
+        for (const plugin of [...this.distube.extractorPlugins, ...this.distube.customPlugins]) {
+          if (await plugin.validate(url)) {
+            const info = [
+              plugin.getStreamURL(url),
+              plugin.getRelatedSongs(url),
+            ] as const;
+            const result: any[] = await Promise.all(info);
+            song.streamURL = result[0];
+            song.related = result[1];
+            break;
+          }
+        }
+      }
+      const stream = this.handler.createStream(queue);
+      queue.voice.play(stream);
+      return false;
+    } catch (e) {
+      this._handlePlayingError(queue, e);
+      return true;
+    }
   }
   /**
    * Whether or not emit playSong event

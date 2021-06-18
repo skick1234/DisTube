@@ -1,7 +1,6 @@
 import ytdl from "ytdl-core";
 import ytpl from "@distube/ytpl";
 import DisTube from "../DisTube";
-import { Readable } from "stream";
 import { DisTubeBase, DisTubeStream } from ".";
 import { OtherSongInfo, Playlist, Queue, SearchResult, Song, isURL } from "..";
 import { GuildMember, Message, StageChannel, TextChannel, VoiceChannel, VoiceState } from "discord.js";
@@ -32,8 +31,8 @@ export class DisTubeHandler extends DisTubeBase {
   /**
    * Resolve a Song
    * @param {Discord.GuildMember} member Requested user
-   * @param {string|Song|SearchResult|Playlist} song YouTube url | Search string | {@link Song}
-   * @returns {Promise<Song|Playlist>} Resolved Song
+   * @param {string|Song|SearchResult|Playlist} song URL | Search string | {@link Song}
+   * @returns {Promise<Song|Playlist|null>} Resolved
    */
   async resolveSong(
     member: GuildMember,
@@ -62,7 +61,8 @@ export class DisTubeHandler extends DisTubeBase {
    * @param {string} [source="youtube"] Playlist source
    * @returns {Promise<Playlist>}
    */
-  async resolvePlaylist(member: GuildMember, playlist: Song[] | string, source = "youtube"): Promise<Playlist> {
+  async resolvePlaylist(member: GuildMember, playlist: Playlist | Song[] | string, source = "youtube"): Promise<Playlist> {
+    if (playlist instanceof Playlist) return playlist;
     let solvablePlaylist: Song[] | ytpl.result;
     if (typeof playlist === "string") {
       solvablePlaylist = await ytpl(playlist, { limit: Infinity });
@@ -70,8 +70,7 @@ export class DisTubeHandler extends DisTubeBase {
         .filter(v => !v.thumbnail.includes("no_thumbnail"))
         .map(v => new Song(v as OtherSongInfo, member));
     } else solvablePlaylist = playlist;
-    if (!(playlist instanceof Playlist)) return new Playlist(solvablePlaylist, member, { source });
-    return playlist;
+    return new Playlist(solvablePlaylist, member, { source });
   }
 
   /**
@@ -195,58 +194,18 @@ export class DisTubeHandler extends DisTubeBase {
   /**
    * Create a ytdl stream
    * @param {Queue} queue Queue
-   * @returns {Readable}
+   * @returns {DisTubeStream}
    */
-  createStream(queue: Queue): Readable {
-    const song = queue.songs[0];
+  createStream(queue: Queue): DisTubeStream {
+    const { duration, formats, isLive, source, streamURL } = queue.songs[0];
     const filterArgs: string[] = [];
     queue.filters.forEach((filter: string | number) => filterArgs.push(this.distube.filters[filter]));
-    const FFmpegArgs = queue.filters?.length ? ["-af", filterArgs.join(",")] : undefined;
-    const seek = song.duration ? queue.beginTime : undefined;
-    const streamOptions = { FFmpegArgs, seek };
+    const ffmpegArgs = queue.filters?.length ? ["-af", filterArgs.join(",")] : undefined;
+    const seek = duration ? queue.beginTime : undefined;
+    const streamOptions = { ffmpegArgs, seek, isLive };
     Object.assign(streamOptions, this.ytdlOptions);
-    if (song.source === "youtube") return DisTubeStream.YouTube(song.info as ytdl.videoInfo, streamOptions);
-    return DisTubeStream.DirectLink(song.streamURL as string, streamOptions);
-  }
-
-  /**
-   * Play a song on voice connection
-   * @param {Queue} queue The guild queue
-   * @returns {Promise<boolean>} error?
-   */
-  async playSong(queue: Queue): Promise<boolean> {
-    if (!queue) return true;
-    if (!queue.songs.length) {
-      queue.stop();
-      return true;
-    }
-    queue.playing = true;
-    queue.paused = false;
-    const song = queue.songs[0];
-    try {
-      const { url } = song;
-      if (song.source === "youtube" && !song.info) song._patchYouTube(await this.getYouTubeInfo(url));
-      if (song.source !== "youtube" && !song.streamURL) {
-        for (const plugin of [...this.distube.extractorPlugins, ...this.distube.customPlugins]) {
-          if (await plugin.validate(url)) {
-            const info = [
-              plugin.getStreamURL(url),
-              plugin.getRelatedSongs(url),
-            ] as const;
-            const result: any[] = await Promise.all(info);
-            song.streamURL = result[0];
-            song.related = result[1];
-            break;
-          }
-        }
-      }
-      const stream = this.createStream(queue);
-      queue.voice.play(stream);
-      return false;
-    } catch (e) {
-      this.queues._handlePlayingError(queue, e);
-      return true;
-    }
+    if (source === "youtube") return DisTubeStream.YouTube(formats, streamOptions);
+    return DisTubeStream.DirectLink(streamURL as string, streamOptions);
   }
 
   /**

@@ -1,18 +1,13 @@
 import { DisTubeVoice } from ".";
-import { Collection, StageChannel, VoiceChannel } from "discord.js";
+import { BaseManager } from "../managers";
+import { QueueResolvable } from "../../types";
+import { StageChannel, VoiceChannel } from "discord.js";
+import { VoiceConnectionStatus, getVoiceConnection } from "@discordjs/voice";
 
 /**
  * Manages voice connections for {@link DisTube}
  */
-export class DisTubeVoiceManager {
-  collection: Collection<string, DisTubeVoice>;
-  constructor() {
-    /**
-     * A collection of {@link DisTubeVoice}
-     * @type {Discord.Collection<string, DisTubeVoice>}
-     */
-    this.collection = new Collection();
-  }
+export class DisTubeVoiceManager extends BaseManager<DisTubeVoice, QueueResolvable> {
   /**
    * Create a {@link DisTubeVoice}
    * @param {Discord.VoiceChannel|Discord.StageChannel} channel A voice channel to join
@@ -35,22 +30,22 @@ export class DisTubeVoiceManager {
       await existing.join(channel);
       return existing;
     }
-    return new DisTubeVoice(this, channel).join();
+    return this.create(channel).join();
   }
   /**
    * Leave the connected voice channel in a guild
    * @param {string} id Guild ID
    */
   leave(id: string) {
-    this.collection.get(id)?.leave();
-  }
-  /**
-   * Get a {@link DisTubeVoice} from a guild ID
-   * @param {string} id Guild ID
-   * @returns {DisTubeVoice?}
-   */
-  get(id: string): DisTubeVoice | undefined {
-    return this.collection.get(id);
+    const voice = this.get(id);
+    if (voice) voice.leave();
+    else {
+      const connection = getVoiceConnection(id);
+      if (
+        connection &&
+        connection.state.status !== VoiceConnectionStatus.Destroyed
+      ) connection.destroy();
+    }
   }
 }
 
