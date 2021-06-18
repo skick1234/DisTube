@@ -618,6 +618,7 @@ class DisTube extends EventEmitter {
     return q.seek(time);
   }
 
+  /* eslint-disable no-console */
   /**
    * Emit error event
    * @param {Error} error error
@@ -634,6 +635,7 @@ class DisTube extends EventEmitter {
       console.warn("Unhandled 'error' event. See: https://distube.js.org/#/docs/DisTube/alpha/class/DisTube?scrollTo=e-error and https://nodejs.org/api/events.html#events_error_events");
     }
   }
+  /* eslint-enable no-console */
 }
 
 export { Options as DisTubeOptions, Song, Playlist, CustomPlugin, ExtractorPlugin, Queue, SearchResult, DisTube };

@@ -7,11 +7,12 @@ export class YouTubeDLPlugin extends ExtractorPlugin {
   constructor(updateYouTubeDL = true) {
     super();
     if (updateYouTubeDL) {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      /* eslint-disable no-console, @typescript-eslint/no-var-requires */
       require("@distube/youtube-dl/src/download")()
         .then((version: any) => console.log(`[DisTube] Updated youtube-dl to ${version}!`))
         .catch(console.error)
         .catch(() => console.log("[DisTube] Unable to update youtube-dl, using default version."));
+      /* eslint-enable no-console, @typescript-eslint/no-var-requires */
     }
   }
   // eslint-disable-next-line require-await

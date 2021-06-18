@@ -132,7 +132,6 @@ export class DisTubeVoice extends EventEmitter {
    * @param {DisTubeStream} stream Readable stream
    */
   play(stream: DisTubeStream) {
-    console.log(stream);
     this.audioResource = createAudioResource(stream.stream, {
       inputType: stream.type,
       inlineVolume: true,

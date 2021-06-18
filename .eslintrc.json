@@ -15,6 +15,7 @@
     "node": true
   },
   "rules": {
+    "no-console": "error",
     "sort-imports": ["warn", {
       "ignoreDeclarationSort": true
     }],
