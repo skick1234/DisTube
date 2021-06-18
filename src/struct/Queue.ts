@@ -361,17 +361,27 @@ export class Queue extends DisTubeBase {
     return this.repeatMode;
   }
   /**
-   * Enable or disable filter of the queue.
+   * Enable or disable filter(s) of the queue.
    * Available filters: {@link Filters}
-   * @param {string|false} filter A filter name, `false` to clear all the filters
+   * @param {string|string[]|false} filter A filter name, an array of filter name or `false` to clear all the filters
+   * @param {boolean} force Force enable the input filter(s) even if it's enabled
    * @returns {Array<string>} Enabled filters.
    * @throws {Error}
    */
-  setFilter(filter: string | false): Array<string> {
-    if (filter === false) this.filters = [];
+  setFilter(filter: string | string[] | false, force = false): Array<string> {
+    if (Array.isArray(filter)) {
+      filter = filter.filter(f => Object.prototype.hasOwnProperty.call(this.distube.filters, f));
+      if (!filter.length) throw new TypeError("There is no valid filter name in your param");
+      for (const f of filter) {
+        if (this.filters.includes(f)) {
+          if (!force) this.filters.splice(this.filters.indexOf(f), 1);
+        } else this.filters.push(f);
+      }
+    } else if (filter === false) this.filters = [];
     else if (!Object.prototype.hasOwnProperty.call(this.distube.filters, filter)) throw new TypeError(`${filter} is not a filter name.`);
-    else if (this.filters.includes(filter)) this.filters.splice(this.filters.indexOf(filter), 1);
-    else this.filters.push(filter);
+    else if (this.filters.includes(filter)) {
+      if (!force) this.filters.splice(this.filters.indexOf(filter), 1);
+    } else this.filters.push(filter);
     this.beginTime = this.currentTime;
     this.queues.playSong(this);
     return this.filters;
