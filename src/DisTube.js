@@ -668,7 +668,10 @@ class DisTube extends EventEmitter {
       console.error(error);
       console.warn("This is logged because <Queue>.textChannel is null");
     } else if (this.listeners("error").length) this.emit("error", channel, error);
-    else this.emit("error", error);
+    else {
+      console.error(error);
+      console.warn("Unhandled 'error' event. See: https://distube.js.org/#/docs/DisTube/alpha/class/DisTube?scrollTo=e-error and https://nodejs.org/api/events.html#events_error_events");
+    };
   }
 }
 
