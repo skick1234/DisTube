@@ -436,7 +436,7 @@ class DisTube extends EventEmitter {
   /**
    * Get the guild queue
    * @param {Discord.Snowflake|Discord.Message} message The guild ID or message from guild channel.
-   * @returns {Queue} The guild queue
+   * @returns {Queue?} The guild queue
    * @example
    * client.on('message', (message) => {
    *     if (!message.content.startsWith(config.prefix)) return;
