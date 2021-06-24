@@ -42,7 +42,7 @@
     "@distube/youtube-dl": "^2.2.2",
     "@distube/ytpl": "^1.0.12",
     "@distube/ytsr": "^1.1.2",
-    "ytdl-core": "^4.8.2"
+    "ytdl-core": "https://github.com/fent/node-ytdl-core.git"
   },
   "devDependencies": {
     "@discordjs/opus": "^0.5.0",
