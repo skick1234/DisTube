@@ -51,7 +51,7 @@ class DisTube extends EventEmitter {
      * @type {Discord.Client}
      */
     this.client = client;
-    checkIntents(client.options.intents);
+    checkIntents(client.options);
     /**
      * Voice connections manager
      * @type {DisTubeVoiceManager}
