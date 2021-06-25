@@ -162,6 +162,44 @@ export class DisTubeVoice extends EventEmitter {
   unpause() {
     this.audioPlayer.unpause();
   }
+  /**
+   * Whether the bot is self-deafened
+   * @returns {boolean}
+   */
+  get selfDeaf(): boolean {
+    return this.connection.joinConfig.selfDeaf;
+  }
+  /**
+   * Whether the bot is self-muted
+   * @returns {boolean}
+   */
+  get selfMute(): boolean {
+    return this.connection.joinConfig.selfMute;
+  }
+  /**
+   * Self-deafens/undeafens the bot.
+   * @param {boolean} selfDeaf Whether or not the bot should be self-deafened
+   * @returns {boolean} true if the voice state was successfully updated, otherwise false
+   */
+  setSelfDeaf(selfDeaf: boolean): boolean {
+    if (typeof selfDeaf !== "boolean") throw new TypeError("selfDeaf must be a boolean.");
+    return this.connection.rejoin({
+      ...this.connection.joinConfig,
+      selfDeaf,
+    });
+  }
+  /**
+   * Self-mutes/unmutes the bot.
+   * @param {boolean} selfMute Whether or not the bot should be self-muted
+   * @returns {boolean} true if the voice state was successfully updated, otherwise false
+   */
+  setSelfMute(selfMute: boolean): boolean {
+    if (typeof selfMute !== "boolean") throw new TypeError("selfMute must be a boolean.");
+    return this.connection.rejoin({
+      ...this.connection.joinConfig,
+      selfMute,
+    });
+  }
 }
 
 export default DisTubeVoice;
