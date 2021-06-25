@@ -175,14 +175,14 @@ export class DisTubeVoice extends EventEmitter {
   }
   /**
    * Whether the bot is self-deafened
-   * @returns {boolean}
+   * @type {boolean}
    */
   get selfDeaf(): boolean {
     return this.connection.joinConfig.selfDeaf;
   }
   /**
    * Whether the bot is self-muted
-   * @returns {boolean}
+   * @type {boolean}
    */
   get selfMute(): boolean {
     return this.connection.joinConfig.selfMute;
