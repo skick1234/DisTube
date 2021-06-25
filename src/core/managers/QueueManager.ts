@@ -22,8 +22,8 @@ export class QueueManager extends BaseManager<Queue, QueueResolvable> {
     }
     const voice = this.voices.create(channel);
     const queue = new Queue(this.distube, voice, song, textChannel);
-    this._voiceEventHandler(queue);
     await voice.join();
+    this._voiceEventHandler(queue);
     this.add(queue.id, queue);
     return queue;
   }
@@ -51,7 +51,8 @@ export class QueueManager extends BaseManager<Queue, QueueResolvable> {
   private _voiceEventHandler(queue: Queue) {
     queue.voice.on("disconnect", error => {
       queue.delete();
-      this.emit("error", error);
+      if (!error) this.emit("disconnect", queue);
+      else this.emitError(error, queue.textChannel);
     }).on("error", error => {
       this._handlePlayingError(queue, error);
     }).on("finish", () => {

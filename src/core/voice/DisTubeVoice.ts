@@ -12,7 +12,8 @@ export declare interface DisTubeVoice {
   connection: VoiceConnection;
   audioResource?: AudioResource;
   readyLock: boolean;
-  on(event: "disconnect" | "error", listener: (error: Error) => void): this;
+  on(event: "disconnect", listener: (error?: Error) => void): this;
+  on(event: "error", listener: (error: Error) => void): this;
   on(event: "finish", listener: () => void): this;
 }
 /**
@@ -24,6 +25,10 @@ export class DisTubeVoice extends EventEmitter {
   constructor(voiceManager: DisTubeVoiceManager, channel: VoiceChannel | StageChannel) {
     super();
     this.id = channel.guild.id;
+    /**
+     * The voice manager that instantiated this connection
+     * @type {DisTubeVoiceManager}
+     */
     this.voices = voiceManager;
     this._volume = 0.5;
     this.audioPlayer = createAudioPlayer().on("stateChange", (oldState, newState) => {
@@ -39,13 +44,16 @@ export class DisTubeVoice extends EventEmitter {
           newState.reason === VoiceConnectionDisconnectReason.WebSocketClose &&
           newState.closeCode === 4014
         ) {
-          entersState(this.connection, VoiceConnectionStatus.Connecting, 15e3)
-            .catch(() => this.leave());
-        } else if (this.connection.rejoinAttempts < 3) {
+          entersState(this.connection, VoiceConnectionStatus.Connecting, 3e3)
+            .catch(() => {
+              this.emit("disconnect");
+              this.leave();
+            });
+        } else if (this.connection.rejoinAttempts < 5) {
           setTimeout(() => {
             this.connection.rejoin();
           }, (this.connection.rejoinAttempts + 1) * 5e3).unref();
-        } else {
+        } else if (this.connection.state.status !== VoiceConnectionStatus.Destroyed) {
           this.emit("disconnect", new DisTubeError("Cannot reconnect to the voice channel.", "ConnectionError"));
           this.leave();
         }
@@ -57,7 +65,10 @@ export class DisTubeVoice extends EventEmitter {
         this.readyLock = true;
         entersState(this.connection, VoiceConnectionStatus.Ready, 30e3)
           .catch(() => {
-            if (this.connection.state.status !== VoiceConnectionStatus.Destroyed) this.leave();
+            if (this.connection.state.status !== VoiceConnectionStatus.Destroyed) {
+              this.emit("disconnect", new DisTubeError("Cannot connect to the voice channel.", "ConnectionError"));
+              this.leave();
+            }
           }).finally(() => {
             this.readyLock = false;
           });
