@@ -131,9 +131,9 @@ export class QueueManager extends BaseManager<Queue, QueueResolvable> {
     queue.paused = false;
     const song = queue.songs[0];
     try {
-      const { url } = song;
-      if (song.source === "youtube" && !song.formats) song._patchYouTube(await this.handler.getYouTubeInfo(url));
-      if (song.source !== "youtube" && !song.streamURL) {
+      const { url, source, formats, streamURL } = song;
+      if (source === "youtube" && !formats) song._patchYouTube(await this.handler.getYouTubeInfo(url));
+      if (source !== "youtube" && !streamURL) {
         for (const plugin of [...this.distube.extractorPlugins, ...this.distube.customPlugins]) {
           if (await plugin.validate(url)) {
             const info = [
@@ -149,6 +149,7 @@ export class QueueManager extends BaseManager<Queue, QueueResolvable> {
       }
       const stream = this.handler.createStream(queue);
       queue.voice.play(stream);
+      song.streamURL = stream.url;
       return false;
     } catch (e) {
       this._handlePlayingError(queue, e);

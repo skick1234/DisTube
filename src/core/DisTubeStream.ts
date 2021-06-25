@@ -65,12 +65,14 @@ export class DisTubeStream {
   }
   type: StreamType.Raw | StreamType.OggOpus | StreamType.Arbitrary;
   stream: FFmpeg | string;
+  url: string;
   /**
    * Create a DisTubeStream to play with {@link DisTubeVoice}
    * @param {string} url Stream URL
    * @param {StreamOptions} options Stream options
    */
   constructor(url: string, options: StreamOptions) {
+    this.url = url;
     if ((!options.seek || options.seek < 0) && !options.ffmpegArgs?.length) {
       this.type = StreamType.Arbitrary;
       this.stream = url;
