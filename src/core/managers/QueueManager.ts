@@ -36,14 +36,6 @@ export class QueueManager extends BaseManager<Queue, QueueResolvable> {
    * @returns {Queue?}
    */
   /**
-   * Get a Queue from a QueueManager with a QueueResolvable.
-   * @private
-   * @method delete
-   * @memberof QueueManager
-   * @instance
-   * @param {QueueResolvable} queue The queue resolvable to resolve
-   */
-  /**
    * Listen to DisTubeVoice events and handle the Queue
    * @private
    * @param {Queue} queue Queue

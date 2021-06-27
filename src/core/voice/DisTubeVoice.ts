@@ -3,7 +3,7 @@ import { EventEmitter } from "events";
 import { DisTubeVoiceManager } from "./DisTubeVoiceManager";
 import { DisTubeError, createDiscordJSAdapter } from "../..";
 import { Snowflake, StageChannel, VoiceChannel } from "discord.js";
-import { AudioPlayer, AudioPlayerStatus, AudioResource, VoiceConnection, VoiceConnectionDisconnectReason, VoiceConnectionState, VoiceConnectionStatus, createAudioPlayer, createAudioResource, entersState, joinVoiceChannel } from "@discordjs/voice";
+import { AudioPlayer, AudioPlayerStatus, AudioResource, VoiceConnection, VoiceConnectionDisconnectReason, VoiceConnectionStatus, createAudioPlayer, createAudioResource, entersState, joinVoiceChannel } from "@discordjs/voice";
 
 export declare interface DisTubeVoice {
   id: Snowflake;
@@ -30,6 +30,7 @@ export class DisTubeVoice extends EventEmitter {
      * @type {DisTubeVoiceManager}
      */
     this.voices = voiceManager;
+    this.voices.add(this.id, this);
     this._volume = 0.5;
     this.audioPlayer = createAudioPlayer().on("stateChange", (oldState, newState) => {
       if (newState.status === AudioPlayerStatus.Idle && oldState.status !== AudioPlayerStatus.Idle) {
@@ -73,7 +74,7 @@ export class DisTubeVoice extends EventEmitter {
     /**
      * Get or set the volume percentage
      * @name DisTubeVoice#volume
-     * @param {number} volume Volume percentage
+     * @type {number}
      */
   }
   get channel() {
@@ -102,9 +103,9 @@ export class DisTubeVoice extends EventEmitter {
       await entersState(this.connection, VoiceConnectionStatus.Ready, 30e3);
     } catch {
       if (this.connection.state.status !== VoiceConnectionStatus.Destroyed) this.connection.destroy();
+      this.voices.delete(this.id);
       throw new DisTubeError("DisTube cannot connect to the voice channel after 30 seconds.");
     }
-    this.voices.add(this.id, this);
     return this;
   }
   /**

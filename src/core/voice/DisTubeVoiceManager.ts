@@ -9,6 +9,19 @@ import { VoiceConnectionStatus, getVoiceConnection } from "@discordjs/voice";
  */
 export class DisTubeVoiceManager extends BaseManager<DisTubeVoice, QueueResolvable> {
   /**
+   * Get a {@link DisTubeVoice}.
+   * @method get
+   * @memberof DisTubeVoiceManager
+   * @instance
+   * @param {QueueResolvable} queue The queue resolvable to resolve
+   * @returns {DisTubeVoice?}
+   */
+  /**
+   * Collection of {@link DisTubeVoice}.
+   * @name DisTubeVoiceManager#collection
+   * @type {Discord.Collection<string, DisTubeVoice>}
+   */
+  /**
    * Create a {@link DisTubeVoice}
    * @param {Discord.VoiceChannel|Discord.StageChannel} channel A voice channel to join
    * @returns {DisTubeVoice}

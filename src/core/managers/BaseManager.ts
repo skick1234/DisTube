@@ -7,11 +7,16 @@ type GuildIDResolvable = string | { id?: string | null, guild?: { id?: string | 
 /**
  * Manages the collection of a data model.
  * @abstract
+ * @private
  */
 export class BaseManager<V, R extends GuildIDResolvable> extends DisTubeBase {
   collection: Collection<string, V>;
   constructor(distube: DisTube) {
     super(distube);
+    /**
+     * Collection of of a data model.
+     * @type {Discord.Collection}
+     */
     this.collection = new Collection();
   }
   private resolveGuildID(idOrInstance: R | string): string {
