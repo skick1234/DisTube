@@ -38,41 +38,26 @@ export class DisTubeVoice extends EventEmitter {
       }
     }).on("error", error => { this.emit("error", error) });
     this.channel = channel;
-    this.connection.on("stateChange", (_, newState: VoiceConnectionState) => {
-      if (newState.status === VoiceConnectionStatus.Disconnected) {
-        if (
-          newState.reason === VoiceConnectionDisconnectReason.WebSocketClose &&
-          newState.closeCode === 4014
-        ) {
-          entersState(this.connection, VoiceConnectionStatus.Connecting, 3e3)
-            .catch(() => {
-              this.emit("disconnect");
-              this.leave();
-            });
-        } else if (this.connection.rejoinAttempts < 5) {
-          setTimeout(() => {
-            this.connection.rejoin();
-          }, (this.connection.rejoinAttempts + 1) * 5e3).unref();
-        } else if (this.connection.state.status !== VoiceConnectionStatus.Destroyed) {
-          this.emit("disconnect", new DisTubeError("Cannot reconnect to the voice channel.", "ConnectionError"));
-          this.leave();
-        }
-      } else if (newState.status === VoiceConnectionStatus.Destroyed) this.stop();
-      else if (
-        !this.readyLock &&
-        (newState.status === VoiceConnectionStatus.Connecting || newState.status === VoiceConnectionStatus.Signalling)
+    this.connection.on(VoiceConnectionStatus.Disconnected, (_, newState) => {
+      if (
+        newState.reason === VoiceConnectionDisconnectReason.WebSocketClose &&
+        newState.closeCode === 4014
       ) {
-        this.readyLock = true;
-        entersState(this.connection, VoiceConnectionStatus.Ready, 30e3)
+        entersState(this.connection, VoiceConnectionStatus.Connecting, 3e3)
           .catch(() => {
-            if (this.connection.state.status !== VoiceConnectionStatus.Destroyed) {
-              this.emit("disconnect", new DisTubeError("Cannot connect to the voice channel.", "ConnectionError"));
-              this.leave();
-            }
-          }).finally(() => {
-            this.readyLock = false;
+            this.emit("disconnect");
+            this.leave();
           });
+      } else if (this.connection.rejoinAttempts < 5) {
+        setTimeout(() => {
+          this.connection.rejoin();
+        }, (this.connection.rejoinAttempts + 1) * 5e3).unref();
+      } else if (this.connection.state.status !== VoiceConnectionStatus.Destroyed) {
+        this.emit("disconnect", new DisTubeError("Cannot reconnect to the voice channel.", "ConnectionError"));
+        this.leave();
       }
+    }).on(VoiceConnectionStatus.Destroyed, () => {
+      this.stop();
     }).on("error", error => {
       if (this.connection.state.status === VoiceConnectionStatus.Destroyed) return;
       if (this.connection.state.status === VoiceConnectionStatus.Disconnected) {
