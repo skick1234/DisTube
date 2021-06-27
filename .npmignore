@@ -9,3 +9,4 @@ typings/events.d.ts
 tsconfig.json
 test.js
 src/
+.eslintignore
