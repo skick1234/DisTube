@@ -63,7 +63,7 @@ export class DisTubeStream {
     if (typeof url !== "string") throw new Error("url must be a string.");
     return new DisTubeStream(url, options);
   }
-  type: StreamType.Raw | StreamType.OggOpus | StreamType.Arbitrary;
+  type: StreamType.Raw | StreamType.OggOpus;
   stream: FFmpeg | string;
   url: string;
   /**
@@ -73,32 +73,27 @@ export class DisTubeStream {
    */
   constructor(url: string, options: StreamOptions) {
     this.url = url;
-    if ((!options.seek || options.seek < 0) && !options.ffmpegArgs?.length) {
-      this.type = StreamType.Arbitrary;
-      this.stream = url;
-    } else {
-      const args = [
-        "-reconnect", "1",
-        "-reconnect_streamed", "1",
-        "-reconnect_delay_max", "5",
-        "-i", url,
-        "-analyzeduration", "0",
-        "-loglevel", "0",
-        "-ar", "48000",
-        "-ac", "2",
-      ];
-      // Use ffmpeg libopus codec
-      // if (supportOggOpus) {
-      //   args.push("-acodec", "libopus", "-f", "opus");
-      //   this.type = StreamType.OggOpus;
-      // } else {
-      args.push("-f", "s16le");
-      this.type = StreamType.Raw;
-      // }
-      if (typeof options.seek === "number" && options.seek > 0) args.push("-ss", options.seek.toString());
-      if (Array.isArray(options.ffmpegArgs)) args.push(...options.ffmpegArgs);
-      this.stream = new FFmpeg({ args, shell: false });
-    }
+    const args = [
+      "-reconnect", "1",
+      "-reconnect_streamed", "1",
+      "-reconnect_delay_max", "5",
+      "-i", url,
+      "-analyzeduration", "0",
+      "-loglevel", "0",
+      "-ar", "48000",
+      "-ac", "2",
+    ];
+    // Use ffmpeg libopus codec
+    // if (supportOggOpus) {
+    //   args.push("-acodec", "libopus", "-f", "opus");
+    //   this.type = StreamType.OggOpus;
+    // } else {
+    args.push("-f", "s16le");
+    this.type = StreamType.Raw;
+    // }
+    if (typeof options.seek === "number" && options.seek > 0) args.push("-ss", options.seek.toString());
+    if (Array.isArray(options.ffmpegArgs)) args.push(...options.ffmpegArgs);
+    this.stream = new FFmpeg({ args, shell: false });
   }
 }
 
