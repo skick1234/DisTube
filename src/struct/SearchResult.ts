@@ -73,7 +73,9 @@ export class SearchResult {
        * @type {string?}
        */
       this.thumbnail = info.thumbnail;
-    } else if (this.type !== "playlist") throw new TypeError("Unsupported info");
+    } else if (this.type !== "playlist") {
+      throw new TypeError("Unsupported info");
+    }
     /**
      * Song uploader
      * @type {Object}

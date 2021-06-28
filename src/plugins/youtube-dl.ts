@@ -25,7 +25,9 @@ export class YouTubeDLPlugin extends ExtractorPlugin {
       noWarnings: true,
       noCallHome: true,
       preferFreeFormats: true,
-    }).catch(e => { throw new Error(`[youtube-dl] ${e.stderr || e}`) });
+    }).catch(e => {
+      throw new Error(`[youtube-dl] ${e.stderr || e}`);
+    });
     if (Array.isArray(info.entries) && info.entries.length > 0) {
       info.source = info.extractor.match(/\w+/)[0];
       info.songs = info.entries.map((i: OtherSongInfo & YtResponse) => new Song(i, member, i.extractor));
@@ -39,7 +41,9 @@ export class YouTubeDLPlugin extends ExtractorPlugin {
       noWarnings: true,
       noCallHome: true,
       preferFreeFormats: true,
-    }).catch(e => { throw new Error(`[youtube-dl] ${e.stderr || e}`) });
+    }).catch(e => {
+      throw new Error(`[youtube-dl] ${e.stderr || e}`);
+    });
     return info.url;
   }
 }

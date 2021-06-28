@@ -15,10 +15,15 @@ export class QueueManager extends BaseManager<Queue, QueueResolvable> {
    * @returns {Promise<Queue>}
    */
   async create(channel: VoiceChannel | StageChannel, song: Song[] | Song, textChannel?: TextChannel): Promise<Queue> {
-    if (this.has(channel.guild.id)) throw new DisTubeError("This guild has a Queue already", "QueueExist");
+    if (this.has(channel.guild.id)) {
+      throw new DisTubeError("This guild has a Queue already", "QueueExist");
+    }
     if (!channel.joinable) {
-      if (channel.full) throw new DisTubeError("The voice channel is full.", "JoinError");
-      else throw new DisTubeError("You do not have permission to join this voice channel.", "JoinError");
+      if (channel.full) {
+        throw new DisTubeError("The voice channel is full.", "JoinError");
+      } else {
+        throw new DisTubeError("You do not have permission to join this voice channel.", "JoinError");
+      }
     }
     const voice = this.voices.create(channel);
     const queue = new Queue(this.distube, voice, song, textChannel);
@@ -30,8 +35,7 @@ export class QueueManager extends BaseManager<Queue, QueueResolvable> {
   /**
    * Get a Queue from a QueueManager with a QueueResolvable.
    * @method get
-   * @memberof QueueManager
-   * @instance
+   * @memberof QueueManager#
    * @param {QueueResolvable} queue The queue resolvable to resolve
    * @returns {Queue?}
    */
@@ -41,15 +45,21 @@ export class QueueManager extends BaseManager<Queue, QueueResolvable> {
    * @param {Queue} queue Queue
    */
   private _voiceEventHandler(queue: Queue) {
-    queue.voice.on("disconnect", error => {
-      queue.delete();
-      if (!error) this.emit("disconnect", queue);
-      else this.emitError(error, queue.textChannel);
-    }).on("error", error => {
-      this._handlePlayingError(queue, error);
-    }).on("finish", () => {
-      this._handleSongFinish(queue);
-    });
+    queue.voice
+      .on("disconnect", error => {
+        queue.delete();
+        if (!error) {
+          this.emit("disconnect", queue);
+        } else {
+          this.emitError(error, queue.textChannel);
+        }
+      })
+      .on("error", error => {
+        this._handlePlayingError(queue, error);
+      })
+      .on("finish", () => {
+        this._handleSongFinish(queue);
+      });
   }
   /**
    * Handle the queue when a Song finish
@@ -59,17 +69,34 @@ export class QueueManager extends BaseManager<Queue, QueueResolvable> {
    */
   private async _handleSongFinish(queue: Queue): Promise<void> {
     this.emit("finishSong", queue, queue.songs[0]);
-    if (queue.stopped) return;
-    if (queue.repeatMode === 2 && !queue.prev) queue.songs.push(queue.songs[0]);
+    if (queue.stopped) {
+      return;
+    }
+    if (queue.repeatMode === 2 && !queue.prev) {
+      queue.songs.push(queue.songs[0]);
+    }
     if (queue.prev) {
-      if (queue.repeatMode === 2) queue.songs.unshift(queue.songs.pop() as Song);
-      else queue.songs.unshift(queue.previousSongs.pop() as Song);
+      if (queue.repeatMode === 2) {
+        queue.songs.unshift(queue.songs.pop() as Song);
+      } else {
+        queue.songs.unshift(queue.previousSongs.pop() as Song);
+      }
     }
     if (queue.songs.length <= 1 && (queue.next || !queue.repeatMode)) {
-      if (queue.autoplay) try { await queue.addRelatedSong() } catch { this.emit("noRelated", queue) }
+      if (queue.autoplay) {
+        try {
+          await queue.addRelatedSong();
+        } catch {
+          this.emit("noRelated", queue);
+        }
+      }
       if (queue.songs.length <= 1) {
-        if (this.options.leaveOnFinish) queue.voice.leave();
-        if (!queue.autoplay) this.emit("finish", queue);
+        if (this.options.leaveOnFinish) {
+          queue.voice.leave();
+        }
+        if (!queue.autoplay) {
+          this.emit("finish", queue);
+        }
         queue.delete();
         return;
       }
@@ -79,13 +106,18 @@ export class QueueManager extends BaseManager<Queue, QueueResolvable> {
       const prev = queue.songs.shift() as Song;
       delete prev.formats;
       delete prev.streamURL;
-      if (this.options.savePreviousSongs) queue.previousSongs.push(prev);
-      else queue.previousSongs.push({ id: prev.id } as Song);
+      if (this.options.savePreviousSongs) {
+        queue.previousSongs.push(prev);
+      } else {
+        queue.previousSongs.push({ id: prev.id } as Song);
+      }
     }
     queue.next = queue.prev = false;
     queue.beginTime = 0;
     const err = await this.playSong(queue);
-    if (!err && emitPlaySong) this.emit("playSong", queue, queue.songs[0]);
+    if (!err && emitPlaySong) {
+      this.emit("playSong", queue, queue.songs[0]);
+    }
   }
   /**
    * Handle error while playing
@@ -98,13 +130,17 @@ export class QueueManager extends BaseManager<Queue, QueueResolvable> {
     try {
       error.name = "PlayingError";
       error.message = `${error.message}\nID: ${song.id}\nName: ${song.name}`;
-    } catch { }
+    } catch {}
     this.emitError(error, queue.textChannel);
     if (queue.songs.length > 0) {
       this.playSong(queue).then(e => {
-        if (!e) this.emit("playSong", queue, queue.songs[0]);
+        if (!e) {
+          this.emit("playSong", queue, queue.songs[0]);
+        }
       });
-    } else queue.stop();
+    } else {
+      queue.stop();
+    }
   }
 
   /**
@@ -114,7 +150,9 @@ export class QueueManager extends BaseManager<Queue, QueueResolvable> {
    * @returns {Promise<boolean>} error?
    */
   async playSong(queue: Queue): Promise<boolean> {
-    if (!queue) return true;
+    if (!queue) {
+      return true;
+    }
     if (!queue.songs.length) {
       queue.stop();
       return true;
@@ -124,14 +162,13 @@ export class QueueManager extends BaseManager<Queue, QueueResolvable> {
     const song = queue.songs[0];
     try {
       const { url, source, formats, streamURL } = song;
-      if (source === "youtube" && !formats) song._patchYouTube(await this.handler.getYouTubeInfo(url));
+      if (source === "youtube" && !formats) {
+        song._patchYouTube(await this.handler.getYouTubeInfo(url));
+      }
       if (source !== "youtube" && !streamURL) {
         for (const plugin of [...this.distube.extractorPlugins, ...this.distube.customPlugins]) {
           if (await plugin.validate(url)) {
-            const info = [
-              plugin.getStreamURL(url),
-              plugin.getRelatedSongs(url),
-            ] as const;
+            const info = [plugin.getStreamURL(url), plugin.getRelatedSongs(url)] as const;
             const result: any[] = await Promise.all(info);
             song.streamURL = result[0];
             song.related = result[1];
@@ -155,10 +192,9 @@ export class QueueManager extends BaseManager<Queue, QueueResolvable> {
    * @returns {boolean}
    */
   private _emitPlaySong(queue: Queue): boolean {
-    if (
-      !this.options.emitNewSongOnly ||
-      (queue.repeatMode !== 1 && queue.songs[0]?.id !== queue.songs[1]?.id)
-    ) return true;
+    if (!this.options.emitNewSongOnly || (queue.repeatMode !== 1 && queue.songs[0]?.id !== queue.songs[1]?.id)) {
+      return true;
+    }
     return false;
   }
 }

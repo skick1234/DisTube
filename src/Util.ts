@@ -2,7 +2,7 @@ import { URL } from "url";
 import { DisTubeError } from ".";
 import { BitFieldResolvable, ClientOptions, Intents, IntentsString } from "discord.js";
 
-const formatInt = (int: number) => int < 10 ? `0${int}` : int;
+const formatInt = (int: number) => (int < 10 ? `0${int}` : int);
 
 /**
  * Format duration to string
@@ -10,9 +10,11 @@ const formatInt = (int: number) => int < 10 ? `0${int}` : int;
  * @returns {string}
  */
 export function formatDuration(sec: number): string {
-  if (!sec || !Number(sec)) return "00:00";
+  if (!sec || !Number(sec)) {
+    return "00:00";
+  }
   const seconds = Math.floor(sec % 60);
-  const minutes = Math.floor(sec % 3600 / 60);
+  const minutes = Math.floor((sec % 3600) / 60);
   const hours = Math.floor(sec / 3600);
   if (hours > 0) {
     return `${formatInt(hours)}:${formatInt(minutes)}:${formatInt(seconds)}`;
@@ -28,9 +30,15 @@ export function formatDuration(sec: number): string {
  * @returns {number}
  */
 export function toSecond(input: any): number {
-  if (!input) return 0;
-  if (typeof input !== "string") return Number(input) || 0;
-  let h = 0, m = 0, s = 0;
+  if (!input) {
+    return 0;
+  }
+  if (typeof input !== "string") {
+    return Number(input) || 0;
+  }
+  let h = 0,
+    m = 0,
+    s = 0;
   if (input.match(/:/g)) {
     const time = input.split(":");
     if (time.length === 2) {
@@ -41,8 +49,10 @@ export function toSecond(input: any): number {
       m = parseInt(time[1], 10);
       s = parseInt(time[2], 10);
     }
-  } else s = parseInt(input, 10);
-  return (h * 60 * 60) + (m * 60) + s;
+  } else {
+    s = parseInt(input, 10);
+  }
+  return h * 60 * 60 + m * 60 + s;
 }
 /**
  * Parse number from input
@@ -50,7 +60,9 @@ export function toSecond(input: any): number {
  * @returns {number}
  */
 export function parseNumber(input: any): number {
-  if (typeof input === "string") return Number(input.replace(/\D+/g, ""));
+  if (typeof input === "string") {
+    return Number(input.replace(/\D+/g, ""));
+  }
   return Number(input) || 0;
 }
 /**
@@ -59,13 +71,17 @@ export function parseNumber(input: any): number {
  * @returns {boolean}
  */
 export function isURL(string: string): boolean {
-  if (string.includes(" ")) return false;
+  if (string.includes(" ")) {
+    return false;
+  }
   try {
     const url = new URL(string);
-    if (!["https:", "http:"].includes(url.protocol) ||
-      url.origin === "null" || !url.host
-    ) return false;
-  } catch { return false }
+    if (!["https:", "http:"].includes(url.protocol) || url.origin === "null" || !url.host) {
+      return false;
+    }
+  } catch {
+    return false;
+  }
   return true;
 }
 /**
@@ -74,7 +90,9 @@ export function isURL(string: string): boolean {
  */
 export function checkIntents(options: ClientOptions): void {
   const bitfield: BitFieldResolvable<IntentsString, number> = options.intents || (options?.ws as any)?.intents;
-  if (typeof bitfield === "undefined") return;
+  if (typeof bitfield === "undefined") {
+    return;
+  }
   const intents = new Intents(bitfield);
   if (!intents.has("GUILD_VOICE_STATES")) {
     throw new DisTubeError("GUILD_VOICE_STATES intent must be provided for the Client", "MissingIntents");

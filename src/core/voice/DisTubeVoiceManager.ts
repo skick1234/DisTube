@@ -11,8 +11,7 @@ export class DisTubeVoiceManager extends BaseManager<DisTubeVoice, QueueResolvab
   /**
    * Get a {@link DisTubeVoice}.
    * @method get
-   * @memberof DisTubeVoiceManager
-   * @instance
+   * @memberof DisTubeVoiceManager#
    * @param {QueueResolvable} queue The queue resolvable to resolve
    * @returns {DisTubeVoice?}
    */
@@ -29,7 +28,9 @@ export class DisTubeVoiceManager extends BaseManager<DisTubeVoice, QueueResolvab
    */
   create(channel: VoiceChannel | StageChannel): DisTubeVoice {
     const existing = this.get(channel.guild.id);
-    if (existing) return existing;
+    if (existing) {
+      return existing;
+    }
     return new DisTubeVoice(this, channel);
   }
   /**
@@ -51,13 +52,13 @@ export class DisTubeVoiceManager extends BaseManager<DisTubeVoice, QueueResolvab
    */
   leave(id: string) {
     const voice = this.get(id);
-    if (voice) voice.leave();
-    else {
+    if (voice) {
+      voice.leave();
+    } else {
       const connection = getVoiceConnection(id);
-      if (
-        connection &&
-        connection.state.status !== VoiceConnectionStatus.Destroyed
-      ) connection.destroy();
+      if (connection && connection.state.status !== VoiceConnectionStatus.Destroyed) {
+        connection.destroy();
+      }
     }
   }
 }

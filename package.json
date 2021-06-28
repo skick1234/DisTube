@@ -5,10 +5,12 @@
   "main": "dist/DisTube.js",
   "typings": "dist/DisTube.d.ts",
   "scripts": {
-    "docgen": "docgen --source dist --output docs/alpha.json --custom pages/index.yml",
+    "docgen": "npm run build && docgen --source dist --output docs/alpha.json --custom pages/index.yml",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
+    "prettier": "prettier --write **/*.{ts,json,yml,yaml}",
     "build": "tsc",
+    "build:check": "tsc --noEmit --incremental false",
     "publish:alpha": "npm publish --tag alpha"
   },
   "repository": {
@@ -41,6 +43,7 @@
     "@distube/youtube-dl": "^2.2.2",
     "@distube/ytpl": "^1.0.12",
     "@distube/ytsr": "^1.1.2",
+    "eslint-plugin-jsdoc": "^35.4.0",
     "ytdl-core": "^4.8.3"
   },
   "devDependencies": {
@@ -52,7 +55,9 @@
     "@typescript-eslint/parser": "^4.28.0",
     "discord.js": "github:discordjs/discord.js",
     "eslint": "^7.29.0",
-    "eslint-plugin-jsdoc": "^35.4.0",
+    "husky": "^6.0.0",
+    "lint-staged": "^11.0.0",
+    "prettier": "^2.3.2",
     "sodium": "github:skick1234/node-sodium",
     "typescript": "^4.3.4"
   },
@@ -63,5 +68,19 @@
   },
   "engines": {
     "node": ">=12.0.0"
+  },
+  "husky": {
+    "hooks": {
+      "pre-commit": "npx lint-staged"
+    }
+  },
+  "lint-staged": {
+    "*.ts": [
+      "prettier --write",
+      "eslint"
+    ],
+    "*.{json,yml,yaml}": [
+      "prettier --write"
+    ]
   }
 }

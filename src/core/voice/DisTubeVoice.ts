@@ -3,7 +3,18 @@ import { EventEmitter } from "events";
 import { DisTubeVoiceManager } from "./DisTubeVoiceManager";
 import { DisTubeError, createDiscordJSAdapter } from "../..";
 import { Snowflake, StageChannel, VoiceChannel } from "discord.js";
-import { AudioPlayer, AudioPlayerStatus, AudioResource, VoiceConnection, VoiceConnectionDisconnectReason, VoiceConnectionStatus, createAudioPlayer, createAudioResource, entersState, joinVoiceChannel } from "@discordjs/voice";
+import {
+  AudioPlayer,
+  AudioPlayerStatus,
+  AudioResource,
+  VoiceConnection,
+  VoiceConnectionDisconnectReason,
+  VoiceConnectionStatus,
+  createAudioPlayer,
+  createAudioResource,
+  entersState,
+  joinVoiceChannel,
+} from "@discordjs/voice";
 
 export declare interface DisTubeVoice {
   id: Snowflake;
@@ -32,44 +43,51 @@ export class DisTubeVoice extends EventEmitter {
     this.voices = voiceManager;
     this.voices.add(this.id, this);
     this._volume = 0.5;
-    this.audioPlayer = createAudioPlayer().on("stateChange", (oldState, newState) => {
-      if (newState.status === AudioPlayerStatus.Idle && oldState.status !== AudioPlayerStatus.Idle) {
-        delete this.audioResource;
-        this.emit("finish");
-      }
-    }).on("error", error => { this.emit("error", error) });
+    this.audioPlayer = createAudioPlayer()
+      .on("stateChange", (oldState, newState) => {
+        if (newState.status === AudioPlayerStatus.Idle && oldState.status !== AudioPlayerStatus.Idle) {
+          delete this.audioResource;
+          this.emit("finish");
+        }
+      })
+      .on("error", error => {
+        this.emit("error", error);
+      });
     this.channel = channel;
-    this.connection.on(VoiceConnectionStatus.Disconnected, (_, newState) => {
-      if (
-        newState.reason === VoiceConnectionDisconnectReason.WebSocketClose &&
-        newState.closeCode === 4014
-      ) {
-        entersState(this.connection, VoiceConnectionStatus.Connecting, 3e3)
-          .catch(() => {
+    this.connection
+      .on(VoiceConnectionStatus.Disconnected, (_, newState) => {
+        if (newState.reason === VoiceConnectionDisconnectReason.WebSocketClose && newState.closeCode === 4014) {
+          entersState(this.connection, VoiceConnectionStatus.Connecting, 3e3).catch(() => {
             this.emit("disconnect");
             this.leave();
           });
-      } else if (this.connection.rejoinAttempts < 5) {
-        setTimeout(() => {
-          this.connection.rejoin();
-        }, (this.connection.rejoinAttempts + 1) * 5e3).unref();
-      } else if (this.connection.state.status !== VoiceConnectionStatus.Destroyed) {
-        this.emit("disconnect", new DisTubeError("Cannot reconnect to the voice channel.", "ConnectionError"));
-        this.leave();
-      }
-    }).on(VoiceConnectionStatus.Destroyed, () => {
-      this.stop();
-    }).on("error", error => {
-      if (this.connection.state.status === VoiceConnectionStatus.Destroyed) return;
-      if (this.connection.state.status === VoiceConnectionStatus.Disconnected) {
-        this.connection.rejoin();
-        entersState(this.connection, VoiceConnectionStatus.Ready, 30e3).catch(() => {
-          if (this.connection.state.status === VoiceConnectionStatus.Destroyed) return;
-          this.emit("disconnect", error);
+        } else if (this.connection.rejoinAttempts < 5) {
+          setTimeout(() => {
+            this.connection.rejoin();
+          }, (this.connection.rejoinAttempts + 1) * 5e3).unref();
+        } else if (this.connection.state.status !== VoiceConnectionStatus.Destroyed) {
+          this.emit("disconnect", new DisTubeError("Cannot reconnect to the voice channel.", "ConnectionError"));
           this.leave();
-        });
-      }
-    });
+        }
+      })
+      .on(VoiceConnectionStatus.Destroyed, () => {
+        this.stop();
+      })
+      .on("error", error => {
+        if (this.connection.state.status === VoiceConnectionStatus.Destroyed) {
+          return;
+        }
+        if (this.connection.state.status === VoiceConnectionStatus.Disconnected) {
+          this.connection.rejoin();
+          entersState(this.connection, VoiceConnectionStatus.Ready, 30e3).catch(() => {
+            if (this.connection.state.status === VoiceConnectionStatus.Destroyed) {
+              return;
+            }
+            this.emit("disconnect", error);
+            this.leave();
+          });
+        }
+      });
     this.connection.subscribe(this.audioPlayer);
     /**
      * Get or set the volume percentage
@@ -98,11 +116,15 @@ export class DisTubeVoice extends EventEmitter {
    * @returns {Promise<DisTubeVoice>}
    */
   async join(channel?: VoiceChannel | StageChannel): Promise<DisTubeVoice> {
-    if (channel) this.channel = channel;
+    if (channel) {
+      this.channel = channel;
+    }
     try {
       await entersState(this.connection, VoiceConnectionStatus.Ready, 30e3);
     } catch {
-      if (this.connection.state.status !== VoiceConnectionStatus.Destroyed) this.connection.destroy();
+      if (this.connection.state.status !== VoiceConnectionStatus.Destroyed) {
+        this.connection.destroy();
+      }
       this.voices.delete(this.id);
       throw new DisTubeError("DisTube cannot connect to the voice channel after 30 seconds.");
     }
@@ -113,7 +135,9 @@ export class DisTubeVoice extends EventEmitter {
    */
   leave() {
     this.stop();
-    if (this.connection.state.status !== VoiceConnectionStatus.Destroyed) this.connection.destroy();
+    if (this.connection.state.status !== VoiceConnectionStatus.Destroyed) {
+      this.connection.destroy();
+    }
     this.voices.delete(this.id);
   }
   /**
@@ -138,8 +162,12 @@ export class DisTubeVoice extends EventEmitter {
     this.audioPlayer.play(this.audioResource);
   }
   set volume(volume: number) {
-    if (typeof volume !== "number") throw new TypeError("Volume must be a number");
-    if (!(volume >= 0)) throw new RangeError("Volume must be >= 0"); // < 0 && NaN
+    if (typeof volume !== "number") {
+      throw new TypeError("Volume must be a number");
+    }
+    if (!(volume >= 0)) {
+      throw new RangeError("Volume must be >= 0");
+    } // < 0 && NaN
     this._volume = volume / 100;
     this.audioResource?.volume?.setVolume(Math.pow(this._volume, 0.5 / Math.log10(2)));
   }
@@ -179,7 +207,9 @@ export class DisTubeVoice extends EventEmitter {
    * @returns {boolean} true if the voice state was successfully updated, otherwise false
    */
   setSelfDeaf(selfDeaf: boolean): boolean {
-    if (typeof selfDeaf !== "boolean") throw new TypeError("selfDeaf must be a boolean.");
+    if (typeof selfDeaf !== "boolean") {
+      throw new TypeError("selfDeaf must be a boolean.");
+    }
     return this.connection.rejoin({
       ...this.connection.joinConfig,
       selfDeaf,
@@ -191,7 +221,9 @@ export class DisTubeVoice extends EventEmitter {
    * @returns {boolean} true if the voice state was successfully updated, otherwise false
    */
   setSelfMute(selfMute: boolean): boolean {
-    if (typeof selfMute !== "boolean") throw new TypeError("selfMute must be a boolean.");
+    if (typeof selfMute !== "boolean") {
+      throw new TypeError("selfMute must be a boolean.");
+    }
     return this.connection.rejoin({
       ...this.connection.joinConfig,
       selfMute,

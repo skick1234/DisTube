@@ -36,19 +36,25 @@ export class Plugin {
    * @param {string} url Input url
    * @returns {Promise<boolean>}
    */
-  async validate(url: string): Promise<boolean> { return false }
+  async validate(url: string): Promise<boolean> {
+    return false;
+  }
   /**
    * Get the stream url from {@link Song#url}. Returns {@link Song#url} by default. Not needed if the plugin plays song from YouTube.
    * @param {string} url Input url
    * @returns {Promise<string>}
    */
-  async getStreamURL(url: string): Promise<string> { return url }
+  async getStreamURL(url: string): Promise<string> {
+    return url;
+  }
   /**
    * (Optional) Get related songs from a supported url (Not needed to add {@link Song#related} and member is `null` because it will be added with this function later)
    * @param {string} url Input url
    * @returns {Promise<Song[]>}
    */
-  async getRelatedSongs(url: string): Promise<Song[]> { return [] }
+  async getRelatedSongs(url: string): Promise<Song[]> {
+    return [];
+  }
 }
 
 export default Plugin;

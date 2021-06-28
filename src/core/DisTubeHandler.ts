@@ -14,7 +14,14 @@ export class DisTubeHandler extends DisTubeBase {
   ytdlOptions: ytdl.downloadOptions;
   constructor(distube: DisTube) {
     super(distube);
-    const requestOptions = this.options.youtubeCookie ? { headers: { cookie: this.options.youtubeCookie, "x-youtube-identity-token": this.options.youtubeIdentityToken } } : undefined;
+    const requestOptions = this.options.youtubeCookie
+      ? {
+          headers: {
+            cookie: this.options.youtubeCookie,
+            "x-youtube-identity-token": this.options.youtubeIdentityToken,
+          },
+        }
+      : undefined;
     this.ytdlOptions = Object.assign(this.options.ytdlOptions, { requestOptions });
   }
 
@@ -24,7 +31,9 @@ export class DisTubeHandler extends DisTubeBase {
    * @returns {Promise<ytdl.videoInfo>}
    */
   getYouTubeInfo(url: string, basic = false): Promise<ytdl.videoInfo> {
-    if (basic) return ytdl.getBasicInfo(url, this.ytdlOptions);
+    if (basic) {
+      return ytdl.getBasicInfo(url, this.ytdlOptions);
+    }
     return ytdl.getInfo(url, this.ytdlOptions);
   }
 
@@ -38,17 +47,32 @@ export class DisTubeHandler extends DisTubeBase {
     member: GuildMember,
     song: string | ytdl.videoInfo | Song | Playlist | SearchResult | OtherSongInfo | ytdl.relatedVideo | null,
   ): Promise<Song | Playlist | null> {
-    if (!song) return null;
-    if (song instanceof Song || song instanceof Playlist) return song;
+    if (!song) {
+      return null;
+    }
+    if (song instanceof Song || song instanceof Playlist) {
+      return song;
+    }
     if (song instanceof SearchResult) {
-      if (song.type === "video") return new Song(song, member);
-      else if (song.type === "playlist") return this.resolvePlaylist(member, song.url);
+      if (song.type === "video") {
+        return new Song(song, member);
+      } else if (song.type === "playlist") {
+        return this.resolvePlaylist(member, song.url);
+      }
       throw new Error("Invalid SearchResult");
     }
-    if (typeof song === "object") return new Song(song, member);
-    if (ytdl.validateURL(song)) return new Song(await this.getYouTubeInfo(song), member);
+    if (typeof song === "object") {
+      return new Song(song, member);
+    }
+    if (ytdl.validateURL(song)) {
+      return new Song(await this.getYouTubeInfo(song), member);
+    }
     if (isURL(song)) {
-      for (const plugin of this.distube.extractorPlugins) if (await plugin.validate(song)) return plugin.resolve(song, member);
+      for (const plugin of this.distube.extractorPlugins) {
+        if (await plugin.validate(song)) {
+          return plugin.resolve(song, member);
+        }
+      }
       throw new Error("Not Supported URL!");
     }
     throw new TypeError("song is not a valid type");
@@ -61,15 +85,23 @@ export class DisTubeHandler extends DisTubeBase {
    * @param {string} [source="youtube"] Playlist source
    * @returns {Promise<Playlist>}
    */
-  async resolvePlaylist(member: GuildMember, playlist: Playlist | Song[] | string, source = "youtube"): Promise<Playlist> {
-    if (playlist instanceof Playlist) return playlist;
+  async resolvePlaylist(
+    member: GuildMember,
+    playlist: Playlist | Song[] | string,
+    source = "youtube",
+  ): Promise<Playlist> {
+    if (playlist instanceof Playlist) {
+      return playlist;
+    }
     let solvablePlaylist: Song[] | ytpl.result;
     if (typeof playlist === "string") {
       solvablePlaylist = await ytpl(playlist, { limit: Infinity });
       (solvablePlaylist as any).items = solvablePlaylist.items
         .filter(v => !v.thumbnail.includes("no_thumbnail"))
         .map(v => new Song(v as OtherSongInfo, member));
-    } else solvablePlaylist = playlist;
+    } else {
+      solvablePlaylist = playlist;
+    }
     return new Playlist(solvablePlaylist, member, { source });
   }
 
@@ -87,24 +119,40 @@ export class DisTubeHandler extends DisTubeBase {
     properties: any = {},
     parallel = true,
   ): Promise<Playlist> {
-    const member = (message as Message)?.member || message as GuildMember;
-    if (!Array.isArray(songs)) throw new TypeError("songs must be an array of url");
-    if (!songs.length) throw new Error("songs is an empty array");
+    const member = (message as Message)?.member || (message as GuildMember);
+    if (!Array.isArray(songs)) {
+      throw new TypeError("songs must be an array of url");
+    }
+    if (!songs.length) {
+      throw new Error("songs is an empty array");
+    }
     songs = songs.filter(song => song instanceof Song || song instanceof SearchResult || isURL(song));
-    if (!songs.length) throw new Error("songs does not have any valid Song, SearchResult or url");
+    if (!songs.length) {
+      throw new Error("songs does not have any valid Song, SearchResult or url");
+    }
     let resolvedSongs: (Song | SearchResult)[];
     if (parallel) {
-      const promises = songs.map((song: string | Song | SearchResult) => this.resolveSong(member, song).catch(() => null));
+      const promises = songs.map((song: string | Song | SearchResult) =>
+        this.resolveSong(member, song).catch(() => null),
+      );
       resolvedSongs = (await Promise.all(promises)).filter((s: any): s is Song => !!s);
     } else {
       const resolved = [];
-      for (const song of songs) resolved.push(await this.resolveSong(member, song).catch(() => undefined));
+      for (const song of songs) {
+        resolved.push(await this.resolveSong(member, song).catch(() => undefined));
+      }
       resolvedSongs = resolved.filter((s: any): s is Song => !!s);
     }
-    return new Playlist(resolvedSongs.map(s => {
-      if (s instanceof Song) return s;
-      return new Song(s, member);
-    }), member, properties);
+    return new Playlist(
+      resolvedSongs.map(s => {
+        if (s instanceof Song) {
+          return s;
+        }
+        return new Song(s, member);
+      }),
+      member,
+      properties,
+    );
   }
 
   /**
@@ -128,13 +176,17 @@ export class DisTubeHandler extends DisTubeBase {
       skip = textChannel;
       textChannel = (message as Message).channel as TextChannel;
     }
-    if (!playlist || !(playlist instanceof Playlist)) throw Error("Invalid Playlist");
+    if (!playlist || !(playlist instanceof Playlist)) {
+      throw Error("Invalid Playlist");
+    }
     if (this.options.nsfw && !textChannel?.nsfw) {
       playlist.songs = playlist.songs.filter(s => !s.age_restricted);
     }
     if (!playlist.songs.length) {
       if (this.options.nsfw && !textChannel?.nsfw) {
-        throw new Error("No valid video in the playlist.\nMaybe age-restricted contents is filtered because you are in non-NSFW channel.");
+        throw new Error(
+          "No valid video in the playlist.\nMaybe age-restricted contents is filtered because you are in non-NSFW channel.",
+        );
       }
       throw Error("No valid video in the playlist");
     }
@@ -142,11 +194,16 @@ export class DisTubeHandler extends DisTubeBase {
     const queue = this.distube.getQueue(message);
     if (queue) {
       queue.addToQueue(songs, skip || unshift ? 1 : -1);
-      if (skip) queue.skip();
-      else this.emit("addList", queue, playlist);
+      if (skip) {
+        queue.skip();
+      } else {
+        this.emit("addList", queue, playlist);
+      }
     } else {
       const newQueue = await this.distube._newQueue(message, songs, textChannel);
-      if (newQueue instanceof Queue) this.emit("playSong", newQueue, newQueue.songs[0]);
+      if (newQueue instanceof Queue) {
+        this.emit("playSong", newQueue, newQueue.songs[0]);
+      }
     }
   }
 
@@ -158,10 +215,12 @@ export class DisTubeHandler extends DisTubeBase {
    */
   async searchSong(message: Message, query: string): Promise<SearchResult | null> {
     const limit = this.options.searchSongs > 1 ? this.options.searchSongs : 1;
-    const results = await this.distube.search(query, {
-      limit,
-      safeSearch: this.options.nsfw ? false : !(message.channel as TextChannel)?.nsfw,
-    }).catch(() => undefined);
+    const results = await this.distube
+      .search(query, {
+        limit,
+        safeSearch: this.options.nsfw ? false : !(message.channel as TextChannel)?.nsfw,
+      })
+      .catch(() => undefined);
     if (!results?.length) {
       this.emit("searchNoResult", message, query);
       return null;
@@ -169,24 +228,23 @@ export class DisTubeHandler extends DisTubeBase {
     let result = results[0];
     if (limit > 1) {
       this.emit("searchResult", message, results, query);
-      const argsLength = message.channel.awaitMessages.length;
-      let answers;
-      if (argsLength === 1) {
-        // Djs v12
-        answers = await (message.channel.awaitMessages as any)((m: Message) => m.author.id === message.author.id, {
-          max: 1,
-          time: this.options.searchCooldown * 1e3,
-          errors: ["time"],
-        }).catch(() => undefined);
-      } else {
-        // Djs v13
-        answers = await message.channel.awaitMessages({
-          filter: m => m.author.id === message.author.id,
-          max: 1,
-          time: this.options.searchCooldown * 1e3,
-          errors: ["time"],
-        }).catch(() => undefined);
-      }
+      const { awaitMessages } = message.channel;
+      const argsLength = awaitMessages.length;
+      /* eslint-disable @typescript-eslint/indent */
+      const answers =
+        argsLength === 0
+          ? await awaitMessages({
+              filter: m => m.author.id === message.author.id,
+              max: 1,
+              time: this.options.searchCooldown * 1e3,
+              errors: ["time"],
+            }).catch(() => undefined)
+          : await (awaitMessages as any)((m: Message) => m.author.id === message.author.id, {
+              max: 1,
+              time: this.options.searchCooldown * 1e3,
+              errors: ["time"],
+            }).catch(() => undefined);
+      /* eslint-enable @typescript-eslint/indent */
       const ans = answers?.first();
       if (!ans) {
         this.emit("searchCancel", message, query);
@@ -216,7 +274,9 @@ export class DisTubeHandler extends DisTubeBase {
     const seek = duration ? queue.beginTime : undefined;
     const streamOptions = { ffmpegArgs, seek, isLive };
     Object.assign(streamOptions, this.ytdlOptions);
-    if (source === "youtube") return DisTubeStream.YouTube(formats, streamOptions);
+    if (source === "youtube") {
+      return DisTubeStream.YouTube(formats, streamOptions);
+    }
     return DisTubeStream.DirectLink(streamURL as string, streamOptions);
   }
 
@@ -227,7 +287,9 @@ export class DisTubeHandler extends DisTubeBase {
    */
   isVoiceChannelEmpty(voiceState: VoiceState): boolean {
     const voiceChannel = voiceState.guild?.me?.voice?.channel;
-    if (!voiceChannel) return false;
+    if (!voiceChannel) {
+      return false;
+    }
     const members = voiceChannel.members.filter(m => !m.user.bot);
     return !members.size;
   }

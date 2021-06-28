@@ -4,7 +4,6 @@ import { SearchResult } from ".";
 import { GuildMember, User } from "discord.js";
 import { Chapter, OtherSongInfo, formatDuration, parseNumber, toSecond } from "..";
 
-
 /**
  * Class representing a song.
  * <info>If {@link Song} is added from a YouTube {@link SearchResult} or {@link Playlist}, some info will be missing to save your resources.
@@ -51,15 +50,20 @@ export class Song {
     member?: GuildMember,
     src = "youtube",
   ) {
-    if (typeof src !== "string") throw new TypeError("Source must be a string");
+    if (typeof src !== "string") {
+      throw new TypeError("Source must be a string");
+    }
     /**
      * The source of the song
      * @type {string}
      */
     this.source = src.toLowerCase();
     this._patchMember(member);
-    if (this.source === "youtube") this._patchYouTube(info as ytdl.videoInfo);
-    else this._patchOther(info as OtherSongInfo);
+    if (this.source === "youtube") {
+      this._patchYouTube(info as ytdl.videoInfo);
+    } else {
+      this._patchOther(info as OtherSongInfo);
+    }
   }
 
   _patchYouTube(i: ytdl.videoInfo | SearchResult) {
@@ -73,9 +77,17 @@ export class Song {
        */
       this.formats = info.formats;
       // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const err = require("ytdl-core/lib/utils").playError(info.player_response, ["UNPLAYABLE", "LIVE_STREAM_OFFLINE", "LOGIN_REQUIRED"]);
-      if (err) throw err;
-      if (!info.formats?.length) throw new Error("This video is unavailable");
+      const err = require("ytdl-core/lib/utils").playError(info.player_response, [
+        "UNPLAYABLE",
+        "LIVE_STREAM_OFFLINE",
+        "LOGIN_REQUIRED",
+      ]);
+      if (err) {
+        throw err;
+      }
+      if (!info.formats?.length) {
+        throw new Error("This video is unavailable");
+      }
     }
     const details = info.videoDetails || info;
     /**
@@ -117,8 +129,10 @@ export class Song {
      * Song thumbnail.
      * @type {string?}
      */
-    this.thumbnail = details.thumbnails?.sort((a: any, b: any) => b.width - a.width)[0].url ||
-      details.thumbnail?.url || details.thumbnail;
+    this.thumbnail =
+      details.thumbnails?.sort((a: any, b: any) => b.width - a.width)[0].url ||
+      details.thumbnail?.url ||
+      details.thumbnail;
     /**
      * Related songs
      * @type {Song[]}
@@ -177,9 +191,14 @@ export class Song {
    * @private
    */
   private _patchOther(info: OtherSongInfo) {
-    if (info.id) this.id = info.id;
-    if (info.title) this.name = info.title;
-    else if (info.name) this.name = info.name;
+    if (info.id) {
+      this.id = info.id;
+    }
+    if (info.title) {
+      this.name = info.title;
+    } else if (info.name) {
+      this.name = info.name;
+    }
     this.isLive = Boolean(info.is_live || info.isLive);
     this.duration = this.isLive ? 0 : toSecond(info._duration_raw || info.duration);
     this.formattedDuration = this.isLive ? "Live" : formatDuration(this.duration);
@@ -205,7 +224,9 @@ export class Song {
    * @returns {Song}
    */
   _patchPlaylist(playlist: Playlist, member?: GuildMember): Song {
-    if (!(playlist instanceof Playlist)) throw new TypeError("playlist is not a valid Playlist");
+    if (!(playlist instanceof Playlist)) {
+      throw new TypeError("playlist is not a valid Playlist");
+    }
     /**
      * The playlist added this song
      * @type {Playlist?}

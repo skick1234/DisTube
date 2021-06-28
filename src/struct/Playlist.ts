@@ -23,8 +23,12 @@ export class Playlist implements PlaylistInfo {
    * @param {Object} properties Custom properties
    */
   constructor(playlist: Song[] | ytpl.result | PlaylistInfo, member?: GuildMember, properties: any = {}) {
-    if (typeof playlist !== "object") throw new TypeError("playlist must be an array of Song or an object.");
-    if (typeof properties !== "object") throw new TypeError("Custom properties must be an object.");
+    if (typeof playlist !== "object") {
+      throw new TypeError("playlist must be an array of Song or an object.");
+    }
+    if (typeof properties !== "object") {
+      throw new TypeError("Custom properties must be an object.");
+    }
     // FIXME
     const info = playlist as any;
     /**
@@ -47,7 +51,9 @@ export class Playlist implements PlaylistInfo {
      * @type {Array<Song>}
      */
     this.songs = Array.isArray(info) ? info : info.items || info.songs;
-    if (!Array.isArray(this.songs) || !this.songs.length) throw new Error("Playlist is empty!");
+    if (!Array.isArray(this.songs) || !this.songs.length) {
+      throw new Error("Playlist is empty!");
+    }
     this.songs.map(s => s.constructor.name === "Song" && s._patchPlaylist(this, this.member));
     /**
      * Playlist name.
@@ -64,7 +70,9 @@ export class Playlist implements PlaylistInfo {
      * @type {string}
      */
     this.thumbnail = info.thumbnail?.url || info.thumbnail || this.songs[0].thumbnail;
-    for (const [key, value] of Object.entries(properties)) this[key] = value;
+    for (const [key, value] of Object.entries(properties)) {
+      this[key] = value;
+    }
   }
 
   /**

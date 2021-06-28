@@ -2,7 +2,7 @@ import DisTube from "../../DisTube";
 import DisTubeBase from "../DisTubeBase";
 import { Collection } from "discord.js";
 
-type GuildIDResolvable = string | { id?: string | null, guild?: { id?: string | null } | null }
+type GuildIDResolvable = string | { id?: string | null; guild?: { id?: string | null } | null };
 
 /**
  * Manages the collection of a data model.
@@ -21,18 +21,21 @@ export class BaseManager<V, R extends GuildIDResolvable> extends DisTubeBase {
   }
   private resolveGuildID(idOrInstance: R | string): string {
     let guildID: string | null | undefined;
-    if (typeof idOrInstance === "string") guildID = idOrInstance;
-    else guildID = idOrInstance.guild?.id || idOrInstance.id;
-    if (
-      typeof guildID !== "string" ||
-      !guildID.match(/^\d+$/) ||
-      guildID.length <= 15
-    ) throw TypeError("The parameter must be a GuildIDResolvable!");
+    if (typeof idOrInstance === "string") {
+      guildID = idOrInstance;
+    } else {
+      guildID = idOrInstance.guild?.id || idOrInstance.id;
+    }
+    if (typeof guildID !== "string" || !guildID.match(/^\d+$/) || guildID.length <= 15) {
+      throw TypeError("The parameter must be a GuildIDResolvable!");
+    }
     return guildID;
   }
   add(id: string, data: V) {
     const existing = this.get(id);
-    if (existing) return existing;
+    if (existing) {
+      return existing;
+    }
     this.collection.set(id, data);
     return data;
   }

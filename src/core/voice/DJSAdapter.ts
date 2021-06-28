@@ -6,7 +6,9 @@ const adapters = new Map<Snowflake, DiscordGatewayAdapterLibraryMethods>();
 const trackedClients = new Set<Client>();
 
 function trackClient(client: Client) {
-  if (trackedClients.has(client)) return;
+  if (trackedClients.has(client)) {
+    return;
+  }
   trackedClients.add(client);
   client.ws.on(Constants.WSEvents.VOICE_SERVER_UPDATE, (payload: GatewayVoiceServerUpdateDispatchData) => {
     adapters.get(payload.guild_id)?.onVoiceServerUpdate(payload);

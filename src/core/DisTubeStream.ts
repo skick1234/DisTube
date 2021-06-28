@@ -18,8 +18,10 @@ interface StreamOptions extends ytdl.downloadOptions {
 }
 
 const chooseBestFormat = (formats: ytdl.videoFormat[], isLive = false) => {
-  let filter = (format: ytdl.videoFormat) => format.audioBitrate ? format.audioBitrate > 0 : false;
-  if (isLive) filter = (format: ytdl.videoFormat) => (format.audioBitrate ? format.audioBitrate > 0 : false) && format.isHLS;
+  let filter = (format: ytdl.videoFormat) => (format.audioBitrate ? format.audioBitrate > 0 : false);
+  if (isLive) {
+    filter = (format: ytdl.videoFormat) => (format.audioBitrate ? format.audioBitrate > 0 : false) && format.isHLS;
+  }
   formats = formats.filter(filter).sort((a, b) => Number(b.audioBitrate) - Number(a.audioBitrate));
   return formats.find(format => !format.bitrate) || formats[0];
 };
@@ -46,10 +48,16 @@ export class DisTubeStream {
    * @returns {*}
    */
   static YouTube(formats: ytdl.videoFormat[] | undefined, options: StreamOptions = {}): DisTubeStream {
-    if (!formats || !formats.length) throw new TypeError("This video is unavailable");
-    if (!options || typeof options !== "object" || Array.isArray(options)) throw new Error("options must be an object.");
+    if (!formats || !formats.length) {
+      throw new TypeError("This video is unavailable");
+    }
+    if (!options || typeof options !== "object" || Array.isArray(options)) {
+      throw new Error("options must be an object.");
+    }
     const bestFormat = chooseBestFormat(formats, options.isLive);
-    if (!bestFormat) throw new Error("No suitable format found");
+    if (!bestFormat) {
+      throw new Error("No suitable format found");
+    }
     return new DisTubeStream(bestFormat.url, options);
   }
   /**
@@ -59,8 +67,12 @@ export class DisTubeStream {
    * @returns {Readable|string}
    */
   static DirectLink(url: string, options: StreamOptions = {}): DisTubeStream {
-    if (!options || typeof options !== "object" || Array.isArray(options)) throw new Error("options must be an object.");
-    if (typeof url !== "string") throw new Error("url must be a string.");
+    if (!options || typeof options !== "object" || Array.isArray(options)) {
+      throw new Error("options must be an object.");
+    }
+    if (typeof url !== "string") {
+      throw new Error("url must be a string.");
+    }
     return new DisTubeStream(url, options);
   }
   type: StreamType.Raw | StreamType.OggOpus;
@@ -74,14 +86,22 @@ export class DisTubeStream {
   constructor(url: string, options: StreamOptions) {
     this.url = url;
     const args = [
-      "-reconnect", "1",
-      "-reconnect_streamed", "1",
-      "-reconnect_delay_max", "5",
-      "-i", url,
-      "-analyzeduration", "0",
-      "-loglevel", "0",
-      "-ar", "48000",
-      "-ac", "2",
+      "-reconnect",
+      "1",
+      "-reconnect_streamed",
+      "1",
+      "-reconnect_delay_max",
+      "5",
+      "-i",
+      url,
+      "-analyzeduration",
+      "0",
+      "-loglevel",
+      "0",
+      "-ar",
+      "48000",
+      "-ac",
+      "2",
     ];
     // Use ffmpeg libopus codec
     // if (supportOggOpus) {
@@ -91,8 +111,12 @@ export class DisTubeStream {
     args.push("-f", "s16le");
     this.type = StreamType.Raw;
     // }
-    if (typeof options.seek === "number" && options.seek > 0) args.push("-ss", options.seek.toString());
-    if (Array.isArray(options.ffmpegArgs)) args.push(...options.ffmpegArgs);
+    if (typeof options.seek === "number" && options.seek > 0) {
+      args.push("-ss", options.seek.toString());
+    }
+    if (Array.isArray(options.ffmpegArgs)) {
+      args.push(...options.ffmpegArgs);
+    }
     this.stream = new FFmpeg({ args, shell: false });
   }
 }
