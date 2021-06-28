@@ -169,12 +169,24 @@ export class DisTubeHandler extends DisTubeBase {
     let result = results[0];
     if (limit > 1) {
       this.emit("searchResult", message, results, query);
-      const answers = await message.channel
-        .awaitMessages((m: Message) => m.author.id === message.author.id, {
+      const argsLength = message.channel.awaitMessages.length;
+      let answers;
+      if (argsLength === 1) {
+        // Djs v12
+        answers = await (message.channel.awaitMessages as any)((m: Message) => m.author.id === message.author.id, {
           max: 1,
           time: this.options.searchCooldown * 1e3,
           errors: ["time"],
         }).catch(() => undefined);
+      } else {
+        // Djs v13
+        answers = await message.channel.awaitMessages({
+          filter: m => m.author.id === message.author.id,
+          max: 1,
+          time: this.options.searchCooldown * 1e3,
+          errors: ["time"],
+        }).catch(() => undefined);
+      }
       const ans = answers?.first();
       if (!ans) {
         this.emit("searchCancel", message, query);
