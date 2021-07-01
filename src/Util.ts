@@ -1,6 +1,16 @@
 import { URL } from "url";
 import { DisTubeError } from ".";
-import { BitFieldResolvable, ClientOptions, Intents, IntentsString } from "discord.js";
+import {
+  BitFieldResolvable,
+  ClientOptions,
+  GuildMember,
+  Intents,
+  IntentsString,
+  Message,
+  Snowflake,
+  TextChannel,
+  VoiceState,
+} from "discord.js";
 
 const formatInt = (int: number) => (int < 10 ? `0${int}` : int);
 
@@ -10,18 +20,12 @@ const formatInt = (int: number) => (int < 10 ? `0${int}` : int);
  * @returns {string}
  */
 export function formatDuration(sec: number): string {
-  if (!sec || !Number(sec)) {
-    return "00:00";
-  }
+  if (!sec || !Number(sec)) return "00:00";
   const seconds = Math.floor(sec % 60);
   const minutes = Math.floor((sec % 3600) / 60);
   const hours = Math.floor(sec / 3600);
-  if (hours > 0) {
-    return `${formatInt(hours)}:${formatInt(minutes)}:${formatInt(seconds)}`;
-  }
-  if (minutes > 0) {
-    return `${formatInt(minutes)}:${formatInt(seconds)}`;
-  }
+  if (hours > 0) return `${formatInt(hours)}:${formatInt(minutes)}:${formatInt(seconds)}`;
+  if (minutes > 0) return `${formatInt(minutes)}:${formatInt(seconds)}`;
   return `00:${formatInt(seconds)}`;
 }
 /**
@@ -30,12 +34,8 @@ export function formatDuration(sec: number): string {
  * @returns {number}
  */
 export function toSecond(input: any): number {
-  if (!input) {
-    return 0;
-  }
-  if (typeof input !== "string") {
-    return Number(input) || 0;
-  }
+  if (!input) return 0;
+  if (typeof input !== "string") return Number(input) || 0;
   let h = 0,
     m = 0,
     s = 0;
@@ -60,9 +60,7 @@ export function toSecond(input: any): number {
  * @returns {number}
  */
 export function parseNumber(input: any): number {
-  if (typeof input === "string") {
-    return Number(input.replace(/\D+/g, ""));
-  }
+  if (typeof input === "string") return Number(input.replace(/\D+/g, "")) || 0;
   return Number(input) || 0;
 }
 /**
@@ -71,14 +69,10 @@ export function parseNumber(input: any): number {
  * @returns {boolean}
  */
 export function isURL(string: string): boolean {
-  if (string.includes(" ")) {
-    return false;
-  }
+  if (string.includes(" ")) return false;
   try {
     const url = new URL(string);
-    if (!["https:", "http:"].includes(url.protocol) || url.origin === "null" || !url.host) {
-      return false;
-    }
+    if (!["https:", "http:"].includes(url.protocol) || url.origin === "null" || !url.host) return false;
   } catch {
     return false;
   }
@@ -90,11 +84,59 @@ export function isURL(string: string): boolean {
  */
 export function checkIntents(options: ClientOptions): void {
   const bitfield: BitFieldResolvable<IntentsString, number> = options.intents || (options?.ws as any)?.intents;
-  if (typeof bitfield === "undefined") {
-    return;
-  }
+  if (typeof bitfield === "undefined") return;
   const intents = new Intents(bitfield);
   if (!intents.has("GUILD_VOICE_STATES")) {
     throw new DisTubeError("GUILD_VOICE_STATES intent must be provided for the Client", "MissingIntents");
   }
+}
+
+/**
+ * Check if the voice channel is empty
+ * @param {Discord.VoiceState} voiceState voiceState
+ * @returns {boolean}
+ */
+export function isVoiceChannelEmpty(voiceState: VoiceState): boolean {
+  const voiceChannel = voiceState.guild?.me?.voice?.channel;
+  if (!voiceChannel) return false;
+  const members = voiceChannel.members.filter(m => !m.user.bot);
+  return !members.size;
+}
+
+export function isSnowflake(id: any): id is Snowflake {
+  // TODO: Make this better
+  return typeof id === "string" && !!id.match(/^\d+$/) && id.length > 15;
+}
+
+export function isMemberInstance(member: any): member is GuildMember {
+  return (
+    member &&
+    isSnowflake(member.id) &&
+    isSnowflake(member.guild?.id) &&
+    isSnowflake(member.user?.id) &&
+    member.id === member.user.id
+  );
+}
+
+export function isTextChannelInstance(channel: any): channel is TextChannel {
+  return (
+    channel &&
+    isSnowflake(channel.id) &&
+    isSnowflake(channel.guild?.id) &&
+    // Check for some necessary functions to use with distube
+    typeof channel.send === "function" &&
+    typeof channel.awaitMessages === "function"
+  );
+}
+
+export function isMessageInstance(message: any): message is Message {
+  // Simple check for using distube normally
+  return (
+    message &&
+    isSnowflake(message.guild?.id) &&
+    isTextChannelInstance(message.channel) &&
+    isMemberInstance(message.member) &&
+    isSnowflake(message.author?.id) &&
+    message.member.id === message.author.id
+  );
 }

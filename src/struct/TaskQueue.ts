@@ -17,6 +17,8 @@ class Task {
 export class TaskQueue {
   /**
    * The task array
+   * @type {Task[]}
+   * @private
    */
   private tasks: Task[] = [];
 
@@ -40,13 +42,15 @@ export class TaskQueue {
 
   /**
    * The remaining number of tasks
+   * @type {number}
    */
   public get remaining(): number {
     return this.tasks.length;
   }
 
   /**
-   * Whether has a resolving info task
+   * Whether or not having a resolving info task
+   * @type {boolean}
    */
   public get hasResolveTask(): boolean {
     return !!this.tasks.find(t => t.resolveInfo);

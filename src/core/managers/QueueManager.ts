@@ -12,25 +12,31 @@ export class QueueManager extends BaseManager<Queue, QueueResolvable> {
    * @param {Discord.VoiceChannel|Discord.StageChannel} channel A voice channel
    * @param {Song|Song[]} song First song
    * @param {Discord.TextChannel} textChannel Default text channel
-   * @returns {Promise<Queue>}
+   * @returns {Promise<Queue|true>} Returns `true` if encounter an error
    */
-  async create(channel: VoiceChannel | StageChannel, song: Song[] | Song, textChannel?: TextChannel): Promise<Queue> {
-    if (this.has(channel.guild.id)) {
-      throw new DisTubeError("This guild has a Queue already", "QueueExist");
-    }
+  async create(
+    channel: VoiceChannel | StageChannel,
+    song: Song[] | Song,
+    textChannel?: TextChannel,
+  ): Promise<Queue | true> {
+    if (this.has(channel.guild.id)) throw new DisTubeError("This guild has a Queue already", "QueueExist");
     if (!channel.joinable) {
-      if (channel.full) {
-        throw new DisTubeError("The voice channel is full.", "JoinError");
-      } else {
-        throw new DisTubeError("You do not have permission to join this voice channel.", "JoinError");
-      }
+      if (channel.full) throw new DisTubeError("The voice channel is full.", "JoinError");
+      else throw new DisTubeError("You do not have permission to join this voice channel.", "JoinError");
     }
     const voice = this.voices.create(channel);
     const queue = new Queue(this.distube, voice, song, textChannel);
-    await voice.join();
-    this._voiceEventHandler(queue);
-    this.add(queue.id, queue);
-    return queue;
+    await queue.taskQueue.queuing();
+    try {
+      await voice.join();
+      this._voiceEventHandler(queue);
+      this.add(queue.id, queue);
+      this.emit("initQueue", queue);
+      const err = await this.queues.playSong(queue);
+      return err ? err : queue;
+    } finally {
+      queue.taskQueue.resolve();
+    }
   }
   /**
    * Get a Queue from a QueueManager with a QueueResolvable.
@@ -48,11 +54,8 @@ export class QueueManager extends BaseManager<Queue, QueueResolvable> {
     queue.voice
       .on("disconnect", error => {
         queue.delete();
-        if (!error) {
-          this.emit("disconnect", queue);
-        } else {
-          this.emitError(error, queue.textChannel);
-        }
+        if (!error) this.emit("disconnect", queue);
+        else this.emitError(error, queue.textChannel);
       })
       .on("error", error => {
         this._handlePlayingError(queue, error);
@@ -123,9 +126,7 @@ export class QueueManager extends BaseManager<Queue, QueueResolvable> {
     this.emitError(error, queue.textChannel);
     if (queue.songs.length > 0) {
       this.playSong(queue).then(e => {
-        if (!e) {
-          this.emit("playSong", queue, queue.songs[0]);
-        }
+        if (!e) this.emit("playSong", queue, queue.songs[0]);
       });
     } else {
       queue.stop();
@@ -139,9 +140,7 @@ export class QueueManager extends BaseManager<Queue, QueueResolvable> {
    * @returns {Promise<boolean>} error?
    */
   async playSong(queue: Queue): Promise<boolean> {
-    if (!queue) {
-      return true;
-    }
+    if (!queue) return true;
     if (!queue.songs.length) {
       queue.stop();
       return true;
@@ -151,9 +150,7 @@ export class QueueManager extends BaseManager<Queue, QueueResolvable> {
     const song = queue.songs[0];
     try {
       const { url, source, formats, streamURL } = song;
-      if (source === "youtube" && !formats) {
-        song._patchYouTube(await this.handler.getYouTubeInfo(url));
-      }
+      if (source === "youtube" && !formats) song._patchYouTube(await this.handler.getYouTubeInfo(url));
       if (source !== "youtube" && !streamURL) {
         for (const plugin of [...this.distube.extractorPlugins, ...this.distube.customPlugins]) {
           if (await plugin.validate(url)) {
@@ -181,9 +178,6 @@ export class QueueManager extends BaseManager<Queue, QueueResolvable> {
    * @returns {boolean}
    */
   private _emitPlaySong(queue: Queue): boolean {
-    if (!this.options.emitNewSongOnly || (queue.repeatMode !== 1 && queue.songs[0]?.id !== queue.songs[1]?.id)) {
-      return true;
-    }
-    return false;
+    return !this.options.emitNewSongOnly || (queue.repeatMode !== 1 && queue.songs[0]?.id !== queue.songs[1]?.id);
   }
 }

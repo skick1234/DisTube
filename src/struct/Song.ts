@@ -16,11 +16,11 @@ export class Song {
   formats?: ytdl.videoFormat[];
   member?: GuildMember;
   user?: User;
-  id!: string;
-  name!: string;
+  id?: string;
+  name?: string;
   isLive!: boolean;
   duration!: number;
-  formattedDuration!: string;
+  formattedDuration?: string;
   url!: string;
   streamURL?: string;
   thumbnail?: string;
@@ -71,7 +71,7 @@ export class Song {
     const info = i as any;
     if ((info as any).full === true) {
       /**
-       * Stream formats (Available if the song is playing)
+       * Stream formats (Available if the song is from YouTube and playing)
        * @type {ytdl.videoFormat[]?}
        * @private
        */
@@ -92,12 +92,12 @@ export class Song {
     const details = info.videoDetails || info;
     /**
      * YouTube video id
-     * @type {string}
+     * @type {string?}
      */
     this.id = details.videoId || details.id;
     /**
      * Song name aka video title.
-     * @type {string}
+     * @type {string?}
      */
     this.name = details.title || details.name;
     /**
@@ -112,7 +112,7 @@ export class Song {
     this.duration = this.isLive ? 0 : toSecond(details.lengthSeconds || details.length_seconds || details.duration);
     /**
      * Formatted duration string (`hh:mm:ss`, `mm:ss` or `Live`).
-     * @type {string}
+     * @type {string?}
      */
     this.formattedDuration = this.isLive ? "Live" : formatDuration(this.duration);
     /**
@@ -191,14 +191,9 @@ export class Song {
    * @private
    */
   private _patchOther(info: OtherSongInfo) {
-    if (info.id) {
-      this.id = info.id;
-    }
-    if (info.title) {
-      this.name = info.title;
-    } else if (info.name) {
-      this.name = info.name;
-    }
+    if (info.id) this.id = info.id;
+    if (info.title) this.name = info.title;
+    else if (info.name) this.name = info.name;
     this.isLive = Boolean(info.is_live || info.isLive);
     this.duration = this.isLive ? 0 : toSecond(info._duration_raw || info.duration);
     this.formattedDuration = this.isLive ? "Live" : formatDuration(this.duration);

@@ -58,7 +58,9 @@
         "allowEmptyCatch": true
       }
     ],
-    "no-multi-spaces": "error"
+    "no-multi-spaces": "error",
+    "arrow-parens": ["error", "as-needed"],
+    "curly": ["error", "multi-line", "consistent"]
   },
   "settings": {
     "jsdoc": {

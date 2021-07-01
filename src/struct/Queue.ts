@@ -15,73 +15,60 @@ export class Queue extends DisTubeBase {
   voice: DisTubeVoice;
   /**
    * List of songs in the queue (The first one is the playing song)
-   * @type {Song[]}
    */
   songs: Song[];
   /**
    * List of the previous songs.
-   * @type {Song[]}
    */
   previousSongs: Song[];
   /**
    * Whether stream is currently stopped.
-   * @type {boolean}
    * @private
    */
   stopped: boolean;
   /**
    * Whether or not the last song was skipped to next song.
-   * @type {boolean}
    * @private
    */
   next: boolean;
   /**
    * Whether or not the last song was skipped to previous song.
-   * @type {boolean}
    * @private
    */
   prev: boolean;
   /**
    * Whether or not the stream is currently playing.
-   * @type {boolean}
    */
   playing: boolean;
   /**
    * Whether or not the stream is currently paused.
-   * @type {boolean}
    */
   paused: boolean;
   /**
    * Type of repeat mode (`0` is disabled, `1` is repeating a song, `2` is repeating all the queue).
    * Default value: `0` (disabled)
-   * @type {number}
    */
   repeatMode: number;
   /**
    * Whether or not the autoplay mode is enabled.
    * Default value: `false`
-   * @type {boolean}
    */
   autoplay: boolean;
   /**
    * Enabled audio filters.
    * Available filters: {@link Filters}
-   * @type {string[]}
    */
   filters: string[];
   /**
    * What time in the song to begin (in seconds).
-   * @type {number}
    */
   beginTime: number;
   /**
    * The text channel of the Queue. (Default: where the first command is called).
-   * @type {Discord.TextChannel?}
    */
   textChannel?: TextChannel;
   /**
    * Timeout for checking empty channel
-   * @type {NodeJS.Timeout?}
    * @private
    */
   emptyTimeout?: NodeJS.Timeout;
@@ -248,37 +235,30 @@ export class Queue extends DisTubeBase {
    * @param {number} [position=-1] Position to add, < 0 to add to the end of the queue
    * @param {boolean} [queuing=true] Wether or not waiting for unfinished tasks
    * @throws {Error}
-   * @returns {Promise<Queue>} The guild queue
+   * @returns {Queue} The guild queue
    */
-  async addToQueue(song: Song | SearchResult | (Song | SearchResult)[], position = -1, queuing = true): Promise<Queue> {
-    if (queuing) await this.taskQueue.queuing();
-    try {
-      const isArray = Array.isArray(song);
-      if (!song || (isArray && !(song as Song[]).length)) throw new Error("No Song provided.");
-      if (position === 0) throw new SyntaxError("Cannot add Song before the playing Song.");
-      if (position < 0) {
-        if (isArray) this.songs.push(...(song as Song[]));
-        else this.songs.push(song as Song);
-      } else if (isArray) {
-        this.songs.splice(position, 0, ...(song as Song[]));
-      } else {
-        this.songs.splice(position, 0, song as Song);
-      }
-      if (isArray) (song as Song[]).map(s => delete s.formats);
-      else delete (song as Song).formats;
-      return this;
-    } finally {
-      if (queuing) this.taskQueue.resolve();
+  addToQueue(song: Song | SearchResult | (Song | SearchResult)[], position = -1): Queue {
+    const isArray = Array.isArray(song);
+    if (!song || (isArray && !(song as Song[]).length)) throw new Error("No Song provided.");
+    if (position === 0) throw new SyntaxError("Cannot add Song before the playing Song.");
+    if (position < 0) {
+      if (isArray) this.songs.push(...(song as Song[]));
+      else this.songs.push(song as Song);
+    } else if (isArray) {
+      this.songs.splice(position, 0, ...(song as Song[]));
+    } else {
+      this.songs.splice(position, 0, song as Song);
     }
+    if (isArray) (song as Song[]).map(s => delete s.formats);
+    else delete (song as Song).formats;
+    return this;
   }
   /**
    * Pause the guild stream
    * @returns {Queue} The guild queue
    */
   pause(): Queue {
-    if (this.paused) {
-      throw new Error("The queue has been paused already.");
-    }
+    if (this.paused) throw new Error("The queue has been paused already.");
     this.playing = false;
     this.paused = true;
     this.voice.pause();
@@ -289,9 +269,7 @@ export class Queue extends DisTubeBase {
    * @returns {Queue} The guild queue
    */
   resume(): Queue {
-    if (this.playing) {
-      throw new Error("The queue has been playing already.");
-    }
+    if (this.playing) throw new Error("The queue has been playing already.");
     this.playing = true;
     this.paused = false;
     this.voice.unpause();
@@ -399,16 +377,10 @@ export class Queue extends DisTubeBase {
    * @returns {number} The new repeat mode
    */
   setRepeatMode(mode: number | null = null): number {
-    if (mode !== null && typeof mode !== "number") {
-      throw new TypeError("mode must be a number or null.");
-    }
-    if (!mode && mode !== 0) {
-      this.repeatMode = (this.repeatMode + 1) % 3;
-    } else if (this.repeatMode === mode) {
-      this.repeatMode = 0;
-    } else {
-      this.repeatMode = mode;
-    }
+    if (mode !== null && typeof mode !== "number") throw new TypeError("mode must be a number or null.");
+    if (!mode && mode !== 0) this.repeatMode = (this.repeatMode + 1) % 3;
+    else if (this.repeatMode === mode) this.repeatMode = 0;
+    else this.repeatMode = mode;
     return this.repeatMode;
   }
   /**
@@ -422,16 +394,11 @@ export class Queue extends DisTubeBase {
   setFilter(filter: string | string[] | false, force = false): Array<string> {
     if (Array.isArray(filter)) {
       filter = filter.filter(f => Object.prototype.hasOwnProperty.call(this.distube.filters, f));
-      if (!filter.length) {
-        throw new TypeError("There is no valid filter name in your param");
-      }
+      if (!filter.length) throw new TypeError("There is no valid filter name in your param");
       for (const f of filter) {
         if (this.filters.includes(f)) {
-          if (!force) {
-            this.filters.splice(this.filters.indexOf(f), 1);
-          }
-        } else {
-          this.filters.push(f);
+          if (!force) this.filters.splice(this.filters.indexOf(f), 1);
+          else this.filters.push(f);
         }
       }
     } else if (filter === false) {
@@ -439,11 +406,8 @@ export class Queue extends DisTubeBase {
     } else if (!Object.prototype.hasOwnProperty.call(this.distube.filters, filter)) {
       throw new TypeError(`${filter} is not a filter name.`);
     } else if (this.filters.includes(filter)) {
-      if (!force) {
-        this.filters.splice(this.filters.indexOf(filter), 1);
-      }
-    } else {
-      this.filters.push(filter);
+      if (!force) this.filters.splice(this.filters.indexOf(filter), 1);
+      else this.filters.push(filter);
     }
     this.beginTime = this.currentTime;
     this.queues.playSong(this);
@@ -465,13 +429,9 @@ export class Queue extends DisTubeBase {
    * @throws {Error}
    */
   async addRelatedSong(): Promise<Queue> {
-    if (!this.songs?.[0]) {
-      throw new Error("There is no playing song.");
-    }
+    if (!this.songs?.[0]) throw new Error("There is no playing song.");
     const related = this.songs[0].related.find(v => !this.previousSongs.map(s => s.id).includes(v.id));
-    if (!related || !(related instanceof Song)) {
-      throw new Error("Cannot find any related songs.");
-    }
+    if (!related || !(related instanceof Song)) throw new Error("Cannot find any related songs.");
     this.addToQueue((await this.handler.resolveSong(this.clientMember, related.url)) as Song);
     return this;
   }
