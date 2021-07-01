@@ -69,54 +69,43 @@ export class QueueManager extends BaseManager<Queue, QueueResolvable> {
    */
   private async _handleSongFinish(queue: Queue): Promise<void> {
     this.emit("finishSong", queue, queue.songs[0]);
-    if (queue.stopped) {
-      return;
-    }
-    if (queue.repeatMode === 2 && !queue.prev) {
-      queue.songs.push(queue.songs[0]);
-    }
-    if (queue.prev) {
-      if (queue.repeatMode === 2) {
-        queue.songs.unshift(queue.songs.pop() as Song);
-      } else {
-        queue.songs.unshift(queue.previousSongs.pop() as Song);
+    await queue.taskQueue.queuing();
+    try {
+      if (queue.stopped) return;
+      if (queue.repeatMode === 2 && !queue.prev) queue.songs.push(queue.songs[0]);
+      if (queue.prev) {
+        if (queue.repeatMode === 2) queue.songs.unshift(queue.songs.pop() as Song);
+        else queue.songs.unshift(queue.previousSongs.pop() as Song);
       }
-    }
-    if (queue.songs.length <= 1 && (queue.next || !queue.repeatMode)) {
-      if (queue.autoplay) {
-        try {
-          await queue.addRelatedSong();
-        } catch {
-          this.emit("noRelated", queue);
+      if (queue.songs.length <= 1 && (queue.next || !queue.repeatMode)) {
+        if (queue.autoplay) {
+          try {
+            await queue.addRelatedSong();
+          } catch {
+            this.emit("noRelated", queue);
+          }
+        }
+        if (queue.songs.length <= 1) {
+          if (this.options.leaveOnFinish) queue.voice.leave();
+          if (!queue.autoplay) this.emit("finish", queue);
+          queue.delete();
+          return;
         }
       }
-      if (queue.songs.length <= 1) {
-        if (this.options.leaveOnFinish) {
-          queue.voice.leave();
-        }
-        if (!queue.autoplay) {
-          this.emit("finish", queue);
-        }
-        queue.delete();
-        return;
+      const emitPlaySong = this._emitPlaySong(queue);
+      if (!queue.prev && (queue.repeatMode !== 1 || queue.next)) {
+        const prev = queue.songs.shift() as Song;
+        delete prev.formats;
+        delete prev.streamURL;
+        if (this.options.savePreviousSongs) queue.previousSongs.push(prev);
+        else queue.previousSongs.push({ id: prev.id } as Song);
       }
-    }
-    const emitPlaySong = this._emitPlaySong(queue);
-    if (!queue.prev && (queue.repeatMode !== 1 || queue.next)) {
-      const prev = queue.songs.shift() as Song;
-      delete prev.formats;
-      delete prev.streamURL;
-      if (this.options.savePreviousSongs) {
-        queue.previousSongs.push(prev);
-      } else {
-        queue.previousSongs.push({ id: prev.id } as Song);
-      }
-    }
-    queue.next = queue.prev = false;
-    queue.beginTime = 0;
-    const err = await this.playSong(queue);
-    if (!err && emitPlaySong) {
-      this.emit("playSong", queue, queue.songs[0]);
+      queue.next = queue.prev = false;
+      queue.beginTime = 0;
+      const err = await this.playSong(queue);
+      if (!err && emitPlaySong) this.emit("playSong", queue, queue.songs[0]);
+    } finally {
+      queue.taskQueue.resolve();
     }
   }
   /**

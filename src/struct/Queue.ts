@@ -1,7 +1,7 @@
 import DisTube from "../DisTube";
 import { DisTubeBase, DisTubeVoice } from "../core";
-import { SearchResult, Song, formatDuration } from "..";
 import { GuildMember, Snowflake, TextChannel } from "discord.js";
+import { SearchResult, Song, TaskQueue, formatDuration } from "..";
 
 /**
  * Represents a queue.
@@ -89,6 +89,10 @@ export class Queue extends DisTubeBase {
    * The client user as a `GuildMember` of this queue's guild
    */
   clientMember: GuildMember;
+  /**
+   * Task queuing system
+   */
+  taskQueue: TaskQueue;
   /**
    * Create a queue for the guild
    * @param {DisTube} distube DisTube
@@ -190,6 +194,12 @@ export class Queue extends DisTubeBase {
      * @private
      */
     this.emptyTimeout = undefined;
+    /**
+     * Task queuing system
+     * @type {TaskQueue}
+     * @private
+     */
+    this.taskQueue = new TaskQueue();
   }
   /**
    * Formatted duration string.
@@ -236,34 +246,30 @@ export class Queue extends DisTubeBase {
    * Add a Song or an array of Song to the queue
    * @param {Song|Song[]} song Song to add
    * @param {number} [position=-1] Position to add, < 0 to add to the end of the queue
+   * @param {boolean} [queuing=true] Wether or not waiting for unfinished tasks
    * @throws {Error}
-   * @returns {Queue} The guild queue
+   * @returns {Promise<Queue>} The guild queue
    */
-  addToQueue(song: Song | SearchResult | (Song | SearchResult)[], position = -1): Queue {
-    const isArray = Array.isArray(song);
-    if (!song || (isArray && !(song as Song[]).length)) {
-      throw new Error("No Song provided.");
-    }
-    if (position === 0) {
-      throw new SyntaxError("Cannot add Song before the playing Song.");
-    }
-    if (position < 0) {
-      if (isArray) {
-        this.songs.push(...(song as Song[]));
+  async addToQueue(song: Song | SearchResult | (Song | SearchResult)[], position = -1, queuing = true): Promise<Queue> {
+    if (queuing) await this.taskQueue.queuing();
+    try {
+      const isArray = Array.isArray(song);
+      if (!song || (isArray && !(song as Song[]).length)) throw new Error("No Song provided.");
+      if (position === 0) throw new SyntaxError("Cannot add Song before the playing Song.");
+      if (position < 0) {
+        if (isArray) this.songs.push(...(song as Song[]));
+        else this.songs.push(song as Song);
+      } else if (isArray) {
+        this.songs.splice(position, 0, ...(song as Song[]));
       } else {
-        this.songs.push(song as Song);
+        this.songs.splice(position, 0, song as Song);
       }
-    } else if (isArray) {
-      this.songs.splice(position, 0, ...(song as Song[]));
-    } else {
-      this.songs.splice(position, 0, song as Song);
+      if (isArray) (song as Song[]).map(s => delete s.formats);
+      else delete (song as Song).formats;
+      return this;
+    } finally {
+      if (queuing) this.taskQueue.resolve();
     }
-    if (isArray) {
-      (song as Song[]).map(s => delete s.formats);
-    } else {
-      delete (song as Song).formats;
-    }
-    return this;
   }
   /**
    * Pause the guild stream
@@ -303,17 +309,20 @@ export class Queue extends DisTubeBase {
 
   /**
    * Skip the playing song
-   * @returns {Song} The song will skip to
+   * @returns {Promise<Song>} The song will skip to
    * @throws {Error}
    */
-  skip(): Song {
-    if (this.songs.length <= 1 && !this.autoplay) {
-      throw new Error("There is no song to skip.");
+  async skip(): Promise<Song> {
+    await this.taskQueue.queuing();
+    try {
+      if (this.songs.length <= 1 && !this.autoplay) throw new Error("There is no song to skip.");
+      const song = this.songs[1];
+      this.next = true;
+      this.voice.stop();
+      return song;
+    } finally {
+      this.taskQueue.resolve();
     }
-    const song = this.songs[1];
-    this.next = true;
-    this.voice.stop();
-    return song;
   }
 
   /**
@@ -321,63 +330,66 @@ export class Queue extends DisTubeBase {
    * @returns {Song} The guild queue
    * @throws {Error}
    */
-  previous(): Song {
-    if (!this.options.savePreviousSongs) {
-      throw new Error("savePreviousSongs is disabled.");
+  async previous(): Promise<Song> {
+    await this.taskQueue.queuing();
+    try {
+      if (!this.options.savePreviousSongs) throw new Error("savePreviousSongs is disabled.");
+      if (this.previousSongs?.length === 0 && this.repeatMode !== 2) throw new Error("There is no previous song.");
+      const song =
+        this.repeatMode === 2 ? this.songs[this.songs.length - 1] : this.previousSongs[this.previousSongs.length - 1];
+      this.prev = true;
+      this.voice.stop();
+      return song;
+    } finally {
+      this.taskQueue.resolve();
     }
-    if (this.previousSongs?.length === 0 && this.repeatMode !== 2) {
-      throw new Error("There is no previous song.");
-    }
-    const song =
-      this.repeatMode === 2 ? this.songs[this.songs.length - 1] : this.previousSongs[this.previousSongs.length - 1];
-    this.prev = true;
-    this.voice.stop();
-    return song;
   }
   /**
    * Shuffle the queue's songs
-   * @returns {Queue} The guild queue
+   * @returns {Promise<Queue>} The guild queue
    */
-  shuffle(): Queue {
-    if (!this.songs.length) {
+  async shuffle(): Promise<Queue> {
+    await this.taskQueue.queuing();
+    try {
+      if (!this.songs.length) return this;
+      const playing = this.songs.shift() as Song;
+      for (let i = this.songs.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [this.songs[i], this.songs[j]] = [this.songs[j], this.songs[i]];
+      }
+      this.songs.unshift(playing);
       return this;
+    } finally {
+      this.taskQueue.resolve();
     }
-    const playing = this.songs.shift() as Song;
-    for (let i = this.songs.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [this.songs[i], this.songs[j]] = [this.songs[j], this.songs[i]];
-    }
-    this.songs.unshift(playing);
-    return this;
   }
   /**
    * Jump to the song number in the queue.
    * The next one is 1, 2,...
    * The previous one is -1, -2,...
    * @param {number} num The song number to play
-   * @returns {Queue} The guild queue
+   * @returns {Promise<Queue>} The guild queue
    * @throws {Error} if `num` is invalid number
    */
-  jump(num: number): Queue {
-    if (typeof num !== "number") {
-      throw new TypeError("num must be a number.");
-    }
-    if (num > this.songs.length || -num > this.previousSongs.length || num === 0) {
-      throw new RangeError("InvalidSong");
-    }
-    if (num > 0) {
-      this.songs = this.songs.splice(num - 1);
-      this.next = true;
-    } else if (!this.options.savePreviousSongs) {
-      throw new RangeError("InvalidSong");
-    } else {
-      this.prev = true;
-      if (num !== -1) {
-        this.songs.unshift(...this.previousSongs.splice(num + 1));
+  async jump(num: number): Promise<Queue> {
+    await this.taskQueue.queuing();
+    try {
+      if (typeof num !== "number") throw new TypeError("num must be a number.");
+      if (num > this.songs.length || -num > this.previousSongs.length || num === 0) throw new RangeError("InvalidSong");
+      if (num > 0) {
+        this.songs = this.songs.splice(num - 1);
+        this.next = true;
+      } else if (!this.options.savePreviousSongs) {
+        throw new RangeError("InvalidSong");
+      } else {
+        this.prev = true;
+        if (num !== -1) this.songs.unshift(...this.previousSongs.splice(num + 1));
       }
+      this.voice.stop();
+      return this;
+    } finally {
+      this.taskQueue.resolve();
     }
-    this.voice.stop();
-    return this;
   }
   /**
    * Set the repeat mode of the guild queue.
@@ -466,13 +478,16 @@ export class Queue extends DisTubeBase {
   /**
    * Stop the guild stream
    */
-  stop() {
-    this.stopped = true;
-    this.voice.stop();
-    if (this.options.leaveOnStop) {
-      this.voice.leave();
+  async stop() {
+    await this.taskQueue.queuing();
+    try {
+      this.stopped = true;
+      this.voice.stop();
+      if (this.options.leaveOnStop) this.voice.leave();
+      this.delete();
+    } finally {
+      this.taskQueue.resolve();
     }
-    this.delete();
   }
   /**
    * Delete the queue

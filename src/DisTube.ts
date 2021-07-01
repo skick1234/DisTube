@@ -251,42 +251,35 @@ class DisTube extends EventEmitter {
           }
         }
       }
-      if (song instanceof SearchResult && song.type === "playlist") {
-        song = song.url;
-      }
-      if (typeof song === "string" && ytpl.validateID(song)) {
-        song = await this.handler.resolvePlaylist(member, song);
-      }
-      if (typeof song === "string" && !isURL(song)) {
-        if (!message) {
-          song = (await this.search(song, { limit: 1 }))[0];
-        } else {
-          song = await this.handler.searchSong(message, song);
+      let queue = this.getQueue(voiceChannel);
+      const queuing = queue && !queue.taskQueue.hasResolveTask;
+      if (queuing) await queue?.taskQueue.queuing(true);
+      try {
+        if (song instanceof SearchResult && song.type === "playlist") song = song.url;
+        if (typeof song === "string" && ytpl.validateID(song)) song = await this.handler.resolvePlaylist(member, song);
+        if (typeof song === "string" && !isURL(song)) {
+          if (!message) song = (await this.search(song, { limit: 1 }))[0];
+          else song = await this.handler.searchSong(message, song);
         }
-      }
-      song = await this.handler.resolveSong(member, song);
-      if (!song) {
-        return;
-      }
-      if (song instanceof Playlist) {
-        await this.handler.handlePlaylist(voiceChannel, song, textChannel, skip, unshift);
-      } else if (!this.options.nsfw && (song as Song).age_restricted && !textChannel?.nsfw) {
-        throw new Error("Cannot play age-restricted content in non-NSFW channel.");
-      } else {
-        const queue = this.getQueue(voiceChannel);
-        if (queue) {
-          queue.addToQueue(song as Song, skip || unshift ? 1 : -1);
-          if (skip) {
-            queue.skip();
+        song = await this.handler.resolveSong(member, song);
+        if (!song) return;
+        if (song instanceof Playlist) {
+          await this.handler.handlePlaylist(voiceChannel, song, textChannel, skip, unshift);
+        } else if (!this.options.nsfw && (song as Song).age_restricted && !textChannel?.nsfw) {
+          throw new Error("Cannot play age-restricted content in non-NSFW channel.");
+        } else {
+          queue = this.getQueue(voiceChannel);
+          if (queue) {
+            queue.addToQueue(song as Song, skip || unshift ? 1 : -1);
+            if (skip) queue.skip();
+            else this.emit("addSong", queue, song);
           } else {
-            this.emit("addSong", queue, song);
-          }
-        } else {
-          const newQueue = await this._newQueue(voiceChannel, song as Song, textChannel);
-          if (newQueue instanceof Queue) {
-            this.emit("playSong", newQueue, song);
+            const newQueue = await this.handler.createQueue(voiceChannel, song as Song, textChannel);
+            if (newQueue instanceof Queue) this.emit("playSong", newQueue, song);
           }
         }
+      } finally {
+        if (queuing) queue?.taskQueue.resolve();
       }
     } catch (e) {
       if (!(e instanceof DisTubeError)) {
@@ -336,8 +329,15 @@ class DisTube extends EventEmitter {
         },
         options,
       );
-      const playlist = await this.handler.createCustomPlaylist(message, songs, properties, parallel);
-      await this.handler.handlePlaylist(message, playlist, skip, unshift);
+      const queue = this.getQueue(message);
+      const queuing = queue && !queue.taskQueue.hasResolveTask;
+      if (queuing) await queue?.taskQueue.queuing(true);
+      try {
+        const playlist = await this.handler.createCustomPlaylist(message, songs, properties, parallel);
+        await this.handler.handlePlaylist(message, playlist, skip, unshift);
+      } finally {
+        if (queuing) queue?.taskQueue.resolve();
+      }
     } catch (e) {
       this.emitError(e, message.channel as TextChannel);
     }

@@ -1,4 +1,5 @@
 export * from "./DisTubeError";
+export * from "./TaskQueue";
 export * from "./Playlist";
 export * from "./SearchResult";
 export * from "./Song";
