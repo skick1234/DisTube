@@ -655,7 +655,7 @@ class DisTube extends EventEmitter {
   /* eslint-enable no-console */
 }
 
-export { Options as DisTubeOptions, Song, Playlist, CustomPlugin, ExtractorPlugin, Queue, SearchResult, DisTube };
+export { DisTubeOptions, Song, Playlist, CustomPlugin, ExtractorPlugin, Queue, SearchResult, DisTube };
 export default DisTube;
 
 /**
