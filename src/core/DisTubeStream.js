@@ -20,6 +20,9 @@ const nextBestFormat = (formats, isLive) => {
 
 const createStream = (url, options = {}) => {
   const args = [
+    "-reconnect", "1",
+    "-reconnect_streamed", "1",
+    "-reconnect_delay_max", "5",
     "-i", url,
     "-analyzeduration", "0",
     "-loglevel", "0",
@@ -44,24 +47,9 @@ module.exports = class DisTubeStream {
   static YouTube(info, options = {}) {
     if (!info.full) throw new TypeError("info must be a full videoInfo from ytdl.getInfo().");
     if (!options) throw new TypeError("options must be an object.");
-    options.quality = "highestaudio";
-    if (info.videoDetails.lengthSeconds !== 0) options.filter = "audioonly";
-    else options.filter = "audioandvideo";
-    const filter = format =>
-      format.audioSampleRate === "48000" &&
-      format.codecs === "opus" &&
-      format.container === "webm";
-    const format = info.formats.find(filter);
-    if (format && info.videoDetails.lengthSeconds > 0 && options.seek <= 0 && !options.FFmpegArgs?.length) {
-      return pipeline([
-        ytdl.downloadFromInfo(info, { ...options, filter }),
-        new opus.WebmDemuxer(),
-      ], () => undefined);
-    } else {
-      const bestFormat = nextBestFormat(info.formats, info.videoDetails.isLive);
-      if (!bestFormat) throw new Error("No suitable format found");
-      return createStream(bestFormat.url, options);
-    }
+    const bestFormat = nextBestFormat(info.formats, info.videoDetails.isLive);
+    if (!bestFormat) throw new Error("No suitable format found");
+    return createStream(bestFormat.url, options);
   }
   /**
    * Create a stream from a stream url
