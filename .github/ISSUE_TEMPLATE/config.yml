@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Frequently Asked Questions
+    url: https://github.com/skick1234/DisTube/wiki/Frequently-Asked-Questions
+    about: DisTube Frequently Asked Questions
+  - name: Discussions
+    url: https://github.com/skick1234/DisTube/discussions
+    about: Suggest an idea for this project or ask a question here
+  - name: Discord Support Server
+    url: https://discord.gg/feaDd9h
+    about: Like Discussions but on Discord
