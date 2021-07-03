@@ -380,7 +380,7 @@ class DisTube extends EventEmitter {
   /**
    * Get the guild queue
    * @param {QueueResolvable} queue The type can be resolved to give a {@link Queue}
-   * @returns {Queue}
+   * @returns {Queue?}
    * @throws {Error}
    * @example
    * client.on('message', (message) => {
