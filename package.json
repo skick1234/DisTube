@@ -5,7 +5,7 @@
   "main": "dist/DisTube.js",
   "typings": "dist/DisTube.d.ts",
   "scripts": {
-    "docgen": "npm run build && docgen --source dist --output docs/alpha.json --custom pages/index.yml",
+    "docs": "npm run build && docgen --source dist --output docs/docs.json --custom pages/index.yml",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "prettier": "prettier --write **/*.{ts,json,yml,yaml}",
