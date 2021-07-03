@@ -313,7 +313,7 @@ class DisTubeHandler extends DisTubeBase {
    * @returns {Promise<void>}
    */
   async _handleSongFinish(queue) {
-    this.emit("finishSong", queue, queue.songs[0]);
+    if (!queue.sought) this.emit("finishSong", queue, queue.songs[0]);
     if (queue.stopped || queue.sought) {
       queue.stopped = queue.sought = false;
       return;
