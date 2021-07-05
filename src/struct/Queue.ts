@@ -398,7 +398,8 @@ export class Queue extends DisTubeBase {
       for (const f of filter) {
         if (this.filters.includes(f)) {
           if (!force) this.filters.splice(this.filters.indexOf(f), 1);
-          else this.filters.push(f);
+        } else {
+          this.filters.push(f);
         }
       }
     } else if (filter === false) {
