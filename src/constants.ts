@@ -19,7 +19,7 @@ import { DisTubeOptions, Filters } from ".";
  * @prop {string} tremolo tremolo
  * @prop {string} earwax earwax
  */
-export const DefaultFilters: Filters = {
+export const defaultFilters: Filters = {
   "3d": "apulsator=hz=0.125",
   bassboost: "bass=g=10",
   echo: "aecho=0.8:0.9:1000:0.3",
@@ -51,7 +51,7 @@ export const DefaultFilters: Filters = {
  * @prop {string} [youtubeIdentityToken=null] If not given; ytdl-core will try to find it. You can find this by going to a video's watch page; viewing the source; and searching for "ID_TOKEN".
  * @prop {boolean} [youtubeDL=true] Whether or not using youtube-dl.
  * @prop {boolean} [updateYouTubeDL=true] Whether or not updating youtube-dl automatically.
- * @prop {Filters} [customFilters] Override {@link DefaultFilters} or add more ffmpeg filters. Example=`{ "Filter name"="Filter value"; "8d"="apulsator=hz=0.075" }`
+ * @prop {Filters} [customFilters] Override {@link defaultFilters} or add more ffmpeg filters. Example=`{ "Filter name"="Filter value"; "8d"="apulsator=hz=0.075" }`
  * @prop {Object} [ytdlOptions] `ytdl-core` options
  * @prop {number} [searchCooldown=60] Built-in search cooldown in seconds (When searchSongs is bigger than 0)
  * @prop {number} [emptyCooldown=60] Built-in leave on empty cooldown in seconds (When leaveOnEmpty is true)
@@ -96,5 +96,5 @@ export const defaultOptions: DisTubeOptions = {
  * }
  * ```
  * @typedef {Object.<string, string>} Filters
- * @see {@link DefaultFilters}
+ * @see {@link defaultFilters}
  */

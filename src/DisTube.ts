@@ -5,7 +5,6 @@ import { checkIntents, isURL, isVoiceChannelEmpty } from "./Util";
 import { Client, GuildMember, Message, StageChannel, TextChannel, VoiceChannel } from "discord.js";
 import {
   CustomPlugin,
-  DefaultFilters,
   DisTubeError,
   DisTubeHandler,
   DisTubeOptions,
@@ -22,6 +21,7 @@ import {
   SearchResult,
   Song,
   YouTubeDLPlugin,
+  defaultFilters,
   isMessageInstance,
   isTextChannelInstance,
 } from ".";
@@ -98,7 +98,7 @@ class DisTube extends EventEmitter {
      * DisTube filters
      * @type {Filters}
      */
-    this.filters = DefaultFilters;
+    this.filters = defaultFilters;
     if (typeof this.options.customFilters === "object") Object.assign(this.filters, this.options.customFilters);
     if (this.options.leaveOnEmpty) {
       client.on("voiceStateUpdate", oldState => {
@@ -533,9 +533,9 @@ class DisTube extends EventEmitter {
   /**
    * Set the repeat mode of the guild queue.
    * Turn off if repeat mode is the same value as new mode.
-   * Toggle mode: `mode = null` `(0 -> 1 -> 2 -> 0...)`
+   * Toggle mode `(0 -> 1 -> 2 -> 0...)`: `mode` is `undefined`
    * @param {QueueResolvable} queue The type can be resolved to give a {@link Queue}
-   * @param {number?} [mode=null] The repeat modes `(0: disabled, 1: Repeat a song, 2: Repeat all the queue)`
+   * @param {number?} [mode] The repeat modes `(0: disabled, 1: Repeat a song, 2: Repeat all the queue)`
    * @returns {number} The new repeat mode
    * @example
    * client.on('message', (message) => {
@@ -549,7 +549,7 @@ class DisTube extends EventEmitter {
    *     }
    * });
    */
-  setRepeatMode(queue: QueueResolvable, mode: number | null = null): number {
+  setRepeatMode(queue: QueueResolvable, mode?: number): number {
     const q = this.getQueue(queue);
     if (!q) throw new Error("Cannot find the playing queue.");
     return q.setRepeatMode(mode);
@@ -581,9 +581,9 @@ class DisTube extends EventEmitter {
   /**
    * Add related song to the queue
    * @param {QueueResolvable} queue The type can be resolved to give a {@link Queue}
-   * @returns {Promise<Queue>} The guild queue
+   * @returns {Promise<Song>} The guild queue
    */
-  addRelatedSong(queue: QueueResolvable): Promise<Queue> {
+  addRelatedSong(queue: QueueResolvable): Promise<Song> {
     const q = this.getQueue(queue);
     if (!q) throw new Error("Cannot find the playing queue.");
     return q.addRelatedSong();

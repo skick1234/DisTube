@@ -207,7 +207,7 @@ export class Queue extends DisTubeBase {
    * @type {number}
    */
   get currentTime() {
-    return this.voice ? this.voice.playbackDuration + this.beginTime : 0;
+    return this.voice.playbackDuration + this.beginTime;
   }
   /**
    * Formatted {@link Queue#currentTime} string.
@@ -240,7 +240,7 @@ export class Queue extends DisTubeBase {
   addToQueue(song: Song | SearchResult | (Song | SearchResult)[], position = -1): Queue {
     const isArray = Array.isArray(song);
     if (!song || (isArray && !(song as Song[]).length)) throw new Error("No Song provided.");
-    if (position === 0) throw new SyntaxError("Cannot add Song before the playing Song.");
+    if (position === 0) throw new Error("Cannot add Song before the playing Song.");
     if (position < 0) {
       if (isArray) this.songs.push(...(song as Song[]));
       else this.songs.push(song as Song);
@@ -293,7 +293,10 @@ export class Queue extends DisTubeBase {
   async skip(): Promise<Song> {
     await this.taskQueue.queuing();
     try {
-      if (this.songs.length <= 1 && !this.autoplay) throw new Error("There is no song to skip.");
+      if (this.songs.length <= 1) {
+        if (this.autoplay) await this.addRelatedSong();
+        else throw new Error("There is no song to skip.");
+      }
       const song = this.songs[1];
       this.next = true;
       this.voice.stop();
@@ -353,12 +356,24 @@ export class Queue extends DisTubeBase {
     await this.taskQueue.queuing();
     try {
       if (typeof num !== "number") throw new TypeError("num must be a number.");
-      if (num > this.songs.length || -num > this.previousSongs.length || num === 0) throw new RangeError("InvalidSong");
+      if (!num || num > this.songs.length || -num > this.previousSongs.length) {
+        throw new RangeError("Does not have any song at this position");
+      }
       if (num > 0) {
-        this.songs = this.songs.splice(num - 1);
+        const nextSongs = this.songs.splice(num - 1);
+        if (this.options.savePreviousSongs) {
+          this.previousSongs.push(...this.songs);
+        } else {
+          this.previousSongs.push(
+            ...this.songs.map(s => {
+              return { id: s.id } as Song;
+            }),
+          );
+        }
+        this.songs = nextSongs;
         this.next = true;
       } else if (!this.options.savePreviousSongs) {
-        throw new RangeError("InvalidSong");
+        throw new RangeError("Cannot play previous songs due to savePreviousSongs option is disabled");
       } else {
         this.prev = true;
         if (num !== -1) this.songs.unshift(...this.previousSongs.splice(num + 1));
@@ -372,13 +387,13 @@ export class Queue extends DisTubeBase {
   /**
    * Set the repeat mode of the guild queue.
    * Turn off if repeat mode is the same value as new mode.
-   * Toggle mode: `mode = null` `(0 -> 1 -> 2 -> 0...)`
+   * Toggle mode `(0 -> 1 -> 2 -> 0...)`: `mode` is `undefined`
    * @param {number?} [mode] The repeat modes `(0: disabled, 1: Repeat a song, 2: Repeat all the queue)`
    * @returns {number} The new repeat mode
    */
-  setRepeatMode(mode: number | null = null): number {
-    if (mode !== null && typeof mode !== "number") throw new TypeError("mode must be a number or null.");
-    if (!mode && mode !== 0) this.repeatMode = (this.repeatMode + 1) % 3;
+  setRepeatMode(mode?: number): number {
+    if (mode !== undefined && typeof mode !== "number") throw new TypeError("mode must be a number or undefined.");
+    if (mode === undefined) this.repeatMode = (this.repeatMode + 1) % 3;
     else if (this.repeatMode === mode) this.repeatMode = 0;
     else this.repeatMode = mode;
     return this.repeatMode;
@@ -408,7 +423,8 @@ export class Queue extends DisTubeBase {
       throw new TypeError(`${filter} is not a filter name.`);
     } else if (this.filters.includes(filter)) {
       if (!force) this.filters.splice(this.filters.indexOf(filter), 1);
-      else this.filters.push(filter);
+    } else {
+      this.filters.push(filter);
     }
     this.beginTime = this.currentTime;
     this.queues.playSong(this);
@@ -420,21 +436,25 @@ export class Queue extends DisTubeBase {
    * @returns {Queue} The guild queue
    */
   seek(time: number): Queue {
+    if (typeof time !== "number") throw new TypeError("time must be a number.");
+    if (isNaN(time) || time < 0) throw new RangeError("time must be >= 0");
     this.beginTime = time;
     this.queues.playSong(this);
     return this;
   }
   /**
    * Add a related song of the playing song to the queue
-   * @returns {Promise<Queue>} The guild queue
+   * @returns {Promise<Song>} The added song
    * @throws {Error}
    */
-  async addRelatedSong(): Promise<Queue> {
+  async addRelatedSong(): Promise<Song> {
     if (!this.songs?.[0]) throw new Error("There is no playing song.");
     const related = this.songs[0].related.find(v => !this.previousSongs.map(s => s.id).includes(v.id));
     if (!related || !(related instanceof Song)) throw new Error("Cannot find any related songs.");
-    this.addToQueue((await this.handler.resolveSong(this.clientMember, related.url)) as Song);
-    return this;
+    const song = await this.handler.resolveSong(this.clientMember, related.url);
+    if (!(song instanceof Song)) throw new Error("Cannot play the related song.");
+    this.addToQueue(song);
+    return song;
   }
   /**
    * Stop the guild stream

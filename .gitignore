@@ -104,4 +104,4 @@ package-lock.json
 docs
 
 .vscode
-test.js
+yarn.lock
