@@ -5,10 +5,11 @@
   "main": "dist/DisTube.js",
   "typings": "dist/DisTube.d.ts",
   "scripts": {
+    "test": "jest",
     "docs": "npm run build && docgen --source dist --output docs/docs.json --custom pages/index.yml",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "prettier": "prettier --write **/*.{ts,json,yml,yaml}",
+    "prettier": "prettier --write **/*.{js,ts,json,yml,yaml}",
     "build": "tsc",
     "build:check": "tsc --noEmit --incremental false",
     "publish:alpha": "npm publish --tag alpha"
@@ -46,23 +47,29 @@
     "ytdl-core": "^4.8.3"
   },
   "devDependencies": {
+    "@babel/core": "^7.14.6",
+    "@babel/preset-env": "^7.14.7",
+    "@babel/preset-typescript": "^7.14.5",
     "@discordjs/opus": "^0.5.0",
-    "@discordjs/voice": "^0.5.1",
-    "@distube/docgen": "github:distubejs/docgen",
-    "@types/node": "^15.12.5",
+    "@discordjs/voice": "0.5.3",
+    "@distube/docgen": "distubejs/docgen",
+    "@types/jest": "^26.0.23",
+    "@types/node": "^16.0.0",
     "@typescript-eslint/eslint-plugin": "^4.28.1",
     "@typescript-eslint/parser": "^4.28.1",
-    "discord.js": "github:discordjs/discord.js#5ad83a6a65e5944ceb3a41fee2df40ba1f5b03e4",
-    "eslint": "^7.29.0",
+    "babel-jest": "^27.0.6",
+    "discord.js": "discordjs/discord.js",
+    "eslint": "^7.30.0",
     "eslint-plugin-jsdoc": "^35.4.1",
     "husky": "^7.0.0",
+    "jest": "^27.0.6",
     "lint-staged": "^11.0.0",
     "prettier": "^2.3.2",
     "typescript": "^4.3.5"
   },
   "peerDependencies": {
     "@discordjs/opus": "*",
-    "@discordjs/voice": "^0.5.1",
+    "@discordjs/voice": "^0.5.3",
     "discord.js": "12||13||^13.0.0-0"
   },
   "engines": {
@@ -78,7 +85,7 @@
       "prettier --write",
       "eslint"
     ],
-    "*.{json,yml,yaml}": [
+    "*.{js,json,yml,yaml}": [
       "prettier --write"
     ]
   }
