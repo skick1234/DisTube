@@ -10,12 +10,14 @@ function trackClient(client: Client) {
     return;
   }
   trackedClients.add(client);
-  client.ws.on(Constants.WSEvents.VOICE_SERVER_UPDATE, (payload: GatewayVoiceServerUpdateDispatchData) => {
-    adapters.get(payload.guild_id)?.onVoiceServerUpdate(payload);
+  client.ws.on(Constants.WSEvents.VOICE_SERVER_UPDATE, payload => {
+    const p = payload as any as GatewayVoiceServerUpdateDispatchData;
+    adapters.get(p.guild_id)?.onVoiceServerUpdate(p);
   });
-  client.ws.on(Constants.WSEvents.VOICE_STATE_UPDATE, (payload: GatewayVoiceStateUpdateDispatchData) => {
-    if (payload.guild_id && payload.session_id && payload.user_id === client.user?.id) {
-      adapters.get(payload.guild_id)?.onVoiceStateUpdate(payload);
+  client.ws.on(Constants.WSEvents.VOICE_STATE_UPDATE, payload => {
+    const p = payload as any as GatewayVoiceStateUpdateDispatchData;
+    if (p.guild_id && p.session_id && p.user_id === client.user?.id) {
+      adapters.get(p.guild_id)?.onVoiceStateUpdate(p);
     }
   });
 }
