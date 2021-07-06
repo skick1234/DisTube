@@ -1,4 +1,4 @@
-name: DisTube
+name: DisTube Beta
 on:
   release:
     types: [created]
@@ -12,6 +12,6 @@ jobs:
           node-version: "16.x"
           registry-url: "https://registry.npmjs.org"
       - run: npm install
-      - run: npm publish --access public
+      - run: npm run publish
         env:
           NODE_AUTH_TOKEN: ${{secrets.NPM_TOKEN}}

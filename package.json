@@ -9,7 +9,7 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "types": "tsc -p .",
-    "publish:beta": "npm publish --tag beta"
+    "publish": "npm publish --tag beta"
   },
   "repository": {
     "type": "git",
