@@ -218,18 +218,19 @@ export class DisTubeHandler extends DisTubeBase {
     let result = results[0];
     if (limit > 1) {
       this.emit("searchResult", message, results, query);
-      const { awaitMessages } = message.channel;
-      const argsLength = awaitMessages.length;
+      const c = message.channel;
       /* eslint-disable @typescript-eslint/indent */ // offsetTernaryExpressions bug
       const answers =
-        argsLength === 0
-          ? await awaitMessages({
-              filter: m => m.author.id === message.author.id,
-              max: 1,
-              time: this.options.searchCooldown * 1e3,
-              errors: ["time"],
-            }).catch(() => undefined)
-          : await (awaitMessages as any)((m: Message) => m.author.id === message.author.id, {
+        c.awaitMessages.length === 0
+          ? await c
+              .awaitMessages({
+                filter: m => m.author.id === message.author.id,
+                max: 1,
+                time: this.options.searchCooldown * 1e3,
+                errors: ["time"],
+              })
+              .catch(() => undefined)
+          : await (c.awaitMessages as any)((m: Message) => m.author.id === message.author.id, {
               max: 1,
               time: this.options.searchCooldown * 1e3,
               errors: ["time"],
