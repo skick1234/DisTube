@@ -75,8 +75,8 @@ export class DisTubeStream {
     }
     return new DisTubeStream(url, options);
   }
-  type: StreamType.Raw | StreamType.OggOpus;
-  stream: FFmpeg | string;
+  type: StreamType.Raw;
+  stream: FFmpeg;
   url: string;
   /**
    * Create a DisTubeStream to play with {@link DisTubeVoice}

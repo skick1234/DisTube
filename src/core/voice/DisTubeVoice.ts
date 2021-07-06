@@ -22,7 +22,7 @@ export declare interface DisTubeVoice {
   audioPlayer: AudioPlayer;
   connection: VoiceConnection;
   audioResource?: AudioResource;
-  readyLock: boolean;
+  emittedError: boolean;
   on(event: "disconnect", listener: (error?: Error) => void): this;
   on(event: "error", listener: (error: Error) => void): this;
   on(event: "finish", listener: () => void): this;
@@ -51,6 +51,8 @@ export class DisTubeVoice extends EventEmitter {
         }
       })
       .on("error", error => {
+        if (this.emittedError) return;
+        this.emittedError = true;
         this.emit("error", error);
       });
     this.channel = channel;
@@ -154,6 +156,12 @@ export class DisTubeVoice extends EventEmitter {
    * @param {DisTubeStream} stream Readable stream
    */
   play(stream: DisTubeStream) {
+    this.emittedError = false;
+    stream.stream.on("error", error => {
+      if (this.emittedError) return;
+      this.emittedError = true;
+      this.emit("error", error);
+    });
     this.audioResource = createAudioResource(stream.stream, {
       inputType: stream.type,
       inlineVolume: true,
