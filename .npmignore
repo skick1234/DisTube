@@ -3,8 +3,11 @@ pages/
 node_modules/
 .github/
 .vscode/
-typings/events.d.ts
-.gitattributes
-.eslintrc.json
+tests/
+src/
+.husky/
+coverage/
+
+.*
+*.config.js
 tsconfig.json
-test.js

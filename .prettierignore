@@ -1,0 +1,8 @@
+# Build folder
+dist/
+
+# Documentation folder
+docs/
+
+# Coverage folder
+coverage/
