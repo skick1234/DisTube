@@ -1,4 +1,4 @@
-name: DisTube Alpha
+name: Publish DisTube
 on:
   release:
     types: [created]
@@ -13,6 +13,6 @@ jobs:
           registry-url: "https://registry.npmjs.org"
       - run: npm install
       - run: npm run build
-      - run: npm run publish:alpha
+      - run: npm run publish
         env:
           NODE_AUTH_TOKEN: ${{secrets.NPM_TOKEN}}
