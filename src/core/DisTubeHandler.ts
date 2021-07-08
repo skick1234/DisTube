@@ -243,7 +243,7 @@ export class DisTubeHandler extends DisTubeBase {
       }
       const index = parseInt(ans.content, 10);
       if (isNaN(index) || index > results.length || index < 1) {
-        this.emit("searchCancel", message, query);
+        this.emit("searchInvalidAnswer", message, ans, query);
         return null;
       }
       this.emit("searchDone", message, ans, query);

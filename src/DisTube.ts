@@ -763,18 +763,6 @@ export default DisTube;
 
 /**
  * Emitted when {@link DisTubeOptions|DisTubeOptions.searchSongs} bigger than 0
- * and the search canceled due to user's next message is invalid number or timeout
- *
- * @event DisTube#searchCancel
- * @param {Discord.Message} message The user message called play method
- * @param {string} query The search query
- * @example
- * // DisTubeOptions.searchSongs > 0
- * distube.on("searchCancel", (message) => message.channel.send(`Searching canceled`));
- */
-
-/**
- * Emitted when {@link DisTubeOptions|DisTubeOptions.searchSongs} bigger than 0
  * and song param of {@link DisTube#play|play()} is invalid url.
  * DisTube will wait for user's next message to choose song manually.
  * <info>{@link https://support.google.com/youtube/answer/7354993|Safe search} is enabled
@@ -789,6 +777,31 @@ export default DisTube;
  * distube.on("searchResult", (message, results) => {
  *     message.channel.send(`**Choose an option from below**\n${results.map((song, i) => `**${i + 1}**. ${song.name} - \`${song.formattedDuration}\``).join("\n")}\n*Enter anything else or wait 60 seconds to cancel*`);
  * });
+ */
+
+/**
+ * Emitted when {@link DisTubeOptions|DisTubeOptions.searchSongs} bigger than 0
+ * and the search canceled due to {@link DisTubeOptions|DisTubeOptions.searchTimeout}
+ *
+ * @event DisTube#searchCancel
+ * @param {Discord.Message} message The user message called play method
+ * @param {string} query The search query
+ * @example
+ * // DisTubeOptions.searchSongs > 0
+ * distube.on("searchCancel", (message) => message.channel.send(`Searching canceled`));
+ */
+
+/**
+ * Emitted when {@link DisTubeOptions|DisTubeOptions.searchSongs} bigger than 0
+ * and the search canceled due to user's next message is not a number or out of results range
+ *
+ * @event DisTube#searchInvalidAnswer
+ * @param {Discord.Message} message The user message called play method
+ * @param {Discord.Message} answer The answered message of user
+ * @param {string} query The search query
+ * @example
+ * // DisTubeOptions.searchSongs > 0
+ * distube.on("searchInvalidAnswer", (message) => message.channel.send(`You answered an invalid number!`));
  */
 
 /**
