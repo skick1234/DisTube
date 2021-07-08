@@ -157,8 +157,8 @@ export class DisTubeVoice extends EventEmitter {
    */
   play(stream: DisTubeStream) {
     this.emittedError = false;
-    stream.stream.on("error", error => {
-      if (this.emittedError) return;
+    stream.stream.on("error", (error: NodeJS.ErrnoException) => {
+      if (this.emittedError || error?.code === "ERR_STREAM_PREMATURE_CLOSE") return;
       this.emittedError = true;
       this.emit("error", error);
     });
