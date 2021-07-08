@@ -27,6 +27,7 @@
     ],
     "@typescript-eslint/no-explicit-any": 0,
     "@typescript-eslint/explicit-module-boundary-types": 0,
+    "@typescript-eslint/no-unused-vars": "error",
     "jsdoc/check-tag-names": "warn",
     "jsdoc/check-types": "warn",
     "valid-jsdoc": [
