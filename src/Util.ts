@@ -65,13 +65,13 @@ export function parseNumber(input: any): number {
 }
 /**
  * Check if the string is an URL
- * @param {string} string input
+ * @param {string} input input
  * @returns {boolean}
  */
-export function isURL(string: string): boolean {
-  if (string.includes(" ")) return false;
+export function isURL(input: any): boolean {
+  if (typeof input !== "string" || input.includes(" ")) return false;
   try {
-    const url = new URL(string);
+    const url = new URL(input);
     if (!["https:", "http:"].includes(url.protocol) || url.origin === "null" || !url.host) return false;
   } catch {
     return false;
@@ -137,6 +137,7 @@ export function isMessageInstance(message: any): message is Message {
     isTextChannelInstance(message.channel) &&
     isMemberInstance(message.member) &&
     isSnowflake(message.author?.id) &&
-    message.member.id === message.author.id
+    message.member.id === message.author.id &&
+    message.guild.id === message.channel.guild.id
   );
 }

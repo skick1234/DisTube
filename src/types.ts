@@ -44,6 +44,7 @@ export interface DisTubeOptions {
 export type QueueResolvable = Queue | Snowflake | Message | VoiceChannel | StageChannel | VoiceState | string;
 
 export interface OtherSongInfo {
+  src?: string;
   id?: string;
   title?: string;
   name?: string;
@@ -67,6 +68,7 @@ export interface OtherSongInfo {
   uploader_url?: string;
   age_limit?: string | number;
   chapters?: Chapter[];
+  age_restricted?: boolean;
 }
 
 export interface Chapter {

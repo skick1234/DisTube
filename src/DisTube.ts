@@ -313,7 +313,7 @@ class DisTube extends EventEmitter {
       if (queuing) await queue?.taskQueue.queuing(true);
       try {
         const playlist = await this.handler.createCustomPlaylist(message, songs, properties, parallel);
-        await this.handler.handlePlaylist(message, playlist, skip, unshift);
+        await this.handler.handlePlaylist(message, playlist, message.channel as TextChannel, skip, unshift);
       } finally {
         if (queuing) queue?.taskQueue.resolve();
       }

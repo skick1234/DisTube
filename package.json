@@ -5,7 +5,7 @@
   "main": "dist/DisTube.js",
   "typings": "dist/DisTube.d.ts",
   "scripts": {
-    "test": "jest",
+    "test": "jest --config .jestrc.json",
     "docs": "npm run build && docgen --source dist --output docs/docs.json --custom pages/index.yml",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
@@ -56,7 +56,7 @@
     "@discordjs/voice": "0.5.3",
     "@distube/docgen": "distubejs/docgen",
     "@types/jest": "^26.0.24",
-    "@types/node": "^16.0.0",
+    "@types/node": "^16.0.1",
     "@typescript-eslint/eslint-plugin": "^4.28.2",
     "@typescript-eslint/parser": "^4.28.2",
     "babel-jest": "^27.0.6",

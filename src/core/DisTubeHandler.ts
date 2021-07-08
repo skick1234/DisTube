@@ -73,8 +73,7 @@ export class DisTubeHandler extends DisTubeBase {
     if (song instanceof Song || song instanceof Playlist) return song;
     if (song instanceof SearchResult) {
       if (song.type === "video") return new Song(song, member);
-      else if (song.type === "playlist") return this.resolvePlaylist(member, song.url);
-      throw new Error("Invalid SearchResult");
+      /*if (song.type === "playlist")*/ else return this.resolvePlaylist(member, song.url);
     }
     if (typeof song === "object") return new Song(song, member);
     if (ytdl.validateURL(song)) return new Song(await this.getYouTubeInfo(song), member);
@@ -84,7 +83,7 @@ export class DisTubeHandler extends DisTubeBase {
       }
       throw new Error("Not Supported URL!");
     }
-    throw new TypeError("song is not a valid type");
+    throw new TypeError(`${typeof song} cannot resolved to a Song`);
   }
 
   /**
@@ -129,12 +128,14 @@ export class DisTubeHandler extends DisTubeBase {
     const member = (message as Message)?.member || (message as GuildMember);
     if (!Array.isArray(songs)) throw new TypeError("songs must be an array of url");
     if (!songs.length) throw new Error("songs is an empty array");
-    songs = songs.filter(song => song instanceof Song || song instanceof SearchResult || isURL(song));
+    songs = songs.filter(
+      song => song instanceof Song || (song instanceof SearchResult && song.type === "video") || isURL(song),
+    );
     if (!songs.length) throw new Error("songs does not have any valid Song, SearchResult or url");
-    let resolvedSongs: (Song | SearchResult)[];
+    let resolvedSongs: Song[];
     if (parallel) {
       const promises = songs.map((song: string | Song | SearchResult) =>
-        this.resolveSong(member, song).catch(() => null),
+        this.resolveSong(member, song).catch(() => undefined),
       );
       resolvedSongs = (await Promise.all(promises)).filter((s: any): s is Song => !!s);
     } else {
@@ -144,14 +145,7 @@ export class DisTubeHandler extends DisTubeBase {
       }
       resolvedSongs = resolved.filter((s: any): s is Song => !!s);
     }
-    return new Playlist(
-      resolvedSongs.map(s => {
-        if (s instanceof Song) return s;
-        return new Song(s, member);
-      }),
-      member,
-      properties,
-    );
+    return new Playlist(resolvedSongs, member, properties);
   }
 
   /**
@@ -166,19 +160,14 @@ export class DisTubeHandler extends DisTubeBase {
   async handlePlaylist(
     message: Message | VoiceChannel | StageChannel,
     playlist: Playlist,
-    textChannel: TextChannel | boolean = false,
+    textChannel?: TextChannel,
     skip = false,
     unshift = false,
   ): Promise<void> {
-    if (typeof textChannel === "boolean") {
-      unshift = skip;
-      skip = textChannel;
-      textChannel = (message as Message).channel as TextChannel;
-    }
     if (!playlist || !(playlist instanceof Playlist)) throw Error("Invalid Playlist");
-    if (this.options.nsfw && !textChannel?.nsfw) playlist.songs = playlist.songs.filter(s => !s.age_restricted);
+    if (!this.options.nsfw && !textChannel?.nsfw) playlist.songs = playlist.songs.filter(s => !s.age_restricted);
     if (!playlist.songs.length) {
-      if (this.options.nsfw && !textChannel?.nsfw) {
+      if (!this.options.nsfw && !textChannel?.nsfw) {
         throw new Error(
           "No valid video in the playlist.\nMaybe age-restricted contents is filtered because you are in non-NSFW channel.",
         );
@@ -186,7 +175,7 @@ export class DisTubeHandler extends DisTubeBase {
       throw Error("No valid video in the playlist");
     }
     const songs = playlist.songs;
-    const queue = this.distube.getQueue(message);
+    const queue = this.queues.get(message);
     if (queue) {
       queue.addToQueue(songs, skip || unshift ? 1 : -1);
       if (skip) queue.skip();
@@ -220,21 +209,19 @@ export class DisTubeHandler extends DisTubeBase {
       this.emit("searchResult", message, results, query);
       const c = message.channel;
       /* eslint-disable @typescript-eslint/indent */ // offsetTernaryExpressions bug
-      const answers =
-        c.awaitMessages.length === 0
-          ? await c
-              .awaitMessages({
-                filter: m => m.author.id === message.author.id,
-                max: 1,
-                time: this.options.searchCooldown * 1e3,
-                errors: ["time"],
-              })
-              .catch(() => undefined)
-          : await (c.awaitMessages as any)((m: Message) => m.author.id === message.author.id, {
-              max: 1,
-              time: this.options.searchCooldown * 1e3,
-              errors: ["time"],
-            }).catch(() => undefined);
+      const answers = await (c.awaitMessages.length === 0
+        ? c.awaitMessages({
+            filter: (m: Message) => m.author.id === message.author.id,
+            max: 1,
+            time: this.options.searchCooldown * 1e3,
+            errors: ["time"],
+          })
+        : (c.awaitMessages as any)((m: Message) => m.author.id === message.author.id, {
+            max: 1,
+            time: this.options.searchCooldown * 1e3,
+            errors: ["time"],
+          })
+      ).catch(() => undefined);
       /* eslint-enable @typescript-eslint/indent */
       const ans = answers?.first();
       if (!ans) {

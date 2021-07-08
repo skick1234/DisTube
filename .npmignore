@@ -9,5 +9,4 @@ src/
 coverage/
 
 .*
-*.config.js
 tsconfig.json

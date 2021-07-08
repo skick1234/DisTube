@@ -43,21 +43,24 @@ export class Song {
    * Create a Song
    * @param {ytdl.videoInfo|SearchResult|OtherSongInfo} info Raw info
    * @param {Discord.GuildMember?} member Requested user
-   * @param {string} src Song source
+   * @param {string} source Song source
    */
   constructor(
     info: ytdl.videoInfo | SearchResult | OtherSongInfo | ytdl.relatedVideo,
     member?: GuildMember,
-    src = "youtube",
+    source = "youtube",
   ) {
-    if (typeof src !== "string") {
+    if (
+      typeof source !== "string" ||
+      ((info as OtherSongInfo).src && typeof (info as OtherSongInfo).src !== "string")
+    ) {
       throw new TypeError("Source must be a string");
     }
     /**
      * The source of the song
      * @type {string}
      */
-    this.source = src.toLowerCase();
+    this.source = ((info as OtherSongInfo)?.src || source).toLowerCase();
     this._patchMember(member);
     if (this.source === "youtube") {
       this._patchYouTube(info as ytdl.videoInfo);
@@ -208,7 +211,7 @@ export class Song {
       name: info.uploader,
       url: info.uploader_url,
     };
-    this.age_restricted = !!info.age_limit && parseNumber(info.age_limit) >= 18;
+    this.age_restricted = info.age_restricted || (!!info.age_limit && parseNumber(info.age_limit) >= 18);
     this.chapters = info.chapters || [];
   }
 
