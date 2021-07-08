@@ -12,7 +12,7 @@
     "prettier": "prettier --write **/*.{js,ts,json,yml,yaml}",
     "build": "tsc",
     "build:check": "tsc --noEmit --incremental false",
-    "publish": "npm publish --tag alpha"
+    "publish:alpha": "npm publish --tag alpha"
   },
   "repository": {
     "type": "git",
