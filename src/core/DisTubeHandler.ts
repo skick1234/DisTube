@@ -3,6 +3,7 @@ import ytpl from "@distube/ytpl";
 import DisTube from "../DisTube";
 import { DisTubeBase, DisTubeStream } from ".";
 import {
+  DisTubeError,
   OtherSongInfo,
   Playlist,
   Queue,
@@ -51,10 +52,8 @@ export class DisTubeHandler extends DisTubeBase {
     textChannel: TextChannel = (message as Message).channel as TextChannel,
   ): Promise<Queue | true> {
     const voice = (message as Message)?.member?.voice?.channel || message;
-    if (isMessageInstance(voice)) throw new Error("User is not in a voice channel.");
-    if (!isSupportedVoiceChannel(voice)) {
-      throw new TypeError("User is not in a VoiceChannel or a StageChannel.");
-    }
+    if (!voice || isMessageInstance(voice)) throw new DisTubeError("NOT_IN_VOICE");
+    if (!isSupportedVoiceChannel(voice)) throw new DisTubeError("NOT_SUPPORTED_VOICE");
     return this.queues.create(voice, song, textChannel);
   }
 
@@ -90,9 +89,9 @@ export class DisTubeHandler extends DisTubeBase {
       for (const plugin of this.distube.extractorPlugins) {
         if (await plugin.validate(song)) return plugin.resolve(song, member);
       }
-      throw new Error("Not Supported URL!");
+      throw new DisTubeError("NOT_SUPPORTED_URL");
     }
-    throw new TypeError(`${typeof song} cannot resolved to a Song`);
+    throw new DisTubeError("CANNOT_RESOLVE_SONG", typeof song);
   }
 
   /**
@@ -135,12 +134,12 @@ export class DisTubeHandler extends DisTubeBase {
     parallel = true,
   ): Promise<Playlist> {
     const member = (message as Message)?.member || (message as GuildMember);
-    if (!Array.isArray(songs)) throw new TypeError("songs must be an array of url");
-    if (!songs.length) throw new Error("songs is an empty array");
+    if (!Array.isArray(songs)) throw new DisTubeError("INVALID_TYPE", "Array", songs, "songs");
+    if (!songs.length) throw new DisTubeError("EMPTY_ARRAY");
     songs = songs.filter(
       song => song instanceof Song || (song instanceof SearchResult && song.type === "video") || isURL(song),
     );
-    if (!songs.length) throw new Error("songs does not have any valid Song, SearchResult or url");
+    if (!songs.length) throw new DisTubeError("NO_VALID_SONG");
     let resolvedSongs: Song[];
     if (parallel) {
       const promises = songs.map((song: string | Song | SearchResult) =>
@@ -173,15 +172,11 @@ export class DisTubeHandler extends DisTubeBase {
     skip = false,
     unshift = false,
   ): Promise<void> {
-    if (!playlist || !(playlist instanceof Playlist)) throw Error("Invalid Playlist");
+    if (!(playlist instanceof Playlist)) throw new DisTubeError("INVALID_TYPE", "Playlist", playlist, "playlist");
     if (!this.options.nsfw && !textChannel?.nsfw) playlist.songs = playlist.songs.filter(s => !s.age_restricted);
     if (!playlist.songs.length) {
-      if (!this.options.nsfw && !textChannel?.nsfw) {
-        throw new Error(
-          "No valid video in the playlist.\nMaybe age-restricted contents is filtered because you are in non-NSFW channel.",
-        );
-      }
-      throw Error("No valid video in the playlist");
+      if (!this.options.nsfw && !textChannel?.nsfw) throw new DisTubeError("EMPTY_FILTERED_PLAYLIST");
+      throw new DisTubeError("EMPTY_PLAYLIST");
     }
     const songs = playlist.songs;
     const queue = this.queues.get(message);

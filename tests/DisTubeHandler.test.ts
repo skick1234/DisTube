@@ -1,4 +1,4 @@
-import { DisTubeHandler, Playlist, SearchResult, Song, defaultFilters, defaultOptions } from "../src";
+import { DisTubeError, DisTubeHandler, Playlist, SearchResult, Song, defaultFilters, defaultOptions } from "../src";
 import fs from "fs";
 
 import * as _ytdl from "ytdl-core";
@@ -85,77 +85,43 @@ describe("DisTubeHandler#createQueue()", () => {
   const distube = createFakeDisTube();
   const handler = new DisTubeHandler(distube as any);
 
-  describe("First parameter is a Message", () => {
-    test("User is not in a voice channel", async () => {
-      Util.isMessageInstance.mockReturnValue(true);
-      const message: any = { member: { voice: { channel: null } } };
-      await expect(handler.createQueue(message, song)).rejects.toThrow("User is not in a voice channel.");
-      expect(Util.isMessageInstance).toBeCalledWith(message);
-    });
-
-    test("User is in an unsupported voice channel", async () => {
-      Util.isMessageInstance.mockReturnValue(false);
-      const message: any = { member: { voice: { channel: { type: "unsupported" } } } };
-      await expect(handler.createQueue(message, song)).rejects.toThrow(
-        "User is not in a VoiceChannel or a StageChannel.",
-      );
-      expect(Util.isMessageInstance).toBeCalledWith(message.member.voice.channel);
-    });
-
-    test("User is in a supported voice channel", async () => {
-      Util.isMessageInstance.mockReturnValue(false);
-      distube.queues.create.mockReturnValue(true);
-      const message: any = {
-        member: { voice: { channel: { type: "voice" } } },
-        channel: { id: "a text channel" },
-      };
-      expect(await handler.createQueue(message, song)).toBe(true);
-      expect(Util.isMessageInstance).toBeCalledWith(message.member.voice.channel);
-      expect(distube.queues.create).toBeCalledWith(message.member.voice.channel, song, message.channel);
-    });
-
-    test("Different text channel from the Message's channel", async () => {
-      Util.isMessageInstance.mockReturnValue(false);
-      distube.queues.create.mockReturnValue(true);
-      const message: any = {
-        member: { voice: { channel: { type: "voice" } } },
-        channel: { id: "a text channel" },
-      };
-      const channel: any = { id: "another text channel" };
-      expect(await handler.createQueue(message, song, channel)).toBe(true);
-      expect(Util.isMessageInstance).toBeCalledWith(message.member.voice.channel);
-      expect(distube.queues.create).toBeCalledWith(message.member.voice.channel, song, channel);
-    });
+  test("User is not in a voice channel", async () => {
+    Util.isMessageInstance.mockReturnValue(true);
+    const message: any = { member: { voice: { channel: null } } };
+    await expect(handler.createQueue(message, song)).rejects.toThrow(new DisTubeError("NOT_IN_VOICE"));
+    expect(Util.isMessageInstance).toBeCalledWith(message);
   });
 
-  describe("First parameter is a voice channel", () => {
-    test("Voice channel", async () => {
-      Util.isMessageInstance.mockReturnValue(false);
-      distube.queues.create.mockReturnValue(true);
-      const voice: any = { type: "voice" };
-      expect(await handler.createQueue(voice, song)).toBe(true);
-      expect(Util.isMessageInstance).toBeCalledWith(voice);
-      expect(distube.queues.create).toBeCalledWith(voice, song, undefined);
-    });
+  test("User is in an unsupported voice channel", async () => {
+    Util.isMessageInstance.mockReturnValue(false);
+    Util.isSupportedVoiceChannel.mockReturnValue(false);
+    const message: any = { member: { voice: { channel: { type: "unsupported" } } } };
+    await expect(handler.createQueue(message, song)).rejects.toThrow(new DisTubeError("NOT_SUPPORTED_VOICE"));
+    expect(Util.isMessageInstance).toBeCalledWith(message.member.voice.channel);
+  });
 
-    test("Stage channel", async () => {
-      Util.isMessageInstance.mockReturnValue(false);
-      distube.queues.create.mockReturnValue(true);
-      const voice: any = { type: "voice" };
-      const channel: any = { id: "a text channel" };
-      expect(await handler.createQueue(voice, song, channel)).toBe(true);
-      expect(Util.isMessageInstance).toBeCalledWith(voice);
-      expect(distube.queues.create).toBeCalledWith(voice, song, channel);
-    });
+  test("User is in a supported voice channel", async () => {
+    Util.isMessageInstance.mockReturnValue(false);
+    Util.isSupportedVoiceChannel.mockReturnValue(true);
+    distube.queues.create.mockReturnValue(true);
+    const message: any = {
+      member: { voice: { channel: { type: "voice" } } },
+      channel: { id: "a text channel" },
+    };
+    await expect(handler.createQueue(message, song)).resolves.toBe(true);
+    expect(Util.isMessageInstance).toBeCalledWith(message.member.voice.channel);
+    expect(distube.queues.create).toBeCalledWith(message.member.voice.channel, song, message.channel);
+  });
 
-    test("Unsupported channel", async () => {
-      Util.isMessageInstance.mockReturnValue(false);
-      const voice: any = { type: "unsupported" };
-      await expect(handler.createQueue(voice, song)).rejects.toThrow(
-        "User is not in a VoiceChannel or a StageChannel.",
-      );
-      expect(Util.isMessageInstance).toBeCalledWith(voice);
-    });
+  test("Custom text channel", async () => {
+    Util.isMessageInstance.mockReturnValue(false);
+    Util.isSupportedVoiceChannel.mockReturnValue(true);
+    distube.queues.create.mockReturnValue(true);
+    const channel: any = { id: "a text channel" };
+    const voice: any = { type: "voice" };
+    await expect(handler.createQueue(voice, song, channel)).resolves.toBe(true);
+    expect(Util.isMessageInstance).toBeCalledWith(voice);
+    expect(distube.queues.create).toBeCalledWith(voice, song, channel);
   });
 });
 
@@ -184,17 +150,17 @@ describe("DisTubeHandler#resolveSong()", () => {
   const member: any = {};
 
   test("Parameter is null or undefined", async () => {
-    expect(await handler.resolveSong(member, null)).toBe(null);
-    expect(await handler.resolveSong(member, undefined)).toBe(null);
+    await expect(handler.resolveSong(member, null)).resolves.toBe(null);
+    await expect(handler.resolveSong(member, undefined)).resolves.toBe(null);
   });
 
   test("Parameter is Song or Playlist", async () => {
-    expect(await handler.resolveSong(member, playlist)).toBe(playlist);
+    await expect(handler.resolveSong(member, playlist)).resolves.toBe(playlist);
   });
 
   test("Parameter is a SearchResult", async () => {
-    expect(await handler.resolveSong(member, songResult)).toBeInstanceOf(Song);
-    expect(await handler.resolveSong(member, plResult)).toBeInstanceOf(Playlist);
+    await expect(handler.resolveSong(member, songResult)).resolves.toBeInstanceOf(Song);
+    await expect(handler.resolveSong(member, plResult)).resolves.toBeInstanceOf(Playlist);
   });
 
   test("Parameter is a song info object", async () => {
@@ -225,7 +191,7 @@ describe("DisTubeHandler#resolveSong()", () => {
     Util.isURL.mockReturnValue(true);
     extractor.validate.mockReturnValue(true);
     extractor.resolve.mockReturnValue(result);
-    expect(await handler.resolveSong(member, url)).toBe(result);
+    await expect(handler.resolveSong(member, url)).resolves.toBe(result);
     expect(extractor.validate).toBeCalledWith(url);
     expect(extractor.resolve).toBeCalledWith(url, member);
   });
@@ -234,13 +200,13 @@ describe("DisTubeHandler#resolveSong()", () => {
     const url = "an url";
     Util.isURL.mockReturnValue(true);
     extractor.validate.mockReturnValue(false);
-    await expect(handler.resolveSong(member, url)).rejects.toThrow("Not Supported URL!");
+    await expect(handler.resolveSong(member, url)).rejects.toThrow(new DisTubeError("NOT_SUPPORTED_URL"));
   });
 
   test("Parameter is a number", async () => {
     const url: any = 1;
     Util.isURL.mockReturnValue(false);
-    await expect(handler.resolveSong(member, url)).rejects.toThrow(`${typeof url} cannot resolved to a Song`);
+    await expect(handler.resolveSong(member, url)).rejects.toThrow(new DisTubeError("CANNOT_RESOLVE_SONG", typeof url));
   });
 });
 
@@ -249,7 +215,7 @@ describe("DisTubeHandler#resolvePlaylist()", () => {
   const handler = new DisTubeHandler(distube as any);
 
   test("playlist is a Playlist", async () => {
-    expect(await handler.resolvePlaylist(null, playlist)).toBe(playlist);
+    await expect(handler.resolvePlaylist(null, playlist)).resolves.toBe(playlist);
   });
 
   test("playlist is a Song array", async () => {
@@ -265,18 +231,18 @@ describe("DisTubeHandler#createCustomPlaylist()", () => {
 
   const message: any = {};
   test("songs is not an array", async () => {
-    await expect(handler.createCustomPlaylist(message, "" as any)).rejects.toThrow("songs must be an array of url");
+    await expect(handler.createCustomPlaylist(message, "" as any)).rejects.toThrow(
+      new DisTubeError("INVALID_TYPE", "Array", "", "songs"),
+    );
   });
 
   test("songs is an empty array", async () => {
-    await expect(handler.createCustomPlaylist(message, [])).rejects.toThrow("songs is an empty array");
+    await expect(handler.createCustomPlaylist(message, [])).rejects.toThrow(new DisTubeError("EMPTY_ARRAY"));
   });
 
   test("songs is an array of invalid types", async () => {
     Util.isURL.mockReturnValue(false);
-    await expect(handler.createCustomPlaylist(message, [""])).rejects.toThrow(
-      "songs does not have any valid Song, SearchResult or url",
-    );
+    await expect(handler.createCustomPlaylist(message, [""])).rejects.toThrow(new DisTubeError("NO_VALID_SONG"));
   });
 
   test("parallel is true", async () => {
@@ -313,19 +279,23 @@ describe("DisTubeHandler#handlePlaylist()", () => {
   const message: any = null;
 
   test("Invalid Playlist", async () => {
-    await expect(handler.handlePlaylist(message, undefined as any)).rejects.toThrow("Invalid Playlist");
-    await expect(handler.handlePlaylist(message, "not a Playlist" as any)).rejects.toThrow("Invalid Playlist");
+    await expect(handler.handlePlaylist(message, undefined as any)).rejects.toThrow(
+      new DisTubeError("INVALID_TYPE", "Playlist", undefined, "playlist"),
+    );
+    await expect(handler.handlePlaylist(message, "not a Playlist" as any)).rejects.toThrow(
+      new DisTubeError("INVALID_TYPE", "Playlist", "not a Playlist", "playlist"),
+    );
   });
 
   test("No valid video in the playlist", async () => {
     const pl1 = new Playlist([nsfwSong], message);
     await expect(handler.handlePlaylist(message, pl1, { nsfw: false } as any)).rejects.toThrow(
-      "No valid video in the playlist.\nMaybe age-restricted contents is filtered because you are in non-NSFW channel.",
+      new DisTubeError("EMPTY_FILTERED_PLAYLIST"),
     );
     const pl2 = new Playlist([new Song({ age_restricted: true, url: "test url" }, null, "test")], message);
     pl2.songs = [];
     await expect(handler.handlePlaylist(message, pl2, { nsfw: true } as any)).rejects.toThrow(
-      "No valid video in the playlist",
+      new DisTubeError("EMPTY_PLAYLIST"),
     );
   });
 
@@ -442,7 +412,7 @@ describe("DisTubeHandler#searchSong()", () => {
   test("No result found", async () => {
     const distube = createFakeDisTube();
     const handler = new DisTubeHandler(distube as any);
-    const err = new Error("No result!");
+    const err = new DisTubeError("NO_RESULT");
     distube.search.mockRejectedValue(err);
     const message: any = {};
     const query = "test";
@@ -473,8 +443,8 @@ describe("DisTubeHandler#searchSong()", () => {
     distube.options.searchSongs = 5;
     const handler = new DisTubeHandler(distube as any);
     const results = [{}, {}, {}, {}, {}];
-    const createV13Message = (answerMessage: any) =>
-      ({
+    const createV13Message = (answerMessage: any): any => {
+      return {
         channel: {
           nsfw: false,
           awaitMessages: (opt: any = {}) =>
@@ -485,9 +455,10 @@ describe("DisTubeHandler#searchSong()", () => {
             }),
         },
         author: { id: 1 },
-      } as any);
-    const createV12Message = (answerMessage: any) =>
-      ({
+      };
+    };
+    const createV12Message = (answerMessage: any): any => {
+      return {
         channel: {
           nsfw: false,
           awaitMessages: (filter: any, opt: any = {}) =>
@@ -498,7 +469,8 @@ describe("DisTubeHandler#searchSong()", () => {
             }),
         },
         author: { id: 1 },
-      } as any);
+      };
+    };
 
     test("User choose a result (discord.js v13)", async () => {
       distube.options.nsfw = true;

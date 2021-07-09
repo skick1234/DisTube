@@ -19,11 +19,7 @@ export class QueueManager extends BaseManager<Queue, QueueResolvable> {
     song: Song[] | Song,
     textChannel?: TextChannel,
   ): Promise<Queue | true> {
-    if (this.has(channel.guild.id)) throw new DisTubeError("This guild has a Queue already", "QueueExist");
-    if (!channel.joinable) {
-      if (channel.full) throw new DisTubeError("The voice channel is full.", "JoinError");
-      else throw new DisTubeError("You do not have permission to join this voice channel.", "JoinError");
-    }
+    if (this.has(channel.guild.id)) throw new DisTubeError("QUEUE_EXIST");
     const voice = this.voices.create(channel);
     const queue = new Queue(this.distube, voice, song, textChannel);
     await queue.taskQueue.queuing();

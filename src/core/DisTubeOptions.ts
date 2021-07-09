@@ -1,5 +1,5 @@
 import ytdl from "ytdl-core";
-import { CustomPlugin, DisTubeOptions, ExtractorPlugin, Filters } from "..";
+import { CustomPlugin, DisTubeError, DisTubeOptions, ExtractorPlugin, Filters } from "..";
 
 export class Options {
   /** DisTube plugins.*/
@@ -76,52 +76,57 @@ export class Options {
 
   private _validateOptions(options = this) {
     if (typeof options.emitNewSongOnly !== "boolean") {
-      throw new TypeError("DisTubeOptions.emitNewSongOnly must be a boolean");
+      throw new DisTubeError("INVALID_TYPE", "boolean", options.emitNewSongOnly, "DisTubeOptions.emitNewSongOnly");
     }
     if (typeof options.leaveOnEmpty !== "boolean") {
-      throw new TypeError("DisTubeOptions.leaveOnEmpty must be a boolean");
+      throw new DisTubeError("INVALID_TYPE", "boolean", options.leaveOnEmpty, "DisTubeOptions.leaveOnEmpty");
     }
     if (typeof options.leaveOnFinish !== "boolean") {
-      throw new TypeError("DisTubeOptions.leaveOnFinish must be a boolean");
+      throw new DisTubeError("INVALID_TYPE", "boolean", options.leaveOnFinish, "DisTubeOptions.leaveOnFinish");
     }
     if (typeof options.leaveOnStop !== "boolean") {
-      throw new TypeError("DisTubeOptions.leaveOnStop must be a boolean");
+      throw new DisTubeError("INVALID_TYPE", "boolean", options.leaveOnStop, "DisTubeOptions.leaveOnStop");
     }
     if (typeof options.savePreviousSongs !== "boolean") {
-      throw new TypeError("DisTubeOptions.savePreviousSongs must be a boolean");
+      throw new DisTubeError("INVALID_TYPE", "boolean", options.savePreviousSongs, "DisTubeOptions.savePreviousSongs");
     }
     if (typeof options.youtubeDL !== "boolean") {
-      throw new TypeError("DisTubeOptions.youtubeDL must be a boolean");
+      throw new DisTubeError("INVALID_TYPE", "boolean", options.youtubeDL, "DisTubeOptions.youtubeDL");
     }
     if (typeof options.updateYouTubeDL !== "boolean") {
-      throw new TypeError("DisTubeOptions.updateYouTubeDL must be a boolean");
+      throw new DisTubeError("INVALID_TYPE", "boolean", options.updateYouTubeDL, "DisTubeOptions.updateYouTubeDL");
     }
     if (typeof options.youtubeCookie !== "undefined" && typeof options.youtubeCookie !== "string") {
-      throw new TypeError("DisTubeOptions.youtubeCookie must be a string");
+      throw new DisTubeError("INVALID_TYPE", "string", options.youtubeCookie, "DisTubeOptions.youtubeCookie");
     }
     if (typeof options.youtubeIdentityToken !== "undefined" && typeof options.youtubeIdentityToken !== "string") {
-      throw new TypeError("DisTubeOptions.youtubeIdentityToken must be a string");
+      throw new DisTubeError(
+        "INVALID_TYPE",
+        "string",
+        options.youtubeIdentityToken,
+        "DisTubeOptions.youtubeIdentityToken",
+      );
     }
     if (typeof options.customFilters !== "object" || Array.isArray(options.customFilters)) {
-      throw new TypeError("DisTubeOptions.customFilters must be an object");
+      throw new DisTubeError("INVALID_TYPE", "object", options.customFilters, "DisTubeOptions.customFilters");
     }
     if (typeof options.ytdlOptions !== "object" || Array.isArray(options.ytdlOptions)) {
-      throw new TypeError("DisTubeOptions.customFilters must be an object");
+      throw new DisTubeError("INVALID_TYPE", "object", options.ytdlOptions, "DisTubeOptions.ytdlOptions");
     }
     if (typeof options.searchCooldown !== "number" || isNaN(options.searchCooldown)) {
-      throw new TypeError("DisTubeOptions.searchCooldown must be a number");
+      throw new DisTubeError("INVALID_TYPE", "number", options.searchCooldown, "DisTubeOptions.searchCooldown");
     }
     if (typeof options.emptyCooldown !== "number" || isNaN(options.emptyCooldown)) {
-      throw new TypeError("DisTubeOptions.emptyCooldown must be a number");
+      throw new DisTubeError("INVALID_TYPE", "number", options.emptyCooldown, "DisTubeOptions.emptyCooldown");
     }
     if (typeof options.searchSongs !== "number" || isNaN(options.emptyCooldown)) {
-      throw new TypeError("DisTubeOptions.searchSongs must be a number");
+      throw new DisTubeError("INVALID_TYPE", "number", options.searchSongs, "DisTubeOptions.searchSongs");
     }
     if (!Array.isArray(options.plugins)) {
-      throw new TypeError("DisTubeOptions.plugins must be an array of Plugin.");
+      throw new DisTubeError("INVALID_TYPE", "Array<Plugin>", options.plugins, "DisTubeOptions.plugins");
     }
     if (typeof options.nsfw !== "boolean") {
-      throw new TypeError("DisTubeOptions.nsfw must be a boolean");
+      throw new DisTubeError("INVALID_TYPE", "boolean", options.nsfw, "DisTubeOptions.nsfw");
     }
   }
 }

@@ -1,5 +1,6 @@
+import Plugin from "./Plugin";
+import { Playlist, Song } from ".";
 import { GuildMember } from "discord.js";
-import { Playlist, Plugin, Song } from ".";
 
 /**
  * Extractor Plugin

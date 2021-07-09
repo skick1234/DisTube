@@ -1,5 +1,5 @@
 import { Playlist, Video } from "@distube/ytsr";
-import { formatDuration, toSecond } from "..";
+import { DisTubeError, formatDuration, toSecond } from "..";
 
 /** Class representing a search result. */
 export class SearchResult {
@@ -74,7 +74,7 @@ export class SearchResult {
        */
       this.thumbnail = info.thumbnail;
     } else if (this.type !== "playlist") {
-      throw new TypeError("Unsupported info");
+      throw new DisTubeError("INVALID_TYPE", ["video", "playlist"], this.type, "SearchResult.type");
     }
     /**
      * Song uploader

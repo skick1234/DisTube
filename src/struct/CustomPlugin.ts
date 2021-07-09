@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import { Plugin } from ".";
+import Plugin from "./Plugin";
 import { GuildMember, StageChannel, TextChannel, VoiceChannel } from "discord.js";
 
 /**

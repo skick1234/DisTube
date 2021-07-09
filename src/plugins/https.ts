@@ -1,7 +1,9 @@
-import { ExtractorPlugin, Song } from "../struct";
 import https from "https";
+import ExtractorPlugin from "../struct/ExtractorPlugin";
+import { Song } from "..";
 import { URL } from "url";
 import { GuildMember } from "discord.js";
+
 const getResponseHeaders = (url: string | https.RequestOptions | URL) =>
   new Promise((resolve, reject) => {
     https

@@ -1,6 +1,7 @@
 import DisTube from "../../DisTube";
 import DisTubeBase from "../DisTubeBase";
 import { Collection } from "discord.js";
+import { DisTubeError } from "../../struct";
 
 type GuildIDResolvable = string | { id?: string | null; guild?: { id?: string | null } | null };
 
@@ -27,7 +28,7 @@ export class BaseManager<V, R extends GuildIDResolvable> extends DisTubeBase {
       guildID = idOrInstance.guild?.id || idOrInstance.id;
     }
     if (typeof guildID !== "string" || !guildID.match(/^\d+$/) || guildID.length <= 15) {
-      throw TypeError("The parameter must be a GuildIDResolvable!");
+      throw new DisTubeError("INVALID_TYPE", "GuildIDResolvable", guildID);
     }
     return guildID;
   }

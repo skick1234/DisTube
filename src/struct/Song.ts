@@ -2,7 +2,7 @@ import ytdl from "ytdl-core";
 import Playlist from "./Playlist";
 import { SearchResult } from ".";
 import { GuildMember, User } from "discord.js";
-import { Chapter, OtherSongInfo, formatDuration, parseNumber, toSecond } from "..";
+import { Chapter, DisTubeError, OtherSongInfo, formatDuration, parseNumber, toSecond } from "..";
 
 /**
  * Class representing a song.
@@ -54,7 +54,7 @@ export class Song {
       typeof source !== "string" ||
       ((info as OtherSongInfo).src && typeof (info as OtherSongInfo).src !== "string")
     ) {
-      throw new TypeError("Source must be a string");
+      throw new DisTubeError("INVALID_TYPE", "string", source, "source");
     }
     /**
      * The source of the song
@@ -85,12 +85,9 @@ export class Song {
         "LIVE_STREAM_OFFLINE",
         "LOGIN_REQUIRED",
       ]);
-      if (err) {
-        throw err;
-      }
-      if (!info.formats?.length) {
-        throw new Error("This video is unavailable");
-      }
+      if (err) throw err;
+
+      if (!info.formats?.length) throw new DisTubeError("UNAVAILABLE_VIDEO");
     }
     const details = info.videoDetails || info;
     /**
@@ -222,9 +219,8 @@ export class Song {
    * @returns {Song}
    */
   _patchPlaylist(playlist: Playlist, member?: GuildMember): Song {
-    if (!(playlist instanceof Playlist)) {
-      throw new TypeError("playlist is not a valid Playlist");
-    }
+    if (!(playlist instanceof Playlist)) throw new DisTubeError("INVALID_TYPE", "Playlist", playlist, "playlist");
+
     /**
      * The playlist added this song
      * @type {Playlist?}

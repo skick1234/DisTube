@@ -8,6 +8,7 @@ import {
   IntentsString,
   Message,
   Snowflake,
+  SnowflakeUtil,
   StageChannel,
   TextChannel,
   VoiceChannel,
@@ -85,11 +86,12 @@ export function isURL(input: any): boolean {
  * @param {ClientOptions} options options
  */
 export function checkIntents(options: ClientOptions): void {
+  const requiredIntents: BitFieldResolvable<IntentsString, number>[] = ["GUILD_VOICE_STATES"];
   const bitfield: BitFieldResolvable<IntentsString, number> = options.intents || (options?.ws as any)?.intents;
   if (typeof bitfield === "undefined") return;
   const intents = new Intents(bitfield);
-  if (!intents.has("GUILD_VOICE_STATES")) {
-    throw new DisTubeError("GUILD_VOICE_STATES intent must be provided for the Client", "MissingIntents");
+  for (const intent of requiredIntents) {
+    if (!intents.has(intent)) throw new DisTubeError("MISSING_INTENTS", intent);
   }
 }
 
@@ -106,8 +108,11 @@ export function isVoiceChannelEmpty(voiceState: VoiceState): boolean {
 }
 
 export function isSnowflake(id: any): id is Snowflake {
-  // TODO: Make this better
-  return typeof id === "string" && !!id.match(/^\d+$/) && id.length > 15;
+  try {
+    return SnowflakeUtil.deconstruct(id).timestamp > SnowflakeUtil.EPOCH;
+  } catch {
+    return false;
+  }
 }
 
 export function isMemberInstance(member: any): member is GuildMember {
@@ -125,7 +130,6 @@ export function isTextChannelInstance(channel: any): channel is TextChannel {
     channel &&
     isSnowflake(channel.id) &&
     isSnowflake(channel.guild?.id) &&
-    // Check for some necessary functions to use with distube
     typeof channel.send === "function" &&
     typeof channel.awaitMessages === "function"
   );
@@ -135,6 +139,7 @@ export function isMessageInstance(message: any): message is Message {
   // Simple check for using distube normally
   return (
     message &&
+    isSnowflake(message.id) &&
     isSnowflake(message.guild?.id) &&
     isTextChannelInstance(message.channel) &&
     isMemberInstance(message.member) &&

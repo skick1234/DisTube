@@ -1,5 +1,6 @@
-import { ExtractorPlugin, Song } from "../struct";
 import http from "http";
+import ExtractorPlugin from "../struct/ExtractorPlugin";
+import { Song } from "..";
 import { URL } from "url";
 import { GuildMember } from "discord.js";
 

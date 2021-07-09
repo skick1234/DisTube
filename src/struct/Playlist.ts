@@ -1,7 +1,7 @@
 import Song from "./Song";
-import { GuildMember, User } from "discord.js";
 import ytpl from "@distube/ytpl";
-import { PlaylistInfo, formatDuration } from "..";
+import { GuildMember, User } from "discord.js";
+import { DisTubeError, PlaylistInfo, formatDuration } from "..";
 
 /**
  * Class representing a playlist.
@@ -24,10 +24,10 @@ export class Playlist implements PlaylistInfo {
    */
   constructor(playlist: Song[] | ytpl.result | PlaylistInfo, member?: GuildMember, properties: any = {}) {
     if (typeof playlist !== "object") {
-      throw new TypeError("playlist must be an array of Song or an object.");
+      throw new DisTubeError("INVALID_TYPE", ["Array<Song>", "object"], playlist, "playlist");
     }
     if (typeof properties !== "object") {
-      throw new TypeError("Custom properties must be an object.");
+      throw new DisTubeError("INVALID_TYPE", "object", properties, "properties");
     }
     // FIXME
     const info = playlist as any;
@@ -52,7 +52,7 @@ export class Playlist implements PlaylistInfo {
      */
     this.songs = Array.isArray(info) ? info : info.items || info.songs;
     if (!Array.isArray(this.songs) || !this.songs.length) {
-      throw new Error("Playlist is empty!");
+      throw new DisTubeError("EMPTY_PLAYLIST");
     }
     this.songs.map(s => s.constructor.name === "Song" && s._patchPlaylist(this, this.member));
     /**
