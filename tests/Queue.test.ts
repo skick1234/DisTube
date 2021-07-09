@@ -33,7 +33,7 @@ const fakeClientMember: {
 };
 const fakeVoiceChannel = {
   id: "000000000000000000",
-  type: "voice",
+  type: "GUILD_VOICE",
   guild: {
     id: "111111111111111111",
     me: fakeClientMember,

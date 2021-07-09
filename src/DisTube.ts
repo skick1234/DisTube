@@ -209,7 +209,7 @@ class DisTube extends EventEmitter {
       message?: Message;
     } = {},
   ): Promise<void> {
-    if (!["voice", "stage"].includes(voiceChannel?.type)) {
+    if (!["GUILD_VOICE", "GUILD_STAGE_VOICE"].includes(voiceChannel?.type)) {
       throw new TypeError("voiceChannel is not a VoiceChannel or a StageChannel.");
     }
     if (typeof options !== "object" || Array.isArray(options)) throw new TypeError("options must be an object.");

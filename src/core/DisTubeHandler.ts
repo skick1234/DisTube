@@ -43,7 +43,7 @@ export class DisTubeHandler extends DisTubeBase {
   ): Promise<Queue | true> {
     const voice = (message as Message)?.member?.voice?.channel || message;
     if (isMessageInstance(voice)) throw new Error("User is not in a voice channel.");
-    if (!["voice", "stage"].includes(voice.type)) {
+    if (!["GUILD_VOICE", "GUILD_STAGE_VOICE"].includes(voice.type)) {
       throw new TypeError("User is not in a VoiceChannel or a StageChannel.");
     }
     return this.queues.create(voice, song, textChannel);

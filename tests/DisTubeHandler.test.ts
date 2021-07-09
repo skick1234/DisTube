@@ -106,7 +106,7 @@ describe("DisTubeHandler#createQueue()", () => {
       Util.isMessageInstance.mockReturnValue(false);
       distube.queues.create.mockReturnValue(true);
       const message: any = {
-        member: { voice: { channel: { type: "voice" } } },
+        member: { voice: { channel: { type: "GUILD_VOICE" } } },
         channel: { id: "a text channel" },
       };
       expect(await handler.createQueue(message, song)).toBe(true);
@@ -118,7 +118,7 @@ describe("DisTubeHandler#createQueue()", () => {
       Util.isMessageInstance.mockReturnValue(false);
       distube.queues.create.mockReturnValue(true);
       const message: any = {
-        member: { voice: { channel: { type: "voice" } } },
+        member: { voice: { channel: { type: "GUILD_VOICE" } } },
         channel: { id: "a text channel" },
       };
       const channel: any = { id: "another text channel" };
@@ -132,7 +132,7 @@ describe("DisTubeHandler#createQueue()", () => {
     test("Voice channel", async () => {
       Util.isMessageInstance.mockReturnValue(false);
       distube.queues.create.mockReturnValue(true);
-      const voice: any = { type: "voice" };
+      const voice: any = { type: "GUILD_VOICE" };
       expect(await handler.createQueue(voice, song)).toBe(true);
       expect(Util.isMessageInstance).toBeCalledWith(voice);
       expect(distube.queues.create).toBeCalledWith(voice, song, undefined);
@@ -141,7 +141,7 @@ describe("DisTubeHandler#createQueue()", () => {
     test("Stage channel", async () => {
       Util.isMessageInstance.mockReturnValue(false);
       distube.queues.create.mockReturnValue(true);
-      const voice: any = { type: "voice" };
+      const voice: any = { type: "GUILD_VOICE" };
       const channel: any = { id: "a text channel" };
       expect(await handler.createQueue(voice, song, channel)).toBe(true);
       expect(Util.isMessageInstance).toBeCalledWith(voice);
