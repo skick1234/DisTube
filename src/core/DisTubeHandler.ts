@@ -2,7 +2,16 @@ import ytdl from "ytdl-core";
 import ytpl from "@distube/ytpl";
 import DisTube from "../DisTube";
 import { DisTubeBase, DisTubeStream } from ".";
-import { OtherSongInfo, Playlist, Queue, SearchResult, Song, isMessageInstance, isURL } from "..";
+import {
+  OtherSongInfo,
+  Playlist,
+  Queue,
+  SearchResult,
+  Song,
+  isMessageInstance,
+  isSupportedVoiceChannel,
+  isURL,
+} from "..";
 import { GuildMember, Message, StageChannel, TextChannel, VoiceChannel } from "discord.js";
 
 /**
@@ -43,7 +52,7 @@ export class DisTubeHandler extends DisTubeBase {
   ): Promise<Queue | true> {
     const voice = (message as Message)?.member?.voice?.channel || message;
     if (isMessageInstance(voice)) throw new Error("User is not in a voice channel.");
-    if (!["voice", "stage"].includes(voice.type)) {
+    if (!isSupportedVoiceChannel(voice)) {
       throw new TypeError("User is not in a VoiceChannel or a StageChannel.");
     }
     return this.queues.create(voice, song, textChannel);

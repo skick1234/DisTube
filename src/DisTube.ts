@@ -23,6 +23,7 @@ import {
   YouTubeDLPlugin,
   defaultFilters,
   isMessageInstance,
+  isSupportedVoiceChannel,
   isTextChannelInstance,
 } from ".";
 
@@ -209,7 +210,7 @@ class DisTube extends EventEmitter {
       message?: Message;
     } = {},
   ): Promise<void> {
-    if (!["voice", "stage"].includes(voiceChannel?.type)) {
+    if (!isSupportedVoiceChannel(voiceChannel)) {
       throw new TypeError("voiceChannel is not a VoiceChannel or a StageChannel.");
     }
     if (typeof options !== "object" || Array.isArray(options)) throw new TypeError("options must be an object.");

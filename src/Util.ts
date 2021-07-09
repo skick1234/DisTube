@@ -8,7 +8,9 @@ import {
   IntentsString,
   Message,
   Snowflake,
+  StageChannel,
   TextChannel,
+  VoiceChannel,
   VoiceState,
 } from "discord.js";
 
@@ -139,5 +141,24 @@ export function isMessageInstance(message: any): message is Message {
     isSnowflake(message.author?.id) &&
     message.member.id === message.author.id &&
     message.guild.id === message.channel.guild.id
+  );
+}
+
+export function isSupportedVoiceChannel(channel: any): channel is VoiceChannel | StageChannel {
+  return (
+    channel &&
+    isSnowflake(channel.id) &&
+    isSnowflake(channel.guild?.id) &&
+    typeof channel.full === "boolean" &&
+    typeof channel.joinable === "boolean" &&
+    typeof channel.speakable === "boolean" &&
+    [
+      // Djs v12
+      "voice",
+      "stage",
+      // Djs v13
+      "GUILD_VOICE",
+      "GUILD_STAGE_VOICE",
+    ].includes(channel.type)
   );
 }

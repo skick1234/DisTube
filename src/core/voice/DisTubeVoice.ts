@@ -1,7 +1,7 @@
 import DisTubeStream from "../DisTubeStream";
 import { EventEmitter } from "events";
 import { DisTubeVoiceManager } from "./DisTubeVoiceManager";
-import { DisTubeError, createDiscordJSAdapter } from "../..";
+import { DisTubeError, createDiscordJSAdapter, isSupportedVoiceChannel } from "../..";
 import { Snowflake, StageChannel, VoiceChannel } from "discord.js";
 import {
   AudioPlayer,
@@ -35,6 +35,9 @@ export class DisTubeVoice extends EventEmitter {
   private _volume: number;
   constructor(voiceManager: DisTubeVoiceManager, channel: VoiceChannel | StageChannel) {
     super();
+    if (!isSupportedVoiceChannel(channel)) {
+      throw new TypeError("DisTubeVoice only supports VoiceChannel or a StageChannel.");
+    }
     this.id = channel.guild.id;
     /**
      * The voice manager that instantiated this connection
