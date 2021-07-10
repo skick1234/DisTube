@@ -35,15 +35,13 @@ export class DisTubeVoice extends EventEmitter {
   private _volume: number;
   constructor(voiceManager: DisTubeVoiceManager, channel: VoiceChannel | StageChannel) {
     super();
-    if (!isSupportedVoiceChannel(channel)) {
-      throw new DisTubeError("NOT_SUPPORTED_VOICE");
-    }
+    if (!isSupportedVoiceChannel(channel)) throw new DisTubeError("NOT_SUPPORTED_VOICE");
     if (!channel.joinable) {
       if (channel.full) throw new DisTubeError("VOICE_FULL");
       else throw new DisTubeError("VOICE_MISSING_PERMS");
     }
-    this.channel = channel;
     this.id = channel.guild.id;
+    this.channel = channel;
     /**
      * The voice manager that instantiated this connection
      * @type {DisTubeVoiceManager}
@@ -108,6 +106,8 @@ export class DisTubeVoice extends EventEmitter {
     return this._channel;
   }
   set channel(channel: VoiceChannel | StageChannel) {
+    if (!isSupportedVoiceChannel(channel)) throw new DisTubeError("NOT_SUPPORTED_VOICE");
+    if (channel.guild.id !== this.id) throw new DisTubeError("VOICE_CHANGE_GUILD");
     this.connection = this._join(channel);
     this._channel = channel;
   }

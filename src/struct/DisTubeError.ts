@@ -19,6 +19,7 @@ const ERROR_MESSAGES = {
   VOICE_CONNECT_FAILED: (s: number) => `Cannot connect to the voice channel after ${s} seconds`,
   VOICE_MISSING_PERMS: "You do not have permission to join this voice channel",
   VOICE_RECONNECT_FAILED: "Cannot reconnect to the voice channel",
+  VOICE_CHANGE_GUILD: "Cannot join a channel in a different guild",
 
   NO_QUEUE: "There is no playing queue in this guild",
   QUEUE_EXIST: "This guild has a Queue already",
