@@ -2,6 +2,7 @@
   "testEnvironment": "node",
   "collectCoverage": true,
   "collectCoverageFrom": ["src/**/*.ts"],
+  "coveragePathIgnorePatterns": ["/node_modules/", "/__test__/"],
   "coverageDirectory": "coverage",
   "coverageReporters": ["text", "lcov", "clover"]
 }

@@ -1,7 +1,7 @@
 import ytpl from "@distube/ytpl";
 import ytsr from "@distube/ytsr";
 import { EventEmitter } from "events";
-import { checkIntents, isURL, isVoiceChannelEmpty } from "./Util";
+import { checkIntents, isURL, isVoiceChannelEmpty } from "./util";
 import { Client, GuildMember, Message, StageChannel, TextChannel, VoiceChannel } from "discord.js";
 import {
   CustomPlugin,

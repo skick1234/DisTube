@@ -1,4 +1,4 @@
-import { DisTubeError, Queue, Song, defaultFilters, defaultOptions } from "../src";
+import { DisTubeError, Queue, Song, defaultFilters, defaultOptions } from "../..";
 
 function createFakeHandler() {
   return {
@@ -50,8 +50,8 @@ const voice = {
   volume: 50,
 };
 fakeClientMember.voice = voice;
-const song = new Song({ id: "xxxxxxxxxxx", url: "https://www.youtube.com/watch?v=xxxxxxxxxxx" }, null, "test");
-const anotherSong = new Song({ id: "y", url: "https://www.youtube.com/watch?v=y" }, null, "test");
+const song = new Song({ id: "xxxxxxxxxxx", url: "https://www.youtube.com/watch?v=xxxxxxxxxxx" }, {} as any, "test");
+const anotherSong = new Song({ id: "y", url: "https://www.youtube.com/watch?v=y" }, {} as any, "test");
 
 afterEach(() => {
   jest.resetAllMocks();

@@ -1,6 +1,6 @@
 import { DisTubeVoice } from ".";
-import { BaseManager } from "../managers";
-import { QueueResolvable } from "../../types";
+import { BaseManager } from "../manager";
+import { QueueResolvable } from "../../type";
 import { StageChannel, VoiceChannel } from "discord.js";
 import { VoiceConnectionStatus, getVoiceConnection } from "@discordjs/voice";
 

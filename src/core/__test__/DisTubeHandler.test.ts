@@ -1,15 +1,15 @@
-import { DisTubeError, DisTubeHandler, Playlist, SearchResult, Song, defaultFilters, defaultOptions } from "../src";
+import { DisTubeError, DisTubeHandler, Playlist, SearchResult, Song, defaultFilters, defaultOptions } from "../..";
 import fs from "fs";
 
 import * as _ytdl from "ytdl-core";
-import * as _Util from "../src/Util";
-import * as _Queue from "../src/struct/Queue";
-import * as _Stream from "../src/core/DisTubeStream";
+import * as _Util from "../../util";
+import * as _Queue from "../../struct/Queue";
+import * as _Stream from "../DisTubeStream";
 
 jest.mock("ytdl-core");
-jest.mock("../src/Util");
-jest.mock("../src/struct/Queue");
-jest.mock("../src/core/DisTubeStream");
+jest.mock("../../Util");
+jest.mock("../../struct/Queue");
+jest.mock("../DisTubeStream");
 
 const ytdl = _ytdl as unknown as jest.Mocked<typeof _ytdl>;
 const Util = _Util as unknown as jest.Mocked<typeof _Util>;
@@ -39,12 +39,17 @@ function createFakeDisTube() {
   };
 }
 
-const songResult = new SearchResult(JSON.parse(fs.readFileSync("./tests/info/videoResults.json", "utf-8")).items[0]);
-const plResult = new SearchResult(JSON.parse(fs.readFileSync("./tests/info/playlistResults.json", "utf-8")).items[0]);
-const song = new Song({ id: "xxxxxxxxxxx", url: "https://www.youtube.com/watch?v=xxxxxxxxxxx" }, null);
-const anotherSong = new Song({ id: "y", url: "https://www.youtube.com/watch?v=y" }, null, "test");
-const nsfwSong = new Song({ id: "z", url: "z url", age_restricted: true }, null, "test");
-const playlist = new Playlist([song, anotherSong, nsfwSong], null);
+const member: any = {};
+const songResult = new SearchResult(
+  JSON.parse(fs.readFileSync(__dirname + "/info/videoResults.json", "utf-8")).items[0],
+);
+const plResult = new SearchResult(
+  JSON.parse(fs.readFileSync(__dirname + "/info/playlistResults.json", "utf-8")).items[0],
+);
+const song = new Song({ id: "xxxxxxxxxxx", url: "https://www.youtube.com/watch?v=xxxxxxxxxxx" }, member);
+const anotherSong = new Song({ id: "y", url: "https://www.youtube.com/watch?v=y" }, member, "test");
+const nsfwSong = new Song({ id: "z", url: "z url", age_restricted: true }, member, "test");
+const playlist = new Playlist([song, anotherSong, nsfwSong], member);
 
 afterEach(() => {
   jest.resetAllMocks();
@@ -147,11 +152,10 @@ describe("DisTubeHandler#getYouTubeInfo()", () => {
 describe("DisTubeHandler#resolveSong()", () => {
   const distube = createFakeDisTube();
   const handler = new DisTubeHandler(distube as any);
-  const member: any = {};
 
   test("Parameter is null or undefined", async () => {
     await expect(handler.resolveSong(member, null)).resolves.toBe(null);
-    await expect(handler.resolveSong(member, undefined)).resolves.toBe(null);
+    await expect(handler.resolveSong(member, null)).resolves.toBe(null);
   });
 
   test("Parameter is Song or Playlist", async () => {
@@ -165,21 +169,15 @@ describe("DisTubeHandler#resolveSong()", () => {
 
   test("Parameter is a song info object", async () => {
     const songInfo = { id: "z", url: "z url", src: "test" };
-    const resolved = await handler.resolveSong(member, songInfo);
-    expect(resolved).toBeInstanceOf(Song);
-    expect(resolved.id).toBe(songInfo.id);
-    expect(resolved.url).toBe(songInfo.url);
-    expect(resolved.source).toBe(songInfo.src);
+    await expect(handler.resolveSong(member, songInfo)).resolves.toBeInstanceOf(Song);
   });
 
   test("Parameter is a youtube url", async () => {
     const url = "a youtube url";
     ytdl.validateURL.mockReturnValue(true);
     ytdl.getInfo.mockReturnValue({ full: true, videoDetails: { id: "test" }, formats: ["a format"] } as any);
-    const resolved = await handler.resolveSong(member, url);
-    expect(resolved).toBeInstanceOf(Song);
-    expect(resolved.formats).toBeDefined();
-    expect(resolved.url).toBe("https://www.youtube.com/watch?v=test");
+    const resolved = handler.resolveSong(member, url);
+    await expect(resolved).resolves.toBeInstanceOf(Song);
     expect(ytdl.validateURL).toBeCalledWith(url);
     expect(ytdl.getInfo).toBeCalledWith(url, handler.ytdlOptions);
   });
@@ -215,13 +213,13 @@ describe("DisTubeHandler#resolvePlaylist()", () => {
   const handler = new DisTubeHandler(distube as any);
 
   test("playlist is a Playlist", async () => {
-    await expect(handler.resolvePlaylist(null, playlist)).resolves.toBe(playlist);
+    await expect(handler.resolvePlaylist(member, playlist)).resolves.toBe(playlist);
   });
 
   test("playlist is a Song array", async () => {
-    const result = await handler.resolvePlaylist(null, [song, anotherSong, nsfwSong]);
-    expect(result).toStrictEqual(playlist);
-    expect(result).not.toBe(playlist);
+    const result = handler.resolvePlaylist(member, [song, anotherSong, nsfwSong]);
+    await expect(result).resolves.toStrictEqual(playlist);
+    await expect(result).resolves.not.toBe(playlist);
   });
 });
 
@@ -276,7 +274,7 @@ describe("DisTubeHandler#createCustomPlaylist()", () => {
 describe("DisTubeHandler#handlePlaylist()", () => {
   const distube = createFakeDisTube();
   const handler = new DisTubeHandler(distube as any);
-  const message: any = null;
+  const message: any = {};
 
   test("Invalid Playlist", async () => {
     await expect(handler.handlePlaylist(message, undefined as any)).rejects.toThrow(
@@ -292,7 +290,7 @@ describe("DisTubeHandler#handlePlaylist()", () => {
     await expect(handler.handlePlaylist(message, pl1, { nsfw: false } as any)).rejects.toThrow(
       new DisTubeError("EMPTY_FILTERED_PLAYLIST"),
     );
-    const pl2 = new Playlist([new Song({ age_restricted: true, url: "test url" }, null, "test")], message);
+    const pl2 = new Playlist([new Song({ age_restricted: true, url: "test url" }, member, "test")], message);
     pl2.songs = [];
     await expect(handler.handlePlaylist(message, pl2, { nsfw: true } as any)).rejects.toThrow(
       new DisTubeError("EMPTY_PLAYLIST"),
@@ -311,7 +309,7 @@ describe("DisTubeHandler#handlePlaylist()", () => {
 
   test("Play in a non-nsfw channel", async () => {
     const channel: any = { nsfw: false };
-    const queue = new Queue.Queue(null, null, null);
+    const queue = new Queue.Queue(distube as any, {} as any, song);
     queue.songs = playlist.songs;
     distube.queues.get.mockReturnValue(undefined);
     handler.createQueue = jest.fn().mockReturnValue(queue);
@@ -324,7 +322,7 @@ describe("DisTubeHandler#handlePlaylist()", () => {
 
   test("Skip the playing song", async () => {
     const channel: any = { nsfw: false };
-    const queue = new Queue.Queue(null, null, null);
+    const queue = new Queue.Queue(distube as any, {} as any, song);
     queue.songs = playlist.songs;
     distube.queues.get.mockReturnValue(queue);
     await expect(handler.handlePlaylist(message, playlist, channel, true, true)).resolves.toBeUndefined();
@@ -337,7 +335,7 @@ describe("DisTubeHandler#handlePlaylist()", () => {
 
   test("Add the playlist to the beginning of the queue", async () => {
     const channel: any = { nsfw: true };
-    const queue = new Queue.Queue(null, null, null);
+    const queue = new Queue.Queue(distube as any, {} as any, song);
     queue.songs = playlist.songs;
     distube.queues.get.mockReturnValue(queue);
     await expect(handler.handlePlaylist(message, playlist, channel, false, true)).resolves.toBeUndefined();
@@ -349,7 +347,7 @@ describe("DisTubeHandler#handlePlaylist()", () => {
 
   test("Add the playlist to the end of the queue", async () => {
     const channel: any = { nsfw: true };
-    const queue = new Queue.Queue(null, null, null);
+    const queue = new Queue.Queue(distube as any, {} as any, song);
     queue.songs = playlist.songs;
     distube.queues.get.mockReturnValue(queue);
     await expect(handler.handlePlaylist(message, playlist, channel, false, false)).resolves.toBeUndefined();
@@ -375,7 +373,7 @@ describe("DisTubeHandler#createStream()", () => {
       filters: [],
       beginTime: 1,
     };
-    const result = handler.createStream(queue as _Queue.Queue);
+    const result = handler.createStream(queue as any);
     expect(result).toBe(stream);
     expect(mockFn).toBeCalledWith(
       song.formats,

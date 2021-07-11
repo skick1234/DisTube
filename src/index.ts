@@ -1,7 +1,7 @@
-export * from "./types";
-export * from "./constants";
+export * from "./type";
+export * from "./constant";
 export * from "./struct";
-export * from "./Util";
+export * from "./util";
 export * from "./core";
-export * from "./plugins";
 export { DisTube } from "./DisTube";
+export * from "./plugin";
