@@ -117,7 +117,7 @@ export function isSnowflake(id: any): id is Snowflake {
 
 export function isMemberInstance(member: any): member is GuildMember {
   return (
-    member &&
+    !!member &&
     isSnowflake(member.id) &&
     isSnowflake(member.guild?.id) &&
     isSnowflake(member.user?.id) &&
@@ -127,7 +127,7 @@ export function isMemberInstance(member: any): member is GuildMember {
 
 export function isTextChannelInstance(channel: any): channel is TextChannel {
   return (
-    channel &&
+    !!channel &&
     isSnowflake(channel.id) &&
     isSnowflake(channel.guild?.id) &&
     typeof channel.send === "function" &&
@@ -138,7 +138,7 @@ export function isTextChannelInstance(channel: any): channel is TextChannel {
 export function isMessageInstance(message: any): message is Message {
   // Simple check for using distube normally
   return (
-    message &&
+    !!message &&
     isSnowflake(message.id) &&
     isSnowflake(message.guild?.id) &&
     isTextChannelInstance(message.channel) &&
@@ -151,12 +151,11 @@ export function isMessageInstance(message: any): message is Message {
 
 export function isSupportedVoiceChannel(channel: any): channel is VoiceChannel | StageChannel {
   return (
-    channel &&
+    !!channel &&
+    channel.deleted === false &&
     isSnowflake(channel.id) &&
     isSnowflake(channel.guild?.id) &&
     typeof channel.full === "boolean" &&
-    typeof channel.joinable === "boolean" &&
-    typeof channel.speakable === "boolean" &&
     [
       // Djs v12
       "voice",
