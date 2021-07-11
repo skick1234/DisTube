@@ -7,7 +7,7 @@ import * as _Queue from "../../struct/Queue";
 import * as _Stream from "../DisTubeStream";
 
 jest.mock("ytdl-core");
-jest.mock("../../Util");
+jest.mock("../../util");
 jest.mock("../../struct/Queue");
 jest.mock("../DisTubeStream");
 
