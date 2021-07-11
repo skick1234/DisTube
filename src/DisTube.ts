@@ -27,7 +27,7 @@ import {
   isTextChannelInstance,
 } from ".";
 
-declare interface DisTube {
+export declare interface DisTube {
   handler: DisTubeHandler;
   options: Options;
   client: Client;
@@ -45,13 +45,16 @@ declare interface DisTube {
   on(event: "error", listener: (channel: TextChannel, error: Error) => void): this;
   on(event: "searchNoResult" | "searchCancel", listener: (message: Message, query: string) => void): this;
   on(event: "searchResult", listener: (message: Message, results: SearchResult[], query: string) => void): this;
-  on(event: "searchDone", listener: (message: Message, answer: Message, query: string) => void): this;
+  on(
+    event: "searchInvalidAnswer" | "searchDone",
+    listener: (message: Message, answer: Message, query: string) => void,
+  ): this;
 }
 /**
  * DisTube class
  * @extends EventEmitter
  */
-class DisTube extends EventEmitter {
+export class DisTube extends EventEmitter {
   /**
    * Create a new DisTube class.
    * @param {Discord.Client} client JS client
@@ -138,13 +141,13 @@ class DisTube extends EventEmitter {
      * @type {ExtractorPlugin[]}
      * @private
      */
-    this.extractorPlugins = this.options.plugins.filter(p => p.type === "extractor") as ExtractorPlugin[];
+    this.extractorPlugins = this.options.plugins.filter((p): p is ExtractorPlugin => p.type === "extractor");
     /**
      * Custom Plugins
      * @type {CustomPlugin[]}
      * @private
      */
-    this.customPlugins = this.options.plugins.filter(p => p.type === "custom") as CustomPlugin[];
+    this.customPlugins = this.options.plugins.filter((p): p is CustomPlugin => p.type === "custom");
   }
 
   /**
@@ -663,7 +666,6 @@ class DisTube extends EventEmitter {
   /* eslint-enable no-console */
 }
 
-export { DisTubeOptions, Song, Playlist, CustomPlugin, ExtractorPlugin, Queue, SearchResult, DisTube };
 export default DisTube;
 
 /**

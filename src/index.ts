@@ -3,5 +3,5 @@ export * from "./constant";
 export * from "./struct";
 export * from "./util";
 export * from "./core";
-export { DisTube } from "./DisTube";
 export * from "./plugin";
+export { DisTube, DisTube as default } from "./DisTube";
