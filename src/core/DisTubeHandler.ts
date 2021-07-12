@@ -212,7 +212,6 @@ export class DisTubeHandler extends DisTubeBase {
     if (limit > 1) {
       this.emit("searchResult", message, results, query);
       const c = message.channel;
-      /* eslint-disable @typescript-eslint/indent */ // offsetTernaryExpressions bug
       const answers = await (c.awaitMessages.length === 0
         ? c.awaitMessages({
             filter: (m: Message) => m.author.id === message.author.id,
@@ -226,7 +225,6 @@ export class DisTubeHandler extends DisTubeBase {
             errors: ["time"],
           })
       ).catch(() => undefined);
-      /* eslint-enable @typescript-eslint/indent */
       const ans = answers?.first();
       if (!ans) {
         this.emit("searchCancel", message, query);

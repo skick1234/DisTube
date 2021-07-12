@@ -1,7 +1,7 @@
 {
   "parser": "@typescript-eslint/parser",
   "plugins": ["@typescript-eslint", "jsdoc"],
-  "extends": ["eslint:recommended", "plugin:@typescript-eslint/recommended"],
+  "extends": ["eslint:recommended", "plugin:@typescript-eslint/recommended", "prettier"],
   "parserOptions": {
     "ecmaVersion": 11,
     "sourceType": "module"
@@ -16,13 +16,6 @@
       "warn",
       {
         "ignoreDeclarationSort": true
-      }
-    ],
-    "@typescript-eslint/indent": [
-      "error",
-      2,
-      {
-        "offsetTernaryExpressions": true
       }
     ],
     "@typescript-eslint/no-explicit-any": 0,

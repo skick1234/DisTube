@@ -61,6 +61,7 @@
     "babel-jest": "^27.0.6",
     "discord.js": "discordjs/discord.js",
     "eslint": "^7.30.0",
+    "eslint-config-prettier": "^8.3.0",
     "eslint-plugin-jsdoc": "^35.4.2",
     "husky": "^7.0.1",
     "jest": "^27.0.6",
