@@ -119,7 +119,7 @@ export class Options {
     if (typeof options.emptyCooldown !== "number" || isNaN(options.emptyCooldown)) {
       throw new DisTubeError("INVALID_TYPE", "number", options.emptyCooldown, "DisTubeOptions.emptyCooldown");
     }
-    if (typeof options.searchSongs !== "number" || isNaN(options.emptyCooldown)) {
+    if (typeof options.searchSongs !== "number" || isNaN(options.searchSongs)) {
       throw new DisTubeError("INVALID_TYPE", "number", options.searchSongs, "DisTubeOptions.searchSongs");
     }
     if (!Array.isArray(options.plugins)) {
