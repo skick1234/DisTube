@@ -1,5 +1,5 @@
 import { DisTubeError, DisTubeHandler, Playlist, SearchResult, Song, defaultFilters, defaultOptions } from "../..";
-import fs from "fs";
+import { playlistResults, videoResults } from "./raw";
 
 import * as _ytdl from "ytdl-core";
 import * as _Util from "../../util";
@@ -40,12 +40,8 @@ function createFakeDisTube() {
 }
 
 const member: any = {};
-const songResult = new SearchResult(
-  JSON.parse(fs.readFileSync(__dirname + "/info/videoResults.json", "utf-8")).items[0],
-);
-const plResult = new SearchResult(
-  JSON.parse(fs.readFileSync(__dirname + "/info/playlistResults.json", "utf-8")).items[0],
-);
+const songResult = new SearchResult(videoResults.items[0] as any);
+const plResult = new SearchResult(playlistResults.items[0] as any);
 const song = new Song({ id: "xxxxxxxxxxx", url: "https://www.youtube.com/watch?v=xxxxxxxxxxx" }, member);
 const anotherSong = new Song({ id: "y", url: "https://www.youtube.com/watch?v=y" }, member, "test");
 const nsfwSong = new Song({ id: "z", url: "z url", age_restricted: true }, member, "test");
