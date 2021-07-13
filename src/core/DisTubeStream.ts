@@ -2,6 +2,7 @@ import ytdl from "ytdl-core";
 import { FFmpeg } from "prism-media";
 import { DisTubeError } from "../struct";
 import { StreamType } from "@discordjs/voice";
+import { isURL } from "..";
 
 interface StreamOptions extends ytdl.downloadOptions {
   /**
@@ -18,7 +19,7 @@ interface StreamOptions extends ytdl.downloadOptions {
   isLive?: boolean;
 }
 
-const chooseBestFormat = (formats: ytdl.videoFormat[], isLive = false) => {
+export const chooseBestVideoFormat = (formats: ytdl.videoFormat[], isLive = false) => {
   let filter = (format: ytdl.videoFormat) => (format.audioBitrate ? format.audioBitrate > 0 : false);
   if (isLive) {
     filter = (format: ytdl.videoFormat) => (format.audioBitrate ? format.audioBitrate > 0 : false) && format.isHLS;
@@ -53,7 +54,7 @@ export class DisTubeStream {
     if (!options || typeof options !== "object" || Array.isArray(options)) {
       throw new DisTubeError("INVALID_TYPE", "object", options, "options");
     }
-    const bestFormat = chooseBestFormat(formats, options.isLive);
+    const bestFormat = chooseBestVideoFormat(formats, options.isLive);
     if (!bestFormat) throw new DisTubeError("UNPLAYABLE_FORMATS");
     return new DisTubeStream(bestFormat.url, options);
   }
@@ -67,8 +68,8 @@ export class DisTubeStream {
     if (!options || typeof options !== "object" || Array.isArray(options)) {
       throw new DisTubeError("INVALID_TYPE", "object", options, "options");
     }
-    if (typeof url !== "string") {
-      throw new DisTubeError("INVALID_TYPE", "string", url, "url");
+    if (typeof url !== "string" || !isURL(url)) {
+      throw new DisTubeError("INVALID_TYPE", "an URL", url);
     }
     return new DisTubeStream(url, options);
   }
