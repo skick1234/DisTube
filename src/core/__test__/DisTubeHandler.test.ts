@@ -1,16 +1,19 @@
 import { DisTubeError, DisTubeHandler, Playlist, SearchResult, Song, defaultFilters, defaultOptions } from "../..";
-import { playlistResults, videoResults } from "./raw";
+import { firstPlaylistInfo, playlistResults, videoResults } from "./raw";
 
+import * as _ytpl from "@distube/ytpl";
 import * as _ytdl from "ytdl-core";
 import * as _Util from "../../util";
 import * as _Queue from "../../struct/Queue";
 import * as _Stream from "../DisTubeStream";
 
+jest.mock("@distube/ytpl");
 jest.mock("ytdl-core");
 jest.mock("../../util");
 jest.mock("../../struct/Queue");
 jest.mock("../DisTubeStream");
 
+const ytpl = _ytpl as unknown as jest.Mocked<typeof _ytpl>;
 const ytdl = _ytdl as unknown as jest.Mocked<typeof _ytdl>;
 const Util = _Util as unknown as jest.Mocked<typeof _Util>;
 const Queue = _Queue as unknown as jest.Mocked<typeof _Queue>;
@@ -160,6 +163,7 @@ describe("DisTubeHandler#resolveSong()", () => {
 
   test("Parameter is a SearchResult", async () => {
     await expect(handler.resolveSong(member, songResult)).resolves.toBeInstanceOf(Song);
+    (ytpl as unknown as jest.Mock).mockReturnValue(firstPlaylistInfo);
     await expect(handler.resolveSong(member, plResult)).resolves.toBeInstanceOf(Playlist);
   });
 

@@ -1,3 +1,258 @@
+export const firstPlaylistInfo = {
+  id: "PLkqOl2GD1Tj_STgpqmpsMjqN_2j5Rvir8",
+  thumbnail: {
+    url: "https://i.ytimg.com/vi/3moLkjvhEu0/hqdefault.jpg?sqp=-oaymwEXCNACELwBSFryq4qpAwkIARUAAIhCGAE=&rs=AOn4CLA14XKyrORIifS-TIjf9cu1Z8hDPA",
+    width: 336,
+    height: 188,
+  },
+  url: "https://www.youtube.com/playlist?list=PLkqOl2GD1Tj_STgpqmpsMjqN_2j5Rvir8",
+  title: "distube",
+  total_items: 17,
+  views: 1676,
+  items: [
+    {
+      title: "Disturbed - Stricken [Official Music Video]",
+      id: "3moLkjvhEu0",
+      shortUrl: "https://www.youtube.com/watch?v=3moLkjvhEu0",
+      url: "https://www.youtube.com/watch?v=3moLkjvhEu0&list=PLkqOl2GD1Tj_STgpqmpsMjqN_2j5Rvir8&index=1",
+      author: {
+        url: "https://www.youtube.com/channel/UCveWMJeHgcIUPMnFzd7Vxjg",
+        channelID: "UCveWMJeHgcIUPMnFzd7Vxjg",
+        name: "Disturbed",
+      },
+      thumbnail:
+        "https://i.ytimg.com/vi/3moLkjvhEu0/hqdefault.jpg?sqp=-oaymwEjCNACELwBSFryq4qpAxUIARUAAAAAGAElAADIQj0AgKJDeAE=&rs=AOn4CLB2iwHMKdR4SeKViqLx-UR9HwOFUw",
+      isLive: false,
+      duration: "4:11",
+    },
+    {
+      title: "Disturbed - Down With The Sickness [Official Music Video]",
+      id: "09LTT0xwdfw",
+      shortUrl: "https://www.youtube.com/watch?v=09LTT0xwdfw",
+      url: "https://www.youtube.com/watch?v=09LTT0xwdfw&list=PLkqOl2GD1Tj_STgpqmpsMjqN_2j5Rvir8&index=2",
+      author: {
+        url: "https://www.youtube.com/channel/UCveWMJeHgcIUPMnFzd7Vxjg",
+        channelID: "UCveWMJeHgcIUPMnFzd7Vxjg",
+        name: "Disturbed",
+      },
+      thumbnail:
+        "https://i.ytimg.com/vi/09LTT0xwdfw/hqdefault.jpg?sqp=-oaymwEjCNACELwBSFryq4qpAxUIARUAAAAAGAElAADIQj0AgKJDeAE=&rs=AOn4CLBYSeu3wpE9Ln744sGFrEYxS7lHDw",
+      isLive: false,
+      duration: "3:37",
+    },
+    {
+      title: "Disturbed - Stupify [Official Music Video]",
+      id: "GVcY--XzeIc",
+      shortUrl: "https://www.youtube.com/watch?v=GVcY--XzeIc",
+      url: "https://www.youtube.com/watch?v=GVcY--XzeIc&list=PLkqOl2GD1Tj_STgpqmpsMjqN_2j5Rvir8&index=3",
+      author: {
+        url: "https://www.youtube.com/channel/UCveWMJeHgcIUPMnFzd7Vxjg",
+        channelID: "UCveWMJeHgcIUPMnFzd7Vxjg",
+        name: "Disturbed",
+      },
+      thumbnail:
+        "https://i.ytimg.com/vi/GVcY--XzeIc/hqdefault.jpg?sqp=-oaymwEjCNACELwBSFryq4qpAxUIARUAAAAAGAElAADIQj0AgKJDeAE=&rs=AOn4CLBIR2I-rPAgACGifAg7_9wwmIuyWA",
+      isLive: false,
+      duration: "4:07",
+    },
+    {
+      title: "Godsmack - I Stand Alone (Official Music Video)",
+      id: "OYjZK_6i37M",
+      shortUrl: "https://www.youtube.com/watch?v=OYjZK_6i37M",
+      url: "https://www.youtube.com/watch?v=OYjZK_6i37M&list=PLkqOl2GD1Tj_STgpqmpsMjqN_2j5Rvir8&index=4",
+      author: {
+        url: "https://www.youtube.com/channel/UCe9rl8k6yymUeVzzXfFGWwA",
+        channelID: "UCe9rl8k6yymUeVzzXfFGWwA",
+        name: "Godsmack",
+      },
+      thumbnail:
+        "https://i.ytimg.com/vi/OYjZK_6i37M/hqdefault.jpg?sqp=-oaymwEjCNACELwBSFryq4qpAxUIARUAAAAAGAElAADIQj0AgKJDeAE=&rs=AOn4CLCTJhGi36XXmWuxkWFTCIERq_4zrw",
+      isLive: false,
+      duration: "4:56",
+    },
+    {
+      title: "System Of A Down - B.Y.O.B. (Official Video)",
+      id: "zUzd9KyIDrM",
+      shortUrl: "https://www.youtube.com/watch?v=zUzd9KyIDrM",
+      url: "https://www.youtube.com/watch?v=zUzd9KyIDrM&list=PLkqOl2GD1Tj_STgpqmpsMjqN_2j5Rvir8&index=5",
+      author: {
+        url: "https://www.youtube.com/channel/UC7-YMmnc0ppcWmio8t1WdcA",
+        channelID: "UC7-YMmnc0ppcWmio8t1WdcA",
+        name: "System Of A Down",
+      },
+      thumbnail:
+        "https://i.ytimg.com/vi/zUzd9KyIDrM/hqdefault.jpg?sqp=-oaymwEjCNACELwBSFryq4qpAxUIARUAAAAAGAElAADIQj0AgKJDeAE=&rs=AOn4CLAsxmHhtE691Sh76BsF957tq-yuqg",
+      isLive: false,
+      duration: "4:23",
+    },
+    {
+      title: "System Of A Down - Chop Suey! (Official Video)",
+      id: "CSvFpBOe8eY",
+      shortUrl: "https://www.youtube.com/watch?v=CSvFpBOe8eY",
+      url: "https://www.youtube.com/watch?v=CSvFpBOe8eY&list=PLkqOl2GD1Tj_STgpqmpsMjqN_2j5Rvir8&index=6",
+      author: {
+        url: "https://www.youtube.com/channel/UC7-YMmnc0ppcWmio8t1WdcA",
+        channelID: "UC7-YMmnc0ppcWmio8t1WdcA",
+        name: "System Of A Down",
+      },
+      thumbnail:
+        "https://i.ytimg.com/vi/CSvFpBOe8eY/hqdefault.jpg?sqp=-oaymwEjCNACELwBSFryq4qpAxUIARUAAAAAGAElAADIQj0AgKJDeAE=&rs=AOn4CLBGntrlv7yGSQfPdN4bXXTUMFUxiQ",
+      isLive: false,
+      duration: "3:27",
+    },
+    {
+      title: "Drowning Pool - Bodies",
+      id: "04F4xlWSFh0",
+      shortUrl: "https://www.youtube.com/watch?v=04F4xlWSFh0",
+      url: "https://www.youtube.com/watch?v=04F4xlWSFh0&list=PLkqOl2GD1Tj_STgpqmpsMjqN_2j5Rvir8&index=7",
+      author: {
+        url: "https://www.youtube.com/channel/UCRFHKKNGdaIs9NaULSUuKGw",
+        channelID: "UCRFHKKNGdaIs9NaULSUuKGw",
+        name: "Drowning Pool",
+      },
+      thumbnail:
+        "https://i.ytimg.com/vi/04F4xlWSFh0/hqdefault.jpg?sqp=-oaymwEjCNACELwBSFryq4qpAxUIARUAAAAAGAElAADIQj0AgKJDeAE=&rs=AOn4CLCrnDKQ4Rfqnx9qt6FrK9FzxznshQ",
+      isLive: false,
+      duration: "3:40",
+    },
+    {
+      title: "Drowning Pool - Step Up",
+      id: "Co5n2RVbWM0",
+      shortUrl: "https://www.youtube.com/watch?v=Co5n2RVbWM0",
+      url: "https://www.youtube.com/watch?v=Co5n2RVbWM0&list=PLkqOl2GD1Tj_STgpqmpsMjqN_2j5Rvir8&index=8",
+      author: {
+        url: "https://www.youtube.com/channel/UCRFHKKNGdaIs9NaULSUuKGw",
+        channelID: "UCRFHKKNGdaIs9NaULSUuKGw",
+        name: "Drowning Pool",
+      },
+      thumbnail:
+        "https://i.ytimg.com/vi/Co5n2RVbWM0/hqdefault.jpg?sqp=-oaymwEjCNACELwBSFryq4qpAxUIARUAAAAAGAElAADIQj0AgKJDeAE=&rs=AOn4CLB3rdoqRQ8Nno9nXK8B8epUFiMxRQ",
+      isLive: false,
+      duration: "3:23",
+    },
+    {
+      title: "Disturbed - down with the sickness",
+      id: "L78yVFeyvRo",
+      shortUrl: "https://www.youtube.com/watch?v=L78yVFeyvRo",
+      url: "https://www.youtube.com/watch?v=L78yVFeyvRo&list=PLkqOl2GD1Tj_STgpqmpsMjqN_2j5Rvir8&index=9",
+      author: {
+        url: "https://www.youtube.com/user/xJuliiaJewelx",
+        channelID: "UCIG-qQkc8nrazBcLPIrbTPA",
+        name: "xJuliiaJewelx",
+      },
+      thumbnail:
+        "https://i.ytimg.com/vi/L78yVFeyvRo/hqdefault.jpg?sqp=-oaymwEjCNACELwBSFryq4qpAxUIARUAAAAAGAElAADIQj0AgKJDeAE=&rs=AOn4CLDadTqyq2Q_bt9_8An8XnjsZLbFPQ",
+      isLive: false,
+      duration: "4:39",
+    },
+    {
+      title: "stupify - disturbed",
+      id: "CQBNH3UFEC0",
+      shortUrl: "https://www.youtube.com/watch?v=CQBNH3UFEC0",
+      url: "https://www.youtube.com/watch?v=CQBNH3UFEC0&list=PLkqOl2GD1Tj_STgpqmpsMjqN_2j5Rvir8&index=10",
+      author: {
+        url: "https://www.youtube.com/user/disturbedrocka",
+        channelID: "UC-aNyA0-LT96awZKERYCTRQ",
+        name: "disturbedrocka",
+      },
+      thumbnail:
+        "https://i.ytimg.com/vi/CQBNH3UFEC0/hqdefault.jpg?sqp=-oaymwEjCNACELwBSFryq4qpAxUIARUAAAAAGAElAADIQj0AgKJDeAE=&rs=AOn4CLDymt-BEQ1pPCkJKvOcjTWfu6I2Sg",
+      isLive: false,
+      duration: "4:35",
+    },
+    {
+      title: "Limp Bizkit - Break Stuff",
+      id: "ZpUYjpKg9KY",
+      shortUrl: "https://www.youtube.com/watch?v=ZpUYjpKg9KY",
+      url: "https://www.youtube.com/watch?v=ZpUYjpKg9KY&list=PLkqOl2GD1Tj_STgpqmpsMjqN_2j5Rvir8&index=11",
+      author: {
+        url: "https://www.youtube.com/channel/UCCndqRyI-5Zl8Mutlq71ASw",
+        channelID: "UCCndqRyI-5Zl8Mutlq71ASw",
+        name: "limpbizkit",
+      },
+      thumbnail:
+        "https://i.ytimg.com/vi/ZpUYjpKg9KY/hqdefault.jpg?sqp=-oaymwEjCNACELwBSFryq4qpAxUIARUAAAAAGAElAADIQj0AgKJDeAE=&rs=AOn4CLBqjo0H2NzhILiA5XmtJlDw-6RuMg",
+      isLive: false,
+      duration: "2:50",
+    },
+    {
+      title: "Limp Bizkit - Faith",
+      id: "l-EdCNjumvI",
+      shortUrl: "https://www.youtube.com/watch?v=l-EdCNjumvI",
+      url: "https://www.youtube.com/watch?v=l-EdCNjumvI&list=PLkqOl2GD1Tj_STgpqmpsMjqN_2j5Rvir8&index=12",
+      author: {
+        url: "https://www.youtube.com/channel/UCCndqRyI-5Zl8Mutlq71ASw",
+        channelID: "UCCndqRyI-5Zl8Mutlq71ASw",
+        name: "limpbizkit",
+      },
+      thumbnail:
+        "https://i.ytimg.com/vi/l-EdCNjumvI/hqdefault.jpg?sqp=-oaymwEjCNACELwBSFryq4qpAxUIARUAAAAAGAElAADIQj0AgKJDeAE=&rs=AOn4CLAUrzUryFQPf2HdMurxsoGwzLybLQ",
+      isLive: false,
+      duration: "2:45",
+    },
+    {
+      title: "Limp Bizkit- jump around",
+      id: "UI-jNetj9t0",
+      shortUrl: "https://www.youtube.com/watch?v=UI-jNetj9t0",
+      url: "https://www.youtube.com/watch?v=UI-jNetj9t0&list=PLkqOl2GD1Tj_STgpqmpsMjqN_2j5Rvir8&index=13",
+      author: {
+        url: "https://www.youtube.com/user/bobeen17",
+        channelID: "UClDFSTgkAUvaHnvv-qw9vzw",
+        name: "bobeen17",
+      },
+      thumbnail:
+        "https://i.ytimg.com/vi/UI-jNetj9t0/hqdefault.jpg?sqp=-oaymwEjCNACELwBSFryq4qpAxUIARUAAAAAGAElAADIQj0AgKJDeAE=&rs=AOn4CLCdU7MOvU96HkOY15i9Zid2aq7JUw",
+      isLive: false,
+      duration: "2:46",
+    },
+    {
+      title: "Slipknot - Psychosocial [OFFICIAL VIDEO]",
+      id: "5abamRO41fE",
+      shortUrl: "https://www.youtube.com/watch?v=5abamRO41fE",
+      url: "https://www.youtube.com/watch?v=5abamRO41fE&list=PLkqOl2GD1Tj_STgpqmpsMjqN_2j5Rvir8&index=14",
+      author: {
+        url: "https://www.youtube.com/channel/UCOJZ1tna8yj8mAEITPkHNCQ",
+        channelID: "UCOJZ1tna8yj8mAEITPkHNCQ",
+        name: "Slipknot",
+      },
+      thumbnail:
+        "https://i.ytimg.com/vi/5abamRO41fE/hqdefault.jpg?sqp=-oaymwEjCNACELwBSFryq4qpAxUIARUAAAAAGAElAADIQj0AgKJDeAE=&rs=AOn4CLBeLRAt_djqKyYG9jv-vniKG-27-g",
+      isLive: false,
+      duration: "5:03",
+    },
+    {
+      title: "Disturbed - Another Way To Die [Official Music Video]",
+      id: "HwELajFteTo",
+      shortUrl: "https://www.youtube.com/watch?v=HwELajFteTo",
+      url: "https://www.youtube.com/watch?v=HwELajFteTo&list=PLkqOl2GD1Tj_STgpqmpsMjqN_2j5Rvir8&index=15",
+      author: {
+        url: "https://www.youtube.com/channel/UCveWMJeHgcIUPMnFzd7Vxjg",
+        channelID: "UCveWMJeHgcIUPMnFzd7Vxjg",
+        name: "Disturbed",
+      },
+      thumbnail:
+        "https://i.ytimg.com/vi/HwELajFteTo/hqdefault.jpg?sqp=-oaymwEjCNACELwBSFryq4qpAxUIARUAAAAAGAElAADIQj0AgKJDeAE=&rs=AOn4CLAcbMwxa_WV95kQB4Kzqo-W-vZqyw",
+      isLive: false,
+      duration: "4:15",
+    },
+    {
+      title: "A'lure Girls - ผักบุ้ง [HD]",
+      id: "4B7H6zaeOzw",
+      shortUrl: "https://www.youtube.com/watch?v=4B7H6zaeOzw",
+      url: "https://www.youtube.com/watch?v=4B7H6zaeOzw&list=PLkqOl2GD1Tj_STgpqmpsMjqN_2j5Rvir8&index=16",
+      author: {
+        url: "https://www.youtube.com/user/VertexClub7",
+        channelID: "UC0qtGtAqSCgmkZFV3-5uWyA",
+        name: "Movie Reac",
+      },
+      thumbnail:
+        "https://i.ytimg.com/vi/4B7H6zaeOzw/hqdefault.jpg?sqp=-oaymwEjCNACELwBSFryq4qpAxUIARUAAAAAGAElAADIQj0AgKJDeAE=&rs=AOn4CLBFrToXZBo1cAOKFu5DKAOtsBkSwQ",
+      isLive: false,
+      duration: "4:01",
+    },
+  ],
+};
+
 export const playlistResults = {
   query: "distube",
   items: [
