@@ -110,25 +110,25 @@ export class DisTube extends EventEmitter {
         const queue = this.getQueue(oldState);
         if (!queue) {
           if (isVoiceChannelEmpty(oldState)) {
-            client.setTimeout(() => {
+            setTimeout(() => {
               const guildID = oldState.guild.id;
               if (!this.getQueue(oldState) && isVoiceChannelEmpty(oldState)) this.voices.leave(guildID);
-            }, this.options.emptyCooldown * 1e3);
+            }, this.options.emptyCooldown * 1e3).unref();
           }
           return;
         }
         if (queue.emptyTimeout) {
-          client.clearTimeout(queue.emptyTimeout);
+          clearTimeout(queue.emptyTimeout);
           delete queue.emptyTimeout;
         }
         if (isVoiceChannelEmpty(oldState)) {
-          queue.emptyTimeout = client.setTimeout(() => {
+          queue.emptyTimeout = setTimeout(() => {
             if (isVoiceChannelEmpty(oldState)) {
               queue.voice.leave();
               this.emit("empty", queue);
               queue.delete();
             }
-          }, this.options.emptyCooldown * 1e3);
+          }, this.options.emptyCooldown * 1e3).unref();
         }
       });
     }

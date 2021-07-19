@@ -478,6 +478,7 @@ export class Queue extends DisTubeBase {
    * Delete the queue
    */
   delete() {
+    this.stopped = true;
     this.songs = [];
     this.previousSongs = [];
     this.queues.delete(this.id);

@@ -38,12 +38,9 @@ export class DisTubeVoiceManager extends BaseManager<DisTubeVoice, QueueResolvab
    * @param {Discord.VoiceChannel|Discord.StageChannel} channel A voice channel to join
    * @returns {Promise<DisTubeVoice>}
    */
-  async join(channel: VoiceChannel | StageChannel): Promise<DisTubeVoice> {
+  join(channel: VoiceChannel | StageChannel): Promise<DisTubeVoice> {
     const existing = this.get(channel.guild.id);
-    if (existing) {
-      await existing.join(channel);
-      return existing;
-    }
+    if (existing) return existing.join(channel);
     return this.create(channel).join();
   }
   /**

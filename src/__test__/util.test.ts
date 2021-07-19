@@ -92,7 +92,7 @@ test("checkIntents()", () => {
   expect(() => {
     checkIntents(client2.options);
   }).toThrow(new DisTubeError("MISSING_INTENTS", intent));
-  expect(checkIntents(client3.options)).toBe(undefined);
+  expect(checkIntents(client3.options)).toBeUndefined();
   // Fake djs v12
   const client4: any = new Client({ intents: [] });
   const client5: any = new Client({ intents: [] });
@@ -103,11 +103,11 @@ test("checkIntents()", () => {
   client4.options.ws.intents = undefined;
   client5.options.ws.intents = client2.options.intents;
   client6.options.ws.intents = client3.options.intents;
-  expect(checkIntents(client4.options)).toBe(undefined);
+  expect(checkIntents(client4.options)).toBeUndefined();
   expect(() => {
     checkIntents(client5.options);
   }).toThrow(new DisTubeError("MISSING_INTENTS", intent));
-  expect(checkIntents(client6.options)).toBe(undefined);
+  expect(checkIntents(client6.options)).toBeUndefined();
 });
 
 test("isURL()", () => {

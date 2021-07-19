@@ -50,8 +50,8 @@ export class DisTubeVoice extends EventEmitter {
     this.voices.add(this.id, this);
     this._volume = 0.5;
     this.audioPlayer = createAudioPlayer()
-      .on("stateChange", (oldState, newState) => {
-        if (newState.status === AudioPlayerStatus.Idle && oldState.status !== AudioPlayerStatus.Idle) {
+      .on(AudioPlayerStatus.Idle, oldState => {
+        if (oldState.status !== AudioPlayerStatus.Idle) {
           delete this.audioResource;
           this.emit("finish");
         }
@@ -78,23 +78,10 @@ export class DisTubeVoice extends EventEmitter {
         }
       })
       .on(VoiceConnectionStatus.Destroyed, () => {
-        this.stop();
+        this.leave();
       })
-      .on("error", error => {
-        if (this.connection.state.status === VoiceConnectionStatus.Destroyed) {
-          return;
-        }
-        if (this.connection.state.status === VoiceConnectionStatus.Disconnected) {
-          this.connection.rejoin();
-          entersState(this.connection, VoiceConnectionStatus.Ready, 30e3).catch(() => {
-            if (this.connection.state.status === VoiceConnectionStatus.Destroyed) {
-              return;
-            }
-            this.emit("disconnect", error);
-            this.leave();
-          });
-        }
-      });
+      // eslint-disable-next-line no-console
+      .on("error", console.warn);
     this.connection.subscribe(this.audioPlayer);
     /**
      * Get or set the volume percentage
@@ -166,7 +153,7 @@ export class DisTubeVoice extends EventEmitter {
   play(stream: DisTubeStream) {
     this.emittedError = false;
     stream.stream.on("error", (error: NodeJS.ErrnoException) => {
-      if (this.emittedError || error?.code === "ERR_STREAM_PREMATURE_CLOSE") return;
+      if (this.emittedError || error.code === "ERR_STREAM_PREMATURE_CLOSE") return;
       this.emittedError = true;
       this.emit("error", error);
     });
@@ -179,12 +166,12 @@ export class DisTubeVoice extends EventEmitter {
     this.audioPlayer.play(this.audioResource);
   }
   set volume(volume: number) {
-    if (typeof volume !== "number") {
+    if (typeof volume !== "number" || isNaN(volume)) {
       throw new DisTubeError("INVALID_TYPE", "number", volume, "volume");
     }
-    if (!(volume >= 0)) {
+    if (volume < 0) {
       throw new DisTubeError("NUMBER_COMPARE", "Volume", "bigger or equal to", 0);
-    } // < 0 && NaN
+    }
     this._volume = volume / 100;
     this.audioResource?.volume?.setVolume(Math.pow(this._volume, 0.5 / Math.log10(2)));
   }
