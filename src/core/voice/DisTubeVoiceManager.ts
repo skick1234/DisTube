@@ -1,6 +1,7 @@
 import { DisTubeVoice } from ".";
 import { BaseManager } from "../manager";
 import { StageChannel, VoiceChannel } from "discord.js";
+import { GuildIDResolvable, resolveGuildID } from "../..";
 import { VoiceConnectionStatus, getVoiceConnection } from "@discordjs/voice";
 
 /**
@@ -44,14 +45,14 @@ export class DisTubeVoiceManager extends BaseManager<DisTubeVoice> {
   }
   /**
    * Leave the connected voice channel in a guild
-   * @param {string} id Guild ID
+   * @param {GuildIDResolvable} guild Queue Resolvable
    */
-  leave(id: string) {
-    const voice = this.get(id);
+  leave(guild: GuildIDResolvable) {
+    const voice = this.get(guild);
     if (voice) {
       voice.leave();
     } else {
-      const connection = getVoiceConnection(id);
+      const connection = getVoiceConnection(resolveGuildID(guild));
       if (connection && connection.state.status !== VoiceConnectionStatus.Destroyed) {
         connection.destroy();
       }
