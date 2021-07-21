@@ -406,7 +406,7 @@ export class Queue extends DisTubeBase {
    * Enable or disable filter(s) of the queue.
    * Available filters: {@link Filters}
    * @param {string|string[]|false} filter A filter name, an array of filter name or `false` to clear all the filters
-   * @param {boolean} force Force enable the input filter(s) even if it's enabled
+   * @param {boolean} [force=false] Force enable the input filter(s) even if it's enabled
    * @returns {Array<string>} Enabled filters.
    * @throws {Error}
    */

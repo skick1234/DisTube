@@ -600,10 +600,11 @@ export class DisTube extends EventEmitter {
   }
 
   /**
-   * Enable or disable a filter of the queue.
+   * Enable or disable filter(s) of the queue.
    * Available filters: {@link Filters}
    * @param {GuildIDResolvable} queue The type can be resolved to give a {@link Queue}
    * @param {string|false} filter A filter name, `false` to clear all the filters
+   * @param {boolean} [force=false] Force enable the input filter(s) even if it's enabled
    * @returns {Array<string>} Enabled filters.
    * @example
    * client.on('message', (message) => {
@@ -616,10 +617,10 @@ export class DisTube extends EventEmitter {
    *     }
    * });
    */
-  setFilter(queue: GuildIDResolvable, filter: string | false): Array<string> {
+  setFilter(queue: GuildIDResolvable, filter: string | false, force = false): Array<string> {
     const q = this.getQueue(queue);
     if (!q) throw new DisTubeError("NO_QUEUE");
-    return q.setFilter(filter);
+    return q.setFilter(filter, force);
   }
 
   /**
