@@ -1,11 +1,11 @@
 import { BaseManager } from ".";
-import { DisTubeError, Queue, QueueResolvable, Song } from "../..";
+import { DisTubeError, Queue, Song } from "../..";
 import { StageChannel, TextChannel, VoiceChannel } from "discord.js";
 
 /**
  * Queue manager
  */
-export class QueueManager extends BaseManager<Queue, QueueResolvable> {
+export class QueueManager extends BaseManager<Queue> {
   /**
    * Create a {@link Queue}
    * @private
@@ -35,10 +35,10 @@ export class QueueManager extends BaseManager<Queue, QueueResolvable> {
     }
   }
   /**
-   * Get a Queue from a QueueManager with a QueueResolvable.
+   * Get a Queue from a QueueManager with a GuildIDResolvable.
    * @method get
    * @memberof QueueManager#
-   * @param {QueueResolvable} queue The queue resolvable to resolve
+   * @param {GuildIDResolvable} queue The queue resolvable to resolve
    * @returns {Queue?}
    */
   /**

@@ -1,5 +1,5 @@
 import { URL } from "url";
-import { DisTubeError } from ".";
+import { DisTubeError, GuildIDResolvable } from ".";
 import {
   BitFieldResolvable,
   ClientOptions,
@@ -157,4 +157,13 @@ export function isSupportedVoiceChannel(channel: any): channel is VoiceChannel |
       "GUILD_STAGE_VOICE",
     ].includes(channel.type)
   );
+}
+
+export function resolveGuildID(resolvable: GuildIDResolvable): Snowflake {
+  let guildID: string | undefined;
+  if (typeof resolvable === "string") guildID = resolvable;
+  else if ("guild" in resolvable) guildID = resolvable.guild?.id;
+  else guildID = resolvable.id;
+  if (!isSnowflake(guildID)) throw new DisTubeError("INVALID_TYPE", "GuildIDResolvable", guildID);
+  return guildID;
 }

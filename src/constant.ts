@@ -77,15 +77,16 @@ export const defaultOptions: DisTubeOptions = {
 };
 
 /**
- * Data that resolves to give a {@link Queue} object. This can be:
- * - A {@link Queue}
+ * Data that can be resolved to give a guild ID string. This can be:
  * - A guild ID string
+ * - A {@link Queue}
  * - A {@link https://discord.js.org/#/docs/main/master/class/Snowflake|Snowflake}
  * - A {@link https://discord.js.org/#/docs/main/master/class/Message|Message}
  * - A {@link https://discord.js.org/#/docs/main/master/class/VoiceChannel|VoiceChannel}
  * - A {@link https://discord.js.org/#/docs/main/master/class/StageChannel|StageChannel}
  * - A {@link https://discord.js.org/#/docs/main/master/class/VoiceState|VoiceState}
- * @typedef {Queue|Discord.Snowflake|Discord.Message|Discord.VoiceChannel|Discord.StageChannel|Discord.VoiceState|string} QueueResolvable
+ * - A {@link https://discord.js.org/#/docs/main/master/class/Guild|Guild}
+ * @typedef {Queue|Discord.Snowflake|Discord.Message|Discord.VoiceChannel|Discord.StageChannel|Discord.VoiceState|string} GuildIDResolvable
  */
 /**
  * FFmpeg Filters
