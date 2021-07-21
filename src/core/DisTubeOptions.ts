@@ -1,5 +1,5 @@
 import ytdl from "ytdl-core";
-import { CustomPlugin, DisTubeError, DisTubeOptions, ExtractorPlugin, Filters } from "..";
+import { CustomPlugin, DisTubeError, DisTubeOptions, ExtractorPlugin, Filters, defaultOptions } from "..";
 
 export class Options {
   /** DisTube plugins.*/
@@ -34,27 +34,14 @@ export class Options {
   ytdlOptions: ytdl.downloadOptions;
   /** Whether or not playing age-restricted content and disabling safe search when using {@link DisTube#play} in non-NSFW channel. */
   nsfw: boolean;
+  /** Whether or not emitting `addList` event when creating a new Queue */
+  emitAddSongWhenCreatingQueue: boolean;
+  /** Whether or not emitting `addSong` event when creating a new Queue */
+  emitAddListWhenCreatingQueue: boolean;
   constructor(options: DisTubeOptions) {
-    const defaultOptions = {
-      plugins: [],
-      emitNewSongOnly: false,
-      leaveOnEmpty: true,
-      leaveOnFinish: false,
-      leaveOnStop: true,
-      savePreviousSongs: true,
-      youtubeDL: true,
-      updateYouTubeDL: true,
-      searchSongs: 0,
-      customFilters: {},
-      ytdlOptions: {
-        highWaterMark: 1 << 24,
-      },
-      searchCooldown: 60,
-      emptyCooldown: 60,
-      nsfw: false,
-    };
+    const def = { ...defaultOptions };
     // Object.assign(this, defaultOptions, options);
-    const opts = Object.assign({}, defaultOptions, options);
+    const opts = Object.assign({}, def, options);
     this.plugins = opts.plugins;
     this.emitNewSongOnly = opts.emitNewSongOnly;
     this.leaveOnEmpty = opts.leaveOnEmpty;
@@ -71,6 +58,8 @@ export class Options {
     this.searchCooldown = opts.searchCooldown;
     this.emptyCooldown = opts.emptyCooldown;
     this.nsfw = opts.nsfw;
+    this.emitAddSongWhenCreatingQueue = opts.emitAddSongWhenCreatingQueue;
+    this.emitAddListWhenCreatingQueue = opts.emitAddListWhenCreatingQueue;
     this._validateOptions();
   }
 
@@ -127,6 +116,22 @@ export class Options {
     }
     if (typeof options.nsfw !== "boolean") {
       throw new DisTubeError("INVALID_TYPE", "boolean", options.nsfw, "DisTubeOptions.nsfw");
+    }
+    if (typeof options.emitAddSongWhenCreatingQueue !== "boolean") {
+      throw new DisTubeError(
+        "INVALID_TYPE",
+        "boolean",
+        options.emitAddSongWhenCreatingQueue,
+        "DisTubeOptions.emitAddSongWhenCreatingQueue",
+      );
+    }
+    if (typeof options.emitAddListWhenCreatingQueue !== "boolean") {
+      throw new DisTubeError(
+        "INVALID_TYPE",
+        "boolean",
+        options.emitAddListWhenCreatingQueue,
+        "DisTubeOptions.emitAddListWhenCreatingQueue",
+      );
     }
   }
 }

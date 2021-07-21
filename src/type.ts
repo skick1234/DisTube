@@ -39,6 +39,10 @@ export interface DisTubeOptions {
   ytdlOptions?: ytdl.downloadOptions;
   /** Whether or not playing age-restricted content and disabling safe search when using {@link DisTube#play} in non-NSFW channel. */
   nsfw?: boolean;
+  /** Whether or not emitting `addList` event when creating a new Queue */
+  emitAddSongWhenCreatingQueue?: boolean;
+  /** Whether or not emitting `addSong` event when creating a new Queue */
+  emitAddListWhenCreatingQueue?: boolean;
 }
 
 export type GuildIDResolvable = Queue | Snowflake | Message | VoiceChannel | StageChannel | VoiceState | Guild | string;

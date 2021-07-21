@@ -20,6 +20,8 @@ test("Default DisTubeOptions", () => {
     ytdlOptions: {
       highWaterMark: 16777216,
     },
+    emitAddListWhenCreatingQueue: true,
+    emitAddSongWhenCreatingQueue: true,
   });
 });
 

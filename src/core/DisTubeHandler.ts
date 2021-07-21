@@ -186,7 +186,10 @@ export class DisTubeHandler extends DisTubeBase {
       else this.emit("addList", queue, playlist);
     } else {
       const newQueue = await this.createQueue(message, songs, textChannel);
-      if (newQueue instanceof Queue) this.emit("playSong", newQueue, newQueue.songs[0]);
+      if (newQueue instanceof Queue) {
+        if (this.options.emitAddListWhenCreatingQueue) this.emit("addList", queue, playlist);
+        this.emit("playSong", newQueue, newQueue.songs[0]);
+      }
     }
   }
 

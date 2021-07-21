@@ -262,7 +262,10 @@ export class DisTube extends EventEmitter {
             else this.emit("addSong", queue, song);
           } else {
             const newQueue = await this.handler.createQueue(voiceChannel, song as Song, textChannel);
-            if (newQueue instanceof Queue) this.emit("playSong", newQueue, song);
+            if (newQueue instanceof Queue) {
+              if (this.options.emitAddSongWhenCreatingQueue) this.emit("addSong", newQueue, song);
+              this.emit("playSong", newQueue, song);
+            }
           }
         }
       } finally {
@@ -337,7 +340,7 @@ export class DisTube extends EventEmitter {
    * @param {string} string The string search for
    * @param {Object} options Search options
    * @param {number} [options.limit=10] Limit the results
-   * @param {'video'|'playlist'} [options.type='video'] Type of search (`video` or `playlist`).
+   * @param {'video'|'playlist'} [options.type='video'] Type of results (`video` or `playlist`).
    * @param {boolean} [options.safeSearch=false] Whether or not use safe search (YouTube restricted mode)
    * @throws {Error}
    * @returns {Promise<Array<SearchResult>>} Array of results

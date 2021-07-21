@@ -1,4 +1,4 @@
-import { DisTubeOptions, Filters } from ".";
+import { Filters } from ".";
 
 /**
  * Default DisTube audio filters.
@@ -56,8 +56,10 @@ export const defaultFilters: Filters = {
  * @prop {number} [searchCooldown=60] Built-in search cooldown in seconds (When searchSongs is bigger than 0)
  * @prop {number} [emptyCooldown=60] Built-in leave on empty cooldown in seconds (When leaveOnEmpty is true)
  * @prop {boolean} [nsfw=false] Whether or not playing age-restricted content and disabling safe search in non-NSFW channel.
+ * @prop {boolean} [emitAddListWhenCreatingQueue=true] Whether or not emitting `addList` event when creating a new Queue
+ * @prop {boolean} [emitAddSongWhenCreatingQueue=true] Whether or not emitting `addSong` event when creating a new Queue
  */
-export const defaultOptions: DisTubeOptions = {
+export const defaultOptions = {
   plugins: [],
   emitNewSongOnly: false,
   leaveOnEmpty: true,
@@ -74,6 +76,8 @@ export const defaultOptions: DisTubeOptions = {
   searchCooldown: 60,
   emptyCooldown: 60,
   nsfw: false,
+  emitAddSongWhenCreatingQueue: true,
+  emitAddListWhenCreatingQueue: true,
 };
 
 /**
