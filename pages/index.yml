@@ -1,3 +1,10 @@
+- name: General
+  files:
+    - name: Welcome
+      id: welcome
+      path: ../../README.md
+    - name: Updating to v3
+      path: update.md
 - name: Plugin
   files:
     - name: Plugin List
