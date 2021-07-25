@@ -1,6 +1,16 @@
 import ytdl from "ytdl-core";
 import { CustomPlugin, ExtractorPlugin, Queue, Song } from "./struct";
-import { Guild, GuildMember, Message, Snowflake, StageChannel, User, VoiceChannel, VoiceState } from "discord.js";
+import {
+  Guild,
+  GuildMember,
+  Message,
+  Snowflake,
+  StageChannel,
+  TextChannel,
+  User,
+  VoiceChannel,
+  VoiceState,
+} from "discord.js";
 
 export interface Filters {
   [x: string]: string;
@@ -45,7 +55,17 @@ export interface DisTubeOptions {
   emitAddListWhenCreatingQueue?: boolean;
 }
 
-export type GuildIDResolvable = Queue | Snowflake | Message | VoiceChannel | StageChannel | VoiceState | Guild | string;
+export type GuildIDResolvable =
+  | Queue
+  | Snowflake
+  | Message
+  | VoiceChannel
+  | StageChannel
+  | VoiceState
+  | Guild
+  | TextChannel
+  | GuildMember
+  | string;
 
 export interface OtherSongInfo {
   src?: string;

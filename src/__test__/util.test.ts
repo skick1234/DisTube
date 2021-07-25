@@ -10,6 +10,7 @@ import {
   isURL,
   isVoiceChannelEmpty,
   parseNumber,
+  resolveGuildID,
   toSecond,
 } from "..";
 import { rawBotVoiceState, rawClientUser, rawGuild, rawMessage, rawUserVoiceState } from "./raw";
@@ -147,4 +148,15 @@ test("formatDuration()", () => {
   expect(formatDuration(70.6)).toBe("01:11");
   expect(formatDuration(5025)).toBe("01:23:45");
   expect(formatDuration(91425)).toBe("25:23:45");
+});
+
+test("resolveGuildID()", () => {
+  const gID = "737499502763704370";
+  const testFn = resolveGuildID;
+  expect(testFn(voiceChannel)).toBe(gID);
+  expect(testFn(stageChannel)).toBe(gID);
+  expect(testFn(textChannel)).toBe(gID);
+  expect(testFn(message)).toBe(gID);
+  expect(testFn(guild)).toBe(gID);
+  expect(testFn(guild.me)).toBe(gID);
 });
