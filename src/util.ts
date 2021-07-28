@@ -3,6 +3,7 @@ import { DisTubeError, GuildIDResolvable } from ".";
 import {
   BitFieldResolvable,
   ClientOptions,
+  Guild,
   GuildMember,
   Intents,
   IntentsString,
@@ -159,11 +160,15 @@ export function isSupportedVoiceChannel(channel: any): channel is VoiceChannel |
   );
 }
 
+export function isGuildInstance(guild: any): guild is Guild {
+  return !!guild && isSnowflake(guild.id) && typeof guild.fetchAuditLogs === "function";
+}
+
 export function resolveGuildID(resolvable: GuildIDResolvable): Snowflake {
   let guildID: string | undefined;
   if (typeof resolvable === "string") guildID = resolvable;
-  else if ("guild" in resolvable) guildID = resolvable.guild?.id;
-  else guildID = resolvable.id;
-  if (!isSnowflake(guildID)) throw new DisTubeError("INVALID_TYPE", "GuildIDResolvable", guildID);
+  else if ("guild" in resolvable && isGuildInstance(resolvable.guild)) guildID = resolvable.guild.id;
+  else if ("id" in resolvable && isGuildInstance(resolvable)) guildID = resolvable.id;
+  if (!isSnowflake(guildID)) throw new DisTubeError("INVALID_TYPE", "GuildIDResolvable", resolvable);
   return guildID;
 }

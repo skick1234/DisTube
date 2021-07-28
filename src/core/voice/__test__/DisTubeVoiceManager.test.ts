@@ -16,10 +16,10 @@ function createFakeDisTube() {
 const distube = createFakeDisTube();
 const manager = new DisTubeVoiceManager(distube as any);
 const channel1: any = {
-  guild: { id: "123456789123456789" },
+  guild: { id: "123456789123456789", fetchAuditLogs: () => undefined },
 };
 const channel2: any = {
-  guild: { id: "123456789012345678" },
+  guild: { id: "123456789012345678", fetchAuditLogs: () => undefined },
 };
 
 test("DisTubeVoiceManager#create()", () => {
