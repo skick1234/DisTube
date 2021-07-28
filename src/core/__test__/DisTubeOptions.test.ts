@@ -42,5 +42,5 @@ test("Validate DisTubeOptions", () => {
   }).toThrow("Expected 'string' for 'DisTubeOptions.youtubeCookie', but got 1");
   expect(() => {
     new Options({ youtubeIdentityToken: {} as any });
-  }).toThrow("Expected 'string' for 'DisTubeOptions.youtubeIdentityToken', but got object");
+  }).toThrow("Expected 'string' for 'DisTubeOptions.youtubeIdentityToken', but got Object");
 });

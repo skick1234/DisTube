@@ -9,7 +9,7 @@ const ERROR_MESSAGES = {
         ? got
         : Array.isArray(got)
         ? `Array<${got.length}>`
-        : typeof got
+        : got?.constructor?.name || typeof got
     }`,
   NUMBER_COMPARE: (name: string, expected: string, value: number) => `'${name}' must be ${expected} ${value}`,
   EMPTY_ARRAY: (name: string) => `'${name}' is an empty array`,
