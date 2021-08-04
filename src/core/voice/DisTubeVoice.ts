@@ -102,8 +102,7 @@ export class DisTubeVoice extends EventEmitter {
     return joinVoiceChannel({
       channelId: channel.id,
       guildId: this.id,
-      // TODO: remove this after `@discordjs/voice` fixes typing problem
-      adapterCreator: (channel.guild.voiceAdapterCreator as any) || createDiscordJSAdapter(channel),
+      adapterCreator: channel.guild.voiceAdapterCreator || createDiscordJSAdapter(channel as any),
     });
   }
   /**
