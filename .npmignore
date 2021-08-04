@@ -1,11 +1,6 @@
 docs/
 pages/
-node_modules/
-.github/
-.vscode/
-tests/
 src/
-.husky/
 coverage/
 
 .*

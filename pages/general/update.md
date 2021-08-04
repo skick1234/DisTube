@@ -118,17 +118,17 @@ v3 doesn't emit `Message` parameter anymore. 100% events are changed. You can ch
 ```diff
 - .on("playSong", (message, queue, song) => {
 -   message.channel.send(...)
-- }
+- })
 + .on("playSong", (queue, song) => {
 +   queue.textChannel.send(...)
-+ }
++ })
 
 - .on("error", (message, err) => {
 -   message.channel.send(...)
-- });
+- })
 + .on("error", (channel, error) => {
 +   channel.send();
-+ }
++ })
 ```
 
 #### playList event
