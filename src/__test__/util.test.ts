@@ -35,6 +35,8 @@ test("isSupportedVoiceChannel()", () => {
   expect(testFn(client)).toBe(false);
   expect(testFn(client.user)).toBe(false);
   expect(testFn(guild.me)).toBe(false);
+  expect(testFn(botVoiceState)).toBe(false);
+  expect(testFn(userVoiceState)).toBe(false);
 });
 
 test("isMessageInstance()", () => {
@@ -47,6 +49,8 @@ test("isMessageInstance()", () => {
   expect(testFn(client)).toBe(false);
   expect(testFn(client.user)).toBe(false);
   expect(testFn(guild.me)).toBe(false);
+  expect(testFn(botVoiceState)).toBe(false);
+  expect(testFn(userVoiceState)).toBe(false);
 });
 
 test("isTextChannelInstance()", () => {
@@ -59,6 +63,8 @@ test("isTextChannelInstance()", () => {
   expect(testFn(client)).toBe(false);
   expect(testFn(client.user)).toBe(false);
   expect(testFn(guild.me)).toBe(false);
+  expect(testFn(botVoiceState)).toBe(false);
+  expect(testFn(userVoiceState)).toBe(false);
 });
 
 test("isMemberInstance()", () => {
@@ -71,6 +77,8 @@ test("isMemberInstance()", () => {
   expect(testFn(client)).toBe(false);
   expect(testFn(client.user)).toBe(false);
   expect(testFn(guild.me)).toBe(true);
+  expect(testFn(botVoiceState)).toBe(false);
+  expect(testFn(userVoiceState)).toBe(false);
 });
 
 test("isVoiceChannelEmpty()", () => {
@@ -159,4 +167,9 @@ test("resolveGuildID()", () => {
   expect(testFn(message)).toBe(gID);
   expect(testFn(guild)).toBe(gID);
   expect(testFn(guild.me)).toBe(gID);
+  expect(testFn(botVoiceState)).toBe(gID);
+  expect(testFn(userVoiceState)).toBe(gID);
+  expect(testFn(gID)).toBe(gID);
+  expect(() => testFn(client as any)).toThrow(new DisTubeError("INVALID_TYPE", "GuildIDResolvable", client));
+  expect(() => testFn(client.user as any)).toThrow(new DisTubeError("INVALID_TYPE", "GuildIDResolvable", client.user));
 });
