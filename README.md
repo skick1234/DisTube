@@ -18,7 +18,7 @@ A Discord.js module to simplify your music commands and play songs with audio fi
 
 ## Features
 
-- Build on discord.js v13
+- Build on @discordjs/voice
 - Easy to use and customize
 - Support YouTube, SoundCloud, Facebook, and [700+ more sites](https://ytdl-org.github.io/youtube-dl/supportedsites.html)
 - Audio filters (bassboost, nightcore, vaporwave,...)
@@ -33,10 +33,12 @@ npm install distube@beta
 
 ### Requirement
 
-- Node v14.x or higher
+- Node v12 or higher
 - [discord.js](https://discord.js.org) v12 or **v13 _(Recommended)_**
+- [@discordjs/voice](https://github.com/discordjs/voice) - `npm install @discordjs/voice`
 - [FFmpeg](https://www.ffmpeg.org/download.html)
 - [@discordjs/opus](https://github.com/discordjs/opus) - `npm install @discordjs/opus`
+- [sodium](https://www.npmjs.com/package/sodium) or [libsodium-wrappers](https://www.npmjs.com/package/libsodium-wrappers)
 - [python](https://www.python.org/) _(Optional - For [`youtube-dl`](https://youtube-dl.org/) to support [700+ more sites](https://ytdl-org.github.io/youtube-dl/supportedsites.html).)_
 
 ## Documentation
