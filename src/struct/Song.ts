@@ -215,7 +215,6 @@ export class Song {
   /**
    * @param {Playlist} playlist Playlist
    * @param {Discord.GuildMember} [member] Requested user
-   * @private
    * @returns {Song}
    */
   _patchPlaylist(playlist: Playlist, member?: GuildMember): Song {

@@ -201,7 +201,7 @@ export class DisTube extends EventEmitter {
    * @param {boolean} [options.skip=false] Skip the playing song (if exists) and play the added song/playlist instantly
    * @param {boolean} [options.unshift=false] Add the song/playlist to the beginning of the queue (after the playing song if exists)
    * @param {Discord.GuildMember} [options.member] Requested user (default is your bot)
-   * @param {Discord.TextChannel} [options.textChannel=null] Default {@link Queue#textChannel} (if the queue wasn't created)
+   * @param {Discord.TextChannel} [options.textChannel] Default {@link Queue#textChannel} (if the queue wasn't created)
    * @param {Discord.Message} [options.message] Called message (For built-in search events. If this is a {@link https://developer.mozilla.org/en-US/docs/Glossary/Falsy|falsy value}, it will play the first result instead)
    */
   async playVoiceChannel(
@@ -271,7 +271,7 @@ export class DisTube extends EventEmitter {
       } finally {
         if (queuing) queue?.taskQueue.resolve();
       }
-    } catch (e) {
+    } catch (e: any) {
       if (!(e instanceof DisTubeError)) {
         try {
           e.name = "PlayError";
@@ -328,7 +328,7 @@ export class DisTube extends EventEmitter {
       } finally {
         if (queuing) queue?.taskQueue.resolve();
       }
-    } catch (e) {
+    } catch (e: any) {
       this.emitError(e, message.channel as TextChannel);
     }
   }

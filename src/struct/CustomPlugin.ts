@@ -25,7 +25,7 @@ export class CustomPlugin extends Plugin {
     voiceChannel: VoiceChannel | StageChannel,
     url: string,
     member: GuildMember,
-    textChannel: TextChannel | null,
+    textChannel: TextChannel | undefined,
     skip: boolean,
     unshift: boolean,
   ): Promise<void> {
