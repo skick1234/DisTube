@@ -28,7 +28,7 @@ A Discord.js module to simplify your music commands and play songs with audio fi
 ## Installation
 
 ```npm
-npm install distube@alpha
+npm install distube@beta
 ```
 
 ### Requirement
