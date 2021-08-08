@@ -17,9 +17,7 @@ test("Default DisTubeOptions", () => {
     youtubeCookie: undefined,
     youtubeDL: true,
     youtubeIdentityToken: undefined,
-    ytdlOptions: {
-      highWaterMark: 16777216,
-    },
+    ytdlOptions: {},
     emitAddListWhenCreatingQueue: true,
     emitAddSongWhenCreatingQueue: true,
   });
@@ -43,4 +41,7 @@ test("Validate DisTubeOptions", () => {
   expect(() => {
     new Options({ youtubeIdentityToken: {} as any });
   }).toThrow("Expected 'string' for 'DisTubeOptions.youtubeIdentityToken', but got Object");
+  expect(() => {
+    new Options({ invalidKey: "an invalid key" } as any);
+  }).toThrow('"invalidKey" does not need to be provided in DisTubeOptions');
 });

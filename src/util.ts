@@ -178,7 +178,7 @@ export function isClientInstance(client: any): client is Client {
   return !!client && typeof client.login === "function";
 }
 
-export function checkInvalidKey(target: Record<string, unknown>, source: Record<string, unknown>, sourceName: string) {
+export function checkInvalidKey(target: Record<string, any>, source: Record<string, any>, sourceName: string) {
   const invalidKey = Object.keys(target).find(key => !Object.keys(source).includes(key));
   if (invalidKey) throw new DisTubeError("INVALID_KEY", sourceName, invalidKey);
 }

@@ -1,5 +1,6 @@
 import { firstPlaylistInfo, playlistResults, videoResults } from "./raw";
 import { DisTubeError, DisTubeHandler, Playlist, SearchResult, Song, defaultFilters, defaultOptions } from "../..";
+import type { DisTubeOptions } from "../..";
 
 import * as _ytpl from "@distube/ytpl";
 import * as _ytdl from "ytdl-core";
@@ -33,7 +34,7 @@ const extractor = {
 
 function createFakeDisTube() {
   return {
-    options: { ...defaultOptions },
+    options: { ...defaultOptions } as DisTubeOptions,
     filters: defaultFilters,
     queues: createFakeQueueManager(),
     emit: jest.fn(),

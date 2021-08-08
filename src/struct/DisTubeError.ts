@@ -14,7 +14,7 @@ const ERROR_MESSAGES = {
   NUMBER_COMPARE: (name: string, expected: string, value: number) => `'${name}' must be ${expected} ${value}`,
   EMPTY_ARRAY: (name: string) => `'${name}' is an empty array`,
   EMPTY_FILTERED_ARRAY: (name: string, type: string) => `There is no valid '${type}' in the '${name}' array`,
-  INVALID_KEY: (obj: string, key: string) => `${key} does not need to be provided in ${obj}`,
+  INVALID_KEY: (obj: string, key: string) => `"${key}" does not need to be provided in ${obj}`,
 
   MISSING_INTENTS: (i: string) => `${i} intent must be provided for the Client`,
   DISABLED_OPTION: (o: string) => `DisTubeOptions.${o} is disabled`,

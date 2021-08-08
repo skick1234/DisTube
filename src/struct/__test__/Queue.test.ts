@@ -1,4 +1,5 @@
 import { DisTubeError, Queue, Song, defaultFilters, defaultOptions } from "../..";
+import type { DisTubeOptions } from "../..";
 
 function createFakeHandler() {
   return {
@@ -15,7 +16,7 @@ function createFakeQueueManager() {
 
 function createFakeDisTube() {
   return {
-    options: { ...defaultOptions },
+    options: { ...defaultOptions } as DisTubeOptions,
     filters: defaultFilters,
     handler: createFakeHandler(),
     queues: createFakeQueueManager(),

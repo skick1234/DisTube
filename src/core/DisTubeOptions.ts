@@ -1,4 +1,4 @@
-import { DisTubeError, defaultOptions } from "..";
+import { DisTubeError, checkInvalidKey, defaultOptions } from "..";
 import type ytdl from "ytdl-core";
 import type { CustomPlugin, DisTubeOptions, ExtractorPlugin, Filters } from "..";
 
@@ -61,6 +61,7 @@ export class Options {
     this.nsfw = opts.nsfw;
     this.emitAddSongWhenCreatingQueue = opts.emitAddSongWhenCreatingQueue;
     this.emitAddListWhenCreatingQueue = opts.emitAddListWhenCreatingQueue;
+    checkInvalidKey(opts, this, "DisTubeOptions");
     this._validateOptions();
   }
 
