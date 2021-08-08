@@ -66,6 +66,7 @@ export class DisTube extends EventEmitter {
    */
   constructor(client: Client, otp: DisTubeOptions = {}) {
     super();
+    this.setMaxListeners(1);
     if (!isClientInstance(client)) throw new DisTubeError("INVALID_TYPE", "Discord.Client", client, "client");
     /**
      * Discord.JS client
