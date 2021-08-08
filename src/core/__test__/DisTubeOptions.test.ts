@@ -36,7 +36,7 @@ test("Validate DisTubeOptions", () => {
   }
   expect(() => {
     new Options({ plugins: "undefined" as any });
-  }).toThrow(`Expected 'Array<Plugin>' for 'DisTubeOptions.plugins', but got 'undefined'`);
+  }).toThrow("Expected 'Array<Plugin>' for 'DisTubeOptions.plugins', but got 'undefined'");
   expect(() => {
     new Options({ youtubeCookie: 1 as any });
   }).toThrow("Expected 'string' for 'DisTubeOptions.youtubeCookie', but got 1");

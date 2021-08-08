@@ -16,7 +16,7 @@ export class YouTubeDLPlugin extends ExtractorPlugin {
       /* eslint-enable no-console, @typescript-eslint/no-var-requires */
     }
   }
-  // eslint-disable-next-line require-await
+  // eslint-disable-next-line @typescript-eslint/require-await
   async validate() {
     return true;
   }

@@ -17,7 +17,7 @@ export class ExtractorPlugin extends Plugin {
    * @param {Discord.GuildMember} member Requested user
    * @returns {Promise<Song|Song[]|Playlist>}
    */
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars, require-await
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars, @typescript-eslint/require-await
   async resolve(url: string, member: GuildMember): Promise<Song | Playlist> {
     return undefined as unknown as Song;
   }

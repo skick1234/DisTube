@@ -5,8 +5,6 @@
   <p>
     <img alt="npm" src="https://img.shields.io/npm/dt/distube">
     <img alt="Depfu" src="https://img.shields.io/depfu/skick1234/DisTube">
-    <img alt="Codacy Grade" src="https://img.shields.io/codacy/grade/79c8b7d7d026410f8e1b7e9d326167a7?label=Codacy%20Score">
-    <img alt="CodeFactor Grade" src="https://img.shields.io/codefactor/grade/github/skick1234/DisTube?label=Codefactor%20Score">
   </p>
 </div>
 
@@ -18,7 +16,7 @@ A Discord.js module to simplify your music commands and play songs with audio fi
 
 ## Features
 
-- Build on @discordjs/voice
+- Build on `@discordjs/voice`
 - Easy to use and customize
 - Support YouTube, SoundCloud, Facebook, and [700+ more sites](https://ytdl-org.github.io/youtube-dl/supportedsites.html)
 - Audio filters (bassboost, nightcore, vaporwave,...)
