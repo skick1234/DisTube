@@ -1,7 +1,8 @@
-import Song from "./Song";
-import ytpl from "@distube/ytpl";
-import { GuildMember, User } from "discord.js";
-import { DisTubeError, PlaylistInfo, formatDuration } from "..";
+import { DisTubeError, formatDuration } from "..";
+import type Song from "./Song";
+import type ytpl from "@distube/ytpl";
+import type { PlaylistInfo } from "..";
+import type { GuildMember, User } from "discord.js";
 
 /**
  * Class representing a playlist.

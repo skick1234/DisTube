@@ -1,15 +1,15 @@
 import { URL } from "url";
-import { DisTubeError, GuildIDResolvable } from ".";
-import {
+import { DisTubeError } from ".";
+import { Intents, SnowflakeUtil } from "discord.js";
+import type { GuildIDResolvable } from ".";
+import type {
   BitFieldResolvable,
   ClientOptions,
   Guild,
   GuildMember,
-  Intents,
   IntentsString,
   Message,
   Snowflake,
-  SnowflakeUtil,
   StageChannel,
   TextChannel,
   VoiceChannel,

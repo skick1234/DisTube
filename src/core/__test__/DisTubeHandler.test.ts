@@ -1,5 +1,5 @@
-import { DisTubeError, DisTubeHandler, Playlist, SearchResult, Song, defaultFilters, defaultOptions } from "../..";
 import { firstPlaylistInfo, playlistResults, videoResults } from "./raw";
+import { DisTubeError, DisTubeHandler, Playlist, SearchResult, Song, defaultFilters, defaultOptions } from "../..";
 
 import * as _ytpl from "@distube/ytpl";
 import * as _ytdl from "ytdl-core";

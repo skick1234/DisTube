@@ -1,5 +1,5 @@
-import { Playlist, Video } from "@distube/ytsr";
 import { DisTubeError, formatDuration, toSecond } from "..";
+import type { Playlist, Video } from "@distube/ytsr";
 
 /** Class representing a search result. */
 export class SearchResult {

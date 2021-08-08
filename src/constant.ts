@@ -1,4 +1,4 @@
-import { Filters } from ".";
+import type { Filters } from ".";
 
 /**
  * Default DisTube audio filters.
@@ -52,7 +52,7 @@ export const defaultFilters: Filters = {
  * @prop {boolean} [youtubeDL=true] Whether or not using youtube-dl.
  * @prop {boolean} [updateYouTubeDL=true] Whether or not updating youtube-dl automatically.
  * @prop {Filters} [customFilters] Override {@link defaultFilters} or add more ffmpeg filters. Example=`{ "Filter name"="Filter value"; "8d"="apulsator=hz=0.075" }`
- * @prop {Object} [ytdlOptions] `ytdl-core` options
+ * @prop {ytdl.getInfoOptions} [ytdlOptions] `ytdl-core` get info options
  * @prop {number} [searchCooldown=60] Built-in search cooldown in seconds (When searchSongs is bigger than 0)
  * @prop {number} [emptyCooldown=60] Built-in leave on empty cooldown in seconds (When leaveOnEmpty is true)
  * @prop {boolean} [nsfw=false] Whether or not playing age-restricted content and disabling safe search in non-NSFW channel.
@@ -70,9 +70,7 @@ export const defaultOptions = {
   updateYouTubeDL: true,
   searchSongs: 0,
   customFilters: {},
-  ytdlOptions: {
-    highWaterMark: 1 << 24,
-  },
+  ytdlOptions: {},
   searchCooldown: 60,
   emptyCooldown: 60,
   nsfw: false,

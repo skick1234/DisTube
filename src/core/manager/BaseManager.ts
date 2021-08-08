@@ -1,7 +1,8 @@
-import DisTube from "../../DisTube";
 import DisTubeBase from "../DisTubeBase";
+import { resolveGuildID } from "../..";
 import { Collection } from "discord.js";
-import { GuildIDResolvable, resolveGuildID } from "../..";
+import type DisTube from "../../DisTube";
+import type { GuildIDResolvable } from "../..";
 
 /**
  * Manages the collection of a data model.

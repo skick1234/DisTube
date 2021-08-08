@@ -1,6 +1,7 @@
 import { BaseManager } from ".";
-import { DisTubeError, Queue, Song } from "../..";
-import { StageChannel, TextChannel, VoiceChannel } from "discord.js";
+import { DisTubeError, Queue } from "../..";
+import type { Song } from "../..";
+import type { StageChannel, TextChannel, VoiceChannel } from "discord.js";
 
 /**
  * Queue manager

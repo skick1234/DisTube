@@ -1,7 +1,7 @@
 import http from "http";
 import ExtractorPlugin from "../struct/ExtractorPlugin";
-import { GuildMember } from "discord.js";
 import { resolveHttpSong, validateAudioURL } from "..";
+import type { GuildMember } from "discord.js";
 
 export class HTTPPlugin extends ExtractorPlugin {
   async validate(url: string) {

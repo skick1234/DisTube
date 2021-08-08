@@ -1,4 +1,4 @@
-import { videoFormat } from "ytdl-core";
+import type { videoFormat } from "ytdl-core";
 
 export const regularFormats: videoFormat[] = [
   {

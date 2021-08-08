@@ -1,6 +1,6 @@
-import ytdl from "ytdl-core";
-import { CustomPlugin, ExtractorPlugin, Queue, Song } from "./struct";
-import {
+import type ytdl from "ytdl-core";
+import type { CustomPlugin, ExtractorPlugin, Queue, Song } from "./struct";
+import type {
   Guild,
   GuildMember,
   Message,
@@ -12,9 +12,7 @@ import {
   VoiceState,
 } from "discord.js";
 
-export interface Filters {
-  [x: string]: string;
-}
+export type Filters = Record<string, string>;
 
 export interface DisTubeOptions {
   /** DisTube plugins.*/

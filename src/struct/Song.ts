@@ -1,8 +1,9 @@
-import ytdl from "ytdl-core";
 import Playlist from "./Playlist";
-import { SearchResult } from ".";
-import { GuildMember, User } from "discord.js";
-import { Chapter, DisTubeError, OtherSongInfo, formatDuration, parseNumber, toSecond } from "..";
+import { DisTubeError, formatDuration, parseNumber, toSecond } from "..";
+import type ytdl from "ytdl-core";
+import type { SearchResult } from ".";
+import type { Chapter, OtherSongInfo } from "..";
+import type { GuildMember, User } from "discord.js";
 
 /**
  * Class representing a song.
@@ -79,7 +80,7 @@ export class Song {
        * @private
        */
       this.formats = info.formats;
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
       const err = require("ytdl-core/lib/utils").playError(info.player_response, [
         "UNPLAYABLE",
         "LIVE_STREAM_OFFLINE",

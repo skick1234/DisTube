@@ -1,4 +1,5 @@
-import { Client, ClientUser, Guild, Message, StageChannel, TextChannel, VoiceChannel, VoiceState } from "discord.js";
+import { Client, ClientUser, Guild, Message, VoiceState } from "discord.js";
+import { rawBotVoiceState, rawClientUser, rawGuild, rawMessage, rawUserVoiceState } from "./raw";
 import {
   DisTubeError,
   checkIntents,
@@ -13,7 +14,7 @@ import {
   resolveGuildID,
   toSecond,
 } from "..";
-import { rawBotVoiceState, rawClientUser, rawGuild, rawMessage, rawUserVoiceState } from "./raw";
+import type { StageChannel, TextChannel, VoiceChannel } from "discord.js";
 
 const client = new Client({ intents: [] });
 client.user = new ClientUser(client, rawClientUser);

@@ -1,13 +1,7 @@
-import DisTubeStream from "../DisTubeStream";
 import { EventEmitter } from "events";
-import { DisTubeVoiceManager } from "./DisTubeVoiceManager";
 import { DisTubeError, createDiscordJSAdapter, isSupportedVoiceChannel } from "../..";
-import { Snowflake, StageChannel, VoiceChannel } from "discord.js";
 import {
-  AudioPlayer,
   AudioPlayerStatus,
-  AudioResource,
-  VoiceConnection,
   VoiceConnectionDisconnectReason,
   VoiceConnectionStatus,
   createAudioPlayer,
@@ -15,6 +9,10 @@ import {
   entersState,
   joinVoiceChannel,
 } from "@discordjs/voice";
+import type DisTubeStream from "../DisTubeStream";
+import type { DisTubeVoiceManager } from "./DisTubeVoiceManager";
+import type { Snowflake, StageChannel, VoiceChannel } from "discord.js";
+import type { AudioPlayer, AudioResource, VoiceConnection } from "@discordjs/voice";
 
 export declare interface DisTubeVoice {
   id: Snowflake;

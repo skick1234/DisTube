@@ -1,9 +1,9 @@
-import http from "http";
 import https from "https";
 import ExtractorPlugin from "../struct/ExtractorPlugin";
 import { URL } from "url";
 import { Song } from "..";
-import { GuildMember } from "discord.js";
+import type http from "http";
+import type { GuildMember } from "discord.js";
 
 export const getResponseHeaders = async (
   httpModule: typeof http | typeof https,

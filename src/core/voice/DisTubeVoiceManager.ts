@@ -1,8 +1,9 @@
 import { DisTubeVoice } from ".";
+import { resolveGuildID } from "../..";
 import { BaseManager } from "../manager";
-import { StageChannel, VoiceChannel } from "discord.js";
-import { GuildIDResolvable, resolveGuildID } from "../..";
 import { VoiceConnectionStatus, getVoiceConnection } from "@discordjs/voice";
+import type { GuildIDResolvable } from "../..";
+import type { StageChannel, VoiceChannel } from "discord.js";
 
 /**
  * Manages voice connections for {@link DisTube}

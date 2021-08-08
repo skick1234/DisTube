@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/require-await, @typescript-eslint/no-unused-vars */
-import DisTube from "../DisTube";
-import { Song } from ".";
-import { DisTubeHandler } from "../core";
+import type DisTube from "../DisTube";
+import type { Song } from ".";
+import type { DisTubeHandler } from "../core";
 
 /**
  * DisTube Plugin

@@ -1,6 +1,6 @@
-import { DisTubeError, DisTubeStream, chooseBestVideoFormat } from "../..";
-import { liveFormats, regularFormats } from "./raw/videoFormats";
 import { StreamType } from "@discordjs/voice";
+import { liveFormats, regularFormats } from "./raw/videoFormats";
+import { DisTubeError, DisTubeStream, chooseBestVideoFormat } from "../..";
 
 import { FFmpeg as _FFmpeg } from "prism-media";
 

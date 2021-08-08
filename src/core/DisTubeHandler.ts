@@ -1,10 +1,8 @@
 import ytdl from "ytdl-core";
 import ytpl from "@distube/ytpl";
-import DisTube from "../DisTube";
 import { DisTubeBase, DisTubeStream } from ".";
 import {
   DisTubeError,
-  OtherSongInfo,
   Playlist,
   Queue,
   SearchResult,
@@ -13,7 +11,9 @@ import {
   isSupportedVoiceChannel,
   isURL,
 } from "..";
-import { GuildMember, Message, StageChannel, TextChannel, VoiceChannel } from "discord.js";
+import type DisTube from "../DisTube";
+import type { OtherSongInfo } from "..";
+import type { GuildMember, Message, StageChannel, TextChannel, VoiceChannel } from "discord.js";
 
 /**
  * DisTube's Handler
