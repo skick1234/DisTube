@@ -3,8 +3,15 @@
     <a href="https://nodei.co/npm/distube/"><img src="https://nodei.co/npm/distube.png?downloads=true&downloadRank=true&stars=true"></a>
   </p>
   <p>
-    <img alt="npm" src="https://img.shields.io/npm/dt/distube">
-    <img alt="Depfu" src="https://img.shields.io/depfu/skick1234/DisTube">
+    <img alt="GitHub Workflow Status" src="https://img.shields.io/github/workflow/status/skick1234/DisTube/Testing?label=test&logo=github&style=flat-square">
+    <img alt="node-current" src="https://img.shields.io/node/v/distube?logo=node.js&logoColor=white&style=flat-square">
+    <img alt="npm peer dependency version" src="https://img.shields.io/npm/dependency-version/distube/peer/discord.js?label=discord.js&logo=discord&logoColor=white&style=flat-square">
+    <img alt="Depfu" src="https://img.shields.io/depfu/skick1234/DisTube?style=flat-square">
+    <img alt="Codecov branch" src="https://img.shields.io/codecov/c/github/skick1234/DisTube/beta?logo=codecov&logoColor=white&style=flat-square&token=WWDYRRSEQW">
+    <br>
+    <img alt="npm" src="https://img.shields.io/npm/dt/distube?logo=npm&style=flat-square">
+    <img alt="GitHub Repo stars" src="https://img.shields.io/github/stars/skick1234/DisTube?logo=github&logoColor=white&style=flat-square">
+    <img alt="Discord" src="https://img.shields.io/discord/732254550689316914?logo=discord&logoColor=white&style=flat-square">
   </p>
 </div>
 
