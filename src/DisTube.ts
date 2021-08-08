@@ -1,6 +1,5 @@
 import ytpl from "@distube/ytpl";
 import ytsr from "@distube/ytsr";
-import { Client } from "discord.js";
 import { EventEmitter } from "events";
 import { checkIntents, isURL, isVoiceChannelEmpty } from "./util";
 import {
@@ -16,11 +15,12 @@ import {
   SearchResult,
   YouTubeDLPlugin,
   defaultFilters,
+  isClientInstance,
   isMessageInstance,
   isSupportedVoiceChannel,
   isTextChannelInstance,
 } from ".";
-import type { GuildMember, Message, StageChannel, TextChannel, VoiceChannel } from "discord.js";
+import type { Client, GuildMember, Message, StageChannel, TextChannel, VoiceChannel } from "discord.js";
 import type { CustomPlugin, DisTubeOptions, ExtractorPlugin, Filters, GuildIDResolvable, Song } from ".";
 
 export declare interface DisTube {
@@ -66,7 +66,7 @@ export class DisTube extends EventEmitter {
    */
   constructor(client: Client, otp: DisTubeOptions = {}) {
     super();
-    if (!(client instanceof Client)) throw new DisTubeError("INVALID_TYPE", "Discord.Client", client, "client");
+    if (!isClientInstance(client)) throw new DisTubeError("INVALID_TYPE", "Discord.Client", client, "client");
     /**
      * Discord.JS client
      * @type {Discord.Client}

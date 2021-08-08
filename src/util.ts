@@ -4,6 +4,7 @@ import { Intents, SnowflakeUtil } from "discord.js";
 import type { GuildIDResolvable } from ".";
 import type {
   BitFieldResolvable,
+  Client,
   ClientOptions,
   Guild,
   GuildMember,
@@ -171,4 +172,13 @@ export function resolveGuildID(resolvable: GuildIDResolvable): Snowflake {
   else if ("id" in resolvable && isGuildInstance(resolvable)) guildID = resolvable.id;
   if (!isSnowflake(guildID)) throw new DisTubeError("INVALID_TYPE", "GuildIDResolvable", resolvable);
   return guildID;
+}
+
+export function isClientInstance(client: any): client is Client {
+  return !!client && typeof client.login === "function";
+}
+
+export function checkInvalidKey(target: Record<string, unknown>, source: Record<string, unknown>, sourceName: string) {
+  const invalidKey = Object.keys(target).find(key => !Object.keys(source).includes(key));
+  if (invalidKey) throw new DisTubeError("INVALID_KEY", sourceName, invalidKey);
 }
