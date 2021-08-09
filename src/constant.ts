@@ -88,8 +88,9 @@ export const defaultOptions = {
  * - A {@link https://discord.js.org/#/docs/main/master/class/StageChannel|StageChannel}
  * - A {@link https://discord.js.org/#/docs/main/master/class/VoiceState|VoiceState}
  * - A {@link https://discord.js.org/#/docs/main/master/class/GuildMember|GuildMember}
+ * - A {@link https://discord.js.org/#/docs/main/master/class/Interaction|Interaction}
  * - A {@link Queue}
- * @typedef {Queue|Discord.Snowflake|Discord.Message|Discord.VoiceChannel|Discord.StageChannel|Discord.VoiceState|Discord.TextChannel|Discord.GuildMember|string} GuildIDResolvable
+ * @typedef {Queue|Discord.Snowflake|Discord.Message|Discord.VoiceChannel|Discord.StageChannel|Discord.VoiceState|Discord.TextChannel|Discord.GuildMember|Discord.Interaction|string} GuildIDResolvable
  */
 /**
  * FFmpeg Filters

@@ -3,6 +3,7 @@ import type { CustomPlugin, ExtractorPlugin, Queue, Song } from "./struct";
 import type {
   Guild,
   GuildMember,
+  Interaction,
   Message,
   Snowflake,
   StageChannel,
@@ -63,6 +64,7 @@ export type GuildIDResolvable =
   | Guild
   | TextChannel
   | GuildMember
+  | Interaction
   | string;
 
 export interface OtherSongInfo {
