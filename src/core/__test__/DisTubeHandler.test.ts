@@ -40,6 +40,7 @@ function createFakeDisTube() {
     emit: jest.fn(),
     extractorPlugins: [extractor],
     search: jest.fn(),
+    listenerCount: () => true, // TODO: add more test cases later
   };
 }
 
@@ -408,15 +409,30 @@ describe("DisTubeHandler#createStream()", () => {
 });
 
 describe("DisTubeHandler#searchSong()", () => {
-  test("No result found", async () => {
-    const distube = createFakeDisTube();
-    const handler = new DisTubeHandler(distube as any);
-    const err = new DisTubeError("NO_RESULT");
-    distube.search.mockRejectedValue(err);
-    const message: any = {};
-    const query = "test";
-    await expect(handler.searchSong(message, query)).resolves.toBe(null);
-    expect(distube.emit).toBeCalledWith("searchNoResult", message, query);
+  describe("No result found", () => {
+    test("With listening searchNoResult event", async () => {
+      const distube = createFakeDisTube();
+      distube.emit.mockReturnValue(true);
+      const handler = new DisTubeHandler(distube as any);
+      const err = new DisTubeError("NO_RESULT");
+      distube.search.mockRejectedValue(err);
+      const message: any = {};
+      const query = "test";
+      await expect(handler.searchSong(message, query)).resolves.toBe(null);
+      expect(distube.emit).toBeCalledWith("searchNoResult", message, query);
+    });
+
+    test("Without listening searchNoResult event", async () => {
+      const distube = createFakeDisTube();
+      distube.emit.mockReturnValue(false);
+      const handler = new DisTubeHandler(distube as any);
+      const err = new DisTubeError("NO_RESULT");
+      distube.search.mockRejectedValue(err);
+      const message: any = {};
+      const query = "test";
+      await expect(handler.searchSong(message, query)).rejects.toThrow(err);
+      expect(distube.emit).toBeCalledWith("searchNoResult", message, query);
+    });
   });
 
   test("searchSongs option <= 1", async () => {

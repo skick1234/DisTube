@@ -3,7 +3,7 @@
     <a href="https://nodei.co/npm/distube/"><img src="https://nodei.co/npm/distube.png?downloads=true&downloadRank=true&stars=true"></a>
   </p>
   <p>
-    <img alt="GitHub Workflow Status" src="https://img.shields.io/github/workflow/status/skick1234/DisTube/Testing?label=test&logo=github&style=flat-square">
+    <img alt="GitHub Workflow Status" src="https://img.shields.io/github/workflow/status/skick1234/DisTube/Testing?label=Tests&logo=github&style=flat-square">
     <img alt="node-current" src="https://img.shields.io/node/v/distube?logo=node.js&logoColor=white&style=flat-square">
     <img alt="npm peer dependency version" src="https://img.shields.io/npm/dependency-version/distube/peer/discord.js?label=discord.js&logo=discord&logoColor=white&style=flat-square">
     <img alt="Depfu" src="https://img.shields.io/depfu/skick1234/DisTube?style=flat-square">
