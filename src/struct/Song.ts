@@ -1,6 +1,6 @@
 import Playlist from "./Playlist";
 import { DisTubeError, formatDuration, parseNumber, toSecond } from "..";
-import type ytdl from "ytdl-core";
+import type ytdl from "@distube/ytdl-core";
 import type { SearchResult } from ".";
 import type { Chapter, OtherSongInfo } from "..";
 import type { GuildMember, User } from "discord.js";
@@ -81,7 +81,7 @@ export class Song {
        */
       this.formats = info.formats;
       // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
-      const err = require("ytdl-core/lib/utils").playError(info.player_response, [
+      const err = require("@distube/ytdl-core/lib/utils").playError(info.player_response, [
         "UNPLAYABLE",
         "LIVE_STREAM_OFFLINE",
         "LOGIN_REQUIRED",

@@ -3,13 +3,13 @@ import { DisTubeError, DisTubeHandler, Playlist, SearchResult, Song, defaultFilt
 import type { DisTubeOptions } from "../..";
 
 import * as _ytpl from "@distube/ytpl";
-import * as _ytdl from "ytdl-core";
+import * as _ytdl from "@distube/ytdl-core";
 import * as _Util from "../../util";
 import * as _Queue from "../../struct/Queue";
 import * as _Stream from "../DisTubeStream";
 
 jest.mock("@distube/ytpl");
-jest.mock("ytdl-core");
+jest.mock("@distube/ytdl-core");
 jest.mock("../../util");
 jest.mock("../../struct/Queue");
 jest.mock("../DisTubeStream");

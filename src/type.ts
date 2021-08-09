@@ -1,4 +1,4 @@
-import type ytdl from "ytdl-core";
+import type ytdl from "@distube/ytdl-core";
 import type { CustomPlugin, ExtractorPlugin, Queue, Song } from "./struct";
 import type {
   Guild,

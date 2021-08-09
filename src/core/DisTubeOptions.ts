@@ -1,5 +1,5 @@
 import { DisTubeError, checkInvalidKey, defaultOptions } from "..";
-import type ytdl from "ytdl-core";
+import type ytdl from "@distube/ytdl-core";
 import type { CustomPlugin, DisTubeOptions, ExtractorPlugin, Filters } from "..";
 
 export class Options {

@@ -2,7 +2,7 @@ import { isURL } from "..";
 import { FFmpeg } from "prism-media";
 import { DisTubeError } from "../struct";
 import { StreamType } from "@discordjs/voice";
-import type ytdl from "ytdl-core";
+import type ytdl from "@distube/ytdl-core";
 
 interface StreamOptions extends ytdl.downloadOptions {
   /**

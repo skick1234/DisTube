@@ -58,7 +58,7 @@ Read DisTube's definitions, properties and events details in the [Documentation 
 
 ## Dependencies
 
-- [node-ytdl-core](https://github.com/fent/node-ytdl-core): YouTube scraper
+- [node-ytdl-core](https://github.com/fent/node-ytdl-core): YouTube scraper ([DisTube Fork](https://github.com/distubejs/node-ytdl-core))
 - [node-ytsr](https://github.com/TimeForANinja/node-ytsr): YouTube search scraper ([DisTube Fork](https://github.com/distubejs/ytsr))
 - [node-ytpl](https://github.com/TimeForANinja/node-ytpl): YouTube playlist resolver ([DisTube Fork](https://github.com/distubejs/ytpl))
 - [youtube-dl-exec](https://github.com/microlinkhq/youtube-dl-exec): [`youtube-dl`](https://youtube-dl.org/) wrapper
