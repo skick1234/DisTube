@@ -40,6 +40,9 @@ export class Options {
   /** Whether or not emitting `addSong` event when creating a new Queue */
   emitAddListWhenCreatingQueue: boolean;
   constructor(options: DisTubeOptions) {
+    if (typeof options !== "object" || Array.isArray(options)) {
+      throw new DisTubeError("INVALID_TYPE", "object", options, "DisTubeOptions");
+    }
     const def = { ...defaultOptions };
     // Object.assign(this, defaultOptions, options);
     const opts = Object.assign({}, def, options);

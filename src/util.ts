@@ -179,6 +179,9 @@ export function isClientInstance(client: any): client is Client {
 }
 
 export function checkInvalidKey(target: Record<string, any>, source: Record<string, any>, sourceName: string) {
+  if (typeof target !== "object" || Array.isArray(target)) {
+    throw new DisTubeError("INVALID_TYPE", "object", target, sourceName);
+  }
   const invalidKey = Object.keys(target).find(key => !Object.keys(source).includes(key));
   if (invalidKey) throw new DisTubeError("INVALID_KEY", sourceName, invalidKey);
 }
