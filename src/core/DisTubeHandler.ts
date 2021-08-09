@@ -78,10 +78,10 @@ export class DisTubeHandler extends DisTubeBase {
     song: string | ytdl.videoInfo | Song | Playlist | SearchResult | OtherSongInfo | ytdl.relatedVideo | null,
   ): Promise<Song | Playlist | null> {
     if (!song) return null;
-    if (song instanceof Song || song instanceof Playlist) return song;
+    if (song instanceof Song || song instanceof Playlist) return song._patchMember(member);
     if (song instanceof SearchResult) {
       if (song.type === "video") return new Song(song, member);
-      /*if (song.type === "playlist")*/ else return this.resolvePlaylist(member, song.url);
+      return this.resolvePlaylist(member, song.url);
     }
     if (typeof song === "object") return new Song(song, member);
     if (ytdl.validateURL(song)) return new Song(await this.getYouTubeInfo(song), member);
