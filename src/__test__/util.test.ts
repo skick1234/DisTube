@@ -4,6 +4,7 @@ import {
   DisTubeError,
   checkIntents,
   formatDuration,
+  isClientInstance,
   isMemberInstance,
   isMessageInstance,
   isSupportedVoiceChannel,
@@ -13,6 +14,7 @@ import {
   parseNumber,
   resolveGuildID,
   toSecond,
+  checkInvalidKey,
 } from "..";
 import type { StageChannel, TextChannel, VoiceChannel } from "discord.js";
 
@@ -24,7 +26,7 @@ const voiceChannel = guild.channels.cache.get("853225781604646933") as VoiceChan
 const stageChannel = guild.channels.cache.get("835876864458489857") as StageChannel;
 const botVoiceState = new VoiceState(guild, rawBotVoiceState);
 const userVoiceState = new VoiceState(guild, rawUserVoiceState);
-const message = new Message(client, rawMessage, textChannel);
+const message = new Message(client, rawMessage);
 
 test("isSupportedVoiceChannel()", () => {
   const testFn = isSupportedVoiceChannel;
@@ -173,4 +175,31 @@ test("resolveGuildID()", () => {
   expect(testFn(gID)).toBe(gID);
   expect(() => testFn(client as any)).toThrow(new DisTubeError("INVALID_TYPE", "GuildIDResolvable", client));
   expect(() => testFn(client.user as any)).toThrow(new DisTubeError("INVALID_TYPE", "GuildIDResolvable", client.user));
+});
+
+test("isClientInstance()", () => {
+  const testFn = isClientInstance;
+  expect(testFn(voiceChannel)).toBe(false);
+  expect(testFn(stageChannel)).toBe(false);
+  expect(testFn(textChannel)).toBe(false);
+  expect(testFn(message)).toBe(false);
+  expect(testFn(guild)).toBe(false);
+  expect(testFn(client)).toBe(true);
+  expect(testFn(client.user)).toBe(false);
+  expect(testFn(guild.me)).toBe(false);
+  expect(testFn(botVoiceState)).toBe(false);
+  expect(testFn(userVoiceState)).toBe(false);
+});
+
+test("checkInvalidKey()", () => {
+  const target = {
+    a: 0,
+    b: 1,
+  };
+  const name = "target";
+  expect(() => checkInvalidKey(0 as any, [], name)).toThrow(new DisTubeError("INVALID_TYPE", "object", 0, name));
+  expect(() => checkInvalidKey(target, ["b"], name)).toThrow(`'a' does not need to be provided in ${name}`);
+  expect(() => checkInvalidKey(target, { a: undefined }, name)).toThrow(`'b' does not need to be provided in ${name}`);
+  expect(checkInvalidKey(target, { a: 0, b: 0, c: 0 }, name)).toBeUndefined();
+  expect(checkInvalidKey(target, ["a", "b"], name)).toBeUndefined();
 });

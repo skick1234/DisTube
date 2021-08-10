@@ -25,6 +25,9 @@ test("Default DisTubeOptions", () => {
 
 test("Validate DisTubeOptions", () => {
   const n: any = NaN;
+  expect(() => {
+    new Options(n);
+  }).toThrow("Expected 'object' for 'DisTubeOptions', but got NaN");
   for (const key of Object.keys(defaultOptions).filter(o => o !== "plugins")) {
     const options = {};
     options[key] = n;
@@ -43,5 +46,5 @@ test("Validate DisTubeOptions", () => {
   }).toThrow("Expected 'string' for 'DisTubeOptions.youtubeIdentityToken', but got Object");
   expect(() => {
     new Options({ invalidKey: "an invalid key" } as any);
-  }).toThrow('"invalidKey" does not need to be provided in DisTubeOptions');
+  }).toThrow("'invalidKey' does not need to be provided in DisTubeOptions");
 });

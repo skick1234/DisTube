@@ -206,7 +206,7 @@ export class DisTubeHandler extends DisTubeBase {
           /* eslint-disable no-console */
           console.warn(`"searchSongs" option is disabled due to missing "${evn}" listener.`);
           console.warn(
-            `If you don't want to use "${evn}" event, simply add an empty listener: <DisTube>.on("${evn}", () => {})`,
+            `If you don't want to use "${evn}" event, simply add an empty listener (not recommended):\n<DisTube>.on("${evn}", () => {})`,
           );
           /* eslint-enable no-console */
           this.options.searchSongs = 0;
