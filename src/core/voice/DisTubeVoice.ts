@@ -127,10 +127,12 @@ export class DisTubeVoice extends EventEmitter {
   }
   /**
    * Leave the voice channel of this connection
+   * @param {Error} [error] Optional, an error to emit with 'error' event.
    */
-  leave() {
+  leave(error?: Error) {
     this.stop();
     if (this.connection.state.status !== VoiceConnectionStatus.Destroyed) {
+      this.emit("disconnect", error);
       this.connection.destroy();
     }
     this.voices.delete(this.id);
