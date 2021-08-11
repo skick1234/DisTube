@@ -11,8 +11,8 @@ import {
 } from "@discordjs/voice";
 import type DisTubeStream from "../DisTubeStream";
 import type { DisTubeVoiceManager } from "./DisTubeVoiceManager";
-import type { Snowflake, StageChannel, VoiceChannel } from "discord.js";
 import type { AudioPlayer, AudioResource, VoiceConnection } from "@discordjs/voice";
+import type { Snowflake, StageChannel, VoiceChannel, VoiceState } from "discord.js";
 
 export declare interface DisTubeVoice {
   id: Snowflake;
@@ -229,6 +229,14 @@ export class DisTubeVoice extends EventEmitter {
       ...this.connection.joinConfig,
       selfMute,
     });
+  }
+
+  /**
+   * The voice state of this connection
+   * @returns {Discord.VoiceState?}
+   */
+  get voiceState(): VoiceState | undefined {
+    return this.channel?.guild?.me?.voice;
   }
 }
 
