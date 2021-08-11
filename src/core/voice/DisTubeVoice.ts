@@ -62,8 +62,7 @@ export class DisTubeVoice extends EventEmitter {
     this.connection
       .on(VoiceConnectionStatus.Disconnected, (_, newState) => {
         if (newState.reason === VoiceConnectionDisconnectReason.WebSocketClose && newState.closeCode === 4014) {
-          entersState(this.connection, VoiceConnectionStatus.Connecting, 3e3).catch(() => {
-            this.emit("disconnect");
+          entersState(this.connection, VoiceConnectionStatus.Connecting, 5e3).catch(() => {
             this.leave();
           });
         } else if (this.connection.rejoinAttempts < 5) {
@@ -71,8 +70,7 @@ export class DisTubeVoice extends EventEmitter {
             this.connection.rejoin();
           }, (this.connection.rejoinAttempts + 1) * 5e3).unref();
         } else if (this.connection.state.status !== VoiceConnectionStatus.Destroyed) {
-          this.emit("disconnect", new DisTubeError("VOICE_RECONNECT_FAILED"));
-          this.leave();
+          this.leave(new DisTubeError("VOICE_RECONNECT_FAILED"));
         }
       })
       .on(VoiceConnectionStatus.Destroyed, () => {

@@ -3,6 +3,7 @@ import { rawBotVoiceState, rawClientUser, rawGuild, rawMessage, rawUserVoiceStat
 import {
   DisTubeError,
   checkIntents,
+  checkInvalidKey,
   formatDuration,
   isClientInstance,
   isMemberInstance,
@@ -14,7 +15,6 @@ import {
   parseNumber,
   resolveGuildID,
   toSecond,
-  checkInvalidKey,
 } from "..";
 import type { StageChannel, TextChannel, VoiceChannel } from "discord.js";
 

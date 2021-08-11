@@ -17,7 +17,7 @@ const voiceManager = {
 
 const voiceChannel = {
   id: 1,
-  guild: { id: 2 },
+  guild: { id: 2, me: { voice: undefined } },
   joinable: true,
 };
 
@@ -132,7 +132,6 @@ describe("Constructor", () => {
       { reason: DiscordVoice.VoiceConnectionDisconnectReason.WebSocketClose, closeCode: 4014 },
     );
     catchFn.mock.calls[0][0]();
-    expect(voice.emit).toBeCalledWith("disconnect");
     expect(voice.leave).toBeCalledTimes(1);
 
     connection.on.mock.calls[0][1]({}, {});
@@ -147,8 +146,7 @@ describe("Constructor", () => {
     expect(connection.rejoinAttempts).toBe(5);
     jest.runAllTimers();
     expect(connection.rejoinAttempts).toBe(5);
-    expect(voice.emit).toBeCalledWith("disconnect", new DisTubeError("VOICE_RECONNECT_FAILED"));
-    expect(voice.leave).toBeCalledTimes(1);
+    expect(voice.leave).toBeCalledWith(new DisTubeError("VOICE_RECONNECT_FAILED"));
 
     (voice.emit as jest.Mock).mockClear();
     (voice.leave as jest.Mock).mockClear();
@@ -230,6 +228,10 @@ describe("Methods", () => {
       expect(voice.playbackDuration).toBe(0.1);
       expect(voice.selfDeaf).toBe(connection.joinConfig.selfDeaf);
       expect(voice.selfMute).toBe(connection.joinConfig.selfMute);
+      expect(voice.voiceState).toBeUndefined();
+      voiceChannel.guild.me = { voice: {} };
+      expect(voice.voiceState).toBe(voiceChannel.guild.me.voice);
+      expect(voice.voiceState).not.toBeUndefined();
     });
   });
 
@@ -269,11 +271,22 @@ describe("Methods", () => {
   });
 
   describe("DisTubeVoice#leave()", () => {
-    test("Destroy the connection", () => {
-      expect(voice.leave()).toBeUndefined();
-      expect(audioPlayer.stop).toBeCalledTimes(1);
-      expect(connection.destroy).toBeCalledTimes(1);
-      expect(voiceManager.delete).toBeCalledWith(voice.id);
+    describe("Destroy the connection", () => {
+      test("Without error", () => {
+        expect(voice.leave()).toBeUndefined();
+        expect(audioPlayer.stop).toBeCalledTimes(1);
+        expect(connection.destroy).toBeCalledTimes(1);
+        expect(voice.emit).toBeCalledWith("disconnect", undefined);
+        expect(voiceManager.delete).toBeCalledWith(voice.id);
+      });
+      test("Without error", () => {
+        const err: any = {};
+        expect(voice.leave(err)).toBeUndefined();
+        expect(audioPlayer.stop).toBeCalledTimes(1);
+        expect(connection.destroy).toBeCalledTimes(1);
+        expect(voice.emit).toBeCalledWith("disconnect", err);
+        expect(voiceManager.delete).toBeCalledWith(voice.id);
+      });
     });
 
     test("Leave the destroyed connection", () => {

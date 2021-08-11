@@ -163,7 +163,7 @@ export class QueueManager extends BaseManager<Queue> {
       queue.voice.play(stream);
       song.streamURL = stream.url;
       return false;
-    } catch (e) {
+    } catch (e: any) {
       this._handlePlayingError(queue, e);
       return true;
     }
