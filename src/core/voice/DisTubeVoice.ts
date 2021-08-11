@@ -230,10 +230,9 @@ export class DisTubeVoice extends EventEmitter {
       selfMute,
     });
   }
-
   /**
    * The voice state of this connection
-   * @returns {Discord.VoiceState?}
+   * @type {Discord.VoiceState?}
    */
   get voiceState(): VoiceState | undefined {
     return this.channel?.guild?.me?.voice;
