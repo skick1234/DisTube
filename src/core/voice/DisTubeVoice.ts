@@ -9,8 +9,7 @@ import {
   entersState,
   joinVoiceChannel,
 } from "@discordjs/voice";
-import type DisTubeStream from "../DisTubeStream";
-import type { DisTubeVoiceManager } from "./DisTubeVoiceManager";
+import type { DisTubeStream, DisTubeVoiceManager } from "..";
 import type { AudioPlayer, AudioResource, VoiceConnection } from "@discordjs/voice";
 import type { Snowflake, StageChannel, VoiceChannel, VoiceState } from "discord.js";
 

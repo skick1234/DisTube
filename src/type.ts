@@ -1,5 +1,5 @@
 import type ytdl from "@distube/ytdl-core";
-import type { CustomPlugin, ExtractorPlugin, Queue, Song } from "./struct";
+import type { CustomPlugin, DisTubeVoice, ExtractorPlugin, Queue, Song } from ".";
 import type {
   Guild,
   GuildMember,
@@ -56,6 +56,7 @@ export interface DisTubeOptions {
 
 export type GuildIDResolvable =
   | Queue
+  | DisTubeVoice
   | Snowflake
   | Message
   | VoiceChannel

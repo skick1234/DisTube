@@ -1,5 +1,5 @@
 import { URL } from "url";
-import { DisTubeError } from ".";
+import { DisTubeError, DisTubeVoice, Queue } from ".";
 import { Intents, SnowflakeUtil } from "discord.js";
 import type { GuildIDResolvable } from ".";
 import type {
@@ -167,9 +167,13 @@ export function isGuildInstance(guild: any): guild is Guild {
 
 export function resolveGuildID(resolvable: GuildIDResolvable): Snowflake {
   let guildID: string | undefined;
-  if (typeof resolvable === "string") guildID = resolvable;
-  else if ("guild" in resolvable && isGuildInstance(resolvable.guild)) guildID = resolvable.guild.id;
-  else if ("id" in resolvable && isGuildInstance(resolvable)) guildID = resolvable.id;
+  if (typeof resolvable === "string") {
+    guildID = resolvable;
+  } else if (typeof resolvable === "object") {
+    if (resolvable instanceof Queue || resolvable instanceof DisTubeVoice) guildID = resolvable.id;
+    else if ("guild" in resolvable && isGuildInstance(resolvable.guild)) guildID = resolvable.guild.id;
+    else if ("id" in resolvable && isGuildInstance(resolvable)) guildID = resolvable.id;
+  }
   if (!isSnowflake(guildID)) throw new DisTubeError("INVALID_TYPE", "GuildIDResolvable", resolvable);
   return guildID;
 }

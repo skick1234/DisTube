@@ -1,7 +1,5 @@
-import type DisTube from "../DisTube";
-import type DisTubeHandler from "./DisTubeHandler";
 import type { Client, TextChannel } from "discord.js";
-import type { DisTubeVoiceManager, Options, QueueManager } from ".";
+import type { DisTube, DisTubeHandler, DisTubeVoiceManager, Options, QueueManager } from "..";
 
 /** @private */
 export class DisTubeBase {

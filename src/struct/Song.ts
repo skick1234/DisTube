@@ -1,9 +1,8 @@
 import Playlist from "./Playlist";
 import { DisTubeError, formatDuration, parseNumber, toSecond } from "..";
 import type ytdl from "@distube/ytdl-core";
-import type { SearchResult } from ".";
-import type { Chapter, OtherSongInfo } from "..";
 import type { GuildMember, User } from "discord.js";
+import type { Chapter, OtherSongInfo, SearchResult } from "..";
 
 /**
  * Class representing a song.

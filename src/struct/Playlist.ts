@@ -1,7 +1,6 @@
 import { DisTubeError, formatDuration } from "..";
-import type Song from "./Song";
 import type ytpl from "@distube/ytpl";
-import type { PlaylistInfo } from "..";
+import type { PlaylistInfo, Song } from "..";
 import type { GuildMember, User } from "discord.js";
 
 /**

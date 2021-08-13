@@ -1,8 +1,6 @@
 import { DisTubeBase } from "../core";
 import { DisTubeError, Song, TaskQueue, formatDuration } from "..";
-import type DisTube from "../DisTube";
-import type { SearchResult } from "..";
-import type { DisTubeVoice } from "../core";
+import type { DisTube, DisTubeVoice, SearchResult } from "..";
 import type { GuildMember, Snowflake, TextChannel } from "discord.js";
 
 /**

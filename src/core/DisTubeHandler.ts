@@ -11,8 +11,7 @@ import {
   isSupportedVoiceChannel,
   isURL,
 } from "..";
-import type DisTube from "../DisTube";
-import type { OtherSongInfo } from "..";
+import type { DisTube, OtherSongInfo } from "..";
 import type { GuildMember, Message, StageChannel, TextChannel, VoiceChannel } from "discord.js";
 
 /**

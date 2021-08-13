@@ -1,7 +1,7 @@
 import youtubeDlExec, { download } from "@distube/youtube-dl";
 import ExtractorPlugin from "../struct/ExtractorPlugin";
 import { Playlist, Song } from "../struct";
-import type { OtherSongInfo } from "../type";
+import type { OtherSongInfo } from "..";
 import type { GuildMember } from "discord.js";
 import type { YtResponse } from "@distube/youtube-dl";
 

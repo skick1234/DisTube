@@ -90,7 +90,8 @@ export const defaultOptions = {
  * - A {@link https://discord.js.org/#/docs/main/master/class/GuildMember|GuildMember}
  * - A {@link https://discord.js.org/#/docs/main/master/class/Interaction|Interaction}
  * - A {@link Queue}
- * @typedef {Queue|Discord.Snowflake|Discord.Message|Discord.VoiceChannel|Discord.StageChannel|Discord.VoiceState|Discord.TextChannel|Discord.GuildMember|Discord.Interaction|string} GuildIDResolvable
+ * - A {@link DisTubeVoice}
+ * @typedef {Discord.Snowflake|Discord.Message|Discord.VoiceChannel|Discord.StageChannel|Discord.VoiceState|Discord.TextChannel|Discord.GuildMember|Discord.Interaction|DisTubeVoice|Queue|string} GuildIDResolvable
  */
 /**
  * FFmpeg Filters
