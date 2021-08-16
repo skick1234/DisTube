@@ -53,7 +53,7 @@ export declare interface DisTube {
 export class DisTube extends EventEmitter {
   /**
    * Create a new DisTube class.
-   * @param {Discord.Client} client JS client
+   * @param {Discord.Client} client Discord.JS client
    * @param {DisTubeOptions} [otp] Custom DisTube options
    * @example
    * const Discord = require('discord.js'),

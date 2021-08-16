@@ -6,7 +6,7 @@
   "typings": "dist/index.d.ts",
   "scripts": {
     "test": "jest --config .jestrc.json",
-    "docs": "npm run build && docgen --source dist --output docs/docs.json --custom pages/index.yml",
+    "docs": "docgen -s src/*.ts src/**/*.ts -o docs/docs.json -c pages/index.yml -g -j .jsconfig.json",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "prettier": "prettier --write **/*.{js,ts,json,yml,yaml}",
@@ -48,20 +48,23 @@
   },
   "devDependencies": {
     "@babel/core": "^7.15.0",
+    "@babel/plugin-proposal-class-properties": "^7.14.5",
+    "@babel/plugin-proposal-object-rest-spread": "^7.14.7",
     "@babel/preset-env": "^7.15.0",
     "@babel/preset-typescript": "^7.15.0",
     "@commitlint/cli": "^13.1.0",
     "@commitlint/config-conventional": "^13.1.0",
     "@discordjs/voice": "^0.6.0",
     "@distube/docgen": "distubejs/docgen",
-    "@types/jest": "^27.0.0",
-    "@types/node": "^16.4.14",
+    "@types/jest": "^27.0.1",
+    "@types/node": "^16.6.1",
     "babel-jest": "^27.0.6",
     "discord.js": "^13.0.1",
     "eslint": "^7.32.0",
     "eslint-config-distube": "^1.2.0",
     "husky": "^7.0.1",
     "jest": "^27.0.6",
+    "jsdoc-babel": "^0.5.0",
     "lint-staged": "^11.1.2",
     "prettier": "^2.3.2",
     "typescript": "^4.3.5"
@@ -69,7 +72,7 @@
   "peerDependencies": {
     "@discordjs/opus": "*",
     "@discordjs/voice": ">=0.5.6",
-    "discord.js": "^12.5.0||^13.0.0"
+    "discord.js": "^12.5.0||^13.0.0-0||^13.1.0-0||^13.2.0-0"
   },
   "engines": {
     "node": ">=12.0.0"
