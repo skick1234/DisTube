@@ -5,13 +5,13 @@ jobs:
     strategy:
       matrix:
         node: ["14", "16"]
-    name: Test (Node v${{ matrix.node }})
+    name: Test on Node.js v${{ matrix.node }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
 
-      - name: Install Node v${{ matrix.node }}
+      - name: Install Node.js v${{ matrix.node }}
         uses: actions/setup-node@v1
         with:
           node-version: ${{ matrix.node }}
@@ -19,7 +19,7 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Run Tests
+      - name: Run tests
         run: npm run test
 
       - name: Upload Coverage

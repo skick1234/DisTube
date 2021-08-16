@@ -7,14 +7,19 @@ jobs:
     name: Linting
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - name: Checkout repository
+        uses: actions/checkout@v2
 
-      - uses: actions/setup-node@v2
+      - name: Install Node.js
+        uses: actions/setup-node@v2
         with:
           node-version: 16.x
 
-      - name: npm install, build, and lint
-        run: |
-          npm install
-          npm run lint
-          npm run build:check
+      - name: Install dependencies
+        run: npm install
+
+      - name: Linting
+        run: npm run lint
+
+      - name: Checking types
+        run: npm run build:check
