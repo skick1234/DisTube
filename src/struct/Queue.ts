@@ -475,7 +475,9 @@ export class Queue extends DisTubeBase {
     }
   }
   /**
-   * Delete the queue
+   * Delete the queue from the manager
+   * (This does not leave the queue even if {@link DisTubeOptions|DisTubeOptions.leaveOnStop} is enabled)
+   * @private
    */
   delete() {
     this.stopped = true;

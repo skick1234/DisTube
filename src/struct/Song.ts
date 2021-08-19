@@ -28,11 +28,8 @@ export class Song {
   views!: number;
   likes!: number;
   dislikes!: number;
-  /** Song uploader */
   uploader!: {
-    /** Uploader name */
     name?: string;
-    /** Uploader url */
     url?: string;
   };
   age_restricted!: boolean;

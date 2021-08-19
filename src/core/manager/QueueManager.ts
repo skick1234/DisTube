@@ -29,8 +29,8 @@ export class QueueManager extends BaseManager<Queue> {
       this._voiceEventHandler(queue);
       this.add(queue.id, queue);
       this.emit("initQueue", queue);
-      const err = await this.queues.playSong(queue);
-      return err ? err : queue;
+      const err = await this.playSong(queue);
+      return err || queue;
     } finally {
       queue.taskQueue.resolve();
     }
@@ -51,8 +51,8 @@ export class QueueManager extends BaseManager<Queue> {
     queue.voice
       .on("disconnect", error => {
         queue.delete();
-        if (!error) this.emit("disconnect", queue);
-        else this.emitError(error, queue.textChannel);
+        this.emit("disconnect", queue);
+        if (error) this.emitError(error, queue.textChannel);
       })
       .on("error", error => {
         this._handlePlayingError(queue, error);
