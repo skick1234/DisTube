@@ -54,12 +54,8 @@ export class QueueManager extends BaseManager<Queue> {
         this.emit("disconnect", queue);
         if (error) this.emitError(error, queue.textChannel);
       })
-      .on("error", error => {
-        this._handlePlayingError(queue, error);
-      })
-      .on("finish", () => {
-        this._handleSongFinish(queue);
-      });
+      .on("error", error => this._handlePlayingError(queue, error))
+      .on("finish", () => this._handleSongFinish(queue));
   }
   /**
    * Handle the queue when a Song finish
