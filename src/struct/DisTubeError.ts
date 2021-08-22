@@ -10,7 +10,7 @@ const ERROR_MESSAGES = {
         : Array.isArray(got)
         ? `Array<${got.length}>`
         : got?.constructor?.name || typeof got
-    }`,
+    } (${typeof got})`,
   NUMBER_COMPARE: (name: string, expected: string, value: number) => `'${name}' must be ${expected} ${value}`,
   EMPTY_ARRAY: (name: string) => `'${name}' is an empty array`,
   EMPTY_FILTERED_ARRAY: (name: string, type: string) => `There is no valid '${type}' in the '${name}' array`,
@@ -48,7 +48,8 @@ const ERROR_MESSAGES = {
   CANNOT_RESOLVE_SONG: (t: string) => `Cannot resolve ${t} to a Song`,
   NO_VALID_SONG: "'songs' array does not have any valid Song, SearchResult or url",
   EMPTY_FILTERED_PLAYLIST:
-    "There is no valid video in the playlist\nMaybe age-restricted contents is filtered because you are in non-NSFW channel",
+    "There is no valid video in the playlist\n" +
+    "Maybe age-restricted contents is filtered because you are in non-NSFW channel",
   EMPTY_PLAYLIST: "There is no valid video in the playlist",
 };
 
