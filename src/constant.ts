@@ -2,7 +2,7 @@ import type { Filters } from ".";
 
 /**
  * Default DisTube audio filters.
- * @typedef {Object} DefaultFilters
+ * @typedef {Object} defaultFilters
  * @prop {string} 3d 3d
  * @prop {string} bassboost bassboost
  * @prop {string} echo echo

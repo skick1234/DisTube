@@ -123,7 +123,7 @@ export class DisTube extends EventEmitter {
    * Shorthand method for {@link DisTube#playVoiceChannel}
    * @returns {Promise<void>}
    * @param {Discord.Message} message A message from guild channel
-   * @param {string|Song|SearchResult|Playlist} song YouTube url | Search string | {@link Song} | {@link SearchResult} | {@link Playlist}
+   * @param {string|Song|SearchResult|Playlist} song URL| Search string | {@link Song} | {@link SearchResult} | {@link Playlist}
    * @param {Object} [options] Optional options
    * @param {boolean} [options.skip=false] Skip the playing song (if exists) and play the added song/playlist instantly
    * @param {boolean} [options.unshift=false] Add the song/playlist to the beginning of the queue (after the playing song if exists)
