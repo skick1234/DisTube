@@ -1,15 +1,14 @@
 /* eslint-disable @typescript-eslint/require-await, @typescript-eslint/no-unused-vars */
-import type { DisTube, DisTubeHandler, Song } from "..";
+import type { Client, TextChannel } from "discord.js";
+import type { DisTube, DisTubeHandler, DisTubeVoiceManager, Options, QueueManager, Song } from "..";
 
 /**
  * DisTube Plugin
  * @private
  */
 export class Plugin {
-  /** Type of the plugin */
   type: "custom" | "extractor";
   distube!: DisTube;
-  handler!: DisTubeHandler;
   constructor(type: "custom" | "extractor") {
     /**
      * Type of the plugin
@@ -23,11 +22,63 @@ export class Plugin {
      * @type {DisTube}
      */
     this.distube = distube;
-    /**
-     * Handler
-     * @type {DisTubeHandler}
-     */
-    this.handler = this.distube.handler;
+  }
+  /**
+   * Emit the {@link DisTube} of this base
+   * @param {string} eventName Event name
+   * @param {...any} args arguments
+   * @returns {boolean}
+   */
+  emit(eventName: string, ...args: any[]): boolean {
+    return this.distube.emit(eventName, ...args);
+  }
+  /**
+   * Emit error event
+   * @param {Error} error error
+   * @param {Discord.TextChannel?} channel Text channel where the error is encountered.
+   */
+  emitError(error: Error, channel?: TextChannel) {
+    this.distube.emitError(error, channel);
+  }
+  /**
+   * The queue manager
+   * @type {QueueManager}
+   * @readonly
+   */
+  get queues(): QueueManager {
+    return this.distube.queues;
+  }
+  /**
+   * The voice manager
+   * @type {DisTubeVoiceManager}
+   * @readonly
+   */
+  get voices(): DisTubeVoiceManager {
+    return this.distube.voices;
+  }
+  /**
+   * Discord.js client
+   * @type {Discord.Client}
+   * @readonly
+   */
+  get client(): Client {
+    return this.distube.client;
+  }
+  /**
+   * DisTube options
+   * @type {DisTubeOptions}
+   * @readonly
+   */
+  get options(): Options {
+    return this.distube.options;
+  }
+  /**
+   * DisTube handler
+   * @type {DisTubeHandler}
+   * @readonly
+   */
+  get handler(): DisTubeHandler {
+    return this.distube.handler;
   }
   /**
    * Check if the url is working with this plugin
@@ -38,7 +89,8 @@ export class Plugin {
     return false;
   }
   /**
-   * Get the stream url from {@link Song#url}. Returns {@link Song#url} by default. Not needed if the plugin plays song from YouTube.
+   * Get the stream url from {@link Song#url}. Returns {@link Song#url} by default.
+   * Not needed if the plugin plays song from YouTube.
    * @param {string} url Input url
    * @returns {Promise<string>}
    */
@@ -46,7 +98,8 @@ export class Plugin {
     return url;
   }
   /**
-   * (Optional) Get related songs from a supported url (Not needed to add {@link Song#related} and member is `null` because it will be added with this function later)
+   * (Optional) Get related songs from a supported url. {@link Song#member} should be `undefined`.
+   * Not needed to add {@link Song#related} because it will be added with this function later.
    * @param {string} url Input url
    * @returns {Promise<Song[]>}
    */
