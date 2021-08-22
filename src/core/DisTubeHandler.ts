@@ -10,6 +10,7 @@ import {
   isMessageInstance,
   isSupportedVoiceChannel,
   isURL,
+  isVoiceChannelEmpty,
 } from "..";
 import type { DisTube, OtherSongInfo } from "..";
 import type { GuildMember, Message, StageChannel, TextChannel, VoiceChannel } from "discord.js";
@@ -24,6 +25,7 @@ export class DisTubeHandler extends DisTubeBase {
   constructor(distube: DisTube) {
     super(distube);
     this.ytdlOptions = this.options.ytdlOptions;
+
     if (this.options.youtubeCookie) {
       const requestOptions: any = {
         headers: {
@@ -34,6 +36,36 @@ export class DisTubeHandler extends DisTubeBase {
         requestOptions.headers["x-youtube-identity-token"] = this.options.youtubeIdentityToken;
       }
       Object.assign(this.ytdlOptions, { requestOptions });
+    }
+
+    const client = this.client;
+    if (this.options.leaveOnEmpty) {
+      client.on("voiceStateUpdate", oldState => {
+        if (!oldState?.channel) return;
+        const queue = this.queues.get(oldState);
+        if (!queue) {
+          if (isVoiceChannelEmpty(oldState)) {
+            setTimeout(() => {
+              if (!this.queues.get(oldState) && isVoiceChannelEmpty(oldState)) this.voices.leave(oldState);
+            }, this.options.emptyCooldown * 1e3).unref();
+          }
+          return;
+        }
+        if (queue.emptyTimeout) {
+          clearTimeout(queue.emptyTimeout);
+          delete queue.emptyTimeout;
+        }
+        if (isVoiceChannelEmpty(oldState)) {
+          queue.emptyTimeout = setTimeout(() => {
+            delete queue.emptyTimeout;
+            if (isVoiceChannelEmpty(oldState)) {
+              queue.voice.leave();
+              this.emit("empty", queue);
+              if (queue.stopped) queue.delete();
+            }
+          }, this.options.emptyCooldown * 1e3).unref();
+        }
+      });
     }
   }
 

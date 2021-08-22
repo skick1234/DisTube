@@ -1,7 +1,7 @@
 import ytpl from "@distube/ytpl";
 import ytsr from "@distube/ytsr";
 import { EventEmitter } from "events";
-import { checkIntents, isURL, isVoiceChannelEmpty } from "./util";
+import { checkIntents, isURL } from "./util";
 import {
   DisTubeError,
   DisTubeHandler,
@@ -75,15 +75,15 @@ export class DisTube extends EventEmitter {
     this.client = client;
     checkIntents(client.options);
     /**
-     * Voice connections manager
-     * @type {DisTubeVoiceManager}
-     */
-    this.voices = new DisTubeVoiceManager(this);
-    /**
      * DisTube options
      * @type {DisTubeOptions}
      */
     this.options = new Options(otp);
+    /**
+     * Voice connections manager
+     * @type {DisTubeVoiceManager}
+     */
+    this.voices = new DisTubeVoiceManager(this);
     /**
      * DisTube's Handler
      * @type {DisTubeHandler}
@@ -100,35 +100,7 @@ export class DisTube extends EventEmitter {
      * @type {Filters}
      */
     this.filters = defaultFilters;
-    if (typeof this.options.customFilters === "object") Object.assign(this.filters, this.options.customFilters);
-    if (this.options.leaveOnEmpty) {
-      client.on("voiceStateUpdate", oldState => {
-        if (!oldState?.channel) return;
-        const queue = this.getQueue(oldState);
-        if (!queue) {
-          if (isVoiceChannelEmpty(oldState)) {
-            setTimeout(() => {
-              const guildID = oldState.guild.id;
-              if (!this.getQueue(oldState) && isVoiceChannelEmpty(oldState)) this.voices.leave(guildID);
-            }, this.options.emptyCooldown * 1e3).unref();
-          }
-          return;
-        }
-        if (queue.emptyTimeout) {
-          clearTimeout(queue.emptyTimeout);
-          delete queue.emptyTimeout;
-        }
-        if (isVoiceChannelEmpty(oldState)) {
-          queue.emptyTimeout = setTimeout(() => {
-            if (isVoiceChannelEmpty(oldState)) {
-              queue.voice.leave();
-              this.emit("empty", queue);
-              queue.delete();
-            }
-          }, this.options.emptyCooldown * 1e3).unref();
-        }
-      });
-    }
+    Object.assign(this.filters, this.options.customFilters);
     // Default plugin
     this.options.plugins.push(new HTTPPlugin(), new HTTPSPlugin());
     if (this.options.youtubeDL) this.options.plugins.push(new YouTubeDLPlugin(this.options.updateYouTubeDL));

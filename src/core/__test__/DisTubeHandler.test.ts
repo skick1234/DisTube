@@ -27,6 +27,12 @@ function createFakeQueueManager() {
   };
 }
 
+function createFakeVoiceManager() {
+  return {
+    leave: jest.fn(),
+  };
+}
+
 const extractor = {
   validate: jest.fn(),
   resolve: jest.fn(),
@@ -37,10 +43,14 @@ function createFakeDisTube() {
     options: { ...defaultOptions } as DisTubeOptions,
     filters: defaultFilters,
     queues: createFakeQueueManager(),
+    voices: createFakeVoiceManager(),
     emit: jest.fn(),
     extractorPlugins: [extractor],
     search: jest.fn(),
     listenerCount: jest.fn(),
+    client: {
+      on: jest.fn(),
+    },
   };
 }
 
@@ -51,8 +61,9 @@ const song = new Song({ id: "xxxxxxxxxxx", url: "https://www.youtube.com/watch?v
 const anotherSong = new Song({ id: "y", url: "https://www.youtube.com/watch?v=y" }, member, "test");
 const nsfwSong = new Song({ id: "z", url: "z url", age_restricted: true }, member, "test");
 const playlist = new Playlist([song, anotherSong, nsfwSong], member);
+const unref = jest.fn();
 
-afterEach(() => {
+beforeEach(() => {
   jest.resetAllMocks();
 });
 
@@ -84,6 +95,68 @@ describe("Constructor", () => {
       expect((handler.ytdlOptions.requestOptions as any).headers.cookie).toBe(cookie);
       expect((handler.ytdlOptions.requestOptions as any).headers["x-youtube-identity-token"]).toBe(idToken);
     });
+  });
+
+  describe("leaveOnEmpty option", () => {
+    beforeEach(() => {
+      jest.spyOn(global, "setTimeout");
+      (setTimeout as unknown as jest.Mock).mockReturnValue({ unref });
+    });
+
+    test("Disabled option", () => {
+      const distube = createFakeDisTube();
+      distube.options.leaveOnEmpty = false;
+      new DisTubeHandler(distube as any);
+      expect(distube.client.on).not.toBeCalled();
+    });
+
+    const distube = createFakeDisTube();
+    distube.options.leaveOnEmpty = true;
+    new DisTubeHandler(distube as any);
+    const stateHandle = distube.client.on.mock.calls[0][1];
+
+    test("Client is not in a voice channel", () => {
+      stateHandle(undefined);
+      stateHandle({ channel: undefined });
+      expect(distube.queues.get).not.toBeCalled();
+    });
+
+    describe("There is no playing Queue in the guild", () => {
+      distube.queues.get.mockReturnValue(undefined);
+      const state = { channel: {} };
+
+      test("The voice channel is not empty", () => {
+        Util.isVoiceChannelEmpty.mockReturnValue(false);
+        stateHandle(state);
+        expect(setTimeout).not.toBeCalled();
+      });
+
+      describe("The voice channel is empty", () => {
+        test("The voice channel is still empty after timeout", () => {
+          Util.isVoiceChannelEmpty.mockReturnValue(true);
+          stateHandle(state);
+          expect(setTimeout).toBeCalledTimes(1);
+          expect(setTimeout).lastCalledWith(expect.any(Function), distube.options.emptyCooldown * 1e3);
+          expect(unref).toBeCalledTimes(1);
+          expect(distube.voices.leave).not.toBeCalled();
+          (setTimeout as unknown as jest.Mock).mock.calls[0][0]();
+          expect(distube.voices.leave).toBeCalledWith(state);
+        });
+
+        test("The voice channel is not empty after timeout", () => {
+          Util.isVoiceChannelEmpty.mockReturnValue(false).mockReturnValueOnce(true);
+          stateHandle(state);
+          expect(setTimeout).toBeCalledTimes(1);
+          expect(setTimeout).lastCalledWith(expect.any(Function), distube.options.emptyCooldown * 1e3);
+          expect(unref).toBeCalledTimes(1);
+          expect(distube.voices.leave).not.toBeCalled();
+          (setTimeout as unknown as jest.Mock).mock.calls[0][0]();
+          expect(distube.voices.leave).not.toBeCalled();
+        });
+      });
+    });
+
+    test.todo("There is a playing Queue in the guild");
   });
 });
 
