@@ -2,6 +2,7 @@ import { Client, ClientUser, Guild, Message, VoiceState } from "discord.js";
 import { rawBotVoiceState, rawClientUser, rawGuild, rawMessage, rawUserVoiceState } from "./raw";
 import {
   DisTubeError,
+  DisTubeVoice as _Voice,
   checkIntents,
   checkInvalidKey,
   formatDuration,
@@ -17,6 +18,10 @@ import {
   toSecond,
 } from "..";
 import type { StageChannel, TextChannel, VoiceChannel } from "discord.js";
+
+jest.mock("../core/voice/DisTubeVoice");
+
+const Voice = _Voice as unknown as jest.Mocked<typeof _Voice>;
 
 const client = new Client({ intents: [] });
 client.user = new ClientUser(client, rawClientUser);
@@ -162,8 +167,11 @@ test("formatDuration()", () => {
 });
 
 test("resolveGuildID()", () => {
+  const voice = new Voice({} as any, voiceChannel);
   const gID = "737499502763704370";
+  voice.id = gID;
   const testFn = resolveGuildID;
+  expect(testFn(voice)).toBe(gID);
   expect(testFn(voiceChannel)).toBe(gID);
   expect(testFn(stageChannel)).toBe(gID);
   expect(testFn(textChannel)).toBe(gID);
@@ -175,6 +183,7 @@ test("resolveGuildID()", () => {
   expect(testFn(gID)).toBe(gID);
   expect(() => testFn(client as any)).toThrow(new DisTubeError("INVALID_TYPE", "GuildIDResolvable", client));
   expect(() => testFn(client.user as any)).toThrow(new DisTubeError("INVALID_TYPE", "GuildIDResolvable", client.user));
+  expect(() => testFn(1 as any)).toThrow(new DisTubeError("INVALID_TYPE", "GuildIDResolvable", 1));
 });
 
 test("isClientInstance()", () => {
