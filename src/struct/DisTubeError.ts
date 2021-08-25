@@ -53,23 +53,31 @@ const ERROR_MESSAGES = {
   EMPTY_PLAYLIST: "There is no valid video in the playlist",
 };
 
-const createMessage = (msg: string | ((...x: any) => string), ...args: any) => {
-  if (typeof msg === "string") return msg;
-  return msg(...args);
-};
+type ErrorMessages = typeof ERROR_MESSAGES;
+type ErrorCodes = keyof ErrorMessages;
+type ErrorCode = { [K in ErrorCodes]-?: ErrorMessages[K] extends string ? K : never }[ErrorCodes];
+type ErrorCodeTemplate = Exclude<keyof typeof ERROR_MESSAGES, ErrorCode>;
 
-export class DisTubeError extends Error {
+const errMsg = (msg: string | ((...x: any) => string), ...args: any) => (typeof msg === "string" ? msg : msg(...args));
+
+const haveCode = (code: string): code is ErrorCodes => Object.keys(ERROR_MESSAGES).includes(code);
+
+export class DisTubeError<T extends string> extends Error {
   errorCode: string;
-  constructor(code: keyof typeof ERROR_MESSAGES, ...args: any) {
-    if (!Object.keys(ERROR_MESSAGES).includes(code)) throw new TypeError(`Error code '${code}' does not exist`);
+  constructor(code: ErrorCode);
+  constructor(code: T extends ErrorCodeTemplate ? T : never, ...args: Parameters<ErrorMessages[typeof code]>);
+  constructor(code: ErrorCodeTemplate, _: never);
+  constructor(code: T extends ErrorCodes ? "This is built-in error code" : T, message: string);
+  constructor(code: string, ...args: any) {
+    if (haveCode(code)) super(errMsg(ERROR_MESSAGES[code], ...args));
+    else super(...args);
 
-    super(createMessage(ERROR_MESSAGES[code], ...args));
     this.errorCode = code;
     if (Error.captureStackTrace) Error.captureStackTrace(this, DisTubeError);
   }
 
   get name() {
-    return `${super.name} [${this.errorCode}]`;
+    return `DisTubeError [${this.errorCode}]`;
   }
 
   get code() {
