@@ -182,10 +182,12 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
    * Shorthand method for {@link DisTube#playVoiceChannel}
    * @returns {Promise<void>}
    * @param {Discord.Message} message A message from guild channel
-   * @param {string|Song|SearchResult|Playlist} song URL| Search string | {@link Song} | {@link SearchResult} | {@link Playlist}
+   * @param {string|Song|SearchResult|Playlist} song URL | Search string |
+   * {@link Song} | {@link SearchResult} | {@link Playlist}
    * @param {Object} [options] Optional options
    * @param {boolean} [options.skip=false] Skip the playing song (if exists) and play the added song/playlist instantly
-   * @param {boolean} [options.unshift=false] Add the song/playlist to the beginning of the queue (after the playing song if exists)
+   * @param {boolean} [options.unshift=false] Add the song/playlist to the beginning of the queue
+   * (after the playing song if exists)
    * @example
    * client.on('message', (message) => {
    *     if (!message.content.startsWith(config.prefix)) return;
@@ -224,10 +226,12 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
    * Emit {@link DisTube#addList}, {@link DisTube#addSong} or {@link DisTube#playSong} after executing
    * @returns {Promise<void>}
    * @param {Discord.VoiceChannel|Discord.StageChannel} voiceChannel The voice channel will be joined
-   * @param {string|Song|SearchResult|Playlist} song YouTube url | Search string | {@link Song} | {@link SearchResult} | {@link Playlist}
+   * @param {string|Song|SearchResult|Playlist} song URL | Search string |
+   * {@link Song} | {@link SearchResult} | {@link Playlist}
    * @param {Object} [options] Optional options
    * @param {boolean} [options.skip=false] Skip the playing song (if exists) and play the added song/playlist instantly
-   * @param {boolean} [options.unshift=false] Add the song/playlist to the beginning of the queue (after the playing song if exists)
+   * @param {boolean} [options.unshift=false] Add the song/playlist to the beginning of the queue
+   * (after the playing song if exists)
    * @param {Discord.GuildMember} [options.member] Requested user (default is your bot)
    * @param {Discord.TextChannel} [options.textChannel] Default {@link Queue#textChannel} (if the queue wasn't created)
    * @param {Discord.Message} [options.message] Called message (For built-in search events. If this is a {@link https://developer.mozilla.org/en-US/docs/Glossary/Falsy|falsy value}, it will play the first result instead)
@@ -321,7 +325,8 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
    * @param {Object} [properties={}] Additional properties such as `name`
    * @param {Object} [options] Optional options
    * @param {boolean} [options.skip=false] Skip the playing song (if exists) and play the added song/playlist instantly
-   * @param {boolean} [options.unshift=false] Add the song/playlist to the beginning of the queue (after the playing song if exists)
+   * @param {boolean} [options.unshift=false] Add the song/playlist to the beginning of the queue
+   * (after the playing song if exists)
    * @param {boolean} [options.parallel=true] Whether or not fetch the songs in parallel
    * @example
    *     let songs = ["https://www.youtube.com/watch?v=xxx", "https://www.youtube.com/watch?v=yyy"];
@@ -790,9 +795,8 @@ export default DisTube;
  * @param {Queue} queue The guild queue
  * @param {Song} song Playing song
  * @example
- * const status = (queue) => `Volume: \`${queue.volume}%\` | Loop: \`${queue.repeatMode ? queue.repeatMode == 2 ? "Server Queue" : "This Song" : "Off"}\` | Autoplay: \`${queue.autoplay ? "On" : "Off"}\``;
  * distube.on("playSong", (queue, song) => queue.textChannel.send(
- *     `Playing \`${song.name}\` - \`${song.formattedDuration}\`\nRequested by: ${song.user}\n${status(queue)}`
+ *     `Playing \`${song.name}\` - \`${song.formattedDuration}\`\nRequested by: ${song.user}`
  * ));
  */
 
@@ -820,7 +824,9 @@ export default DisTube;
  * @example
  * // DisTubeOptions.searchSongs > 0
  * distube.on("searchResult", (message, results) => {
- *     message.channel.send(`**Choose an option from below**\n${results.map((song, i) => `**${i + 1}**. ${song.name} - \`${song.formattedDuration}\``).join("\n")}\n*Enter anything else or wait 60 seconds to cancel*`);
+ *     message.channel.send(`**Choose an option from below**\n${
+ *         results.map((song, i) => `**${i + 1}**. ${song.name} - \`${song.formattedDuration}\``).join("\n")
+ *     }\n*Enter anything else or wait 60 seconds to cancel*`);
  * });
  */
 

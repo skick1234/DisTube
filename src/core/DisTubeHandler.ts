@@ -71,7 +71,7 @@ export class DisTubeHandler extends DisTubeBase {
 
   /**
    * Create a new guild queue
-   * @param {Discord.Message|Discord.VoiceChannel|Discord.StageChannel} message A message from guild channel | a voice channel
+   * @param {Discord.Message|Discord.VoiceChannel|Discord.StageChannel} message A user message | a voice channel
    * @param {Song|Song[]} song Song to play
    * @param {Discord.TextChannel} textChannel A text channel of the queue
    * @throws {Error}
@@ -166,7 +166,7 @@ export class DisTubeHandler extends DisTubeBase {
   ): Promise<Playlist> {
     const member = (message as Message)?.member || (message as GuildMember);
     if (!Array.isArray(songs)) throw new DisTubeError("INVALID_TYPE", "Array", songs, "songs");
-    if (!songs.length) throw new DisTubeError("EMPTY_ARRAY");
+    if (!songs.length) throw new DisTubeError("EMPTY_ARRAY", "songs");
     songs = songs.filter(
       song => song instanceof Song || (song instanceof SearchResult && song.type === "video") || isURL(song),
     );
@@ -190,7 +190,7 @@ export class DisTubeHandler extends DisTubeBase {
   /**
    * Play / add a playlist
    * @returns {Promise<void>}
-   * @param {Discord.Message|Discord.VoiceChannel|Discord.StageChannel} message A message from guild channel | a voice channel
+   * @param {Discord.Message|Discord.VoiceChannel|Discord.StageChannel} message A message | a voice channel
    * @param {Playlist|string} playlist A YouTube playlist url | a Playlist
    * @param {Discord.TextChannel|boolean} [textChannel] The default text channel of the queue
    * @param {boolean} [skip=false] Skip the playing song (if exists) and play the added playlist instantly
@@ -232,7 +232,14 @@ export class DisTubeHandler extends DisTubeBase {
    */
   async searchSong(message: Message, query: string): Promise<SearchResult | null> {
     if (this.options.searchSongs > 1) {
-      for (const evn of ["searchNoResult", "searchResult", "searchCancel", "searchInvalidAnswer", "searchDone"]) {
+      const searchEvents = [
+        "searchNoResult",
+        "searchResult",
+        "searchCancel",
+        "searchInvalidAnswer",
+        "searchDone",
+      ] as const;
+      for (const evn of searchEvents) {
         if (this.distube.listenerCount(evn) === 0) {
           /* eslint-disable no-console */
           console.warn(`"searchSongs" option is disabled due to missing "${evn}" listener.`);

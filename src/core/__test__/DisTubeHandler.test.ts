@@ -310,7 +310,7 @@ describe("DisTubeHandler#createCustomPlaylist()", () => {
   });
 
   test("songs is an empty array", async () => {
-    await expect(handler.createCustomPlaylist(message, [])).rejects.toThrow(new DisTubeError("EMPTY_ARRAY"));
+    await expect(handler.createCustomPlaylist(message, [])).rejects.toThrow(new DisTubeError("EMPTY_ARRAY", "songs"));
   });
 
   test("songs is an array of invalid types", async () => {

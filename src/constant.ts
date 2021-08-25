@@ -41,21 +41,29 @@ export const defaultFilters: Filters = {
  * DisTube options.
  * @typedef {Object} DisTubeOptions
  * @prop {Array<CustomPlugin|ExtractorPlugin>} [plugins] DisTube plugins.
- * @prop {boolean} [emitNewSongOnly=false] If `true`, {@link DisTube#event:playSong} will not be emitted when looping a song or next song is the same as the previous one
- * @prop {boolean} [leaveOnEmpty=true] Whether or not leaving voice channel if the voice channel is empty after {@link DisTubeOptions}.emptyCooldown seconds.
+ * @prop {boolean} [emitNewSongOnly=false] Whether or not emitting {@link DisTube#event:playSong} event
+ * when looping a song or next song is the same as the previous one
+ * @prop {boolean} [leaveOnEmpty=true] Whether or not leaving voice channel
+ * if the voice channel is empty after {@link DisTubeOptions}.emptyCooldown seconds.
  * @prop {boolean} [leaveOnFinish=false] Whether or not leaving voice channel when the queue ends.
  * @prop {boolean} [leaveOnStop=true] Whether or not leaving voice channel after using {@link DisTube#stop} function.
- * @prop {boolean} [savePreviousSongs=true] Whether or not saving the previous songs of the queue and enable {@link DisTube#previous} method
- * @prop {number} [searchSongs=0] Limit of search results emits in {@link DisTube#event:searchResult} event when {@link DisTube#play} method executed. If `searchSongs <= 1`, play the first result
- * @prop {string} [youtubeCookie] YouTube cookies. Read how to get it in {@link https://github.com/fent/node-ytdl-core/blob/997efdd5dd9063363f6ef668bb364e83970756e7/example/cookies.js#L6-L12|YTDL's Example}
- * @prop {string} [youtubeIdentityToken] If not given; ytdl-core will try to find it. You can find this by going to a video's watch page; viewing the source; and searching for "ID_TOKEN".
+ * @prop {boolean} [savePreviousSongs=true] Whether or not saving the previous songs of the queue
+ * and enable {@link DisTube#previous} method
+ * @prop {number} [searchSongs=0] Limit of search results emits in {@link DisTube#event:searchResult} event
+ * when {@link DisTube#play} method executed. If `searchSongs <= 1`, play the first result
+ * @prop {string} [youtubeCookie] YouTube cookies. Read how to get it in
+ * {@link https://github.com/fent/node-ytdl-core/blob/997efdd5dd9063363f6ef668bb364e83970756e7/example/cookies.js#L6-L12|YTDL's Example}
+ * @prop {string} [youtubeIdentityToken] If not given; ytdl-core will try to find it.
+ * You can find this by going to a video's watch page; viewing the source; and searching for "ID_TOKEN".
  * @prop {boolean} [youtubeDL=true] Whether or not using youtube-dl.
  * @prop {boolean} [updateYouTubeDL=true] Whether or not updating youtube-dl automatically.
- * @prop {Filters} [customFilters] Override {@link defaultFilters} or add more ffmpeg filters. Example=`{ "Filter name"="Filter value"; "8d"="apulsator=hz=0.075" }`
+ * @prop {Filters} [customFilters] Override {@link defaultFilters} or add more ffmpeg filters.
+ * Example=`{ "Filter name"="Filter value"; "8d"="apulsator=hz=0.075" }`
  * @prop {ytdl.getInfoOptions} [ytdlOptions] `ytdl-core` get info options
  * @prop {number} [searchCooldown=60] Built-in search cooldown in seconds (When searchSongs is bigger than 0)
  * @prop {number} [emptyCooldown=60] Built-in leave on empty cooldown in seconds (When leaveOnEmpty is true)
- * @prop {boolean} [nsfw=false] Whether or not playing age-restricted content and disabling safe search in non-NSFW channel.
+ * @prop {boolean} [nsfw=false] Whether or not playing age-restricted content
+ * and disabling safe search in non-NSFW channel.
  * @prop {boolean} [emitAddListWhenCreatingQueue=true] Whether or not emitting `addList` event when creating a new Queue
  * @prop {boolean} [emitAddSongWhenCreatingQueue=true] Whether or not emitting `addSong` event when creating a new Queue
  */
@@ -91,7 +99,19 @@ export const defaultOptions = {
  * - A {@link https://discord.js.org/#/docs/main/master/class/Interaction|Interaction}
  * - A {@link Queue}
  * - A {@link DisTubeVoice}
- * @typedef {Discord.Snowflake|Discord.Message|Discord.VoiceChannel|Discord.StageChannel|Discord.VoiceState|Discord.TextChannel|Discord.GuildMember|Discord.Interaction|DisTubeVoice|Queue|string} GuildIDResolvable
+ * @typedef {
+ * Discord.Snowflake|
+ * Discord.Message|
+ * Discord.VoiceChannel|
+ * Discord.StageChannel|
+ * Discord.VoiceState|
+ * Discord.TextChannel|
+ * Discord.GuildMember|
+ * Discord.Interaction|
+ * DisTubeVoice|
+ * Queue|
+ * string
+ * } GuildIDResolvable
  */
 /**
  * FFmpeg Filters
