@@ -1,5 +1,5 @@
 import type { Client, TextChannel } from "discord.js";
-import type { DisTube, DisTubeHandler, DisTubeVoiceManager, Options, QueueManager } from "..";
+import type { DisTube, DisTubeEvents, DisTubeHandler, DisTubeVoiceManager, Options, QueueManager } from "..";
 
 /** @private */
 export class DisTubeBase {
@@ -17,7 +17,7 @@ export class DisTubeBase {
    * @param {...any} args arguments
    * @returns {boolean}
    */
-  emit(eventName: string, ...args: any[]): boolean {
+  emit(eventName: keyof DisTubeEvents, ...args: any): boolean {
     return this.distube.emit(eventName, ...args);
   }
   /**

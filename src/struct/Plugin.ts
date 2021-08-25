@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/require-await, @typescript-eslint/no-unused-vars */
 import type { Client, TextChannel } from "discord.js";
-import type { DisTube, DisTubeHandler, DisTubeVoiceManager, Options, QueueManager, Song } from "..";
+import type { DisTube, DisTubeEvents, DisTubeHandler, DisTubeVoiceManager, Options, QueueManager, Song } from "..";
 
 /**
  * DisTube Plugin
@@ -29,7 +29,7 @@ export class Plugin {
    * @param {...any} args arguments
    * @returns {boolean}
    */
-  emit(eventName: string, ...args: any[]): boolean {
+  emit(eventName: keyof DisTubeEvents, ...args: any): boolean {
     return this.distube.emit(eventName, ...args);
   }
   /**

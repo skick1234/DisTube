@@ -85,7 +85,7 @@ export function checkIntents(options: ClientOptions): void {
   if (typeof bitfield === "undefined") return;
   const intents = new Intents(bitfield);
   for (const intent of requiredIntents) {
-    if (!intents.has(intent)) throw new DisTubeError("MISSING_INTENTS", intent);
+    if (!intents.has(intent)) throw new DisTubeError("MISSING_INTENTS", intent.toString());
   }
 }
 
