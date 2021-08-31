@@ -1,6 +1,6 @@
 import { BaseManager } from ".";
 import { DisTubeError, Queue } from "../..";
-import type { Song } from "../..";
+import type { DisTubeVoiceEvents, Song } from "../..";
 import type { StageChannel, TextChannel, VoiceChannel } from "discord.js";
 
 /**
@@ -48,14 +48,18 @@ export class QueueManager extends BaseManager<Queue> {
    * @param {Queue} queue Queue
    */
   private _voiceEventHandler(queue: Queue) {
-    queue.voice
-      .on("disconnect", error => {
+    queue.listeners = {
+      disconnect: error => {
         queue.delete();
         this.emit("disconnect", queue);
         if (error) this.emitError(error, queue.textChannel);
-      })
-      .on("error", error => this._handlePlayingError(queue, error))
-      .on("finish", () => this._handleSongFinish(queue));
+      },
+      error: error => this._handlePlayingError(queue, error),
+      finish: () => this._handleSongFinish(queue),
+    };
+    for (const event of Object.keys(queue.listeners) as (keyof DisTubeVoiceEvents)[]) {
+      queue.voice.on(event, queue.listeners[event]);
+    }
   }
   /**
    * Handle the queue when a Song finish

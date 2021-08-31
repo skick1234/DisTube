@@ -1,7 +1,7 @@
 import { DisTubeBase } from "../core";
 import { DisTubeError, Song, TaskQueue, formatDuration } from "..";
-import type { DisTube, DisTubeVoice, SearchResult } from "..";
 import type { GuildMember, Snowflake, TextChannel } from "discord.js";
+import type { DisTube, DisTubeVoice, DisTubeVoiceEvents, SearchResult } from "..";
 
 /**
  * Represents a queue.
@@ -80,6 +80,7 @@ export class Queue extends DisTubeBase {
    * Task queuing system
    */
   taskQueue: TaskQueue;
+  listeners?: DisTubeVoiceEvents;
   /**
    * Create a queue for the guild
    * @param {DisTube} distube DisTube
@@ -187,6 +188,12 @@ export class Queue extends DisTubeBase {
      * @private
      */
     this.taskQueue = new TaskQueue();
+    /**
+     * DisTubeVoice listener
+     * @type {Object}
+     * @private
+     */
+    this.listeners = undefined;
   }
   /**
    * Formatted duration string.
@@ -483,6 +490,11 @@ export class Queue extends DisTubeBase {
     this.stopped = true;
     this.songs = [];
     this.previousSongs = [];
+    if (this.listeners) {
+      for (const event of Object.keys(this.listeners) as (keyof DisTubeVoiceEvents)[]) {
+        this.voice.removeListener(event, this.listeners[event]);
+      }
+    }
     this.queues.delete(this.id);
     this.emit("deleteQueue", this);
   }

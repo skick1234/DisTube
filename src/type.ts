@@ -15,6 +15,12 @@ import type {
 
 type Awaitable = Promise<void> | void;
 
+export type DisTubeVoiceEvents = {
+  disconnect: (error?: Error) => Awaitable;
+  error: (error: Error) => Awaitable;
+  finish: () => Awaitable;
+};
+
 export type DisTubeEvents = {
   /** Emitted after DisTube add a new song to the playing {@link Queue}. */
   addSong: (queue: Queue, song: Song) => Awaitable;
