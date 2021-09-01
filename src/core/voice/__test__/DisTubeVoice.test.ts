@@ -280,6 +280,7 @@ describe("Methods", () => {
         expect(voiceManager.delete).toBeCalledWith(voice.id);
       });
       test("Without error", () => {
+        voice.isDisconnected = false;
         const err: any = {};
         expect(voice.leave(err)).toBeUndefined();
         expect(audioPlayer.stop).toBeCalledTimes(1);
@@ -293,6 +294,7 @@ describe("Methods", () => {
       connection.state.status = DiscordVoice.VoiceConnectionStatus.Destroyed;
       expect(voice.leave()).toBeUndefined();
       expect(audioPlayer.stop).toBeCalledTimes(1);
+      expect(voice.emit).not.toBeCalled();
       expect(connection.destroy).not.toBeCalled();
       expect(voiceManager.delete).toBeCalledWith(voice.id);
       connection.state.status = DiscordVoice.VoiceConnectionStatus.Signalling;

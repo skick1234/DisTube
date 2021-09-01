@@ -23,6 +23,7 @@ export class DisTubeVoice extends TypedEmitter<DisTubeVoiceEvents> {
   connection!: VoiceConnection;
   audioResource?: AudioResource;
   emittedError!: boolean;
+  isDisconnected: boolean;
   private _channel!: VoiceChannel | StageChannel;
   private _volume: number;
   constructor(voiceManager: DisTubeVoiceManager, channel: VoiceChannel | StageChannel) {
@@ -32,6 +33,7 @@ export class DisTubeVoice extends TypedEmitter<DisTubeVoiceEvents> {
       if (channel.full) throw new DisTubeError("VOICE_FULL");
       else throw new DisTubeError("VOICE_MISSING_PERMS");
     }
+    this.isDisconnected = false;
     this.id = channel.guild.id;
     this.channel = channel;
     /**
@@ -123,10 +125,11 @@ export class DisTubeVoice extends TypedEmitter<DisTubeVoiceEvents> {
    */
   leave(error?: Error) {
     this.stop();
-    if (this.connection.state.status !== VoiceConnectionStatus.Destroyed) {
+    if (!this.isDisconnected) {
       this.emit("disconnect", error);
-      this.connection.destroy();
+      this.isDisconnected = true;
     }
+    if (this.connection.state.status !== VoiceConnectionStatus.Destroyed) this.connection.destroy();
     this.voices.delete(this.id);
   }
   /**
