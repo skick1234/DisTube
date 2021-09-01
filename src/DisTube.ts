@@ -241,6 +241,11 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
   }
 
   /**
+   * <info>Shorthand method of {@link DisTubeHandler#createCustomPlaylist} and {@link DisTube#playVoiceChannel}
+   *
+   * If you doesn't have a user message (interaction,...),
+   * see {@link DisTubeHandler#createCustomPlaylist} example</info>
+   *
    * Play or add array of video urls.
    * {@link DisTube#event:playSong} or {@link DisTube#event:addList} will be emitted
    * with `playlist`'s properties include `properties` parameter's properties such as
@@ -255,7 +260,7 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
    * (after the playing song if exists)
    * @param {boolean} [options.parallel=true] Whether or not fetch the songs in parallel
    * @example
-   *     let songs = ["https://www.youtube.com/watch?v=xxx", "https://www.youtube.com/watch?v=yyy"];
+   *     const songs = ["https://www.youtube.com/watch?v=xxx", "https://www.youtube.com/watch?v=yyy"];
    *     distube.playCustomPlaylist(message, songs, { name: "My playlist name" });
    *     // Fetching custom playlist sequentially (reduce lag for low specs)
    *     distube.playCustomPlaylist(message, songs, { name: "My playlist name" }, false, false);
@@ -538,7 +543,7 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
    *     const args = message.content.slice(config.prefix.length).trim().split(/ +/g);
    *     const command = args.shift();
    *     if (command == "autoplay") {
-   *         let mode = distube.toggleAutoplay(message);
+   *         const mode = distube.toggleAutoplay(message);
    *         message.channel.send("Set autoplay mode to `" + (mode ? "On" : "Off") + "`");
    *     }
    * });
@@ -574,7 +579,7 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
    *     const args = message.content.slice(config.prefix.length).trim().split(/ +/g);
    *     const command = args.shift();
    *     if ([`3d`, `bassboost`, `echo`, `karaoke`, `nightcore`, `vaporwave`].includes(command)) {
-   *         let filter = distube.setFilter(message, command);
+   *         const filter = distube.setFilter(message, command);
    *         message.channel.send("Current queue filter: " + (filter.join(", ") || "Off"));
    *     }
    * });

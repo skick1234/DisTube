@@ -157,6 +157,12 @@ export class DisTubeHandler extends DisTubeBase {
    * @param {Array<string|Song|SearchResult>} songs Array of url, Song or SearchResult
    * @param {Object} [properties={}] Additional properties such as `name`
    * @param {boolean} [parallel=true] Whether or not fetch the songs in parallel
+   * @example
+   *     const songs = ["https://www.youtube.com/watch?v=xxx", "https://www.youtube.com/watch?v=yyy"];
+   *     const playlist = await distube.handler.createCustomPlaylist(member, songs, { name: "My playlist name" }, true);
+   *     // Or fetching custom playlist sequentially (reduce lag for low specs)
+   *     const playlist = await distube.handler.createCustomPlaylist(member, songs, false);
+   *     distube.playVoiceChannel(voiceChannel, playlist, { ... });
    */
   async createCustomPlaylist(
     message: Message | GuildMember,
