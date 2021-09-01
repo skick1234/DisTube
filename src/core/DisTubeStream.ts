@@ -28,16 +28,6 @@ export const chooseBestVideoFormat = (formats: ytdl.videoFormat[], isLive = fals
   return formats.find(format => !format.bitrate) || formats[0];
 };
 
-// Use ffmpeg libopus codec
-// function libopusSupport(): boolean {
-//   try {
-//     return FFmpeg.getInfo().output.includes("--enable-libopus");
-//   } catch { }
-//   return false;
-// }
-
-// const supportOggOpus = libopusSupport();
-
 /**
  * Create a stream to play with {@link DisTubeVoice}
  * @private
@@ -83,6 +73,7 @@ export class DisTubeStream {
    */
   constructor(url: string, options: StreamOptions) {
     this.url = url;
+    this.type = StreamType.Raw;
     const args = [
       "-reconnect",
       "1",
@@ -100,17 +91,11 @@ export class DisTubeStream {
       "48000",
       "-ac",
       "2",
+      "-f",
+      "s16le",
     ];
-    // Use ffmpeg libopus codec
-    // if (supportOggOpus) {
-    //   args.push("-acodec", "libopus", "-f", "opus");
-    //   this.type = StreamType.OggOpus;
-    // } else {
-    args.push("-f", "s16le");
-    this.type = StreamType.Raw;
-    // }
     if (typeof options.seek === "number" && options.seek > 0) {
-      args.push("-ss", options.seek.toString());
+      args.unshift("-ss", options.seek.toString());
     }
     if (Array.isArray(options.ffmpegArgs)) {
       args.push(...options.ffmpegArgs);
