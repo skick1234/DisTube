@@ -37,7 +37,8 @@ export class DisTubeStream {
    * Create a stream from ytdl video formats
    * @param {ytdl.videoFormat[]} formats ytdl video formats
    * @param {StreamOptions} options options
-   * @returns {*}
+   * @returns {DisTubeStream}
+   * @private
    */
   static YouTube(formats: ytdl.videoFormat[] | undefined, options: StreamOptions = {}): DisTubeStream {
     if (!formats || !formats.length) throw new DisTubeError("UNAVAILABLE_VIDEO");
@@ -52,7 +53,8 @@ export class DisTubeStream {
    * Create a stream from a stream url
    * @param {string} url stream url
    * @param {StreamOptions} options options
-   * @returns {Readable|string}
+   * @returns {DisTubeStream}
+   * @private
    */
   static DirectLink(url: string, options: StreamOptions = {}): DisTubeStream {
     if (!options || typeof options !== "object" || Array.isArray(options)) {
@@ -70,9 +72,18 @@ export class DisTubeStream {
    * Create a DisTubeStream to play with {@link DisTubeVoice}
    * @param {string} url Stream URL
    * @param {StreamOptions} options Stream options
+   * @private
    */
   constructor(url: string, options: StreamOptions) {
+    /**
+     * Stream URL
+     * @type {string}
+     */
     this.url = url;
+    /**
+     * Stream type
+     * @type {DiscordVoice.StreamType.Raw}
+     */
     this.type = StreamType.Raw;
     const args = [
       "-reconnect",
@@ -100,6 +111,10 @@ export class DisTubeStream {
     if (Array.isArray(options.ffmpegArgs)) {
       args.push(...options.ffmpegArgs);
     }
+    /**
+     * FFmpeg stream (Duplex)
+     * @type {FFmpeg}
+     */
     this.stream = new FFmpeg({ args, shell: false });
   }
 }

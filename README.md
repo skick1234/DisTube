@@ -39,7 +39,7 @@ npm install distube@beta
 ### Requirement
 
 - Node v12 or higher
-- [git](https://git-scm.com/downloads) (for install forked dependencies)
+- [git](https://git-scm.com/downloads) _(For installing forked dependencies)_
 - [discord.js](https://discord.js.org) v12 or **v13 _(Recommended)_**
 - [@discordjs/voice](https://github.com/discordjs/voice)
 - [FFmpeg](https://www.ffmpeg.org/download.html)
