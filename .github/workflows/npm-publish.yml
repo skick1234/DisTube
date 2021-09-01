@@ -15,6 +15,12 @@ jobs:
         with:
           node-version: 16.x
 
+      - name: Login
+        run: npm config set //registry.npmjs.org/:_authToken ${{secrets.NPM_TOKEN}}
+
+      - name: Install latest npm
+        run: npm install -g npm@latest
+
       - name: Install dependencies
         run: npm install
 
@@ -23,5 +29,3 @@ jobs:
 
       - name: Publish
         run: npm run publish:beta
-        env:
-          NODE_AUTH_TOKEN: ${{secrets.NPM_TOKEN}}
