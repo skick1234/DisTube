@@ -124,3 +124,16 @@ export const defaultOptions = {
  * @typedef {Object.<string, string>} Filters
  * @see {@link defaultFilters}
  */
+
+/**
+ * The repeat mode of a {@link Queue} (enum)
+ * * DISABLED
+ * * SONG
+ * * QUEUE
+ * @typedef {number} RepeatMode
+ */
+export enum RepeatMode {
+  DISABLED,
+  SONG,
+  QUEUE,
+}

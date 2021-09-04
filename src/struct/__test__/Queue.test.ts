@@ -486,7 +486,7 @@ describe("Queue#setRepeatMode()", () => {
   test("Invalid mode", () => {
     expect(() => {
       queue.setRepeatMode("0" as any);
-    }).toThrow(new DisTubeError("INVALID_TYPE", [0, 1, 2, "undefined"], "0", "mode"));
+    }).toThrow(new DisTubeError("INVALID_TYPE", ["RepeatMode", "undefined"], "0", "mode"));
   });
 });
 

@@ -425,7 +425,9 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
   }
 
   /**
-   * Skip the playing song
+   * Skip the playing song if there is a next song in the queue.
+   * <info>If {@link Queue#autoplay} is `true` and there is no up next song,
+   * DisTube will add and play a related song.</info>
    * @param {GuildIDResolvable} queue The type can be resolved to give a {@link Queue}
    * @returns {Promise<Song>} The new Song will be played
    * @throws {Error}
@@ -508,12 +510,11 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
   }
 
   /**
-   * Set the repeat mode of the guild queue.
-   * Turn off if repeat mode is the same value as new mode.
-   * Toggle mode `(0 -> 1 -> 2 -> 0...)`: `mode` is `undefined`
+   * Set the repeat mode of the guild queue.\
+   * Toggle mode `(Disabled -> Song -> Queue -> Disabled ->...)` if `mode` is `undefined`
    * @param {GuildIDResolvable} queue The type can be resolved to give a {@link Queue}
-   * @param {number?} [mode] The repeat modes `(0: disabled, 1: Repeat a song, 2: Repeat all the queue)`
-   * @returns {number} The new repeat mode
+   * @param {RepeatMode?} [mode] The repeat modes (toggle if `undefined`)
+   * @returns {RepeatMode} The new repeat mode
    * @example
    * client.on('message', (message) => {
    *     if (!message.content.startsWith(config.prefix)) return;
@@ -525,6 +526,21 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
    *         message.channel.send("Set repeat mode to `" + mode + "`");
    *     }
    * });
+   * @example
+   * const { RepeatMode } = require("distube");
+   * let mode;
+   * switch(distube.setRepeatMode(message, parseInt(args[0]))) {
+   *     case RepeatMode.DISABLED:
+   *         mode = "Off";
+   *         break;
+   *     case RepeatMode.SONG:
+   *         mode = "Repeat a song";
+   *         break;
+   *     case RepeatMode.QUEUE:
+   *         mode = "Repeat all queue";
+   *         break;
+   * }
+   * message.channel.send("Set repeat mode to `" + mode + "`");
    */
   setRepeatMode(queue: GuildIDResolvable, mode?: number): number {
     const q = this.getQueue(queue);

@@ -1,5 +1,5 @@
 import { BaseManager } from ".";
-import { DisTubeError, Queue } from "../..";
+import { DisTubeError, Queue, RepeatMode } from "../..";
 import type { DisTubeVoiceEvents, Song } from "../..";
 import type { StageChannel, TextChannel, VoiceChannel } from "discord.js";
 
@@ -36,10 +36,10 @@ export class QueueManager extends BaseManager<Queue> {
     }
   }
   /**
-   * Get a Queue from a QueueManager with a GuildIDResolvable.
+   * Get a Queue from this QueueManager.
    * @method get
    * @memberof QueueManager#
-   * @param {GuildIDResolvable} queue The queue resolvable to resolve
+   * @param {GuildIDResolvable} queue Resolvable thing from a guild
    * @returns {Queue?}
    */
   /**
@@ -72,12 +72,12 @@ export class QueueManager extends BaseManager<Queue> {
     await queue.taskQueue.queuing();
     try {
       if (queue.stopped) return;
-      if (queue.repeatMode === 2 && !queue.prev) queue.songs.push(queue.songs[0]);
+      if (queue.repeatMode === RepeatMode.QUEUE && !queue.prev) queue.songs.push(queue.songs[0]);
       if (queue.prev) {
-        if (queue.repeatMode === 2) queue.songs.unshift(queue.songs.pop() as Song);
+        if (queue.repeatMode === RepeatMode.QUEUE) queue.songs.unshift(queue.songs.pop() as Song);
         else queue.songs.unshift(queue.previousSongs.pop() as Song);
       }
-      if (queue.songs.length <= 1 && (queue.next || !queue.repeatMode)) {
+      if (queue.songs.length <= 1 && (queue.next || queue.repeatMode !== RepeatMode.DISABLED)) {
         if (queue.autoplay) {
           try {
             await queue.addRelatedSong();
@@ -93,7 +93,7 @@ export class QueueManager extends BaseManager<Queue> {
         }
       }
       const emitPlaySong = this._emitPlaySong(queue);
-      if (!queue.prev && (queue.repeatMode !== 1 || queue.next)) {
+      if (!queue.prev && (queue.repeatMode !== RepeatMode.SONG || queue.next)) {
         const prev = queue.songs.shift() as Song;
         delete prev.formats;
         delete prev.streamURL;
@@ -175,6 +175,9 @@ export class QueueManager extends BaseManager<Queue> {
    * @returns {boolean}
    */
   private _emitPlaySong(queue: Queue): boolean {
-    return !this.options.emitNewSongOnly || (queue.repeatMode !== 1 && queue.songs[0]?.id !== queue.songs[1]?.id);
+    return (
+      !this.options.emitNewSongOnly ||
+      (queue.repeatMode !== RepeatMode.SONG && queue.songs[0]?.id !== queue.songs[1]?.id)
+    );
   }
 }
