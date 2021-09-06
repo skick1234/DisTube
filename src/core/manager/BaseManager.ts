@@ -8,7 +8,7 @@ import type { DisTube, GuildIDResolvable } from "../..";
  * @abstract
  * @private
  */
-export class BaseManager<V> extends DisTubeBase {
+export abstract class BaseManager<V> extends DisTubeBase {
   collection: Collection<string, V>;
   constructor(distube: DisTube) {
     super(distube);

@@ -3,19 +3,20 @@ import type { Client, TextChannel } from "discord.js";
 import type { DisTube, DisTubeEvents, DisTubeHandler, DisTubeVoiceManager, Options, QueueManager, Song } from "..";
 
 /**
+ * All available plugin types:
+ * * `custom`: {@link CustomPlugin}
+ * * `extractor`: {@link ExtractorPlugin}
+ * @typedef {"custom"|"extractor"} PluginType
+ */
+
+/**
  * DisTube Plugin
+ * @abstract
  * @private
  */
-export class Plugin {
-  type: "custom" | "extractor";
+export abstract class Plugin {
+  type!: "custom" | "extractor";
   distube!: DisTube;
-  constructor(type: "custom" | "extractor") {
-    /**
-     * Type of the plugin
-     * @type {"custom"|"extractor"}
-     */
-    this.type = type;
-  }
   init(distube: DisTube) {
     /**
      * DisTube
@@ -23,6 +24,11 @@ export class Plugin {
      */
     this.distube = distube;
   }
+  /**
+   * Type of the plugin
+   * @name Plugin#type
+   * @type {PluginType}
+   */
   /**
    * Emit the {@link DisTube} of this base
    * @param {string} eventName Event name

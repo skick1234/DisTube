@@ -1,8 +1,11 @@
 import type { Client, TextChannel } from "discord.js";
 import type { DisTube, DisTubeEvents, DisTubeHandler, DisTubeVoiceManager, Options, QueueManager } from "..";
 
-/** @private */
-export class DisTubeBase {
+/**
+ * @private
+ * @abstract
+ */
+export abstract class DisTubeBase {
   distube: DisTube;
   constructor(distube: DisTube) {
     /**

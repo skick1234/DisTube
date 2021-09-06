@@ -1,5 +1,5 @@
 import { DisTubeBase } from "../core";
-import { DisTubeError, Song, TaskQueue, formatDuration, RepeatMode } from "..";
+import { DisTubeError, RepeatMode, Song, TaskQueue, formatDuration } from "..";
 import type { GuildMember, Snowflake, TextChannel } from "discord.js";
 import type { DisTube, DisTubeVoice, DisTubeVoiceEvents, SearchResult } from "..";
 

@@ -1,5 +1,5 @@
 const ERROR_MESSAGES = {
-  INVALID_TYPE: (expected: (number | string) | (number | string)[], got: any, name?: string) =>
+  INVALID_TYPE: (expected: (number | string) | readonly (number | string)[], got: any, name?: string) =>
     `Expected ${
       Array.isArray(expected) ? expected.map(e => (typeof e === "number" ? e : `'${e}'`)).join(" or ") : `'${expected}'`
     }${name ? ` for '${name}'` : ""}, but got ${

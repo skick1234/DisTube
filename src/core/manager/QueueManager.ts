@@ -142,6 +142,7 @@ export class QueueManager extends BaseManager<Queue> {
       queue.stop();
       return true;
     }
+    if (queue.stopped) return false;
     queue.playing = true;
     queue.paused = false;
     const song = queue.songs[0];

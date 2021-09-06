@@ -5,23 +5,26 @@ import type { GuildMember } from "discord.js";
 /**
  * Extractor Plugin
  * @extends Plugin
+ * @abstract
  */
-export class ExtractorPlugin extends Plugin {
-  /** Create a extractor plugin */
-  constructor() {
-    super("extractor");
-  }
+export abstract class ExtractorPlugin extends Plugin {
+  type = "extractor" as const;
   /**
-   * Execute if the url is validated
-   * (Not needed to add {@link Song#related} because it will be added with {@link Plugin#getRelatedSongs})
-   * @param {string} url URL
-   * @param {Discord.GuildMember} member Requested user
-   * @returns {Promise<Song|Song[]|Playlist>}
+   * Resolve the validated url to a {@link Song} or a {@link Playlist}.\
+   * Not needed to add {@link Song#related} because it will be added with {@link Plugin#getRelatedSongs}.
    */
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars, @typescript-eslint/require-await
-  async resolve(url: string, member: GuildMember): Promise<Song | Playlist> {
-    return undefined as unknown as Song;
-  }
+  abstract resolve(url: string, member: GuildMember): Promise<Song | Playlist>;
 }
+
+/**
+ * Resolve the validated url to a {@link Song} or a {@link Playlist}.\
+ * Not needed to add {@link Song#related} because it will be added with {@link Plugin#getRelatedSongs}.
+ * @param {string} url URL
+ * @param {Discord.GuildMember} member Requested user
+ * @returns {Promise<Song|Song[]|Playlist>}
+ * @method resolve
+ * @memberof ExtractorPlugin#
+ * @abstract
+ */
 
 export default ExtractorPlugin;
