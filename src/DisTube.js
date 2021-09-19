@@ -8,21 +8,20 @@ const ytdl = require("@distube/ytdl"),
   Playlist = require("./Playlist"),
   Discord = require("discord.js"),
   youtube_dl = require("@distube/youtube-dl"),
+  path = require("path"),
+  fs = require("fs"),
   { promisify } = require("util");
 const youtube_dlOptions = ["--no-warnings", "--force-ipv4"];
+const binPath = path.join(__dirname, `../youtube-dl/youtube-dl${process.platform === "win32" || process.env.NODE_PLATFORM === "windows" ? ".exe" : ""}`);
+fs.chmodSync(binPath, "777");
+youtube_dl.setYtdlBinary(binPath);
 youtube_dl.getInfo = promisify(youtube_dl.getInfo);
 
 const isURL = string => {
-  if (string.includes(" ")) return false;
-  try {
-    const url = new URL(string);
-    if (!["https:", "http:"].includes(url.protocol) ||
-      url.origin === "null" || !url.host
-    ) return false;
-  } catch { return false }
+  // eslint-disable-next-line no-new
+  try { new URL(string) } catch { return false }
   return true;
 }
-const parseNumber = string => (typeof string === "string" ? Number(string.replace(/\D+/g, "")) : Number(string)) || 0;
 
 /**
  * DisTube options.
@@ -55,7 +54,7 @@ const DisTubeOptions = {
 
 /**
  * DisTube audio filters.
- * @typedef {("3d"|"bassboost"|"echo"|"karaoke"|"nightcore"|"vaporwave"|"flanger"|"gate"|"haas"|"reverse"|"surround"|"mcompand"|"phaser"|"tremolo"|"earwax"|string)} Filter
+ * @typedef {("3d"|"bassboost"|"echo"|"karaoke"|"nightcore"|"vaporwave"|"flanger"|"gate"|"haas"|"reverse"|"surround"|"mcompand"|"phaser"|"tremolo"|"earwax")} Filter
  * @prop {string} 3d `@2.0.0`
  * @prop {string} bassboost `@2.0.0`
  * @prop {string} echo `@2.0.0`
@@ -170,10 +169,8 @@ class DisTube extends EventEmitter {
     })
 
     if (this.options.updateYouTubeDL) {
-      require("@distube/youtube-dl/lib/downloader")()
-        .then(message => console.log(`[DisTube] ${message}`))
+      require("@distube/youtube-dl/lib/downloader")(path.join(__dirname, "../youtube-dl"))
         .catch(console.error)
-        .catch(() => console.log("[DisTube] Unable to update youtube-dl, using default version."));
     }
   }
 
@@ -221,7 +218,7 @@ class DisTube extends EventEmitter {
       this.emit("playSong", message, queue, song);
     }
   }
-
+ 
   /**
    * Play / add a song or playlist from url. Search and play a song if it is not a valid url.
    * @async
@@ -242,8 +239,8 @@ class DisTube extends EventEmitter {
       if (ytpl.validateID(song)) await this._handlePlaylist(message, song);
       else await this._handleSong(message, await this._resolveSong(message, song));
     } catch (e) {
-      e.message = `play(${song}) encountered:\n${e.message}`;
-      this._emitError(message, e);
+      e.message = `Cannot play ${song}\n${e.message}`;
+      this._emitError(message,e);
     }
   }
 
@@ -366,8 +363,8 @@ class DisTube extends EventEmitter {
     let results = await this.search(name);
     let result = results[0];
     if (this.options.searchSongs) {
-      this.emit("searchResult", message, results);
       try {
+        this.emit("searchResult", message, results);
         let answers = await message.channel.awaitMessages(m => m.author.id === message.author.id, {
           max: 1,
           time: 60000,
@@ -397,8 +394,8 @@ class DisTube extends EventEmitter {
    */
   async _newQueue(message, song, retried = false) {
     let voice = message.member.voice.channel;
-    if (!voice) throw new Error("User is not in the voice channel.");
-    let queue = new Queue(message, song);
+    if (!voice) throw new Error("You are not in a voice channel!");
+    let queue = new Queue(message);
     this.emit("initQueue", queue);
     this.guildQueues.set(message.guild.id, queue);
     try {
@@ -414,10 +411,13 @@ class DisTube extends EventEmitter {
       this._emitError(message, e);
       this._deleteQueue(message);
     })
+    queue.songs.push(song);
     await this._playSong(message);
     return queue;
   }
-
+   moveQueue(message, oldInd,newInd) {
+    return this._moveArray(message,oldInd,newInd);
+  }
   /**
    * Delete a guild queue
    * @private
@@ -432,11 +432,22 @@ class DisTube extends EventEmitter {
     if (typeof message === "string") this.guildQueues.delete(message);
     else if (message && message.guild) this.guildQueues.delete(message.guild.id);
   }
-
+  _moveArray(message, oldInd,newInd) {
+    let queue = this.getQueue(message);
+    if (!queue) return;
+    if (newInd >= queue.songs.length) {
+      var k = newInd - queue.songs.length + 1;
+      while (k--) {
+          queue.songs.push(undefined);
+      }
+    }
+    queue.songs.splice(newInd, 0, queue.songs.splice(oldInd, 1)[0]);
+    return queue;
+  }
   /**
    * Get the guild queue
    * @param {Discord.Snowflake|Discord.Message} message The guild ID or message from guild channel.
-   * @returns {Queue?} The guild queue
+   * @returns {Queue} The guild queue
    * @example
    * client.on('message', (message) => {
    *     if (!message.content.startsWith(config.prefix)) return;
@@ -455,7 +466,12 @@ class DisTube extends EventEmitter {
     if (!message || !message.guild) throw TypeError("Parameter should be Discord.Message or server ID!");
     return this.guildQueues.get(message.guild.id);
   }
-
+  deleteFromQueue(message,index) {
+    return this._removeFromQueue(message,index)
+  }
+  deleteAllQueue(message) {
+    return this._deleteAllFromQueue(message)
+  }
   /**
    * Add a video to queue
    * @private
@@ -476,7 +492,18 @@ class DisTube extends EventEmitter {
     } else { queue.songs.push(song); }
     return queue;
   }
-
+  _removeFromQueue(message,index) {
+    let queue = this.getQueue(message);
+    if (!queue) throw new Error("NotPlaying");
+    queue.songs.splice(index,1)
+    return queue;
+  }
+  _deleteAllFromQueue(message){
+    let queue = this.getQueue(message);
+    if (!queue) throw new Error("NotPlaying");
+    queue.songs.splice(1,queue.songs.length)
+    return queue;
+  }
   /**
    * Add a array of videos to queue
    * @private
@@ -738,14 +765,13 @@ class DisTube extends EventEmitter {
     return !members.size;
   }
 
-  /**
+  /** 
    * TODO: Remove this
    * @deprecated use {@link DisTube#addRelatedVideo} instead
    * @param {DisTube.Message} message Message
    * @returns {Promise<Queue>}
    */
   runAutoplay(message) {
-    console.warn(`\`DisTube#runAutoplay\` is deprecated, use \`DisTube#addRelatedVideo\` instead.`);
     return this.addRelatedVideo(message);
   }
 
@@ -764,15 +790,9 @@ class DisTube extends EventEmitter {
       return queue;
     }
     let related = song.related;
-    if (!Array.isArray(related)) related = (await ytdl.getBasicInfo(song.url, { requestOptions: this.requestOptions })).related_videos;
-    if (Array.isArray(related)) {
-      const relatedVideo = related.find(s => !queue.previousSongs.includes(s.id));
-      if (!relatedVideo && !relatedVideo.id) {
-        this.emit("noRelated", message);
-        return queue;
-      }
-      this._addToQueue(message, new Song(await ytdl.getInfo(relatedVideo.id, { requestOptions: this.requestOptions }), this.client.user, true));
-    } else this.emit("noRelated", message);
+    if (!related) related = (await ytdl.getBasicInfo(song.url, { requestOptions: this.requestOptions })).related_videos;
+    if (related && related[0]) this._addToQueue(message, new Song(await ytdl.getInfo(related[0].id, { requestOptions: this.requestOptions }), this.client.user, true));
+    else this.emit("noRelated", message);
     return queue;
   }
 
@@ -797,7 +817,7 @@ class DisTube extends EventEmitter {
   setFilter(message, filter) {
     let queue = this.getQueue(message);
     if (!queue) throw new Error("NotPlaying");
-    if (!Object.prototype.hasOwnProperty.call(this.filters, filter)) throw new TypeError(`${filter} is not a Filter (https://DisTube.js.org/global.html#Filter).`);
+    if (!Object.prototype.hasOwnProperty.call(this.filters, filter)) throw new TypeError(`${filter} is not a valid Filter!`);
     if (queue.filter === filter) queue.filter = null;
     else queue.filter = filter;
     queue.beginTime = queue.currentTime;
@@ -823,7 +843,7 @@ class DisTube extends EventEmitter {
     let queue = this.getQueue(message);
     if (!queue) throw new Error("NotPlaying");
     queue.beginTime = time;
-    this._playSong(message);
+    return this._playSong(message);
   }
 
   /**
@@ -835,7 +855,7 @@ class DisTube extends EventEmitter {
     if (this.listeners("error").length) this.emit("error", message, error);
     else this.emit("error", error);
   }
-
+  
   /**
    * Whether or not emit playSong event
    * @private
@@ -869,7 +889,7 @@ class DisTube extends EventEmitter {
       encoderArgs,
       seek: queue.beginTime / 1000,
     };
-    if (song.youtube) return ytdl(song.info, streamOptions);
+    if (song.youtube) return ytdl.downloadFromInfo(song.info, streamOptions);
     return ytdl.arbitraryStream(song.streamURL, streamOptions);
   }
 
@@ -892,9 +912,9 @@ class DisTube extends EventEmitter {
       // Queue.stream.on('info') should works but maybe DisTube#playSong will emit before ytdl#info
       if (song.youtube && !song.info) {
         let { videoDetails } = song.info = await ytdl.getInfo(song.url, { requestOptions: this.requestOptions });
-        song.views = parseNumber(videoDetails.viewCount);
-        song.likes = parseNumber(videoDetails.likes);
-        song.dislikes = parseNumber(videoDetails.dislikes);
+        song.views = Number(videoDetails.viewCount);
+        song.likes = videoDetails.likes;
+        song.dislikes = videoDetails.dislikes;
         if (song.info.formats.length) {
           song.streamURL = ytdl.chooseFormat(song.info.formats, {
             filter: song.isLive ? "audioandvideo" : "audioonly",
@@ -940,7 +960,7 @@ class DisTube extends EventEmitter {
     }
     if (queue.repeatMode === 2 && !queue.skipped) queue.songs.push(queue.songs[0]);
     if (queue.songs.length <= 1 && (queue.skipped || !queue.repeatMode)) {
-      if (queue.autoplay) try { await this.addRelatedVideo(message) } catch { this.emit("noRelated", message) }
+      if (queue.autoplay) await this.addRelatedVideo(message);
       if (queue.songs.length <= 1) {
         this._deleteQueue(message);
         if (this.options.leaveOnFinish && !queue.stopped) queue.connection.channel.leave();
@@ -948,15 +968,11 @@ class DisTube extends EventEmitter {
         return;
       }
     }
-    const emitSong = this._emitPlaySong(queue);
-    if (queue.repeatMode !== 1 || queue.skipped) {
-      const { id } = queue.songs.shift();
-      queue.previousSongs.push(id);
-    }
+    if (queue.repeatMode !== 1 || queue.skipped) queue.songs.shift();
     queue.skipped = false;
     queue.beginTime = 0;
     await this._playSong(message);
-    if (emitSong) this.emit("playSong", message, queue, queue.songs[0]);
+    if (this._emitPlaySong(queue)) this.emit("playSong", message, queue, queue.songs[0]);
   }
 
   /**
