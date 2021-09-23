@@ -178,6 +178,7 @@ export class QueueManager extends BaseManager<Queue> {
   private _emitPlaySong(queue: Queue): boolean {
     return (
       !this.options.emitNewSongOnly ||
+      (queue.repeatMode === RepeatMode.SONG && queue.next) ||
       (queue.repeatMode !== RepeatMode.SONG && queue.songs[0]?.id !== queue.songs[1]?.id)
     );
   }
