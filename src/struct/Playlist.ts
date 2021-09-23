@@ -49,7 +49,10 @@ export class Playlist implements PlaylistInfo {
      * Playlist name.
      * @type {string}
      */
-    this.name = info.name || info.title || `${this.songs[0].name} and ${this.songs.length - 1} more songs.`;
+    this.name =
+      info.name || info.title || this.songs[0].name
+        ? `${this.songs[0].name} and ${this.songs.length - 1} more songs.`
+        : `${this.songs.length} songs playlist`;
     /**
      * Playlist URL.
      * @type {string}
@@ -57,7 +60,7 @@ export class Playlist implements PlaylistInfo {
     this.url = info.url || info.webpage_url;
     /**
      * Playlist thumbnail.
-     * @type {string}
+     * @type {?string}
      */
     this.thumbnail = info.thumbnail?.url || info.thumbnail || this.songs[0].thumbnail;
     for (const [key, value] of Object.entries(properties)) {
@@ -82,7 +85,7 @@ export class Playlist implements PlaylistInfo {
   }
 
   /**
-   * @param {Discord.GuildMember} [member] Requested user
+   * @param {?Discord.GuildMember} [member] Requested user
    * @private
    * @returns {Playlist}
    */
@@ -90,12 +93,12 @@ export class Playlist implements PlaylistInfo {
     if (member) {
       /**
        * User requested.
-       * @type {Discord.GuildMember}
+       * @type {?Discord.GuildMember}
        */
       this.member = member;
       /**
        * User requested.
-       * @type {Discord.User}
+       * @type {?Discord.User}
        */
       this.user = this.member?.user;
     }
