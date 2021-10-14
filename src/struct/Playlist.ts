@@ -50,9 +50,11 @@ export class Playlist implements PlaylistInfo {
      * @type {string}
      */
     this.name =
-      info.name || info.title || this.songs[0].name
+      info.name ||
+      info.title ||
+      (this.songs[0].name
         ? `${this.songs[0].name} and ${this.songs.length - 1} more songs.`
-        : `${this.songs.length} songs playlist`;
+        : `${this.songs.length} songs playlist`);
     /**
      * Playlist URL.
      * @type {string}
