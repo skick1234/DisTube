@@ -9,7 +9,7 @@ jest.mock("prism-media");
 const FFmpeg = _FFmpeg as unknown as jest.Mocked<typeof _FFmpeg>;
 
 const regularItag = 251;
-const liveItag = 96;
+const liveItag = 91;
 
 afterEach(() => {
   jest.resetAllMocks();
@@ -63,7 +63,7 @@ describe("DisTubeStream.YouTube()", () => {
   });
 
   test("Live video", () => {
-    const stream = DisTubeStream.YouTube(liveFormats as any, { seek: 1 });
+    const stream = DisTubeStream.YouTube(liveFormats as any, { seek: 1, isLive: true });
     const url = liveFormats.find(f => f.itag === liveItag).url;
     expect(stream).toMatchObject({
       url,

@@ -20,12 +20,12 @@ interface StreamOptions extends ytdl.downloadOptions {
 }
 
 export const chooseBestVideoFormat = (formats: ytdl.videoFormat[], isLive = false) => {
-  let filter = (format: ytdl.videoFormat) => (format.audioBitrate ? format.audioBitrate > 0 : false);
-  if (isLive) {
-    filter = (format: ytdl.videoFormat) => (format.audioBitrate ? format.audioBitrate > 0 : false) && format.isHLS;
-  }
-  formats = formats.filter(filter).sort((a, b) => Number(b.audioBitrate) - Number(a.audioBitrate));
-  return formats.find(format => !format.bitrate) || formats[0];
+  let filter = (format: ytdl.videoFormat) => format.hasAudio;
+  if (isLive) filter = (format: ytdl.videoFormat) => format.hasAudio && format.isHLS;
+  formats = formats
+    .filter(filter)
+    .sort((a, b) => Number(b.audioBitrate) - Number(a.audioBitrate) || Number(a.bitrate) - Number(b.bitrate));
+  return formats.find(format => !format.hasVideo) || formats.sort((a, b) => Number(a.bitrate) - Number(b.bitrate))[0];
 };
 
 /**
