@@ -1,6 +1,6 @@
 {
   "include": ["src/**/*.ts"],
-  "exclude": ["src/**/__test__"],
+  "exclude": ["src/**/__test__", "src/**/__mocks__"],
   "compilerOptions": {
     "module": "commonjs",
     "target": "es2019",
