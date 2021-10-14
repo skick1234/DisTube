@@ -1,4 +1,5 @@
 import Plugin from "./Plugin";
+import { PluginType } from "..";
 import type { Playlist, Song } from ".";
 import type { GuildMember } from "discord.js";
 
@@ -8,7 +9,7 @@ import type { GuildMember } from "discord.js";
  * @abstract
  */
 export abstract class ExtractorPlugin extends Plugin {
-  type = "extractor" as const;
+  type = PluginType.EXTRACTOR;
   /**
    * Resolve the validated url to a {@link Song} or a {@link Playlist}.\
    * Not needed to add {@link Song#related} because it will be added with {@link Plugin#getRelatedSongs}.

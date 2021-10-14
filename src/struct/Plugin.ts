@@ -1,13 +1,15 @@
 /* eslint-disable @typescript-eslint/require-await, @typescript-eslint/no-unused-vars */
 import type { Client, TextChannel } from "discord.js";
-import type { DisTube, DisTubeEvents, DisTubeHandler, DisTubeVoiceManager, Options, QueueManager, Song } from "..";
-
-/**
- * All available plugin types:
- * * `custom`: {@link CustomPlugin}
- * * `extractor`: {@link ExtractorPlugin}
- * @typedef {"custom"|"extractor"} PluginType
- */
+import type {
+  DisTube,
+  DisTubeEvents,
+  DisTubeHandler,
+  DisTubeVoiceManager,
+  Options,
+  PluginType,
+  QueueManager,
+  Song,
+} from "..";
 
 /**
  * DisTube Plugin
@@ -15,7 +17,7 @@ import type { DisTube, DisTubeEvents, DisTubeHandler, DisTubeVoiceManager, Optio
  * @private
  */
 export abstract class Plugin {
-  type!: "custom" | "extractor";
+  type!: PluginType;
   distube!: DisTube;
   init(distube: DisTube) {
     /**

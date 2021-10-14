@@ -1,4 +1,5 @@
 import Plugin from "./Plugin";
+import { PluginType } from "..";
 import type { GuildMember, StageChannel, TextChannel, VoiceChannel } from "discord.js";
 
 /**
@@ -7,7 +8,7 @@ import type { GuildMember, StageChannel, TextChannel, VoiceChannel } from "disco
  * @abstract
  */
 export abstract class CustomPlugin extends Plugin {
-  type = "custom" as const;
+  type = PluginType.CUSTOM;
   abstract play(
     voiceChannel: VoiceChannel | StageChannel,
     url: string,

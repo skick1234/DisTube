@@ -127,13 +127,24 @@ export const defaultOptions = {
 
 /**
  * The repeat mode of a {@link Queue} (enum)
- * * DISABLED
- * * SONG
- * * QUEUE
+ * * `DISABLED` = 0
+ * * `SONG` = 1
+ * * `QUEUE` = 2
  * @typedef {number} RepeatMode
  */
 export enum RepeatMode {
   DISABLED,
   SONG,
   QUEUE,
+}
+
+/**
+ * All available plugin types:
+ * * `custom`: {@link CustomPlugin}
+ * * `extractor`: {@link ExtractorPlugin}
+ * @typedef {"custom"|"extractor"} PluginType
+ */
+export enum PluginType {
+  CUSTOM = "custom",
+  EXTRACTOR = "extractor",
 }

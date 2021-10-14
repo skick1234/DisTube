@@ -153,7 +153,7 @@ export class QueueManager extends BaseManager<Queue> {
         for (const plugin of [...this.distube.extractorPlugins, ...this.distube.customPlugins]) {
           if (await plugin.validate(url)) {
             const info = [plugin.getStreamURL(url), plugin.getRelatedSongs(url)] as const;
-            const result: any[] = await Promise.all(info);
+            const result = await Promise.all(info);
             song.streamURL = result[0];
             song.related = result[1];
             break;
