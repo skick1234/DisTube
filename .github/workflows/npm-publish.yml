@@ -1,4 +1,4 @@
-name: Publish distube@dev
+name: Publish DisTube
 on:
   release:
     types: [created]
@@ -28,4 +28,4 @@ jobs:
         run: npm run build
 
       - name: Publish
-        run: npm run publish:dev
+        run: npm run publish:stable
