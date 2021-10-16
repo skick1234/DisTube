@@ -1,4 +1,4 @@
-name: Publish DisTube Beta
+name: Publish DisTube
 on:
   release:
     types: [created]
@@ -13,7 +13,7 @@ jobs:
       - name: Install Node.js
         uses: actions/setup-node@v2
         with:
-          node-version: 16.x
+          node-version: 16
 
       - name: Login
         run: npm config set //registry.npmjs.org/:_authToken ${{secrets.NPM_TOKEN}}
@@ -28,4 +28,4 @@ jobs:
         run: npm run build
 
       - name: Publish
-        run: npm run publish:beta
+        run: npm run publish:stable
