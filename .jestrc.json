@@ -1,8 +1,0 @@
-{
-  "testEnvironment": "node",
-  "collectCoverage": true,
-  "collectCoverageFrom": ["src/**/*.ts"],
-  "coveragePathIgnorePatterns": ["/node_modules/", "/__test__/", "/__mocks__/", "DJSAdapter.ts"],
-  "coverageDirectory": "coverage",
-  "coverageReporters": ["text", "lcov", "clover"]
-}

@@ -1,7 +1,0 @@
-docs/
-pages/
-src/
-coverage/
-
-.*
-tsconfig.json

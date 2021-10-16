@@ -1,6 +1,0 @@
-{
-  "parserOptions": {
-    "project": "./tsconfig.eslint.json"
-  },
-  "extends": "distube"
-}
