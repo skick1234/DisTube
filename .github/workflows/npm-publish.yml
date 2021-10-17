@@ -27,8 +27,5 @@ jobs:
       - name: Build the package
         run: npm run build
 
-      - name: Change version to ${{ github.event.release.tag_name }}
-        run: npm version --git-tag-version=false ${{ github.event.release.tag_name }}
-
       - name: Publish
         run: npm run publish:dev
