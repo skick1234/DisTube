@@ -643,7 +643,7 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
       console.error(error);
       console.warn("Unhandled 'error' event.");
       console.warn(
-        "See: https://distube.js.org/#/docs/DisTube/beta/class/DisTube?scrollTo=e-error and https://nodejs.org/api/events.html#events_error_events",
+        "See: https://distube.js.org/#/docs/DisTube/stable/class/DisTube?scrollTo=e-error and https://nodejs.org/api/events.html#events_error_events",
       );
     }
   }

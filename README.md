@@ -7,7 +7,7 @@
     <img alt="node-current" src="https://img.shields.io/node/v/distube?logo=node.js&logoColor=white&style=flat-square">
     <img alt="npm peer dependency version" src="https://img.shields.io/npm/dependency-version/distube/peer/discord.js?label=discord.js&logo=discord&logoColor=white&style=flat-square">
     <img alt="Depfu" src="https://img.shields.io/depfu/skick1234/DisTube?style=flat-square">
-    <img alt="Codecov branch" src="https://img.shields.io/codecov/c/github/skick1234/DisTube/beta?logo=codecov&logoColor=white&style=flat-square&token=WWDYRRSEQW">
+    <img alt="Codecov branch" src="https://img.shields.io/codecov/c/github/skick1234/DisTube/main?logo=codecov&logoColor=white&style=flat-square&token=WWDYRRSEQW">
     <br>
     <img alt="npm" src="https://img.shields.io/npm/dt/distube?logo=npm&style=flat-square">
     <img alt="GitHub Repo stars" src="https://img.shields.io/github/stars/skick1234/DisTube?logo=github&logoColor=white&style=flat-square">
@@ -28,18 +28,17 @@ A Discord.js module to simplify your music commands and play songs with audio fi
 - Support YouTube, SoundCloud, Facebook, and [700+ more sites](https://ytdl-org.github.io/youtube-dl/supportedsites.html)
 - Audio filters (bassboost, nightcore, vaporwave,...)
 - Autoplay related songs
-- Plugin system to support more sites ([Plugin List](https://distube.js.org/#/docs/DisTube/beta/plugin/list))
+- Plugin system to support more sites ([Plugin List](https://distube.js.org/#/docs/DisTube/main/plugin/list))
 
 ## Installation
 
 ```npm
-npm install distube@beta
+npm install distube@dev
 ```
 
 ### Requirement
 
 - Node v12 or higher
-- [git](https://git-scm.com/downloads) _(For installing forked dependencies)_
 - [discord.js](https://discord.js.org) v12 or **v13 _(Recommended)_**
 - [@discordjs/voice](https://github.com/discordjs/voice)
 - [FFmpeg](https://www.ffmpeg.org/download.html)
