@@ -477,8 +477,8 @@ export class Queue extends DisTubeBase {
     await this.taskQueue.queuing();
     try {
       this.stopped = true;
-      this.voice.stop();
       if (this.options.leaveOnStop) this.voice.leave();
+      else this.voice.stop();
       this.delete();
     } finally {
       this.taskQueue.resolve();

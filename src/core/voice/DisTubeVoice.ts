@@ -130,15 +130,21 @@ export class DisTubeVoice extends TypedEmitter<DisTubeVoiceEvents> {
       this.emit("disconnect", error);
       this.isDisconnected = true;
     }
-    if (this.connection.state.status !== VoiceConnectionStatus.Destroyed) this.connection.destroy();
+    entersState(this.audioPlayer, AudioPlayerStatus.Idle, (this.audioResource?.silencePaddingFrames ?? 5) * 20)
+      .catch(() => this.stop(true))
+      .finally(() => {
+        if (this.connection.state.status !== VoiceConnectionStatus.Destroyed) this.connection.destroy();
+      });
     this.voices.delete(this.id);
   }
   /**
    * Stop the playing stream
+   * @param {boolean} [force=false] If true, will force the {@link DisTubeVoice#audioPlayer} to enter the Idle state
+   * even if the {@link DisTubeVoice#audioResource} has silence padding frames.
    * @private
    */
-  stop() {
-    this.audioPlayer.stop();
+  stop(force = false) {
+    this.audioPlayer.stop(force);
   }
   /**
    * Play a readable stream
