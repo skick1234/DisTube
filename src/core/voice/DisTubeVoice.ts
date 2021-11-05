@@ -115,7 +115,7 @@ export class DisTubeVoice extends TypedEmitter<DisTubeVoiceEvents> {
         this.connection.destroy();
       }
       this.voices.delete(this.id);
-      if ((this.voiceState as any).connection) throw new DisTubeError("VOICE_DEPRECATED_CONNECTION");
+      if ((this.voiceState as any)?.connection) throw new DisTubeError("VOICE_DEPRECATED_CONNECTION");
       throw new DisTubeError("VOICE_CONNECT_FAILED", TIMEOUT / 1e3);
     }
     return this;

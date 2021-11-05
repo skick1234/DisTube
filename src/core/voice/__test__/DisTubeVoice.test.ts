@@ -10,6 +10,8 @@ jest.mock("@discordjs/voice");
 const Util = _Util as unknown as jest.Mocked<typeof _Util>;
 const DiscordVoice = _DiscordVoice as unknown as jest.Mocked<typeof _DiscordVoice>;
 
+const flushPromises = () => new Promise(jest.requireActual("timers").setImmediate);
+
 const voiceManager = {
   add: jest.fn(),
   delete: jest.fn(),
@@ -272,27 +274,34 @@ describe("Methods", () => {
 
   describe("DisTubeVoice#leave()", () => {
     describe("Destroy the connection", () => {
-      test("Without error", () => {
+      test("Without error", async () => {
+        DiscordVoice.entersState.mockResolvedValueOnce(voice.audioPlayer);
         expect(voice.leave()).toBeUndefined();
+        await flushPromises();
         expect(audioPlayer.stop).toBeCalledTimes(1);
         expect(connection.destroy).toBeCalledTimes(1);
         expect(voice.emit).toBeCalledWith("disconnect", undefined);
         expect(voiceManager.delete).toBeCalledWith(voice.id);
       });
-      test("Without error", () => {
+      test("With error", async () => {
+        DiscordVoice.entersState.mockRejectedValueOnce(undefined);
         voice.isDisconnected = false;
         const err: any = {};
         expect(voice.leave(err)).toBeUndefined();
-        expect(audioPlayer.stop).toBeCalledTimes(1);
+        await flushPromises();
+        expect(audioPlayer.stop).toBeCalledTimes(2);
+        expect(audioPlayer.stop).nthCalledWith(2, true);
         expect(connection.destroy).toBeCalledTimes(1);
         expect(voice.emit).toBeCalledWith("disconnect", err);
         expect(voiceManager.delete).toBeCalledWith(voice.id);
       });
     });
 
-    test("Leave the destroyed connection", () => {
+    test("Leave the destroyed connection", async () => {
+      DiscordVoice.entersState.mockResolvedValueOnce(voice.audioPlayer);
       connection.state.status = DiscordVoice.VoiceConnectionStatus.Destroyed;
       expect(voice.leave()).toBeUndefined();
+      await flushPromises();
       expect(audioPlayer.stop).toBeCalledTimes(1);
       expect(voice.emit).not.toBeCalled();
       expect(connection.destroy).not.toBeCalled();

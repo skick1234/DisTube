@@ -172,7 +172,7 @@ describe("Queue#stop()", () => {
     await queue.stop();
     expect(queue.stopped).toBe(true);
     expect(queue.delete).toBeCalledTimes(1);
-    expect(voice.stop).toBeCalledTimes(1);
+    expect(voice.stop).not.toBeCalled();
     expect(voice.leave).toBeCalledTimes(1);
   });
 
