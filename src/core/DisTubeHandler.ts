@@ -232,11 +232,50 @@ export class DisTubeHandler extends DisTubeBase {
 
   /**
    * Search for a song, fire {@link DisTube#event:error} if not found.
-   * @param {Discord.Message} message A message from guild channel
+   * @param {Discord.Message} message The original message from an user
    * @param {string} query The query string
    * @returns {Promise<SearchResult?>} Song info
    */
   async searchSong(message: Message, query: string): Promise<SearchResult | null> {
+    if (!isMessageInstance(message)) throw new DisTubeError("INVALID_TYPE", "Discord.Message", message, "message");
+    if (typeof query !== "string") throw new DisTubeError("INVALID_TYPE", "string", query, "query");
+    if (query.length === 0) throw new DisTubeError("EMPTY_STRING", "query");
+    const limit = this.options.searchSongs > 1 ? this.options.searchSongs : 1;
+    const results = await this.distube
+      .search(query, {
+        limit,
+        safeSearch: this.options.nsfw ? false : !(message.channel as TextChannel)?.nsfw,
+      })
+      .catch(() => {
+        if (!this.emit("searchNoResult", message, query)) {
+          // eslint-disable-next-line no-console
+          console.warn("searchNoResult event does not have any listeners! Emits `error` event instead.");
+          throw new DisTubeError("NO_RESULT");
+        }
+      });
+    if (!results) return null;
+    return this.createSearchMessageCollector(message, results, query);
+  }
+
+  /**
+   * Create a message collector for selecting search results.
+   *
+   * Needed events: {@link DisTube#event:searchResult}, {@link DisTube#event:searchCancel},
+   * {@link DisTube#event:searchInvalidAnswer}, {@link DisTube#event:searchDone}.
+   * @param {Discord.Message} message The original message from an user
+   * @param {Array<SearchResult|Song|Playlist>} results The search results
+   * @param {string?} [query] The query string
+   * @returns {Promise<SearchResult|Song|Playlist|null>} Selected result
+   */
+  async createSearchMessageCollector<R extends SearchResult | Song | Playlist>(
+    message: Message,
+    results: Array<R>,
+    query?: string,
+  ): Promise<R | null> {
+    if (!isMessageInstance(message)) throw new DisTubeError("INVALID_TYPE", "Discord.Message", message, "message");
+    if (!Array.isArray(results) || results.length == 0) {
+      throw new DisTubeError("INVALID_TYPE", "Array<SearchResult|Song|Playlist>", results, "results");
+    }
     if (this.options.searchSongs > 1) {
       const searchEvents = [
         "searchNoResult",
@@ -259,21 +298,9 @@ export class DisTubeHandler extends DisTubeBase {
       }
     }
     const limit = this.options.searchSongs > 1 ? this.options.searchSongs : 1;
-    const results = await this.distube
-      .search(query, {
-        limit,
-        safeSearch: this.options.nsfw ? false : !(message.channel as TextChannel)?.nsfw,
-      })
-      .catch(() => {
-        if (!this.emit("searchNoResult", message, query)) {
-          // eslint-disable-next-line no-console
-          console.warn("searchNoResult event does not have any listeners! Emits `error` event instead.");
-          throw new DisTubeError("NO_RESULT");
-        }
-      });
-    if (!results) return null;
     let result = results[0];
     if (limit > 1) {
+      results.splice(limit);
       this.emit("searchResult", message, results, query);
       const c = message.channel;
       const answers = await (c.awaitMessages.length === 0

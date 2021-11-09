@@ -15,6 +15,7 @@ const ERROR_MESSAGES = {
   EMPTY_ARRAY: (name: string) => `'${name}' is an empty array`,
   EMPTY_FILTERED_ARRAY: (name: string, type: string) => `There is no valid '${type}' in the '${name}' array`,
   INVALID_KEY: (obj: string, key: string) => `'${key}' does not need to be provided in ${obj}`,
+  EMPTY_STRING: (name: string) => `'${name}' string must not be empty`,
 
   MISSING_INTENTS: (i: string) => `${i} intent must be provided for the Client`,
   DISABLED_OPTION: (o: string) => `DisTubeOptions.${o} is disabled`,
