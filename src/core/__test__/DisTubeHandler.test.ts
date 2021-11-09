@@ -8,6 +8,7 @@ import * as _Util from "../../util";
 import * as _Queue from "../../struct/Queue";
 import * as _Stream from "../DisTubeStream";
 
+jest.useFakeTimers();
 jest.mock("@distube/ytpl");
 jest.mock("@distube/ytdl-core");
 jest.mock("../../util");
@@ -53,6 +54,34 @@ function createFakeDisTube() {
     },
   };
 }
+function createV13Message(answerMessage?: any): any {
+  return {
+    channel: {
+      nsfw: false,
+      awaitMessages: (opt: any = {}) =>
+        new Promise((resolve, reject) => {
+          const a = [answerMessage].filter(opt.filter)[0];
+          if (!a || opt.max !== 1) reject();
+          resolve({ first: () => answerMessage });
+        }),
+    },
+    author: { id: 1 },
+  };
+}
+function createV12Message(answerMessage: any): any {
+  return {
+    channel: {
+      nsfw: false,
+      awaitMessages: (filter: any, opt: any = {}) =>
+        new Promise((resolve, reject) => {
+          const a = [answerMessage].filter(filter)[0];
+          if (!a || opt.max !== 1) reject();
+          resolve({ first: () => answerMessage });
+        }),
+    },
+    author: { id: 1 },
+  };
+}
 
 const member: any = {};
 const songResult = new SearchResult(videoResults.items[0] as any);
@@ -61,7 +90,7 @@ const song = new Song({ id: "xxxxxxxxxxx", url: "https://www.youtube.com/watch?v
 const anotherSong = new Song({ id: "y", url: "https://www.youtube.com/watch?v=y" }, member, "test");
 const nsfwSong = new Song({ id: "z", url: "z url", age_restricted: true }, member, "test");
 const playlist = new Playlist([song, anotherSong, nsfwSong], member);
-const unref = jest.fn();
+// const unref = jest.fn();
 
 beforeEach(() => {
   jest.resetAllMocks();
@@ -98,11 +127,6 @@ describe("Constructor", () => {
   });
 
   describe("leaveOnEmpty option", () => {
-    beforeEach(() => {
-      jest.spyOn(global, "setTimeout");
-      (setTimeout as unknown as jest.Mock).mockReturnValue({ unref });
-    });
-
     test("Disabled option", () => {
       const distube = createFakeDisTube();
       distube.options.leaveOnEmpty = false;
@@ -128,35 +152,85 @@ describe("Constructor", () => {
       test("The voice channel is not empty", () => {
         Util.isVoiceChannelEmpty.mockReturnValue(false);
         stateHandle(state);
-        expect(setTimeout).not.toBeCalled();
+        expect(jest.getTimerCount()).toBe(0);
       });
 
       describe("The voice channel is empty", () => {
         test("The voice channel is still empty after timeout", () => {
           Util.isVoiceChannelEmpty.mockReturnValue(true);
           stateHandle(state);
-          expect(setTimeout).toBeCalledTimes(1);
-          expect(setTimeout).lastCalledWith(expect.any(Function), distube.options.emptyCooldown * 1e3);
-          expect(unref).toBeCalledTimes(1);
+          expect(jest.getTimerCount()).toBe(1);
           expect(distube.voices.leave).not.toBeCalled();
-          (setTimeout as unknown as jest.Mock).mock.calls[0][0]();
+          jest.runAllTimers();
           expect(distube.voices.leave).toBeCalledWith(state);
         });
 
         test("The voice channel is not empty after timeout", () => {
           Util.isVoiceChannelEmpty.mockReturnValue(false).mockReturnValueOnce(true);
           stateHandle(state);
-          expect(setTimeout).toBeCalledTimes(1);
-          expect(setTimeout).lastCalledWith(expect.any(Function), distube.options.emptyCooldown * 1e3);
-          expect(unref).toBeCalledTimes(1);
+          expect(jest.getTimerCount()).toBe(1);
           expect(distube.voices.leave).not.toBeCalled();
-          (setTimeout as unknown as jest.Mock).mock.calls[0][0]();
+          jest.runAllTimers();
+          expect(distube.voices.leave).not.toBeCalled();
+        });
+
+        test("A queue is created after timeout", () => {
+          Util.isVoiceChannelEmpty.mockReturnValue(true);
+          stateHandle(state);
+          expect(jest.getTimerCount()).toBe(1);
+          expect(distube.voices.leave).not.toBeCalled();
+          distube.queues.get.mockReturnValueOnce({});
+          jest.runAllTimers();
           expect(distube.voices.leave).not.toBeCalled();
         });
       });
     });
 
-    test.todo("There is a playing Queue in the guild");
+    describe("There is a playing Queue in the guild", () => {
+      const queue = { voice: { leave: jest.fn() }, stopped: false, delete: jest.fn() };
+      const state = { channel: {} };
+      describe("The voice channel is not empty", () => {
+        distube.queues.get.mockReturnValue(queue);
+        Util.isVoiceChannelEmpty.mockReturnValueOnce(false);
+        stateHandle(state);
+        expect(jest.getTimerCount()).toBe(0);
+      });
+      describe("The voice channel is empty", () => {
+        test("The voice channel is still empty after timeout", () => {
+          distube.queues.get.mockReturnValue(queue);
+          Util.isVoiceChannelEmpty.mockReturnValue(true);
+          stateHandle(state);
+          expect(jest.getTimerCount()).toBe(1);
+          expect(queue.voice.leave).not.toBeCalled();
+          jest.runAllTimers();
+          expect(queue.voice.leave).toBeCalledTimes(1);
+          expect(queue.delete).not.toBeCalled();
+          // Stopped queue
+          queue.stopped = true;
+          stateHandle(state);
+          expect(jest.getTimerCount()).toBe(1);
+          expect(queue.voice.leave).toBeCalledTimes(1);
+          jest.runAllTimers();
+          expect(queue.voice.leave).toBeCalledTimes(2);
+          expect(queue.delete).toBeCalledTimes(1);
+          queue.stopped = false;
+        });
+
+        test("The voice channel is not empty after timeout", () => {
+          distube.queues.get.mockReturnValue(queue);
+          Util.isVoiceChannelEmpty.mockReturnValue(false).mockReturnValueOnce(true);
+          stateHandle(state);
+          expect(jest.getTimerCount()).toBe(1);
+          expect(queue.voice.leave).not.toBeCalled();
+          // Test clear previous timeout
+          Util.isVoiceChannelEmpty.mockReturnValueOnce(true);
+          stateHandle(state);
+          expect(jest.getTimerCount()).toBe(1);
+          jest.runAllTimers();
+          expect(queue.voice.leave).not.toBeCalled();
+        });
+      });
+    });
   });
 });
 
@@ -494,8 +568,23 @@ describe("DisTubeHandler#createStream()", () => {
 });
 
 describe("DisTubeHandler#searchSong()", () => {
+  test("Validate parameter", async () => {
+    const distube = createFakeDisTube();
+    const handler = new DisTubeHandler(distube as any);
+    Util.isMessageInstance.mockReturnValue(true);
+    Util.isMessageInstance.mockReturnValueOnce(false);
+    await expect(handler.searchSong(null, "")).rejects.toThrow(
+      new DisTubeError("INVALID_TYPE", "Discord.Message", null, "message"),
+    );
+    const message = createV13Message();
+    await expect(handler.searchSong(message, 0 as any)).rejects.toThrow(
+      new DisTubeError("INVALID_TYPE", "string", 0, "query"),
+    );
+    await expect(handler.searchSong(message, "")).rejects.toThrow(new DisTubeError("EMPTY_STRING", "query"));
+  });
   describe("No result found", () => {
     test("With listening searchNoResult event", async () => {
+      Util.isMessageInstance.mockReturnValue(true);
       const distube = createFakeDisTube();
       distube.emit.mockReturnValue(true);
       const handler = new DisTubeHandler(distube as any);
@@ -508,6 +597,7 @@ describe("DisTubeHandler#searchSong()", () => {
     });
 
     test("Without listening searchNoResult event", async () => {
+      Util.isMessageInstance.mockReturnValue(true);
       const warn = jest.spyOn(console, "warn").mockImplementation(() => undefined);
       const distube = createFakeDisTube();
       distube.emit.mockReturnValue(false);
@@ -523,6 +613,7 @@ describe("DisTubeHandler#searchSong()", () => {
   });
 
   test("searchSongs option <= 1", async () => {
+    Util.isMessageInstance.mockReturnValue(true);
     const distube = createFakeDisTube();
     const handler = new DisTubeHandler(distube as any);
     distube.options.searchSongs = 0;
@@ -545,36 +636,9 @@ describe("DisTubeHandler#searchSong()", () => {
     distube.options.searchSongs = 5;
     const handler = new DisTubeHandler(distube as any);
     const results = [{}, {}, {}, {}, {}];
-    const createV13Message = (answerMessage: any): any => {
-      return {
-        channel: {
-          nsfw: false,
-          awaitMessages: (opt: any = {}) =>
-            new Promise((resolve, reject) => {
-              const a = [answerMessage].filter(opt.filter)[0];
-              if (!a || opt.max !== 1) reject();
-              resolve({ first: () => answerMessage });
-            }),
-        },
-        author: { id: 1 },
-      };
-    };
-    const createV12Message = (answerMessage: any): any => {
-      return {
-        channel: {
-          nsfw: false,
-          awaitMessages: (filter: any, opt: any = {}) =>
-            new Promise((resolve, reject) => {
-              const a = [answerMessage].filter(filter)[0];
-              if (!a || opt.max !== 1) reject();
-              resolve({ first: () => answerMessage });
-            }),
-        },
-        author: { id: 1 },
-      };
-    };
 
     test("User choose a result (discord.js v13)", async () => {
+      Util.isMessageInstance.mockReturnValue(true);
       distube.listenerCount.mockReturnValue(true);
       distube.options.nsfw = true;
       distube.search.mockResolvedValue(results);
@@ -599,6 +663,7 @@ describe("DisTubeHandler#searchSong()", () => {
     });
 
     test("User choose a result (discord.js v12)", async () => {
+      Util.isMessageInstance.mockReturnValue(true);
       distube.listenerCount.mockReturnValue(true);
       distube.search.mockResolvedValue(results);
       const query = "query";
@@ -616,6 +681,7 @@ describe("DisTubeHandler#searchSong()", () => {
     });
 
     test("Message timeout", async () => {
+      Util.isMessageInstance.mockReturnValue(true);
       distube.listenerCount.mockReturnValue(true);
       distube.search.mockResolvedValue(results);
       const ans = { content: "3", author: { id: 2 } };
@@ -632,6 +698,7 @@ describe("DisTubeHandler#searchSong()", () => {
     });
 
     test("User sends an invalid number", async () => {
+      Util.isMessageInstance.mockReturnValue(true);
       distube.listenerCount.mockReturnValue(true);
       // Bigger than result length
       distube.search.mockResolvedValue(results);
@@ -659,6 +726,7 @@ describe("DisTubeHandler#searchSong()", () => {
     });
 
     test("Disabled `searchSongs` due to missing listener", async () => {
+      Util.isMessageInstance.mockReturnValue(true);
       const warn = jest.spyOn(console, "warn").mockImplementation(() => undefined);
       const events = ["searchNoResult", "searchResult", "searchCancel", "searchInvalidAnswer", "searchDone"];
       distube.search.mockResolvedValue(results);
@@ -673,5 +741,20 @@ describe("DisTubeHandler#searchSong()", () => {
         expect(distube.options.searchSongs).toBeLessThanOrEqual(1);
       }
     });
+  });
+});
+
+describe("DisTubeHandler#createSearchMessageCollector()", () => {
+  test("Validate parameter", async () => {
+    const distube = createFakeDisTube();
+    const handler = new DisTubeHandler(distube as any);
+    Util.isMessageInstance.mockReturnValue(true);
+    Util.isMessageInstance.mockReturnValueOnce(false);
+    await expect(handler.createSearchMessageCollector(null, null)).rejects.toThrow(
+      new DisTubeError("INVALID_TYPE", "Discord.Message", null, "message"),
+    );
+    await expect(handler.createSearchMessageCollector(null, null)).rejects.toThrow(
+      new DisTubeError("INVALID_TYPE", "Array<SearchResult|Song|Playlist>", null, "results"),
+    );
   });
 });

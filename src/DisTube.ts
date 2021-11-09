@@ -128,7 +128,7 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
     song: string | Song | SearchResult | Playlist,
     options: { skip?: boolean; unshift?: boolean } = {},
   ): Promise<void> {
-    if (!song) return;
+    if (!song) throw new DisTubeError("INVALID_TYPE", ["string", "Song", "SearchResult", "Playlist"], song, "song");
     if (!isMessageInstance(message)) throw new DisTubeError("INVALID_TYPE", "Discord.Message", message, "message");
     if (typeof options !== "object" || Array.isArray(options)) {
       throw new DisTubeError("INVALID_TYPE", "object", options, "options");

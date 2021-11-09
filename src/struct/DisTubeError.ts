@@ -15,6 +15,7 @@ const ERROR_MESSAGES = {
   EMPTY_ARRAY: (name: string) => `'${name}' is an empty array`,
   EMPTY_FILTERED_ARRAY: (name: string, type: string) => `There is no valid '${type}' in the '${name}' array`,
   INVALID_KEY: (obj: string, key: string) => `'${key}' does not need to be provided in ${obj}`,
+  EMPTY_STRING: (name: string) => `'${name}' string must not be empty`,
 
   MISSING_INTENTS: (i: string) => `${i} intent must be provided for the Client`,
   DISABLED_OPTION: (o: string) => `DisTubeOptions.${o} is disabled`,
@@ -27,6 +28,9 @@ const ERROR_MESSAGES = {
   VOICE_MISSING_PERMS: "You do not have permission to join this voice channel",
   VOICE_RECONNECT_FAILED: "Cannot reconnect to the voice channel",
   VOICE_CHANGE_GUILD: "Cannot join a channel in a different guild",
+  VOICE_DEPRECATED_CONNECTION:
+    "Cannot connect to the voice channel due to a deprecated connection is created.\n" +
+    "Read more: https://distube.js.org/guide/additional-info/update.html#voice",
 
   NO_QUEUE: "There is no playing queue in this guild",
   QUEUE_EXIST: "This guild has a Queue already",
