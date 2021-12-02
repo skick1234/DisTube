@@ -14,6 +14,7 @@
     "build:check": "tsc --noEmit --incremental false",
     "publish:stable": "npm publish",
     "ncu": "ncu -u --dep dev,prod",
+    "postinstall": "tsc",
     "prepublishOnly": "pinst -d",
     "postpublish": "pinst -e"
   },
