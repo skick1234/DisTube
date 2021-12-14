@@ -143,8 +143,6 @@ export class QueueManager extends BaseManager<Queue> {
       return true;
     }
     if (queue.stopped) return false;
-    queue.playing = true;
-    queue.paused = false;
     const song = queue.songs[0];
     try {
       const { url, source, formats, streamURL } = song;
@@ -163,6 +161,8 @@ export class QueueManager extends BaseManager<Queue> {
       const stream = this.handler.createStream(queue);
       queue.voice.play(stream);
       song.streamURL = stream.url;
+      if (queue.stopped) queue.stop();
+      else if (queue.paused) queue.voice.pause();
       return false;
     } catch (e: any) {
       this._handlePlayingError(queue, e);
