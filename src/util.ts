@@ -2,6 +2,8 @@ import { URL } from "url";
 import { DisTubeError, DisTubeVoice, Queue } from ".";
 import { Intents, SnowflakeUtil } from "discord.js";
 import type { GuildIDResolvable } from ".";
+import type { EventEmitter } from "node:events";
+import type { AudioPlayer, AudioPlayerStatus, VoiceConnection, VoiceConnectionStatus } from "@discordjs/voice";
 import type {
   BitFieldResolvable,
   Client,
@@ -146,7 +148,7 @@ export function isMessageInstance(message: any): message is Message {
 export function isSupportedVoiceChannel(channel: any): channel is VoiceChannel | StageChannel {
   return (
     !!channel &&
-    channel.deleted === false &&
+    typeof channel.joinable === "boolean" &&
     isSnowflake(channel.id) &&
     isSnowflake(channel.guild?.id) &&
     typeof channel.full === "boolean" &&
@@ -193,4 +195,32 @@ export function checkInvalidKey(
   const sourceKeys = Array.isArray(source) ? source : Object.keys(source);
   const invalidKey = Object.keys(target).find(key => !sourceKeys.includes(key));
   if (invalidKey) throw new DisTubeError("INVALID_KEY", sourceName, invalidKey);
+}
+
+async function waitEvent(target: EventEmitter, status: string, maxTime: number) {
+  let cleanup = () => undefined as any;
+  try {
+    await new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error(`Didn't trigger ${status} within ${maxTime}ms`)), maxTime);
+      target.once(status, resolve);
+      target.once("error", reject);
+      cleanup = () => {
+        clearTimeout(timeout);
+        target.off(status, resolve);
+        target.off("error", reject);
+      };
+    });
+    return target;
+  } finally {
+    cleanup();
+  }
+}
+
+export async function entersState<T extends VoiceConnection | AudioPlayer>(
+  target: T,
+  status: T extends VoiceConnection ? VoiceConnectionStatus : AudioPlayerStatus,
+  maxTime: number,
+) {
+  if (target.state.status === status) return target;
+  return waitEvent(target, status, maxTime) as Promise<T>;
 }

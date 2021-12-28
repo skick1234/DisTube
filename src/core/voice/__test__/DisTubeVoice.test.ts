@@ -10,8 +10,6 @@ jest.mock("@discordjs/voice");
 const Util = _Util as unknown as jest.Mocked<typeof _Util>;
 const DiscordVoice = _DiscordVoice as unknown as jest.Mocked<typeof _DiscordVoice>;
 
-const flushPromises = () => new Promise(jest.requireActual("timers").setImmediate);
-
 const voiceManager = {
   add: jest.fn(),
   delete: jest.fn(),
@@ -128,7 +126,7 @@ describe("Constructor", () => {
     (voice.emit as jest.Mock).mockClear();
     expect(connection.on).nthCalledWith(1, DiscordVoice.VoiceConnectionStatus.Disconnected, expect.any(Function));
     const catchFn = jest.fn();
-    DiscordVoice.entersState.mockReturnValue({ catch: catchFn } as any);
+    Util.entersState.mockReturnValue({ catch: catchFn } as any);
     connection.on.mock.calls[0][1](
       {},
       { reason: DiscordVoice.VoiceConnectionDisconnectReason.WebSocketClose, closeCode: 4014 },
@@ -241,9 +239,9 @@ describe("Methods", () => {
     const TIMEOUT = 30e3;
 
     test("Timeout when signalling connection", async () => {
-      DiscordVoice.entersState.mockRejectedValue(undefined);
+      Util.entersState.mockRejectedValue(undefined);
       await expect(voice.join()).rejects.toThrow(new DisTubeError("VOICE_CONNECT_FAILED", TIMEOUT / 1e3));
-      expect(DiscordVoice.entersState).toBeCalledWith(connection, DiscordVoice.VoiceConnectionStatus.Ready, TIMEOUT);
+      expect(Util.entersState).toBeCalledWith(connection, DiscordVoice.VoiceConnectionStatus.Ready, TIMEOUT);
       expect(connection.destroy).toBeCalledTimes(1);
       expect(voiceManager.delete).toBeCalledWith(voice.id);
     });
@@ -251,7 +249,7 @@ describe("Methods", () => {
     test("Timeout when connection destroyed", async () => {
       const newVC = { guild: { id: 2 } };
       Util.isSupportedVoiceChannel.mockReturnValue(true);
-      DiscordVoice.entersState.mockRejectedValue(undefined);
+      Util.entersState.mockRejectedValue(undefined);
       connection.state.status = DiscordVoice.VoiceConnectionStatus.Destroyed;
       await expect(voice.join(newVC as any)).rejects.toThrow(new DisTubeError("VOICE_CONNECT_FAILED", TIMEOUT / 1e3));
       expect(voice.channel).toBe(newVC);
@@ -262,9 +260,9 @@ describe("Methods", () => {
 
     test("Joined a voice channel", async () => {
       Util.isSupportedVoiceChannel.mockReturnValue(true);
-      DiscordVoice.entersState.mockResolvedValue(undefined);
+      Util.entersState.mockResolvedValue(undefined);
       await expect(voice.join(voiceChannel as any)).resolves.toBe(voice);
-      expect(DiscordVoice.entersState).toBeCalledWith(connection, DiscordVoice.VoiceConnectionStatus.Ready, TIMEOUT);
+      expect(Util.entersState).toBeCalledWith(connection, DiscordVoice.VoiceConnectionStatus.Ready, TIMEOUT);
       expect(connection.destroy).not.toBeCalled();
       expect(voiceManager.delete).not.toBeCalled();
       expect(voice.channel).toBe(voiceChannel);
@@ -274,35 +272,21 @@ describe("Methods", () => {
 
   describe("DisTubeVoice#leave()", () => {
     describe("Destroy the connection", () => {
-      test("Without error", async () => {
-        DiscordVoice.entersState.mockResolvedValueOnce(voice.audioPlayer);
+      test("Without error", () => {
         expect(voice.leave()).toBeUndefined();
-        await flushPromises();
         expect(audioPlayer.stop).toBeCalledTimes(1);
+        expect(audioPlayer.stop).toBeCalledWith(true);
         expect(connection.destroy).toBeCalledTimes(1);
         expect(voice.emit).toBeCalledWith("disconnect", undefined);
         expect(voiceManager.delete).toBeCalledWith(voice.id);
       });
-      test("With error", async () => {
-        DiscordVoice.entersState.mockRejectedValueOnce(undefined);
-        voice.isDisconnected = false;
-        const err: any = {};
-        expect(voice.leave(err)).toBeUndefined();
-        await flushPromises();
-        expect(audioPlayer.stop).toBeCalledTimes(2);
-        expect(audioPlayer.stop).nthCalledWith(2, true);
-        expect(connection.destroy).toBeCalledTimes(1);
-        expect(voice.emit).toBeCalledWith("disconnect", err);
-        expect(voiceManager.delete).toBeCalledWith(voice.id);
-      });
     });
 
-    test("Leave the destroyed connection", async () => {
-      DiscordVoice.entersState.mockResolvedValueOnce(voice.audioPlayer);
+    test("Leave the destroyed connection", () => {
       connection.state.status = DiscordVoice.VoiceConnectionStatus.Destroyed;
       expect(voice.leave()).toBeUndefined();
-      await flushPromises();
       expect(audioPlayer.stop).toBeCalledTimes(1);
+      expect(audioPlayer.stop).toBeCalledWith(true);
       expect(voice.emit).not.toBeCalled();
       expect(connection.destroy).not.toBeCalled();
       expect(voiceManager.delete).toBeCalledWith(voice.id);
