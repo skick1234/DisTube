@@ -1,12 +1,11 @@
 import { TypedEmitter } from "tiny-typed-emitter";
-import { DisTubeError, createDiscordJSAdapter, isSupportedVoiceChannel } from "../..";
+import { DisTubeError, createDiscordJSAdapter, entersState, isSupportedVoiceChannel } from "../..";
 import {
   AudioPlayerStatus,
   VoiceConnectionDisconnectReason,
   VoiceConnectionStatus,
   createAudioPlayer,
   createAudioResource,
-  entersState,
   joinVoiceChannel,
 } from "@discordjs/voice";
 import type { DisTubeStream, DisTubeVoiceEvents, DisTubeVoiceManager } from "../..";
@@ -125,16 +124,12 @@ export class DisTubeVoice extends TypedEmitter<DisTubeVoiceEvents> {
    * @param {Error} [error] Optional, an error to emit with 'error' event.
    */
   leave(error?: Error) {
-    this.stop();
+    this.stop(true);
     if (!this.isDisconnected) {
       this.emit("disconnect", error);
       this.isDisconnected = true;
     }
-    entersState(this.audioPlayer, AudioPlayerStatus.Idle, (this.audioResource?.silencePaddingFrames ?? 5) * 20)
-      .catch(() => this.stop(true))
-      .finally(() => {
-        if (this.connection.state.status !== VoiceConnectionStatus.Destroyed) this.connection.destroy();
-      });
+    if (this.connection.state.status !== VoiceConnectionStatus.Destroyed) this.connection.destroy();
     this.voices.delete(this.id);
   }
   /**
