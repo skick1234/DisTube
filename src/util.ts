@@ -146,7 +146,7 @@ export function isMessageInstance(message: any): message is Message {
 export function isSupportedVoiceChannel(channel: any): channel is VoiceChannel | StageChannel {
   return (
     !!channel &&
-    channel.deleted === false &&
+    typeof channel.joinable === "boolean" &&
     isSnowflake(channel.id) &&
     isSnowflake(channel.guild?.id) &&
     typeof channel.full === "boolean" &&
