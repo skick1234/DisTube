@@ -168,18 +168,18 @@ export class DisTubeVoice extends TypedEmitter<DisTubeVoiceEvents> {
     if (volume < 0) {
       throw new DisTubeError("NUMBER_COMPARE", "Volume", "bigger or equal to", 0);
     }
-    this._volume = volume / 100;
-    this.audioResource?.volume?.setVolume(Math.pow(this._volume, 0.5 / Math.log10(2)));
+    this._volume = volume;
+    this.audioResource?.volume?.setVolume(Math.pow(this._volume / 100, 0.5 / Math.log10(2)));
   }
   get volume() {
-    return this._volume * 100;
+    return this._volume;
   }
   /**
    * Playback duration of the audio resource in seconds
    * @type {number}
    */
   get playbackDuration() {
-    return (this.audioResource?.playbackDuration || 0) / 1000;
+    return (this.audioResource?.playbackDuration ?? 0) / 1000;
   }
   pause() {
     this.audioPlayer.pause();
