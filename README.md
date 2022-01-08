@@ -30,12 +30,6 @@ A Discord.js module to simplify your music commands and play songs with audio fi
 - Autoplay related songs
 - Plugin system to support more sites ([Plugin List](https://distube.js.org/#/docs/DisTube/main/plugin/list))
 
-## Installation
-
-```npm
-npm install distube@dev
-```
-
 ### Requirement
 
 - Node v12 or higher
@@ -45,6 +39,12 @@ npm install distube@dev
 - [@discordjs/opus](https://github.com/discordjs/opus)
 - [sodium](https://www.npmjs.com/package/sodium) or [libsodium-wrappers](https://www.npmjs.com/package/libsodium-wrappers)
 - [python](https://www.python.org/) _(Optional - For [`youtube-dl`](https://youtube-dl.org/) to support [700+ more sites](https://ytdl-org.github.io/youtube-dl/supportedsites.html).)_
+
+## Installation
+
+```npm
+npm install distube@dev
+```
 
 ## Documentation
 
