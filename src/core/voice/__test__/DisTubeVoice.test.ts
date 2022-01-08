@@ -217,7 +217,7 @@ describe("Methods", () => {
         voice.volume = volume;
       }).not.toThrow();
       expect(voice.volume).toBe(volume);
-      expect((voice as any)._volume).toBe(volume / 100);
+      expect((voice as any)._volume).toBe(volume);
       expect(audioResource.volume.setVolume).toBeCalledWith(expect.any(Number));
     });
 
