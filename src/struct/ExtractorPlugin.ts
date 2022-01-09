@@ -14,7 +14,7 @@ export abstract class ExtractorPlugin extends Plugin {
    * Resolve the validated url to a {@link Song} or a {@link Playlist}.\
    * Not needed to add {@link Song#related} because it will be added with {@link Plugin#getRelatedSongs}.
    */
-  abstract resolve(url: string, member: GuildMember): Promise<Song | Playlist>;
+  abstract resolve(url: string, member: GuildMember, metadata?: any): Promise<Song | Playlist>;
 }
 
 /**

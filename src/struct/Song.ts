@@ -4,6 +4,8 @@ import type ytdl from "@distube/ytdl-core";
 import type { GuildMember, User } from "discord.js";
 import type { Chapter, OtherSongInfo, SearchResult } from "..";
 
+// TODO: Clean parameters on the next major version.
+
 /**
  * Class representing a song.
  *
@@ -12,8 +14,9 @@ import type { Chapter, OtherSongInfo, SearchResult } from "..";
  *
  * Missing info: {@link Song#likes}, {@link Song#dislikes}, {@link Song#streamURL},
  * {@link Song#related}, {@link Song#chapters}, {@link Song#age_restricted}</info>
+ * @template T - The type for the metadata (if any) of the song
  */
-export class Song {
+export class Song<T = unknown> {
   source: string;
   formats?: ytdl.videoFormat[];
   member?: GuildMember;
@@ -38,16 +41,19 @@ export class Song {
   chapters!: Chapter[];
   reposts!: number;
   playlist?: Playlist;
+  metadata: T;
   /**
    * Create a Song
    * @param {ytdl.videoInfo|SearchResult|OtherSongInfo} info Raw info
-   * @param {Discord.GuildMember?} member Requested user
-   * @param {string} source Song source
+   * @param {Discord.GuildMember} [member] Requested user
+   * @param {string} [source="youtube"] Song source
+   * @param {T} [metadata] Song metadata
    */
   constructor(
     info: ytdl.videoInfo | SearchResult | OtherSongInfo | ytdl.relatedVideo,
     member?: GuildMember,
     source = "youtube",
+    metadata?: T,
   ) {
     if (
       typeof source !== "string" ||
@@ -66,6 +72,11 @@ export class Song {
     } else {
       this._patchOther(info as OtherSongInfo);
     }
+    /**
+     * Optional metadata that can be used to identify the song.
+     * @type {T}
+     */
+    this.metadata = metadata as T;
   }
 
   _patchYouTube(i: ytdl.videoInfo | SearchResult) {
@@ -136,7 +147,8 @@ export class Song {
      * Related songs
      * @type {Song[]}
      */
-    this.related = info?.related_videos?.map((v: any) => new Song(v)) || details.related || [];
+    this.related =
+      info?.related_videos?.map((v: any) => new Song(v, undefined, "youtube", this.metadata)) || details.related || [];
     /**
      * Song views count
      * @type {number}
@@ -247,6 +259,16 @@ export class Song {
       this.user = member?.user;
     }
     return this;
+  }
+
+  /**
+   * @param {*} metadata Metadata
+   * @private
+   * @returns {Song}
+   */
+  _patchMetadata<S = unknown>(metadata: S): Song<S> {
+    this.metadata = metadata as unknown as T;
+    return this as unknown as Song<S>;
   }
 }
 

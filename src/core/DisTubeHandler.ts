@@ -15,6 +15,8 @@ import {
 import type { DisTube, OtherSongInfo } from "..";
 import type { GuildMember, Message, StageChannel, TextChannel, VoiceChannel } from "discord.js";
 
+// TODO: Clean parameters on the next major version.
+
 /**
  * DisTube's Handler
  * @extends DisTubeBase
@@ -102,23 +104,25 @@ export class DisTubeHandler extends DisTubeBase {
    * Resolve a Song
    * @param {Discord.GuildMember} member Requested user
    * @param {string|Song|SearchResult|Playlist} song URL | Search string | {@link Song}
+   * @param {*} [metadata] Metadata
    * @returns {Promise<Song|Playlist|null>} Resolved
    */
   async resolveSong(
     member: GuildMember,
     song: string | ytdl.videoInfo | Song | Playlist | SearchResult | OtherSongInfo | ytdl.relatedVideo | null,
+    metadata: any,
   ): Promise<Song | Playlist | null> {
     if (!song) return null;
     if (song instanceof Song || song instanceof Playlist) return song._patchMember(member);
     if (song instanceof SearchResult) {
-      if (song.type === "video") return new Song(song, member);
-      return this.resolvePlaylist(member, song.url);
+      if (song.type === "video") return new Song(song, member, "youtube", metadata);
+      return this.resolvePlaylist(member, song.url, "youtube", metadata);
     }
-    if (typeof song === "object") return new Song(song, member);
-    if (ytdl.validateURL(song)) return new Song(await this.getYouTubeInfo(song), member);
+    if (typeof song === "object") return new Song(song, member, "youtube", metadata);
+    if (ytdl.validateURL(song)) return new Song(await this.getYouTubeInfo(song), member, "youtube", metadata);
     if (isURL(song)) {
       for (const plugin of this.distube.extractorPlugins) {
-        if (await plugin.validate(song)) return plugin.resolve(song, member);
+        if (await plugin.validate(song)) return plugin.resolve(song, member, metadata);
       }
       throw new DisTubeError("NOT_SUPPORTED_URL");
     }
@@ -130,12 +134,14 @@ export class DisTubeHandler extends DisTubeBase {
    * @param {Discord.GuildMember} member Requested user
    * @param {Song[]|string} playlist Resolvable playlist
    * @param {string} [source="youtube"] Playlist source
+   * @param {*} [metadata] Metadata
    * @returns {Promise<Playlist>}
    */
   async resolvePlaylist(
     member: GuildMember,
     playlist: Playlist | Song[] | string,
     source = "youtube",
+    metadata?: any,
   ): Promise<Playlist> {
     if (playlist instanceof Playlist) return playlist;
     let solvablePlaylist: Song[] | ytpl.result;
@@ -143,11 +149,11 @@ export class DisTubeHandler extends DisTubeBase {
       solvablePlaylist = await ytpl(playlist, { limit: Infinity });
       (solvablePlaylist as any).items = solvablePlaylist.items
         .filter(v => !v.thumbnail.includes("no_thumbnail"))
-        .map(v => new Song(v as OtherSongInfo, member));
+        .map(v => new Song(v as OtherSongInfo, member, "youtube", metadata));
     } else {
       solvablePlaylist = playlist;
     }
-    return new Playlist(solvablePlaylist, member, { source });
+    return new Playlist(solvablePlaylist, member, { source }, metadata);
   }
 
   /**
@@ -157,6 +163,7 @@ export class DisTubeHandler extends DisTubeBase {
    * @param {Array<string|Song|SearchResult>} songs Array of url, Song or SearchResult
    * @param {Object} [properties={}] Additional properties such as `name`
    * @param {boolean} [parallel=true] Whether or not fetch the songs in parallel
+   * @param {*} [metadata] Metadata
    * @example
    *     const songs = ["https://www.youtube.com/watch?v=xxx", "https://www.youtube.com/watch?v=yyy"];
    *     const playlist = await distube.handler.createCustomPlaylist(member, songs, { name: "My playlist name" }, true);
@@ -169,6 +176,7 @@ export class DisTubeHandler extends DisTubeBase {
     songs: (string | Song | SearchResult)[],
     properties: any = {},
     parallel = true,
+    metadata?: any,
   ): Promise<Playlist> {
     const member = (message as Message)?.member || (message as GuildMember);
     if (!Array.isArray(songs)) throw new DisTubeError("INVALID_TYPE", "Array", songs, "songs");
@@ -180,17 +188,17 @@ export class DisTubeHandler extends DisTubeBase {
     let resolvedSongs: Song[];
     if (parallel) {
       const promises = songs.map((song: string | Song | SearchResult) =>
-        this.resolveSong(member, song).catch(() => undefined),
+        this.resolveSong(member, song, metadata).catch(() => undefined),
       );
       resolvedSongs = (await Promise.all(promises)).filter((s: any): s is Song => !!s);
     } else {
       const resolved = [];
       for (const song of songs) {
-        resolved.push(await this.resolveSong(member, song).catch(() => undefined));
+        resolved.push(await this.resolveSong(member, song, metadata).catch(() => undefined));
       }
       resolvedSongs = resolved.filter((s: any): s is Song => !!s);
     }
-    return new Playlist(resolvedSongs, member, properties);
+    return new Playlist(resolvedSongs, member, properties, metadata);
   }
 
   /**

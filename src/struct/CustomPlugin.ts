@@ -2,6 +2,8 @@ import Plugin from "./Plugin";
 import { PluginType } from "..";
 import type { GuildMember, StageChannel, TextChannel, VoiceChannel } from "discord.js";
 
+// TODO: Clean parameters on the next major version.
+
 /**
  * Custom Plugin
  * @extends Plugin
@@ -16,6 +18,7 @@ export abstract class CustomPlugin extends Plugin {
     textChannel: TextChannel | undefined,
     skip: boolean,
     unshift: boolean,
+    metadata?: any,
   ): Promise<void>;
 }
 

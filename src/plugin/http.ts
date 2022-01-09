@@ -8,8 +8,8 @@ export class HTTPPlugin extends ExtractorPlugin {
     return validateAudioURL(http, "http:", url);
   }
 
-  async resolve(url: string, member: GuildMember) {
-    return resolveHttpSong("http", url, member);
+  async resolve(url: string, member: GuildMember, metadata: any) {
+    return resolveHttpSong("http", url, member, metadata);
   }
 }
 

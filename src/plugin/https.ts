@@ -31,7 +31,7 @@ export const validateAudioURL = async (httpModule: typeof http | typeof https, p
 };
 
 // eslint-disable-next-line @typescript-eslint/require-await
-export const resolveHttpSong = async (source: string, url: string, member: GuildMember) => {
+export const resolveHttpSong = async (source: string, url: string, member: GuildMember, metadata: any) => {
   url = url.replace(/\/+$/, "");
   return new Song(
     {
@@ -40,6 +40,7 @@ export const resolveHttpSong = async (source: string, url: string, member: Guild
     },
     member,
     source,
+    metadata,
   );
 };
 
@@ -48,8 +49,8 @@ export class HTTPSPlugin extends ExtractorPlugin {
     return validateAudioURL(https, "https:", url);
   }
 
-  async resolve(url: string, member: GuildMember) {
-    return resolveHttpSong("https", url, member);
+  async resolve(url: string, member: GuildMember, metadata: any) {
+    return resolveHttpSong("https", url, member, metadata);
   }
 }
 

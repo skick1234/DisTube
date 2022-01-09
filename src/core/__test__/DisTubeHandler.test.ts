@@ -86,10 +86,16 @@ function createV12Message(answerMessage: any): any {
 const member: any = {};
 const songResult = new SearchResult(videoResults.items[0] as any);
 const plResult = new SearchResult(playlistResults.items[0] as any);
-const song = new Song({ id: "xxxxxxxxxxx", url: "https://www.youtube.com/watch?v=xxxxxxxxxxx" }, member);
-const anotherSong = new Song({ id: "y", url: "https://www.youtube.com/watch?v=y" }, member, "test");
-const nsfwSong = new Song({ id: "z", url: "z url", age_restricted: true }, member, "test");
-const playlist = new Playlist([song, anotherSong, nsfwSong], member);
+const metadata = { test: "sth" };
+const song = new Song(
+  { id: "xxxxxxxxxxx", url: "https://www.youtube.com/watch?v=xxxxxxxxxxx" },
+  member,
+  "youtube",
+  metadata,
+);
+const anotherSong = new Song({ id: "y", url: "https://www.youtube.com/watch?v=y" }, member, "test", metadata);
+const nsfwSong = new Song({ id: "z", url: "z url", age_restricted: true }, member, "test", metadata);
+const playlist = new Playlist([song, anotherSong, nsfwSong], member, {}, metadata);
 // const unref = jest.fn();
 
 beforeEach(() => {
@@ -302,30 +308,31 @@ describe("DisTubeHandler#resolveSong()", () => {
   const handler = new DisTubeHandler(distube as any);
 
   test("Parameter is null or undefined", async () => {
-    await expect(handler.resolveSong(member, null)).resolves.toBe(null);
-    await expect(handler.resolveSong(member, null)).resolves.toBe(null);
+    await expect(handler.resolveSong(member, null, metadata)).resolves.toBe(null);
+    await expect(handler.resolveSong(member, null, metadata)).resolves.toBe(null);
   });
 
   test("Parameter is Song or Playlist", async () => {
-    await expect(handler.resolveSong(member, playlist)).resolves.toBe(playlist);
+    await expect(handler.resolveSong(member, song, metadata)).resolves.toBe(song);
+    await expect(handler.resolveSong(member, playlist, metadata)).resolves.toBe(playlist);
   });
 
   test("Parameter is a SearchResult", async () => {
-    await expect(handler.resolveSong(member, songResult)).resolves.toBeInstanceOf(Song);
+    await expect(handler.resolveSong(member, songResult, metadata)).resolves.toBeInstanceOf(Song);
     (ytpl as unknown as jest.Mock).mockReturnValue(firstPlaylistInfo);
-    await expect(handler.resolveSong(member, plResult)).resolves.toBeInstanceOf(Playlist);
+    await expect(handler.resolveSong(member, plResult, metadata)).resolves.toBeInstanceOf(Playlist);
   });
 
   test("Parameter is a song info object", async () => {
     const songInfo = { id: "z", url: "z url", src: "test" };
-    await expect(handler.resolveSong(member, songInfo)).resolves.toBeInstanceOf(Song);
+    await expect(handler.resolveSong(member, songInfo, metadata)).resolves.toBeInstanceOf(Song);
   });
 
   test("Parameter is a youtube url", async () => {
     const url = "a youtube url";
     ytdl.validateURL.mockReturnValue(true);
     ytdl.getInfo.mockReturnValue({ full: true, videoDetails: { id: "test" }, formats: ["a format"] } as any);
-    const resolved = handler.resolveSong(member, url);
+    const resolved = handler.resolveSong(member, url, metadata);
     await expect(resolved).resolves.toBeInstanceOf(Song);
     expect(ytdl.validateURL).toBeCalledWith(url);
     expect(ytdl.getInfo).toBeCalledWith(url, handler.ytdlOptions);
@@ -338,22 +345,24 @@ describe("DisTubeHandler#resolveSong()", () => {
     Util.isURL.mockReturnValue(true);
     extractor.validate.mockReturnValue(true);
     extractor.resolve.mockReturnValue(result);
-    await expect(handler.resolveSong(member, url)).resolves.toBe(result);
+    await expect(handler.resolveSong(member, url, metadata)).resolves.toBe(result);
     expect(extractor.validate).toBeCalledWith(url);
-    expect(extractor.resolve).toBeCalledWith(url, member);
+    expect(extractor.resolve).toBeCalledWith(url, member, metadata);
   });
 
   test("Parameter is an unsupported URL", async () => {
     const url = "an url";
     Util.isURL.mockReturnValue(true);
     extractor.validate.mockReturnValue(false);
-    await expect(handler.resolveSong(member, url)).rejects.toThrow(new DisTubeError("NOT_SUPPORTED_URL"));
+    await expect(handler.resolveSong(member, url, metadata)).rejects.toThrow(new DisTubeError("NOT_SUPPORTED_URL"));
   });
 
   test("Parameter is a number", async () => {
     const url: any = 1;
     Util.isURL.mockReturnValue(false);
-    await expect(handler.resolveSong(member, url)).rejects.toThrow(new DisTubeError("CANNOT_RESOLVE_SONG", typeof url));
+    await expect(handler.resolveSong(member, url, metadata)).rejects.toThrow(
+      new DisTubeError("CANNOT_RESOLVE_SONG", typeof url),
+    );
   });
 });
 
@@ -366,7 +375,7 @@ describe("DisTubeHandler#resolvePlaylist()", () => {
   });
 
   test("playlist is a Song array", async () => {
-    const result = handler.resolvePlaylist(member, [song, anotherSong, nsfwSong]);
+    const result = handler.resolvePlaylist(member, [song, anotherSong, nsfwSong], "youtube", metadata);
     await expect(result).resolves.toStrictEqual(playlist);
     await expect(result).resolves.not.toBe(playlist);
   });
@@ -395,12 +404,19 @@ describe("DisTubeHandler#createCustomPlaylist()", () => {
   test("parallel is true", async () => {
     const name = "a custom playlist";
     Util.isURL.mockReturnValueOnce(true).mockReturnValueOnce(false);
-    const result = await handler.createCustomPlaylist(message, ["not an url", song, anotherSong, songResult], { name });
+    const result = await handler.createCustomPlaylist(
+      message,
+      ["not an url", song, anotherSong, songResult],
+      { name },
+      true,
+      metadata,
+    );
     expect(result.songs.length).toBe(3);
     expect(result.songs[0]).toBe(song);
     expect(result.songs[1]).toBe(anotherSong);
     expect(result.songs[2]).toBeInstanceOf(Song);
     expect(result.name).toBe(name);
+    expect(result.metadata).toBe(metadata);
   });
 
   test("parallel is false", async () => {
@@ -412,11 +428,13 @@ describe("DisTubeHandler#createCustomPlaylist()", () => {
       ["not an url", anotherSong, song, plResult],
       { name },
       false,
+      metadata,
     );
     expect(result.songs.length).toBe(2);
     expect(result.songs[1]).toBe(song);
     expect(result.songs[0]).toBe(anotherSong);
     expect(result.name).toBe(name);
+    expect(result.metadata).toBe(metadata);
   });
 });
 

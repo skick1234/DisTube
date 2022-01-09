@@ -465,7 +465,7 @@ export class Queue extends DisTubeBase {
     if (!this.songs?.[0]) throw new DisTubeError("NO_PLAYING");
     const related = this.songs[0].related.find(v => !this.previousSongs.map(s => s.id).includes(v.id));
     if (!related || !(related instanceof Song)) throw new DisTubeError("NO_RELATED");
-    const song = await this.handler.resolveSong(this.clientMember, related.url);
+    const song = await this.handler.resolveSong(this.clientMember, related.url, related.metadata);
     if (!(song instanceof Song)) throw new DisTubeError("CANNOT_PLAY_RELATED");
     this.addToQueue(song);
     return song;

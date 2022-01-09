@@ -3,11 +3,14 @@ import type ytpl from "@distube/ytpl";
 import type { PlaylistInfo, Song } from "..";
 import type { GuildMember, User } from "discord.js";
 
+// TODO: Clean parameters on the next major version.
+
 /**
  * Class representing a playlist.
  * @prop {string} source Playlist source
+ * @template T - The type for the metadata (if any) of the playlist
  */
-export class Playlist implements PlaylistInfo {
+export class Playlist<T = unknown> implements PlaylistInfo {
   source: string;
   member?: GuildMember;
   user?: User;
@@ -15,14 +18,16 @@ export class Playlist implements PlaylistInfo {
   name: string;
   url?: string;
   thumbnail?: string;
+  metadata: T;
   [x: string]: any;
   /**
    * Create a playlist
    * @param {Song[]|PlaylistInfo} playlist Playlist
-   * @param {Discord.GuildMember} member Requested user
-   * @param {Object} properties Custom properties
+   * @param {Discord.GuildMember} [member] Requested user
+   * @param {Object} [properties] Custom properties
+   * @param {T} [metadata] Playlist metadata
    */
-  constructor(playlist: Song[] | ytpl.result | PlaylistInfo, member?: GuildMember, properties: any = {}) {
+  constructor(playlist: Song[] | ytpl.result | PlaylistInfo, member?: GuildMember, properties: any = {}, metadata?: T) {
     if (typeof playlist !== "object") {
       throw new DisTubeError("INVALID_TYPE", ["Array<Song>", "object"], playlist, "playlist");
     }
@@ -68,6 +73,12 @@ export class Playlist implements PlaylistInfo {
     for (const [key, value] of Object.entries(properties)) {
       this[key] = value;
     }
+    /**
+     * Optional metadata that can be used to identify the playlist.
+     * @type {T}
+     */
+    this.metadata = metadata as T;
+    this._patchMetadata(metadata);
   }
 
   /**
@@ -106,6 +117,17 @@ export class Playlist implements PlaylistInfo {
     }
     this.songs.map(s => s.constructor.name === "Song" && s._patchPlaylist(this, this.member));
     return this;
+  }
+
+  /**
+   * @param {*} metadata Metadata
+   * @private
+   * @returns {Playlist}
+   */
+  _patchMetadata<S = unknown>(metadata: S): Playlist<S> {
+    this.metadata = metadata as unknown as T;
+    this.songs.map(s => s.constructor.name === "Song" && s._patchMetadata(metadata));
+    return this as unknown as Playlist<S>;
   }
 }
 
