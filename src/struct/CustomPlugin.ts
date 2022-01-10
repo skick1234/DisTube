@@ -1,6 +1,6 @@
 import Plugin from "./Plugin";
 import { PluginType } from "..";
-import type { GuildMember, StageChannel, TextChannel, VoiceChannel } from "discord.js";
+import type { GuildMember, GuildTextBasedChannel, VoiceBasedChannel } from "discord.js";
 
 // TODO: Clean parameters on the next major version.
 
@@ -11,29 +11,46 @@ import type { GuildMember, StageChannel, TextChannel, VoiceChannel } from "disco
  */
 export abstract class CustomPlugin extends Plugin {
   type = PluginType.CUSTOM;
+  /**
+   * This method will be executed if the url is validated.
+   * @param {Discord.VoiceBasedChannel} voiceChannel The voice channel will be joined
+   * @param {string} song Validated url
+   * @param {Object} [options] Optional options
+   * @param {Discord.GuildMember} [options.member] Requested user
+   * @param {Discord.GuildTextBasedChannel} [options.textChannel] Default {@link Queue#textChannel}
+   * @param {boolean} [options.skip] Skip the playing song (if exists) and play the added song/playlist instantly
+   * @param {boolean} [options.unshift] Add the song/playlist after the playing song if exists
+   * @param {*} [options.metadata] Metadata
+   * @returns {Promise<void>}
+   * @abstract
+   */
   abstract play(
-    voiceChannel: VoiceChannel | StageChannel,
-    url: string,
-    member: GuildMember,
-    textChannel: TextChannel | undefined,
-    skip: boolean,
-    unshift: boolean,
-    metadata?: any,
+    voiceChannel: VoiceBasedChannel,
+    song: string,
+    options: {
+      skip: boolean;
+      unshift: boolean;
+      member: GuildMember;
+      textChannel?: GuildTextBasedChannel;
+      metadata?: any;
+    },
   ): Promise<void>;
 }
 
 /**
  * This method will be executed if the url is validated.
- * @param {Discord.VoiceChannel|Discord.StageChannel} voiceChannel The voice channel will be joined
- * @param {string} url Validated url
- * @param {Discord.GuildMember} member Requested user
- * @param {Discord.TextChannel?} textChannel Default {@link Queue#textChannel}
- * @param {boolean} skip Skip the playing song (if exists) and play the added song/playlist instantly
- * @param {boolean} unshift Add the song/playlist to the beginning of the queue (after the playing song if exists)
+ * @param {Discord.VoiceBasedChannel} voiceChannel The voice channel will be joined
+ * @param {string} song Validated url
+ * @param {Object} [options] Optional options
+ * @param {Discord.GuildMember} [options.member] Requested user
+ * @param {Discord.GuildTextBasedChannel} [options.textChannel] Default {@link Queue#textChannel}
+ * @param {boolean} [options.skip] Skip the playing song (if exists) and play the added song/playlist instantly
+ * @param {boolean} [options.unshift] Add the song/playlist after the playing song if exists
+ * @param {*} [options.metadata] Metadata
  * @returns {Promise<void>}
+ * @abstract
  * @method play
  * @memberof CustomPlugin#
- * @abstract
  */
 
 export default CustomPlugin;

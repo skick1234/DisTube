@@ -1,7 +1,7 @@
 import { BaseManager } from ".";
 import { DisTubeError, Queue, RepeatMode } from "../..";
 import type { DisTubeVoiceEvents, Song } from "../..";
-import type { StageChannel, TextChannel, VoiceChannel } from "discord.js";
+import type { GuildTextBasedChannel, VoiceBasedChannel } from "discord.js";
 
 /**
  * Queue manager
@@ -10,15 +10,15 @@ export class QueueManager extends BaseManager<Queue> {
   /**
    * Create a {@link Queue}
    * @private
-   * @param {Discord.VoiceChannel|Discord.StageChannel} channel A voice channel
+   * @param {Discord.VoiceBasedChannel} channel A voice channel
    * @param {Song|Song[]} song First song
-   * @param {Discord.TextChannel} textChannel Default text channel
+   * @param {Discord.GuildTextBasedChannel} textChannel Default text channel
    * @returns {Promise<Queue|true>} Returns `true` if encounter an error
    */
   async create(
-    channel: VoiceChannel | StageChannel,
+    channel: VoiceBasedChannel,
     song: Song[] | Song,
-    textChannel?: TextChannel,
+    textChannel?: GuildTextBasedChannel,
   ): Promise<Queue | true> {
     if (this.has(channel.guild.id)) throw new DisTubeError("QUEUE_EXIST");
     const voice = this.voices.create(channel);

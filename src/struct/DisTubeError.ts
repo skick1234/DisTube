@@ -2,12 +2,17 @@ const ERROR_MESSAGES = {
   INVALID_TYPE: (expected: (number | string) | readonly (number | string)[], got: any, name?: string) =>
     `Expected ${
       Array.isArray(expected) ? expected.map(e => (typeof e === "number" ? e : `'${e}'`)).join(" or ") : `'${expected}'`
-    }${name ? ` for '${name}'` : ""}, but got ${JSON.stringify(got)} (${got?.constructor?.name ?? typeof got})`,
+    }${name ? ` for '${name}'` : ""}, but got ${typeof got === "bigint" ? `${got}n` : JSON.stringify(got)} (${
+      got?.constructor?.name ?? typeof got
+    })`,
   NUMBER_COMPARE: (name: string, expected: string, value: number) => `'${name}' must be ${expected} ${value}`,
   EMPTY_ARRAY: (name: string) => `'${name}' is an empty array`,
   EMPTY_FILTERED_ARRAY: (name: string, type: string) => `There is no valid '${type}' in the '${name}' array`,
-  INVALID_KEY: (obj: string, key: string) => `'${key}' does not need to be provided in ${obj}`,
   EMPTY_STRING: (name: string) => `'${name}' string must not be empty`,
+  INVALID_KEY: (obj: string, key: string) => `'${key}' does not need to be provided in ${obj}`,
+  MISSING_KEY: (obj: string, key: string) => `'${key}' needs to be provided in ${obj}`,
+  MISSING_KEYS: (obj: string, key: string[], all: boolean) =>
+    `${key.map(k => `'${k}'`).join(all ? " and " : " or ")} need to be provided in ${obj}`,
 
   MISSING_INTENTS: (i: string) => `${i} intent must be provided for the Client`,
   DISABLED_OPTION: (o: string) => `DisTubeOptions.${o} is disabled`,

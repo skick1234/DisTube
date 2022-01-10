@@ -3,13 +3,12 @@ import type { CustomPlugin, DisTubeVoice, ExtractorPlugin, Playlist, Queue, Sear
 import type {
   Guild,
   GuildMember,
+  GuildTextBasedChannel,
   Interaction,
   Message,
   Snowflake,
-  StageChannel,
-  TextChannel,
   User,
-  VoiceChannel,
+  VoiceBasedChannel,
   VoiceState,
 } from "discord.js";
 
@@ -22,6 +21,10 @@ export type DisTubeVoiceEvents = {
 };
 
 export type DisTubeEvents = {
+  /** Emitted when DisTube encounters an error. */
+  error: (channel: GuildTextBasedChannel, error: Error) => Awaitable;
+  /** Emitted after DisTube add a new playlist to the playing {@link Queue}. */
+  addList: (queue: Queue, playlist: Playlist) => Awaitable;
   /** Emitted after DisTube add a new song to the playing {@link Queue}. */
   addSong: (queue: Queue, song: Song) => Awaitable;
   /**
@@ -63,25 +66,20 @@ export type DisTubeEvents = {
    * Emitted when {@link DisTubeOptions.searchSongs} bigger than 0,
    * and the search canceled due to {@link DisTubeOptions.searchTimeout}.
    */
-  searchCancel: (message: Message, query: string) => Awaitable;
+  searchCancel: (message: Message<true>, query: string) => Awaitable;
   /** Emitted when DisTube cannot find any results for the query. */
-  searchNoResult: (message: Message, query: string) => Awaitable;
+  searchNoResult: (message: Message<true>, query: string) => Awaitable;
 
   /**
    * Emitted when {@link DisTubeOptions.searchSongs} bigger than 0,
    * and after the user chose a search result to play.
    */
-  searchDone: (message: Message, answer: Message, query: string) => Awaitable;
+  searchDone: (message: Message<true>, answer: Message<true>, query: string) => Awaitable;
   /**
    * Emitted when {@link DisTubeOptions.searchSongs} bigger than 0,
    * and the search canceled due to user's next message is not a number or out of results range.
    */
-  searchInvalidAnswer: (message: Message, answer: Message, query: string) => Awaitable;
-
-  /** Emitted when DisTube encounters an error. */
-  error: (channel: TextChannel, error: Error) => Awaitable;
-  /** Emitted after DisTube add a new playlist to the playing {@link Queue}. */
-  addList: (queue: Queue, playlist: Playlist) => Awaitable;
+  searchInvalidAnswer: (message: Message<true>, answer: Message<true>, query: string) => Awaitable;
   /**
    * Emitted when {@link DisTubeOptions.searchSongs} bigger than 0,
    * and song param of {@link DisTube#playVoiceChannel} is invalid url.
@@ -90,7 +88,7 @@ export type DisTubeEvents = {
    * Safe search is enabled
    * if {@link DisTubeOptions.nsfw} is disabled and the message's channel is not a nsfw channel.
    */
-  searchResult: (message: Message, results: SearchResult[], query: string) => Awaitable;
+  searchResult: (message: Message<true>, results: SearchResult[], query: string) => Awaitable;
 };
 
 export type Filters = Record<string, string>;
@@ -121,11 +119,10 @@ export type GuildIDResolvable =
   | DisTubeVoice
   | Snowflake
   | Message
-  | VoiceChannel
-  | StageChannel
+  | GuildTextBasedChannel
+  | VoiceBasedChannel
   | VoiceState
   | Guild
-  | TextChannel
   | GuildMember
   | Interaction
   | string;

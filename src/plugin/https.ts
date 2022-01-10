@@ -30,17 +30,18 @@ export const validateAudioURL = async (httpModule: typeof http | typeof https, p
   return false;
 };
 
-// eslint-disable-next-line @typescript-eslint/require-await
-export const resolveHttpSong = async (source: string, url: string, member: GuildMember, metadata: any) => {
+export const resolveHttpSong = async (
+  url: string,
+  options: { source: "http" | "https"; member?: GuildMember; metadata?: any },
+  // eslint-disable-next-line @typescript-eslint/require-await
+) => {
   url = url.replace(/\/+$/, "");
   return new Song(
     {
       name: url.substring(url.lastIndexOf("/") + 1).replace(/((\?|#).*)?$/, "") || url,
       url,
     },
-    member,
-    source,
-    metadata,
+    options,
   );
 };
 
@@ -49,8 +50,8 @@ export class HTTPSPlugin extends ExtractorPlugin {
     return validateAudioURL(https, "https:", url);
   }
 
-  async resolve(url: string, member: GuildMember, metadata: any) {
-    return resolveHttpSong("https", url, member, metadata);
+  async resolve(url: string, options: { member?: GuildMember; metadata?: any } = {}) {
+    return resolveHttpSong(url, { ...options, source: "https" });
   }
 }
 

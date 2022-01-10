@@ -17,7 +17,6 @@ import {
   resolveGuildID,
   toSecond,
 } from "..";
-import type { StageChannel, TextChannel, VoiceChannel } from "discord.js";
 
 jest.mock("../core/voice/DisTubeVoice");
 
@@ -26,10 +25,10 @@ const Voice = _Voice as unknown as jest.Mocked<typeof _Voice>;
 const client = new Client({ intents: [] });
 client.user = new ClientUser(client, rawClientUser);
 const guild = new Guild(client, rawGuild);
-const textChannel = guild.channels.cache.get("737499503384461325") as TextChannel;
-const voiceChannel = guild.channels.cache.get("853225781604646933") as VoiceChannel;
+const textChannel = guild.channels.cache.get("737499503384461325");
+const voiceChannel = guild.channels.cache.get("853225781604646933");
 Object.defineProperty(voiceChannel, "joinable", { value: true, writable: false });
-const stageChannel = guild.channels.cache.get("835876864458489857") as StageChannel;
+const stageChannel = guild.channels.cache.get("835876864458489857");
 Object.defineProperty(stageChannel, "joinable", { value: false, writable: false });
 const botVoiceState = new VoiceState(guild, rawBotVoiceState);
 const userVoiceState = new VoiceState(guild, rawUserVoiceState);

@@ -10,7 +10,7 @@ import {
 } from "@discordjs/voice";
 import type { DisTubeStream, DisTubeVoiceEvents, DisTubeVoiceManager } from "../..";
 import type { AudioPlayer, AudioResource, VoiceConnection } from "@discordjs/voice";
-import type { Snowflake, StageChannel, VoiceChannel, VoiceState } from "discord.js";
+import type { Snowflake, VoiceBasedChannel, VoiceState } from "discord.js";
 
 /**
  * Create a voice connection to the voice channel
@@ -23,9 +23,9 @@ export class DisTubeVoice extends TypedEmitter<DisTubeVoiceEvents> {
   audioResource?: AudioResource;
   emittedError!: boolean;
   isDisconnected: boolean;
-  private _channel!: VoiceChannel | StageChannel;
+  private _channel!: VoiceBasedChannel;
   private _volume: number;
-  constructor(voiceManager: DisTubeVoiceManager, channel: VoiceChannel | StageChannel) {
+  constructor(voiceManager: DisTubeVoiceManager, channel: VoiceBasedChannel) {
     super();
     if (!isSupportedVoiceChannel(channel)) throw new DisTubeError("NOT_SUPPORTED_VOICE");
     if (!channel.joinable) {
@@ -83,13 +83,13 @@ export class DisTubeVoice extends TypedEmitter<DisTubeVoiceEvents> {
   get channel() {
     return this._channel;
   }
-  set channel(channel: VoiceChannel | StageChannel) {
+  set channel(channel: VoiceBasedChannel) {
     if (!isSupportedVoiceChannel(channel)) throw new DisTubeError("NOT_SUPPORTED_VOICE");
     if (channel.guild.id !== this.id) throw new DisTubeError("VOICE_CHANGE_GUILD");
     this.connection = this._join(channel);
     this._channel = channel;
   }
-  private _join(channel: VoiceChannel | StageChannel) {
+  private _join(channel: VoiceBasedChannel) {
     return joinVoiceChannel({
       channelId: channel.id,
       guildId: this.id,
@@ -98,11 +98,11 @@ export class DisTubeVoice extends TypedEmitter<DisTubeVoiceEvents> {
   }
   /**
    * Join a voice channel with this connection
-   * @param {Discord.VoiceChannel|Discord.StageChannel} [channel] A voice channel
+   * @param {Discord.VoiceBasedChannel} [channel] A voice channel
    * @private
    * @returns {Promise<DisTubeVoice>}
    */
-  async join(channel?: VoiceChannel | StageChannel): Promise<DisTubeVoice> {
+  async join(channel?: VoiceBasedChannel): Promise<DisTubeVoice> {
     const TIMEOUT = 30e3;
     if (channel) {
       this.channel = channel;

@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/require-await, @typescript-eslint/no-unused-vars */
-import type { Client, TextChannel } from "discord.js";
+import type { Client, GuildTextBasedChannel } from "discord.js";
 import type {
   DisTube,
   DisTubeEvents,
@@ -43,9 +43,9 @@ export abstract class Plugin {
   /**
    * Emit error event
    * @param {Error} error error
-   * @param {Discord.TextChannel?} channel Text channel where the error is encountered.
+   * @param {Discord.GuildTextBasedChannel} [channel] Text channel where the error is encountered.
    */
-  emitError(error: Error, channel?: TextChannel) {
+  emitError(error: Error, channel?: GuildTextBasedChannel) {
     this.distube.emitError(error, channel);
   }
   /**

@@ -22,7 +22,7 @@ export class YouTubeDLPlugin extends ExtractorPlugin {
     return true;
   }
 
-  async resolve(url: string, member: GuildMember, metadata: any) {
+  async resolve(url: string, { member, metadata }: { member?: GuildMember; metadata?: any }) {
     const info: any = await youtubeDlExec(url, {
       dumpSingleJson: true,
       noWarnings: true,
@@ -33,10 +33,12 @@ export class YouTubeDLPlugin extends ExtractorPlugin {
     });
     if (Array.isArray(info.entries) && info.entries.length > 0) {
       info.source = info.extractor.match(/\w+/)[0];
-      info.songs = info.entries.map((i: OtherSongInfo & YtResponse) => new Song(i, member, i.extractor, metadata));
-      return new Playlist(info, member, undefined, metadata);
+      info.songs = info.entries.map(
+        (i: OtherSongInfo & YtResponse) => new Song(i, { member, source: i.extractor, metadata }),
+      );
+      return new Playlist(info, { member, metadata, properties: { source: info.songs[0]?.source } });
     }
-    return new Song(info, member, info.extractor, metadata);
+    return new Song(info, { member, source: info.extractor, metadata });
   }
   async getStreamURL(url: string) {
     const info = await youtubeDlExec(url, {

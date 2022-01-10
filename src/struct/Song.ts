@@ -1,5 +1,5 @@
 import Playlist from "./Playlist";
-import { DisTubeError, formatDuration, parseNumber, toSecond } from "..";
+import { DisTubeError, formatDuration, isMemberInstance, parseNumber, toSecond } from "..";
 import type ytdl from "@distube/ytdl-core";
 import type { GuildMember, User } from "discord.js";
 import type { Chapter, OtherSongInfo, SearchResult } from "..";
@@ -17,7 +17,8 @@ import type { Chapter, OtherSongInfo, SearchResult } from "..";
  * @template T - The type for the metadata (if any) of the song
  */
 export class Song<T = unknown> {
-  source: string;
+  source!: string;
+  metadata!: T;
   formats?: ytdl.videoFormat[];
   member?: GuildMember;
   user?: User;
@@ -29,7 +30,7 @@ export class Song<T = unknown> {
   url!: string;
   streamURL?: string;
   thumbnail?: string;
-  related!: Song[];
+  related!: Omit<Song, "related">[];
   views!: number;
   likes!: number;
   dislikes!: number;
@@ -41,20 +42,51 @@ export class Song<T = unknown> {
   chapters!: Chapter[];
   reposts!: number;
   playlist?: Playlist;
-  metadata: T;
   /**
    * Create a Song
    * @param {ytdl.videoInfo|SearchResult|OtherSongInfo} info Raw info
-   * @param {Discord.GuildMember} [member] Requested user
-   * @param {string} [source="youtube"] Song source
-   * @param {T} [metadata] Song metadata
+   * @param {Object} [options] Optional options
+   * @param {Discord.GuildMember} [options.member] Requested user
+   * @param {string} [options.source="youtube"] Song source
+   * @param {T} [options.metadata] Song metadata
    */
   constructor(
     info: ytdl.videoInfo | SearchResult | OtherSongInfo | ytdl.relatedVideo,
+    options?: {
+      member?: GuildMember;
+      source?: string;
+      metadata?: T;
+    },
+  );
+  /** @deprecated Passing GuildMember for DisTube#Song() is deprecated. */
+  constructor(
+    info: ytdl.videoInfo | SearchResult | OtherSongInfo | ytdl.relatedVideo,
     member?: GuildMember,
-    source = "youtube",
+    source?: string,
     metadata?: T,
+  );
+  constructor(
+    info: ytdl.videoInfo | SearchResult | OtherSongInfo | ytdl.relatedVideo,
+    options:
+      | GuildMember
+      | {
+          member?: GuildMember;
+          source?: string;
+          metadata?: T;
+        } = {},
+    src = "youtube",
+    meta?: T,
   ) {
+    if (isMemberInstance(options)) {
+      process.emitWarning(
+        "Passing GuildMember for DisTube#Song() is deprecated, read the docs for more.",
+        "DeprecationWarning",
+      );
+      return new Song(info, { member: options, source: src, metadata: meta });
+    }
+
+    const { member, source, metadata } = Object.assign({ source: "youtube" }, options);
+
     if (
       typeof source !== "string" ||
       ((info as OtherSongInfo).src && typeof (info as OtherSongInfo).src !== "string")
@@ -145,10 +177,12 @@ export class Song<T = unknown> {
       details.thumbnail;
     /**
      * Related songs
-     * @type {Song[]}
+     * @type {Omit<Song, "related">[]}
      */
     this.related =
-      info?.related_videos?.map((v: any) => new Song(v, undefined, "youtube", this.metadata)) || details.related || [];
+      info?.related_videos?.map((v: any) => new Song(v, { source: this.source, metadata: this.metadata })) ||
+      details.related ||
+      [];
     /**
      * Song views count
      * @type {number}
@@ -229,7 +263,7 @@ export class Song<T = unknown> {
    * @private
    * @returns {Song}
    */
-  _patchPlaylist(playlist: Playlist, member?: GuildMember): Song {
+  _patchPlaylist(playlist: Playlist, member?: GuildMember) {
     if (!(playlist instanceof Playlist)) throw new DisTubeError("INVALID_TYPE", "Playlist", playlist, "playlist");
 
     /**
@@ -245,19 +279,17 @@ export class Song<T = unknown> {
    * @private
    * @returns {Song}
    */
-  _patchMember(member?: GuildMember): Song {
-    if (member) {
-      /**
-       * User requested
-       * @type {Discord.GuildMember?}
-       */
-      this.member = member;
-      /**
-       * User requested
-       * @type {Discord.User?}
-       */
-      this.user = member?.user;
-    }
+  _patchMember(member?: GuildMember) {
+    /**
+     * User requested
+     * @type {Discord.GuildMember?}
+     */
+    this.member = member;
+    /**
+     * User requested
+     * @type {Discord.User?}
+     */
+    this.user = member?.user;
     return this;
   }
 
@@ -266,7 +298,7 @@ export class Song<T = unknown> {
    * @private
    * @returns {Song}
    */
-  _patchMetadata<S = unknown>(metadata: S): Song<S> {
+  _patchMetadata<S = unknown>(metadata: S) {
     this.metadata = metadata as unknown as T;
     return this as unknown as Song<S>;
   }
