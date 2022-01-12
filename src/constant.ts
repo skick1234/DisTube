@@ -102,8 +102,8 @@ export const defaultOptions = {
  * Discord.Snowflake|
  * Discord.Guild|
  * Discord.Message|
- * Discord.VoiceBasedChannel|
- * Discord.GuildTextBasedChannel|
+ * Discord.BaseGuildVoiceChannel|
+ * Discord.BaseGuildTextChannel|
  * Discord.VoiceState|
  * Discord.GuildMember|
  * Discord.Interaction|

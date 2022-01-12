@@ -1,4 +1,4 @@
-import Playlist from "./Playlist";
+import { Playlist } from "./Playlist";
 import { DisTubeError, formatDuration, isMemberInstance, parseNumber, toSecond } from "..";
 import type ytdl from "@distube/ytdl-core";
 import type { GuildMember, User } from "discord.js";
@@ -42,6 +42,14 @@ export class Song<T = unknown> {
   chapters!: Chapter[];
   reposts!: number;
   playlist?: Playlist;
+  constructor(info: ytdl.videoInfo | SearchResult | OtherSongInfo | ytdl.relatedVideo);
+  /** @deprecated Passing GuildMember for DisTube#Song() is deprecated. */
+  constructor(
+    info: ytdl.videoInfo | SearchResult | OtherSongInfo | ytdl.relatedVideo,
+    member?: GuildMember,
+    source?: string,
+    metadata?: T,
+  );
   /**
    * Create a Song
    * @param {ytdl.videoInfo|SearchResult|OtherSongInfo} info Raw info
@@ -57,13 +65,6 @@ export class Song<T = unknown> {
       source?: string;
       metadata?: T;
     },
-  );
-  /** @deprecated Passing GuildMember for DisTube#Song() is deprecated. */
-  constructor(
-    info: ytdl.videoInfo | SearchResult | OtherSongInfo | ytdl.relatedVideo,
-    member?: GuildMember,
-    source?: string,
-    metadata?: T,
   );
   constructor(
     info: ytdl.videoInfo | SearchResult | OtherSongInfo | ytdl.relatedVideo,
@@ -176,8 +177,8 @@ export class Song<T = unknown> {
       details.thumbnail?.url ||
       details.thumbnail;
     /**
-     * Related songs
-     * @type {Omit<Song, "related">[]}
+     * Related songs (without {@link Song#related} properties)
+     * @type {Song[]}
      */
     this.related =
       info?.related_videos?.map((v: any) => new Song(v, { source: this.source, metadata: this.metadata })) ||
@@ -235,7 +236,7 @@ export class Song<T = unknown> {
    * @param {OtherSongInfo} info Video info
    * @private
    */
-  private _patchOther(info: OtherSongInfo) {
+  _patchOther(info: OtherSongInfo) {
     if (info.id) this.id = info.id;
     if (info.title) this.name = info.title;
     else if (info.name) this.name = info.name;
@@ -303,5 +304,3 @@ export class Song<T = unknown> {
     return this as unknown as Song<S>;
   }
 }
-
-export default Song;

@@ -2,7 +2,7 @@ const ERROR_MESSAGES = {
   INVALID_TYPE: (expected: (number | string) | readonly (number | string)[], got: any, name?: string) =>
     `Expected ${
       Array.isArray(expected) ? expected.map(e => (typeof e === "number" ? e : `'${e}'`)).join(" or ") : `'${expected}'`
-    }${name ? ` for '${name}'` : ""}, but got ${typeof got === "bigint" ? `${got}n` : JSON.stringify(got)} (${
+    }${name ? ` for '${name}'` : ""}, but got ${typeof got === "bigint" ? `${got}` : JSON.stringify(got)} (${
       got?.constructor?.name ?? typeof got
     })`,
   NUMBER_COMPARE: (name: string, expected: string, value: number) => `'${name}' must be ${expected} ${value}`,
@@ -85,5 +85,3 @@ export class DisTubeError<T extends string> extends Error {
     return this.errorCode;
   }
 }
-
-export default DisTubeError;

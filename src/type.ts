@@ -82,7 +82,7 @@ export type DisTubeEvents = {
   searchInvalidAnswer: (message: Message<true>, answer: Message<true>, query: string) => Awaitable;
   /**
    * Emitted when {@link DisTubeOptions.searchSongs} bigger than 0,
-   * and song param of {@link DisTube#playVoiceChannel} is invalid url.
+   * and song param of {@link DisTube#play} is invalid url.
    * DisTube will wait for user's next message to choose a song manually.
    *
    * Safe search is enabled

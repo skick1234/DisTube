@@ -1,6 +1,5 @@
 import http from "http";
-import ExtractorPlugin from "../struct/ExtractorPlugin";
-import { resolveHttpSong, validateAudioURL } from "..";
+import { ExtractorPlugin, resolveHttpSong, validateAudioURL } from "..";
 import type { GuildMember } from "discord.js";
 
 export class HTTPPlugin extends ExtractorPlugin {
@@ -12,5 +11,3 @@ export class HTTPPlugin extends ExtractorPlugin {
     return resolveHttpSong(url, { ...options, source: "http" });
   }
 }
-
-export default HTTPPlugin;

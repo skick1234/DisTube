@@ -217,8 +217,14 @@ describe("Methods", () => {
         voice.volume = volume;
       }).not.toThrow();
       expect(voice.volume).toBe(volume);
-      expect((voice as any)._volume).toBe(volume);
-      expect(audioResource.volume.setVolume).toBeCalledWith(expect.any(Number));
+      expect(audioResource.volume.setVolume).toBeCalledTimes(1);
+      expect(audioResource.volume.setVolume).toHaveBeenNthCalledWith(1, 1);
+      volume = 50;
+      expect(() => {
+        voice.volume = volume;
+      }).not.toThrow();
+      expect(audioResource.volume.setVolume).toBeCalledTimes(2);
+      expect(audioResource.volume.setVolume).toHaveBeenNthCalledWith(2, 0.31622776601683794);
     });
 
     test("Other getters", () => {

@@ -118,5 +118,3 @@ export class DisTubeStream {
     this.stream = new FFmpeg({ args, shell: false });
   }
 }
-
-export default DisTubeStream;

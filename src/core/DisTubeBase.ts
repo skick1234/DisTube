@@ -26,7 +26,7 @@ export abstract class DisTubeBase {
   /**
    * Emit error event
    * @param {Error} error error
-   * @param {Discord.GuildTextBasedChannel} [channel] Text channel where the error is encountered.
+   * @param {Discord.BaseGuildTextChannel} [channel] Text channel where the error is encountered.
    */
   emitError(error: Error, channel?: GuildTextBasedChannel) {
     this.distube.emitError(error, channel);
@@ -72,5 +72,3 @@ export abstract class DisTubeBase {
     return this.distube.handler;
   }
 }
-
-export default DisTubeBase;

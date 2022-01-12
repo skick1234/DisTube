@@ -72,7 +72,7 @@ export class DisTubeHandler extends DisTubeBase {
    * Create a new guild queue
    * @param {Discord.Message|Discord.VoiceChannel|Discord.StageChannel} message A user message | a voice channel
    * @param {Song|Song[]} song Song to play
-   * @param {Discord.GuildTextBasedChannel?} textChannel A text channel of the queue
+   * @param {Discord.BaseGuildTextChannel?} textChannel A text channel of the queue
    * @throws {Error}
    * @returns {Promise<Queue|true>} `true` if queue is not generated
    * @deprecated Use {@link QueueManager#create} instead
@@ -179,12 +179,6 @@ export class DisTubeHandler extends DisTubeBase {
    * @param {Object} [properties={}] Additional properties such as `name`
    * @param {boolean} [parallel=true] Whether or not fetch the songs in parallel
    * @param {*} [metadata] Metadata
-   * @example
-   *     const songs = ["https://www.youtube.com/watch?v=xxx", "https://www.youtube.com/watch?v=yyy"];
-   *     const playlist = await distube.handler.createCustomPlaylist(member, songs, { name: "My playlist name" }, true);
-   *     // Or fetching custom playlist sequentially (reduce lag for low specs)
-   *     const playlist = await distube.handler.createCustomPlaylist(member, songs, false);
-   *     distube.playVoiceChannel(voiceChannel, playlist, { ... });
    * @deprecated Use {@link DisTube#createCustomPlaylist} instead
    */
   async createCustomPlaylist(
@@ -209,10 +203,10 @@ export class DisTubeHandler extends DisTubeBase {
   /**
    * Play / add a playlist
    * @returns {Promise<void>}
-   * @param {Discord.VoiceBasedChannel} voice A voice channel
+   * @param {Discord.BaseGuildVoiceChannel} voice A voice channel
    * @param {Playlist|string} playlist A YouTube playlist url | a Playlist
    * @param {Object} [options] Optional options
-   * @param {Discord.GuildTextBasedChannel} [options.textChannel] The default text channel of the queue
+   * @param {Discord.BaseGuildTextChannel} [options.textChannel] The default text channel of the queue
    * @param {boolean} [options.skip=false] Skip the playing song (if exists) and play the added playlist instantly
    * @param {boolean} [options.unshift=false] Add the playlist after the playing song if exists
    */
@@ -368,5 +362,3 @@ export class DisTubeHandler extends DisTubeBase {
     return DisTubeStream.DirectLink(streamURL as string, streamOptions);
   }
 }
-
-export default DisTubeHandler;

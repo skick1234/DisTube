@@ -20,6 +20,14 @@ export class Playlist<T = unknown> implements PlaylistInfo {
   url?: string;
   thumbnail?: string;
   [x: string]: any;
+  constructor(playlist: Song[] | ytpl.result | PlaylistInfo);
+  /** @deprecated Passing GuildMember for DisTube#Playlist() is deprecated. */
+  constructor(
+    playlist: Song[] | ytpl.result | PlaylistInfo,
+    member?: GuildMember,
+    properties?: Record<string, any>,
+    metadata?: T,
+  );
   /**
    * Create a playlist
    * @param {Song[]|PlaylistInfo} playlist Playlist
@@ -35,13 +43,6 @@ export class Playlist<T = unknown> implements PlaylistInfo {
       properties?: Record<string, any>;
       metadata?: T;
     },
-  );
-  /** @deprecated Passing GuildMember for DisTube#Playlist() is deprecated. */
-  constructor(
-    playlist: Song[] | ytpl.result | PlaylistInfo,
-    member?: GuildMember,
-    properties?: Record<string, any>,
-    metadata?: T,
   );
   constructor(
     playlist: Song[] | ytpl.result | PlaylistInfo,
@@ -167,5 +168,3 @@ export class Playlist<T = unknown> implements PlaylistInfo {
     return this as unknown as Playlist<S>;
   }
 }
-
-export default Playlist;

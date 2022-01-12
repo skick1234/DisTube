@@ -7,6 +7,7 @@ import type { VoiceBasedChannel } from "discord.js";
 
 /**
  * Manages voice connections for {@link DisTube}
+ * @extends BaseManager
  */
 export class DisTubeVoiceManager extends BaseManager<DisTubeVoice> {
   /**
@@ -23,7 +24,7 @@ export class DisTubeVoiceManager extends BaseManager<DisTubeVoice> {
    */
   /**
    * Create a {@link DisTubeVoice}
-   * @param {Discord.VoiceBasedChannel} channel A voice channel to join
+   * @param {Discord.BaseGuildVoiceChannel} channel A voice channel to join
    * @returns {DisTubeVoice}
    * @private
    */
@@ -36,7 +37,7 @@ export class DisTubeVoiceManager extends BaseManager<DisTubeVoice> {
   }
   /**
    * Join a voice channel
-   * @param {Discord.VoiceBasedChannel} channel A voice channel to join
+   * @param {Discord.BaseGuildVoiceChannel} channel A voice channel to join
    * @returns {Promise<DisTubeVoice>}
    */
   join(channel: VoiceBasedChannel): Promise<DisTubeVoice> {
@@ -60,5 +61,3 @@ export class DisTubeVoiceManager extends BaseManager<DisTubeVoice> {
     }
   }
 }
-
-export default DisTubeVoiceManager;

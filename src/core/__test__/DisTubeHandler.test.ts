@@ -418,7 +418,7 @@ describe("DisTubeHandler#handlePlaylist()", () => {
   });
 
   test("No valid video in the playlist", async () => {
-    const pl1 = new Playlist([nsfwSong], voice);
+    const pl1 = new Playlist([nsfwSong]);
     await expect(handler.handlePlaylist(voice, pl1, { textChannel: { nsfw: false } } as any)).rejects.toThrow(
       new DisTubeError("EMPTY_FILTERED_PLAYLIST"),
     );

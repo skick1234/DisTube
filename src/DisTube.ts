@@ -32,14 +32,14 @@ import type { CustomPlugin, DisTubeEvents, DisTubeOptions, ExtractorPlugin, Filt
  * @extends EventEmitter
  */
 export class DisTube extends TypedEmitter<DisTubeEvents> {
-  handler: DisTubeHandler;
-  options: Options;
-  client: Client;
-  queues: QueueManager;
-  voices: DisTubeVoiceManager;
-  extractorPlugins: ExtractorPlugin[];
-  customPlugins: CustomPlugin[];
-  filters: Filters;
+  readonly handler: DisTubeHandler;
+  readonly options: Options;
+  readonly client: Client;
+  readonly queues: QueueManager;
+  readonly voices: DisTubeVoiceManager;
+  readonly extractorPlugins: ExtractorPlugin[];
+  readonly customPlugins: CustomPlugin[];
+  readonly filters: Filters;
   /**
    * Create a new DisTube class.
    * @param {Discord.Client} client Discord.JS client
@@ -110,7 +110,7 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
   /**
    * Play / add a song or playlist from url. Search and play a song if it is not a valid url.
    *
-   * @param {Discord.VoiceBasedChannel} voiceChannel The voice channel will be joined
+   * @param {Discord.BaseGuildVoiceChannel} voiceChannel The voice channel will be joined
    * @param {string|Song|SearchResult|Playlist} song URL | Search string |
    * {@link Song} | {@link SearchResult} | {@link Playlist}
    * @param {Object} [options] Optional options
@@ -118,11 +118,23 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
    * @param {boolean} [options.unshift=false] Add the song/playlist to the beginning of the queue
    * (after the playing song if exists)
    * @param {Discord.GuildMember} [options.member] Requested user (default is your bot)
-   * @param {Discord.GuildTextBasedChannel} [options.textChannel] Default {@link Queue#textChannel}
+   * @param {Discord.BaseGuildTextChannel} [options.textChannel] Default {@link Queue#textChannel}
    * @param {Discord.Message} [options.message] Called message (For built-in search events. If this is a {@link https://developer.mozilla.org/en-US/docs/Glossary/Falsy|falsy value}, it will play the first result instead)
    * @param {*} [options.metadata] Optional metadata that can be attached to the song/playlist will be played,
    * This is useful for identification purposes when the song/playlist is passed around in events.
    * See {@link Song#metadata} or {@link Playlist#metadata}
+   * @example
+   * client.on('message', (message) => {
+   *     if (!message.content.startsWith(config.prefix)) return;
+   *     const args = message.content.slice(config.prefix.length).trim().split(/ +/g);
+   *     const command = args.shift();
+   *     if (command == "play")
+   *         distube.play(message.member.voice?.channel, args.join(" "), {
+   *             member: message.member,
+   *             textChannel: message.channel,
+   *             message
+   *         });
+   * });
    * @returns {Promise<void>}
    */
   async play(
@@ -150,14 +162,6 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
    * @param {*} [options.metadata] Optional metadata that can be attached to the song/playlist will be played,
    * This is useful for identification purposes when the song/playlist is passed around in events.
    * See {@link Song#metadata} or {@link Playlist#metadata}
-   * @example
-   * client.on('message', (message) => {
-   *     if (!message.content.startsWith(config.prefix)) return;
-   *     const args = message.content.slice(config.prefix.length).trim().split(/ +/g);
-   *     const command = args.shift();
-   *     if (command == "play")
-   *         distube.play(message, args.join(" "));
-   * });
    * @deprecated Message parameter is deprecated, use VoiceChannel instead. See {@link DisTube#play}
    */
   async play(
@@ -223,12 +227,12 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
       if (typeof song === "string") {
         for (const plugin of this.customPlugins) {
           if (await plugin.validate(song)) {
-            return plugin.play(voiceChannel, song, { member, textChannel, skip, unshift, metadata });
+            return plugin.play(voiceChannel, song, options);
           }
         }
       }
       let queue = this.getQueue(voiceChannel);
-      const queuing = queue && !queue.taskQueue.hasResolveTask;
+      const queuing = !!queue && !queue.taskQueue.hasResolveTask;
       if (queuing) await queue?.taskQueue.queuing(true);
       try {
         if (song instanceof SearchResult && song.type === "playlist") song = song.url;
@@ -277,7 +281,7 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
    * Play / add a song or playlist from url. Search and play a song if it is not a valid url.
    *
    * @returns {Promise<void>}
-   * @param {Discord.VoiceBasedChannel} voiceChannel The voice channel will be joined
+   * @param {Discord.BaseGuildVoiceChannel} voiceChannel The voice channel will be joined
    * @param {string|Song|SearchResult|Playlist} song URL | Search string |
    * {@link Song} | {@link SearchResult} | {@link Playlist}
    * @param {Object} [options] Optional options
@@ -285,7 +289,7 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
    * @param {boolean} [options.unshift=false] Add the song/playlist to the beginning of the queue
    * (after the playing song if exists)
    * @param {Discord.GuildMember} [options.member] Requested user (default is your bot)
-   * @param {Discord.GuildTextBasedChannel} [options.textChannel] Default {@link Queue#textChannel}
+   * @param {Discord.BaseGuildTextChannel} [options.textChannel] Default {@link Queue#textChannel}
    * @param {Discord.Message} [options.message] Called message (For built-in search events. If this is a {@link https://developer.mozilla.org/en-US/docs/Glossary/Falsy|falsy value}, it will play the first result instead)
    * @param {*} [options.metadata] Optional metadata that can be attached to the song/playlist will be played,
    * This is useful for identification purposes when the song/playlist is passed around in events.
@@ -304,7 +308,7 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
       metadata?: any;
     } = {},
   ): Promise<void> {
-    process.emitWarning("DisTube#playVoiceChannel is deprecated,u se DisTube#play instead.", "DeprecationWarning");
+    process.emitWarning("DisTube#playVoiceChannel is deprecated, use DisTube#play instead.", "DeprecationWarning");
     return this.play(voiceChannel, song, options);
   }
 
@@ -318,13 +322,13 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
    * @param {boolean} [options.parallel=true] Whether or not fetch the songs in parallel
    * @param {*} [options.metadata] Metadata
    * @example
-   *     const songs = ["https://www.youtube.com/watch?v=xxx", "https://www.youtube.com/watch?v=yyy"];
-   *     const playlist = await distube.createCustomPlaylist(songs, {
-   *         member: message.member,
-   *         properties: { name: "My playlist name" },
-   *         parallel: true
-   *     });
-   *     distube.play(voiceChannel, playlist, { ... });
+   * const songs = ["https://www.youtube.com/watch?v=xxx", "https://www.youtube.com/watch?v=yyy"];
+   * const playlist = await distube.createCustomPlaylist(songs, {
+   *     member: message.member,
+   *     properties: { name: "My playlist name" },
+   *      parallel: true
+   * });
+   * distube.play(voiceChannel, playlist, { ... });
    */
   async createCustomPlaylist(
     songs: (string | Song | SearchResult)[],
@@ -381,12 +385,7 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
    * @param {boolean} [options.unshift=false] Add the song/playlist to the beginning of the queue
    * (after the playing song if exists)
    * @param {boolean} [options.parallel=true] Whether or not fetch the songs in parallel
-   * @example
-   *     const songs = ["https://www.youtube.com/watch?v=xxx", "https://www.youtube.com/watch?v=yyy"];
-   *     distube.playCustomPlaylist(message, songs, { name: "My playlist name" });
-   *     // Fetching custom playlist sequentially (reduce lag for low specs)
-   *     distube.playCustomPlaylist(message, songs, { name: "My playlist name" }, false, false);
-   * @deprecated Use {@link DisTubeHandler#createCustomPlaylist} and {@link DisTube#play} instead
+   * @deprecated Use {@link DisTube#createCustomPlaylist} and {@link DisTube#play} instead
    */
   async playCustomPlaylist(
     message: Message<true>,
@@ -432,9 +431,9 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
   }
 
   /**
-   * Search for a song.
-   * You can customize how user answers instead of send a number.
-   * Then use {@link DisTube#play} or {@link DisTube#playVoiceChannel} to play it.
+   * Search for a song. You can customize how user answers instead of send a number.
+   * Then use {@link DisTube#play} to play it.
+   *
    * @param {string} string The string search for
    * @param {Object} options Search options
    * @param {number} [options.limit=10] Limit the results
@@ -764,7 +763,7 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
   /**
    * Emit error event
    * @param {Error} error error
-   * @param {Discord.GuildTextBasedChannel} [channel] Text channel where the error is encountered.
+   * @param {Discord.BaseGuildTextChannel} [channel] Text channel where the error is encountered.
    * @private
    */
   emitError(error: Error, channel?: GuildTextBasedChannel): void {
@@ -826,7 +825,7 @@ export default DisTube;
  * Emitted when DisTube encounters an error.
  *
  * @event DisTube#error
- * @param {Discord.GuildTextBasedChannel} channel Text channel where the error is encountered.
+ * @param {Discord.BaseGuildTextChannel} channel Text channel where the error is encountered.
  * @param {Error} error The error encountered
  * @example
  * distube.on("error", (channel, error) => channel.send(
@@ -893,7 +892,7 @@ export default DisTube;
 
 /**
  * Emitted when {@link DisTubeOptions|DisTubeOptions.searchSongs} bigger than 0,
- * and song param of {@link DisTube#playVoiceChannel} is invalid url.
+ * and song param of {@link DisTube#play} is invalid url.
  * DisTube will wait for user's next message to choose a song manually.
  * <info>{@link https://support.google.com/youtube/answer/7354993|Safe search} is enabled
  * if {@link DisTubeOptions}.nsfw is disabled and the message's channel is not a nsfw channel.</info>

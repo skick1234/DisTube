@@ -8,7 +8,7 @@ import type { DisTube, DisTubeVoice, DisTubeVoiceEvents, SearchResult } from "..
  * @extends DisTubeBase
  */
 export class Queue extends DisTubeBase {
-  id: Snowflake;
+  readonly id: Snowflake;
   /**
    * Voice connection of this queue
    */
@@ -86,7 +86,7 @@ export class Queue extends DisTubeBase {
    * @param {DisTube} distube DisTube
    * @param {DisTubeVoice} voice Voice connection
    * @param {Song|Song[]} song First song(s)
-   * @param {Discord.GuildTextBasedChannel?} textChannel Default text channel
+   * @param {Discord.BaseGuildTextChannel?} textChannel Default text channel
    */
   constructor(distube: DisTube, voice: DisTubeVoice, song: Song | Song[], textChannel?: GuildTextBasedChannel) {
     super(distube);
@@ -510,5 +510,3 @@ export class Queue extends DisTubeBase {
     return this.autoplay;
   }
 }
-
-export default Queue;

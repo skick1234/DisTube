@@ -1,23 +1,21 @@
-import DisTubeBase from "../DisTubeBase";
+import { DisTubeBase } from "..";
 import { resolveGuildID } from "../..";
 import { Collection } from "discord.js";
-import type { DisTube, GuildIDResolvable } from "../..";
+import type { GuildIDResolvable } from "../..";
 
 /**
  * Manages the collection of a data model.
  * @abstract
  * @private
+ * @extends DisTubeBase
  */
 export abstract class BaseManager<V> extends DisTubeBase {
-  collection: Collection<string, V>;
-  constructor(distube: DisTube) {
-    super(distube);
-    /**
-     * Collection of of a data model.
-     * @type {Discord.Collection}
-     */
-    this.collection = new Collection();
-  }
+  /**
+   * The collection of items for this manager.
+   * @type {Discord.Collection}
+   * @abstract
+   */
+  collection = new Collection<string, V>();
   add(id: string, data: V) {
     const existing = this.get(id);
     if (existing) {
@@ -36,5 +34,3 @@ export abstract class BaseManager<V> extends DisTubeBase {
     return this.collection.has(resolveGuildID(idOrInstance));
   }
 }
-
-export default BaseManager;

@@ -47,10 +47,10 @@ export class Options {
     this.emitAddSongWhenCreatingQueue = opts.emitAddSongWhenCreatingQueue;
     this.emitAddListWhenCreatingQueue = opts.emitAddListWhenCreatingQueue;
     checkInvalidKey(opts, this, "DisTubeOptions");
-    this._validateOptions();
+    this.#validateOptions();
   }
 
-  private _validateOptions(options = this) {
+  #validateOptions(options = this) {
     if (typeof options.emitNewSongOnly !== "boolean") {
       throw new DisTubeError("INVALID_TYPE", "boolean", options.emitNewSongOnly, "DisTubeOptions.emitNewSongOnly");
     }
@@ -122,5 +122,3 @@ export class Options {
     }
   }
 }
-
-export default Options;

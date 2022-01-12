@@ -1,6 +1,5 @@
 import youtubeDlExec, { download } from "@distube/youtube-dl";
-import ExtractorPlugin from "../struct/ExtractorPlugin";
-import { Playlist, Song } from "../struct";
+import { ExtractorPlugin, Playlist, Song } from "..";
 import type { OtherSongInfo } from "..";
 import type { GuildMember } from "discord.js";
 import type { YtResponse } from "@distube/youtube-dl";
@@ -52,5 +51,3 @@ export class YouTubeDLPlugin extends ExtractorPlugin {
     return info.url;
   }
 }
-
-export default YouTubeDLPlugin;
