@@ -124,7 +124,11 @@ export class DisTubeHandler extends DisTubeBase {
     } = {},
   ): Promise<Song | Playlist | null> {
     if (!song) return null;
-    if (song instanceof Song || song instanceof Playlist) return song._patchMember(options.member);
+    if (song instanceof Song || song instanceof Playlist) {
+      if (options.metadata) song._patchMetadata(options.metadata);
+      if (options.member) song._patchMember(options.member);
+      return song;
+    }
     if (song instanceof SearchResult) {
       if (song.type === "video") return new Song(song, options);
       return this.resolvePlaylist(song.url, options);
@@ -158,7 +162,11 @@ export class DisTubeHandler extends DisTubeBase {
     } = {},
   ): Promise<Playlist> {
     const { member, source, metadata } = Object.assign({ source: "youtube" }, options);
-    if (playlist instanceof Playlist) return playlist;
+    if (playlist instanceof Playlist) {
+      if (metadata) playlist._patchMetadata(metadata);
+      if (member) playlist._patchMember(member);
+      return playlist;
+    }
     let solvablePlaylist: Song[] | ytpl.result;
     if (typeof playlist === "string") {
       solvablePlaylist = await ytpl(playlist, { limit: Infinity });

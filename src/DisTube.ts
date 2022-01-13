@@ -421,7 +421,7 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
         });
         const voice = message.member?.voice?.channel;
         if (!voice) throw new DisTubeError("NOT_IN_VOICE");
-        await this.handler.handlePlaylist(voice, playlist, { textChannel: message.channel, skip, unshift });
+        await this.play(voice, playlist, { textChannel: message.channel, skip, unshift, metadata });
       } finally {
         if (queuing) queue?.taskQueue.resolve();
       }
