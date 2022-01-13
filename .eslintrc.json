@@ -2,5 +2,14 @@
   "parserOptions": {
     "project": "./tsconfig.eslint.json"
   },
-  "extends": "distube"
+  "extends": "distube",
+  "overrides": [
+    {
+      "files": ["*.ts"],
+      "plugins": ["deprecation"],
+      "rules": {
+        "deprecation/deprecation": "warn"
+      }
+    }
+  ]
 }

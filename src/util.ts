@@ -10,12 +10,11 @@ import type {
   ClientOptions,
   Guild,
   GuildMember,
+  GuildTextBasedChannel,
   IntentsString,
   Message,
   Snowflake,
-  StageChannel,
-  TextChannel,
-  VoiceChannel,
+  VoiceBasedChannel,
   VoiceState,
 } from "discord.js";
 
@@ -121,7 +120,7 @@ export function isMemberInstance(member: any): member is GuildMember {
   );
 }
 
-export function isTextChannelInstance(channel: any): channel is TextChannel {
+export function isTextChannelInstance(channel: any): channel is GuildTextBasedChannel {
   return (
     !!channel &&
     isSnowflake(channel.id) &&
@@ -131,7 +130,7 @@ export function isTextChannelInstance(channel: any): channel is TextChannel {
   );
 }
 
-export function isMessageInstance(message: any): message is Message {
+export function isMessageInstance(message: any): message is Message<true> {
   // Simple check for using distube normally
   return (
     !!message &&
@@ -145,7 +144,7 @@ export function isMessageInstance(message: any): message is Message {
   );
 }
 
-export function isSupportedVoiceChannel(channel: any): channel is VoiceChannel | StageChannel {
+export function isSupportedVoiceChannel(channel: any): channel is VoiceBasedChannel {
   return (
     !!channel &&
     typeof channel.joinable === "boolean" &&

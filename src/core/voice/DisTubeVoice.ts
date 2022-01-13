@@ -10,29 +10,28 @@ import {
 } from "@discordjs/voice";
 import type { DisTubeStream, DisTubeVoiceEvents, DisTubeVoiceManager } from "../..";
 import type { AudioPlayer, AudioResource, VoiceConnection } from "@discordjs/voice";
-import type { Snowflake, StageChannel, VoiceChannel, VoiceState } from "discord.js";
+import type { Snowflake, VoiceBasedChannel, VoiceState } from "discord.js";
 
 /**
  * Create a voice connection to the voice channel
  */
 export class DisTubeVoice extends TypedEmitter<DisTubeVoiceEvents> {
-  id: Snowflake;
-  voices: DisTubeVoiceManager;
-  audioPlayer: AudioPlayer;
+  readonly id: Snowflake;
+  readonly voices: DisTubeVoiceManager;
+  readonly audioPlayer: AudioPlayer;
   connection!: VoiceConnection;
   audioResource?: AudioResource;
   emittedError!: boolean;
-  isDisconnected: boolean;
-  private _channel!: VoiceChannel | StageChannel;
-  private _volume: number;
-  constructor(voiceManager: DisTubeVoiceManager, channel: VoiceChannel | StageChannel) {
+  isDisconnected = false;
+  #channel!: VoiceBasedChannel;
+  #volume = 100;
+  constructor(voiceManager: DisTubeVoiceManager, channel: VoiceBasedChannel) {
     super();
     if (!isSupportedVoiceChannel(channel)) throw new DisTubeError("NOT_SUPPORTED_VOICE");
     if (!channel.joinable) {
       if (channel.full) throw new DisTubeError("VOICE_FULL");
       else throw new DisTubeError("VOICE_MISSING_PERMS");
     }
-    this.isDisconnected = false;
     this.id = channel.guild.id;
     this.channel = channel;
     /**
@@ -41,7 +40,6 @@ export class DisTubeVoice extends TypedEmitter<DisTubeVoiceEvents> {
      */
     this.voices = voiceManager;
     this.voices.add(this.id, this);
-    this._volume = 0.5;
     this.audioPlayer = createAudioPlayer()
       .on(AudioPlayerStatus.Idle, oldState => {
         if (oldState.status !== AudioPlayerStatus.Idle) {
@@ -81,15 +79,15 @@ export class DisTubeVoice extends TypedEmitter<DisTubeVoiceEvents> {
      */
   }
   get channel() {
-    return this._channel;
+    return this.#channel;
   }
-  set channel(channel: VoiceChannel | StageChannel) {
+  set channel(channel: VoiceBasedChannel) {
     if (!isSupportedVoiceChannel(channel)) throw new DisTubeError("NOT_SUPPORTED_VOICE");
     if (channel.guild.id !== this.id) throw new DisTubeError("VOICE_CHANGE_GUILD");
-    this.connection = this._join(channel);
-    this._channel = channel;
+    this.connection = this.#join(channel);
+    this.#channel = channel;
   }
-  private _join(channel: VoiceChannel | StageChannel) {
+  #join(channel: VoiceBasedChannel) {
     return joinVoiceChannel({
       channelId: channel.id,
       guildId: this.id,
@@ -98,11 +96,11 @@ export class DisTubeVoice extends TypedEmitter<DisTubeVoiceEvents> {
   }
   /**
    * Join a voice channel with this connection
-   * @param {Discord.VoiceChannel|Discord.StageChannel} [channel] A voice channel
+   * @param {Discord.BaseGuildVoiceChannel} [channel] A voice channel
    * @private
    * @returns {Promise<DisTubeVoice>}
    */
-  async join(channel?: VoiceChannel | StageChannel): Promise<DisTubeVoice> {
+  async join(channel?: VoiceBasedChannel): Promise<DisTubeVoice> {
     const TIMEOUT = 30e3;
     if (channel) {
       this.channel = channel;
@@ -168,11 +166,11 @@ export class DisTubeVoice extends TypedEmitter<DisTubeVoiceEvents> {
     if (volume < 0) {
       throw new DisTubeError("NUMBER_COMPARE", "Volume", "bigger or equal to", 0);
     }
-    this._volume = volume;
-    this.audioResource?.volume?.setVolume(Math.pow(this._volume / 100, 0.5 / Math.log10(2)));
+    this.#volume = volume;
+    this.audioResource?.volume?.setVolume(Math.pow(this.#volume / 100, 0.5 / Math.log10(2)));
   }
   get volume() {
-    return this._volume;
+    return this.#volume;
   }
   /**
    * Playback duration of the audio resource in seconds
@@ -237,5 +235,3 @@ export class DisTubeVoice extends TypedEmitter<DisTubeVoiceEvents> {
     return this.channel?.guild?.me?.voice;
   }
 }
-
-export default DisTubeVoice;

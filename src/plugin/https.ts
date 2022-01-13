@@ -1,7 +1,6 @@
 import https from "https";
-import ExtractorPlugin from "../struct/ExtractorPlugin";
 import { URL } from "url";
-import { Song } from "..";
+import { ExtractorPlugin, Song } from "..";
 import type http from "http";
 import type { GuildMember } from "discord.js";
 
@@ -30,16 +29,18 @@ export const validateAudioURL = async (httpModule: typeof http | typeof https, p
   return false;
 };
 
-// eslint-disable-next-line @typescript-eslint/require-await
-export const resolveHttpSong = async (source: string, url: string, member: GuildMember) => {
+export const resolveHttpSong = async (
+  url: string,
+  options: { source: "http" | "https"; member?: GuildMember; metadata?: any },
+  // eslint-disable-next-line @typescript-eslint/require-await
+) => {
   url = url.replace(/\/+$/, "");
   return new Song(
     {
       name: url.substring(url.lastIndexOf("/") + 1).replace(/((\?|#).*)?$/, "") || url,
       url,
     },
-    member,
-    source,
+    options,
   );
 };
 
@@ -48,9 +49,7 @@ export class HTTPSPlugin extends ExtractorPlugin {
     return validateAudioURL(https, "https:", url);
   }
 
-  async resolve(url: string, member: GuildMember) {
-    return resolveHttpSong("https", url, member);
+  async resolve(url: string, options: { member?: GuildMember; metadata?: any } = {}) {
+    return resolveHttpSong(url, { ...options, source: "https" });
   }
 }
-
-export default HTTPSPlugin;

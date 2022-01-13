@@ -1,28 +1,71 @@
-import { DisTubeError, formatDuration } from "..";
+import { DisTubeError, formatDuration, isMemberInstance } from "..";
 import type ytpl from "@distube/ytpl";
 import type { PlaylistInfo, Song } from "..";
 import type { GuildMember, User } from "discord.js";
 
+// TODO: Remove ! on the next major version
+
 /**
  * Class representing a playlist.
  * @prop {string} source Playlist source
+ * @template T - The type for the metadata (if any) of the playlist
  */
-export class Playlist implements PlaylistInfo {
-  source: string;
+export class Playlist<T = unknown> implements PlaylistInfo {
+  source!: string;
+  songs!: Song[];
+  name!: string;
+  metadata!: T;
   member?: GuildMember;
   user?: User;
-  songs: Song[];
-  name: string;
   url?: string;
   thumbnail?: string;
   [x: string]: any;
+  constructor(playlist: Song[] | ytpl.result | PlaylistInfo);
+  /** @deprecated Passing GuildMember for DisTube#Playlist() is deprecated. */
+  constructor(
+    playlist: Song[] | ytpl.result | PlaylistInfo,
+    member?: GuildMember,
+    properties?: Record<string, any>,
+    metadata?: T,
+  );
   /**
    * Create a playlist
    * @param {Song[]|PlaylistInfo} playlist Playlist
-   * @param {Discord.GuildMember} member Requested user
-   * @param {Object} properties Custom properties
+   * @param {Object} [options] Optional options
+   * @param {Discord.GuildMember} [options.member] Requested user
+   * @param {Object} [options.properties] Custom properties
+   * @param {T} [options.metadata] Playlist metadata
    */
-  constructor(playlist: Song[] | ytpl.result | PlaylistInfo, member?: GuildMember, properties: any = {}) {
+  constructor(
+    playlist: Song[] | ytpl.result | PlaylistInfo,
+    options?: {
+      member?: GuildMember;
+      properties?: Record<string, any>;
+      metadata?: T;
+    },
+  );
+  constructor(
+    playlist: Song[] | ytpl.result | PlaylistInfo,
+    options:
+      | GuildMember
+      | {
+          member?: GuildMember;
+          properties?: Record<string, any>;
+          metadata?: T;
+        } = {},
+    props: Record<string, any> = {},
+    meta?: T,
+  ) {
+    if (isMemberInstance(options)) {
+      process.emitWarning(
+        "Passing GuildMember for DisTube#Playlist() is deprecated, read the docs for more.",
+        "DeprecationWarning",
+      );
+      return new Playlist(playlist, { member: options, properties: props, metadata: meta });
+    }
+
+    const { member, properties, metadata } = Object.assign({ properties: {} }, options);
+
     if (typeof playlist !== "object") {
       throw new DisTubeError("INVALID_TYPE", ["Array<Song>", "object"], playlist, "playlist");
     }
@@ -68,6 +111,12 @@ export class Playlist implements PlaylistInfo {
     for (const [key, value] of Object.entries(properties)) {
       this[key] = value;
     }
+    /**
+     * Optional metadata that can be used to identify the playlist.
+     * @type {T}
+     */
+    this.metadata = metadata as T;
+    this._patchMetadata(metadata);
   }
 
   /**
@@ -91,7 +140,7 @@ export class Playlist implements PlaylistInfo {
    * @private
    * @returns {Playlist}
    */
-  _patchMember(member?: GuildMember): Playlist {
+  _patchMember(member?: GuildMember) {
     if (member) {
       /**
        * User requested.
@@ -107,6 +156,15 @@ export class Playlist implements PlaylistInfo {
     this.songs.map(s => s.constructor.name === "Song" && s._patchPlaylist(this, this.member));
     return this;
   }
-}
 
-export default Playlist;
+  /**
+   * @param {*} metadata Metadata
+   * @private
+   * @returns {Playlist}
+   */
+  _patchMetadata<S = unknown>(metadata: S) {
+    this.metadata = metadata as unknown as T;
+    this.songs.map(s => s.constructor.name === "Song" && s._patchMetadata(metadata));
+    return this as unknown as Playlist<S>;
+  }
+}

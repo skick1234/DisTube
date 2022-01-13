@@ -88,5 +88,3 @@ export class SearchResult {
     };
   }
 }
-
-export default SearchResult;

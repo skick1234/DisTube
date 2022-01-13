@@ -3,10 +3,11 @@ import { resolveGuildID } from "../..";
 import { BaseManager } from "../manager";
 import { VoiceConnectionStatus, getVoiceConnection } from "@discordjs/voice";
 import type { GuildIDResolvable } from "../..";
-import type { StageChannel, VoiceChannel } from "discord.js";
+import type { VoiceBasedChannel } from "discord.js";
 
 /**
  * Manages voice connections for {@link DisTube}
+ * @extends BaseManager
  */
 export class DisTubeVoiceManager extends BaseManager<DisTubeVoice> {
   /**
@@ -23,11 +24,11 @@ export class DisTubeVoiceManager extends BaseManager<DisTubeVoice> {
    */
   /**
    * Create a {@link DisTubeVoice}
-   * @param {Discord.VoiceChannel|Discord.StageChannel} channel A voice channel to join
+   * @param {Discord.BaseGuildVoiceChannel} channel A voice channel to join
    * @returns {DisTubeVoice}
    * @private
    */
-  create(channel: VoiceChannel | StageChannel): DisTubeVoice {
+  create(channel: VoiceBasedChannel): DisTubeVoice {
     const existing = this.get(channel.guild.id);
     if (existing) {
       return existing;
@@ -36,10 +37,10 @@ export class DisTubeVoiceManager extends BaseManager<DisTubeVoice> {
   }
   /**
    * Join a voice channel
-   * @param {Discord.VoiceChannel|Discord.StageChannel} channel A voice channel to join
+   * @param {Discord.BaseGuildVoiceChannel} channel A voice channel to join
    * @returns {Promise<DisTubeVoice>}
    */
-  join(channel: VoiceChannel | StageChannel): Promise<DisTubeVoice> {
+  join(channel: VoiceBasedChannel): Promise<DisTubeVoice> {
     const existing = this.get(channel.guild.id);
     if (existing) return existing.join(channel);
     return this.create(channel).join();
@@ -60,5 +61,3 @@ export class DisTubeVoiceManager extends BaseManager<DisTubeVoice> {
     }
   }
 }
-
-export default DisTubeVoiceManager;

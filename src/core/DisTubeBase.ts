@@ -1,4 +1,4 @@
-import type { Client, TextChannel } from "discord.js";
+import type { Client, GuildTextBasedChannel } from "discord.js";
 import type { DisTube, DisTubeEvents, DisTubeHandler, DisTubeVoiceManager, Options, QueueManager } from "..";
 
 /**
@@ -26,9 +26,9 @@ export abstract class DisTubeBase {
   /**
    * Emit error event
    * @param {Error} error error
-   * @param {Discord.TextChannel?} channel Text channel where the error is encountered.
+   * @param {Discord.BaseGuildTextChannel} [channel] Text channel where the error is encountered.
    */
-  emitError(error: Error, channel?: TextChannel) {
+  emitError(error: Error, channel?: GuildTextBasedChannel) {
     this.distube.emitError(error, channel);
   }
   /**
@@ -72,5 +72,3 @@ export abstract class DisTubeBase {
     return this.distube.handler;
   }
 }
-
-export default DisTubeBase;

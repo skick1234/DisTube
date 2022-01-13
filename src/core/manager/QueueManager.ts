@@ -1,24 +1,30 @@
 import { BaseManager } from ".";
 import { DisTubeError, Queue, RepeatMode } from "../..";
 import type { DisTubeVoiceEvents, Song } from "../..";
-import type { StageChannel, TextChannel, VoiceChannel } from "discord.js";
+import type { GuildTextBasedChannel, VoiceBasedChannel } from "discord.js";
 
 /**
  * Queue manager
+ * @extends BaseManager
  */
 export class QueueManager extends BaseManager<Queue> {
   /**
+   * Collection of {@link Queue}.
+   * @name QueueManager#collection
+   * @type {Discord.Collection<string, Queue>}
+   */
+  /**
    * Create a {@link Queue}
    * @private
-   * @param {Discord.VoiceChannel|Discord.StageChannel} channel A voice channel
+   * @param {Discord.BaseGuildVoiceChannel} channel A voice channel
    * @param {Song|Song[]} song First song
-   * @param {Discord.TextChannel} textChannel Default text channel
+   * @param {Discord.BaseGuildTextChannel} textChannel Default text channel
    * @returns {Promise<Queue|true>} Returns `true` if encounter an error
    */
   async create(
-    channel: VoiceChannel | StageChannel,
+    channel: VoiceBasedChannel,
     song: Song[] | Song,
-    textChannel?: TextChannel,
+    textChannel?: GuildTextBasedChannel,
   ): Promise<Queue | true> {
     if (this.has(channel.guild.id)) throw new DisTubeError("QUEUE_EXIST");
     const voice = this.voices.create(channel);
@@ -26,7 +32,7 @@ export class QueueManager extends BaseManager<Queue> {
     await queue.taskQueue.queuing();
     try {
       await voice.join();
-      this._voiceEventHandler(queue);
+      this.#voiceEventHandler(queue);
       this.add(queue.id, queue);
       this.emit("initQueue", queue);
       const err = await this.playSong(queue);
@@ -47,15 +53,15 @@ export class QueueManager extends BaseManager<Queue> {
    * @private
    * @param {Queue} queue Queue
    */
-  private _voiceEventHandler(queue: Queue) {
+  #voiceEventHandler(queue: Queue) {
     queue.listeners = {
       disconnect: error => {
         queue.delete();
         this.emit("disconnect", queue);
         if (error) this.emitError(error, queue.textChannel);
       },
-      error: error => this._handlePlayingError(queue, error),
-      finish: () => this._handleSongFinish(queue),
+      error: error => this.#handlePlayingError(queue, error),
+      finish: () => this.#handleSongFinish(queue),
     };
     for (const event of Object.keys(queue.listeners) as (keyof DisTubeVoiceEvents)[]) {
       queue.voice.on(event, queue.listeners[event]);
@@ -67,7 +73,7 @@ export class QueueManager extends BaseManager<Queue> {
    * @param {Queue} queue queue
    * @returns {Promise<void>}
    */
-  private async _handleSongFinish(queue: Queue): Promise<void> {
+  async #handleSongFinish(queue: Queue): Promise<void> {
     this.emit("finishSong", queue, queue.songs[0]);
     await queue.taskQueue.queuing();
     try {
@@ -92,7 +98,7 @@ export class QueueManager extends BaseManager<Queue> {
           return;
         }
       }
-      const emitPlaySong = this._emitPlaySong(queue);
+      const emitPlaySong = this.#emitPlaySong(queue);
       if (!queue.prev && (queue.repeatMode !== RepeatMode.SONG || queue.next)) {
         const prev = queue.songs.shift() as Song;
         delete prev.formats;
@@ -114,7 +120,7 @@ export class QueueManager extends BaseManager<Queue> {
    * @param {Queue} queue queue
    * @param {Error} error error
    */
-  private _handlePlayingError(queue: Queue, error: Error) {
+  #handlePlayingError(queue: Queue, error: Error) {
     const song = queue.songs.shift() as Song;
     try {
       error.name = "PlayingError";
@@ -150,10 +156,7 @@ export class QueueManager extends BaseManager<Queue> {
       if (source !== "youtube" && !streamURL) {
         for (const plugin of [...this.distube.extractorPlugins, ...this.distube.customPlugins]) {
           if (await plugin.validate(url)) {
-            const info = [plugin.getStreamURL(url), plugin.getRelatedSongs(url)] as const;
-            const result = await Promise.all(info);
-            song.streamURL = result[0];
-            song.related = result[1];
+            song.streamURL = await plugin.getStreamURL(url);
             break;
           }
         }
@@ -165,7 +168,7 @@ export class QueueManager extends BaseManager<Queue> {
       else if (queue.paused) queue.voice.pause();
       return false;
     } catch (e: any) {
-      this._handlePlayingError(queue, e);
+      this.#handlePlayingError(queue, e);
       return true;
     }
   }
@@ -175,7 +178,7 @@ export class QueueManager extends BaseManager<Queue> {
    * @private
    * @returns {boolean}
    */
-  private _emitPlaySong(queue: Queue): boolean {
+  #emitPlaySong(queue: Queue): boolean {
     return (
       !this.options.emitNewSongOnly ||
       (queue.repeatMode === RepeatMode.SONG && queue.next) ||

@@ -1,6 +1,6 @@
 import { DisTubeBase } from "../core";
 import { DisTubeError, RepeatMode, Song, TaskQueue, formatDuration } from "..";
-import type { GuildMember, Snowflake, TextChannel } from "discord.js";
+import type { GuildMember, GuildTextBasedChannel, Snowflake } from "discord.js";
 import type { DisTube, DisTubeVoice, DisTubeVoiceEvents, SearchResult } from "..";
 
 /**
@@ -8,7 +8,7 @@ import type { DisTube, DisTubeVoice, DisTubeVoiceEvents, SearchResult } from "..
  * @extends DisTubeBase
  */
 export class Queue extends DisTubeBase {
-  id: Snowflake;
+  readonly id: Snowflake;
   /**
    * Voice connection of this queue
    */
@@ -66,7 +66,7 @@ export class Queue extends DisTubeBase {
   /**
    * The text channel of the Queue. (Default: where the first command is called).
    */
-  textChannel?: TextChannel;
+  textChannel?: GuildTextBasedChannel;
   /**
    * Timeout for checking empty channel
    * @private
@@ -86,9 +86,9 @@ export class Queue extends DisTubeBase {
    * @param {DisTube} distube DisTube
    * @param {DisTubeVoice} voice Voice connection
    * @param {Song|Song[]} song First song(s)
-   * @param {Discord.TextChannel?} textChannel Default text channel
+   * @param {Discord.BaseGuildTextChannel?} textChannel Default text channel
    */
-  constructor(distube: DisTube, voice: DisTubeVoice, song: Song | Song[], textChannel?: TextChannel) {
+  constructor(distube: DisTube, voice: DisTubeVoice, song: Song | Song[], textChannel?: GuildTextBasedChannel) {
     super(distube);
     /**
      * The client user as a `GuildMember` of this queue's guild
@@ -465,7 +465,7 @@ export class Queue extends DisTubeBase {
     if (!this.songs?.[0]) throw new DisTubeError("NO_PLAYING");
     const related = this.songs[0].related.find(v => !this.previousSongs.map(s => s.id).includes(v.id));
     if (!related || !(related instanceof Song)) throw new DisTubeError("NO_RELATED");
-    const song = await this.handler.resolveSong(this.clientMember, related.url);
+    const song = await this.handler.resolveSong(related.url, { member: this.clientMember, metadata: related.metadata });
     if (!(song instanceof Song)) throw new DisTubeError("CANNOT_PLAY_RELATED");
     this.addToQueue(song);
     return song;
@@ -510,5 +510,3 @@ export class Queue extends DisTubeBase {
     return this.autoplay;
   }
 }
-
-export default Queue;

@@ -13,8 +13,7 @@ import {
   isVoiceChannelEmpty,
 } from "..";
 import type { DisTube, OtherSongInfo } from "..";
-import type { GuildMember, Message, StageChannel, TextChannel, VoiceChannel } from "discord.js";
-
+import type { GuildMember, GuildTextBasedChannel, Message, TextChannel, VoiceBasedChannel } from "discord.js";
 /**
  * DisTube's Handler
  * @extends DisTubeBase
@@ -73,17 +72,28 @@ export class DisTubeHandler extends DisTubeBase {
    * Create a new guild queue
    * @param {Discord.Message|Discord.VoiceChannel|Discord.StageChannel} message A user message | a voice channel
    * @param {Song|Song[]} song Song to play
-   * @param {Discord.TextChannel} textChannel A text channel of the queue
+   * @param {Discord.BaseGuildTextChannel?} textChannel A text channel of the queue
    * @throws {Error}
    * @returns {Promise<Queue|true>} `true` if queue is not generated
+   * @deprecated Use {@link QueueManager#create} instead
    */
   async createQueue(
-    message: Message | VoiceChannel | StageChannel,
+    message: Message<true> | VoiceBasedChannel,
     song: Song | Song[],
-    textChannel: TextChannel = (message as Message).channel as TextChannel,
+    textChannel?: GuildTextBasedChannel,
   ): Promise<Queue | true> {
-    const voice = (message as Message)?.member?.voice?.channel || message;
-    if (!voice || isMessageInstance(voice)) throw new DisTubeError("NOT_IN_VOICE");
+    process.emitWarning(
+      "DisTubeHandler#createQueue is deprecated, use QueueManager#create instead.",
+      "DeprecationWarning",
+    );
+    let voice: VoiceBasedChannel | undefined;
+    if (isMessageInstance(message)) {
+      textChannel = message.channel;
+      voice = message.member?.voice?.channel ?? undefined;
+    } else {
+      voice = message;
+    }
+    if (!voice) throw new DisTubeError("NOT_IN_VOICE");
     if (!isSupportedVoiceChannel(voice)) throw new DisTubeError("NOT_SUPPORTED_VOICE");
     return this.queues.create(voice, song, textChannel);
   }
@@ -100,25 +110,34 @@ export class DisTubeHandler extends DisTubeBase {
 
   /**
    * Resolve a Song
-   * @param {Discord.GuildMember} member Requested user
    * @param {string|Song|SearchResult|Playlist} song URL | Search string | {@link Song}
+   * @param {Object} [options] Optional options
+   * @param {Discord.GuildMember} [options.member] Requested user
+   * @param {*} [options.metadata] Metadata
    * @returns {Promise<Song|Playlist|null>} Resolved
    */
   async resolveSong(
-    member: GuildMember,
     song: string | ytdl.videoInfo | Song | Playlist | SearchResult | OtherSongInfo | ytdl.relatedVideo | null,
+    options: {
+      member?: GuildMember;
+      metadata?: any;
+    } = {},
   ): Promise<Song | Playlist | null> {
     if (!song) return null;
-    if (song instanceof Song || song instanceof Playlist) return song._patchMember(member);
-    if (song instanceof SearchResult) {
-      if (song.type === "video") return new Song(song, member);
-      return this.resolvePlaylist(member, song.url);
+    if (song instanceof Song || song instanceof Playlist) {
+      if (options.metadata) song._patchMetadata(options.metadata);
+      if (options.member) song._patchMember(options.member);
+      return song;
     }
-    if (typeof song === "object") return new Song(song, member);
-    if (ytdl.validateURL(song)) return new Song(await this.getYouTubeInfo(song), member);
+    if (song instanceof SearchResult) {
+      if (song.type === "video") return new Song(song, options);
+      return this.resolvePlaylist(song.url, options);
+    }
+    if (typeof song === "object") return new Song(song, options);
+    if (ytdl.validateURL(song)) return new Song(await this.getYouTubeInfo(song), options);
     if (isURL(song)) {
       for (const plugin of this.distube.extractorPlugins) {
-        if (await plugin.validate(song)) return plugin.resolve(song, member);
+        if (await plugin.validate(song)) return plugin.resolve(song, options);
       }
       throw new DisTubeError("NOT_SUPPORTED_URL");
     }
@@ -126,28 +145,38 @@ export class DisTubeHandler extends DisTubeBase {
   }
 
   /**
-   * Resole Song[] or url to a Playlist
-   * @param {Discord.GuildMember} member Requested user
-   * @param {Song[]|string} playlist Resolvable playlist
-   * @param {string} [source="youtube"] Playlist source
+   * Resolve Song[] or url to a Playlist
+   * @param {Playlist|Song[]|string} playlist Resolvable playlist
+   * @param {Object} options Optional options
+   * @param {Discord.GuildMember} [options.member] Requested user
+   * @param {string} [options.source="youtube"] Playlist source
+   * @param {*} [options.metadata] Metadata
    * @returns {Promise<Playlist>}
    */
   async resolvePlaylist(
-    member: GuildMember,
     playlist: Playlist | Song[] | string,
-    source = "youtube",
+    options: {
+      member?: GuildMember;
+      source?: string;
+      metadata?: any;
+    } = {},
   ): Promise<Playlist> {
-    if (playlist instanceof Playlist) return playlist;
+    const { member, source, metadata } = Object.assign({ source: "youtube" }, options);
+    if (playlist instanceof Playlist) {
+      if (metadata) playlist._patchMetadata(metadata);
+      if (member) playlist._patchMember(member);
+      return playlist;
+    }
     let solvablePlaylist: Song[] | ytpl.result;
     if (typeof playlist === "string") {
       solvablePlaylist = await ytpl(playlist, { limit: Infinity });
       (solvablePlaylist as any).items = solvablePlaylist.items
         .filter(v => !v.thumbnail.includes("no_thumbnail"))
-        .map(v => new Song(v as OtherSongInfo, member));
+        .map(v => new Song(v as OtherSongInfo, { member, metadata }));
     } else {
       solvablePlaylist = playlist;
     }
-    return new Playlist(solvablePlaylist, member, { source });
+    return new Playlist(solvablePlaylist, { member, properties: { source }, metadata });
   }
 
   /**
@@ -157,72 +186,64 @@ export class DisTubeHandler extends DisTubeBase {
    * @param {Array<string|Song|SearchResult>} songs Array of url, Song or SearchResult
    * @param {Object} [properties={}] Additional properties such as `name`
    * @param {boolean} [parallel=true] Whether or not fetch the songs in parallel
-   * @example
-   *     const songs = ["https://www.youtube.com/watch?v=xxx", "https://www.youtube.com/watch?v=yyy"];
-   *     const playlist = await distube.handler.createCustomPlaylist(member, songs, { name: "My playlist name" }, true);
-   *     // Or fetching custom playlist sequentially (reduce lag for low specs)
-   *     const playlist = await distube.handler.createCustomPlaylist(member, songs, false);
-   *     distube.playVoiceChannel(voiceChannel, playlist, { ... });
+   * @param {*} [metadata] Metadata
+   * @deprecated Use {@link DisTube#createCustomPlaylist} instead
    */
   async createCustomPlaylist(
-    message: Message | GuildMember,
+    message: Message<true> | GuildMember,
     songs: (string | Song | SearchResult)[],
     properties: any = {},
     parallel = true,
+    metadata?: any,
   ): Promise<Playlist> {
-    const member = (message as Message)?.member || (message as GuildMember);
-    if (!Array.isArray(songs)) throw new DisTubeError("INVALID_TYPE", "Array", songs, "songs");
-    if (!songs.length) throw new DisTubeError("EMPTY_ARRAY", "songs");
-    songs = songs.filter(
-      song => song instanceof Song || (song instanceof SearchResult && song.type === "video") || isURL(song),
+    process.emitWarning(
+      "DisTubeHandler#createCustomPlaylist is deprecated, use DisTube#createCustomPlaylist instead.",
+      "DeprecationWarning",
     );
-    if (!songs.length) throw new DisTubeError("NO_VALID_SONG");
-    let resolvedSongs: Song[];
-    if (parallel) {
-      const promises = songs.map((song: string | Song | SearchResult) =>
-        this.resolveSong(member, song).catch(() => undefined),
-      );
-      resolvedSongs = (await Promise.all(promises)).filter((s: any): s is Song => !!s);
-    } else {
-      const resolved = [];
-      for (const song of songs) {
-        resolved.push(await this.resolveSong(member, song).catch(() => undefined));
-      }
-      resolvedSongs = resolved.filter((s: any): s is Song => !!s);
-    }
-    return new Playlist(resolvedSongs, member, properties);
+    return this.distube.createCustomPlaylist(songs, {
+      member: (message as Message<true>).member ?? (message as GuildMember),
+      properties,
+      parallel,
+      metadata,
+    });
   }
 
   /**
    * Play / add a playlist
    * @returns {Promise<void>}
-   * @param {Discord.Message|Discord.VoiceChannel|Discord.StageChannel} message A message | a voice channel
+   * @param {Discord.BaseGuildVoiceChannel} voice A voice channel
    * @param {Playlist|string} playlist A YouTube playlist url | a Playlist
-   * @param {Discord.TextChannel|boolean} [textChannel] The default text channel of the queue
-   * @param {boolean} [skip=false] Skip the playing song (if exists) and play the added playlist instantly
-   * @param {boolean} [unshift=false] Add the playlist to the beginning of the queue (after the playing song if exists)
+   * @param {Object} [options] Optional options
+   * @param {Discord.BaseGuildTextChannel} [options.textChannel] The default text channel of the queue
+   * @param {boolean} [options.skip=false] Skip the playing song (if exists) and play the added playlist instantly
+   * @param {boolean} [options.unshift=false] Add the playlist after the playing song if exists
    */
   async handlePlaylist(
-    message: Message | VoiceChannel | StageChannel,
+    voice: VoiceBasedChannel,
     playlist: Playlist,
-    textChannel?: TextChannel,
-    skip = false,
-    unshift = false,
+    options: {
+      textChannel?: GuildTextBasedChannel;
+      skip?: boolean;
+      unshift?: boolean;
+    } = {},
   ): Promise<void> {
+    const { textChannel, skip, unshift } = Object.assign({ skip: false, unshift: false }, options);
     if (!(playlist instanceof Playlist)) throw new DisTubeError("INVALID_TYPE", "Playlist", playlist, "playlist");
-    if (!this.options.nsfw && !textChannel?.nsfw) playlist.songs = playlist.songs.filter(s => !s.age_restricted);
+    if (!this.options.nsfw && !(textChannel as TextChannel)?.nsfw) {
+      playlist.songs = playlist.songs.filter(s => !s.age_restricted);
+    }
     if (!playlist.songs.length) {
-      if (!this.options.nsfw && !textChannel?.nsfw) throw new DisTubeError("EMPTY_FILTERED_PLAYLIST");
+      if (!this.options.nsfw && !(textChannel as TextChannel)?.nsfw) throw new DisTubeError("EMPTY_FILTERED_PLAYLIST");
       throw new DisTubeError("EMPTY_PLAYLIST");
     }
     const songs = playlist.songs;
-    const queue = this.queues.get(message);
+    const queue = this.queues.get(voice);
     if (queue) {
       queue.addToQueue(songs, skip || unshift ? 1 : -1);
       if (skip) queue.skip();
       else this.emit("addList", queue, playlist);
     } else {
-      const newQueue = await this.createQueue(message, songs, textChannel);
+      const newQueue = await this.queues.create(voice, songs, textChannel);
       if (newQueue instanceof Queue) {
         if (this.options.emitAddListWhenCreatingQueue) this.emit("addList", newQueue, playlist);
         this.emit("playSong", newQueue, newQueue.songs[0]);
@@ -236,7 +257,7 @@ export class DisTubeHandler extends DisTubeBase {
    * @param {string} query The query string
    * @returns {Promise<SearchResult?>} Song info
    */
-  async searchSong(message: Message, query: string): Promise<SearchResult | null> {
+  async searchSong(message: Message<true>, query: string): Promise<SearchResult | null> {
     if (!isMessageInstance(message)) throw new DisTubeError("INVALID_TYPE", "Discord.Message", message, "message");
     if (typeof query !== "string") throw new DisTubeError("INVALID_TYPE", "string", query, "query");
     if (query.length === 0) throw new DisTubeError("EMPTY_STRING", "query");
@@ -268,7 +289,7 @@ export class DisTubeHandler extends DisTubeBase {
    * @returns {Promise<SearchResult|Song|Playlist|null>} Selected result
    */
   async createSearchMessageCollector<R extends SearchResult | Song | Playlist>(
-    message: Message,
+    message: Message<true>,
     results: Array<R>,
     query?: string,
   ): Promise<R | null> {
@@ -349,5 +370,3 @@ export class DisTubeHandler extends DisTubeBase {
     return DisTubeStream.DirectLink(streamURL as string, streamOptions);
   }
 }
-
-export default DisTubeHandler;

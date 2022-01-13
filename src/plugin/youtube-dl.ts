@@ -1,6 +1,5 @@
 import youtubeDlExec, { download } from "@distube/youtube-dl";
-import ExtractorPlugin from "../struct/ExtractorPlugin";
-import { Playlist, Song } from "../struct";
+import { ExtractorPlugin, Playlist, Song } from "..";
 import type { OtherSongInfo } from "..";
 import type { GuildMember } from "discord.js";
 import type { YtResponse } from "@distube/youtube-dl";
@@ -21,7 +20,8 @@ export class YouTubeDLPlugin extends ExtractorPlugin {
   async validate() {
     return true;
   }
-  async resolve(url: string, member: GuildMember) {
+
+  async resolve(url: string, { member, metadata }: { member?: GuildMember; metadata?: any }) {
     const info: any = await youtubeDlExec(url, {
       dumpSingleJson: true,
       noWarnings: true,
@@ -32,10 +32,12 @@ export class YouTubeDLPlugin extends ExtractorPlugin {
     });
     if (Array.isArray(info.entries) && info.entries.length > 0) {
       info.source = info.extractor.match(/\w+/)[0];
-      info.songs = info.entries.map((i: OtherSongInfo & YtResponse) => new Song(i, member, i.extractor));
-      return new Playlist(info, member);
+      info.songs = info.entries.map(
+        (i: OtherSongInfo & YtResponse) => new Song(i, { member, source: i.extractor, metadata }),
+      );
+      return new Playlist(info, { member, metadata, properties: { source: info.songs[0]?.source } });
     }
-    return new Song(info, member, info.extractor);
+    return new Song(info, { member, source: info.extractor, metadata });
   }
   async getStreamURL(url: string) {
     const info = await youtubeDlExec(url, {
@@ -49,5 +51,3 @@ export class YouTubeDLPlugin extends ExtractorPlugin {
     return info.url;
   }
 }
-
-export default YouTubeDLPlugin;

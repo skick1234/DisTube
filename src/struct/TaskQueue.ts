@@ -20,7 +20,7 @@ export class TaskQueue {
    * @type {Task[]}
    * @private
    */
-  private tasks: Task[] = [];
+  #tasks: Task[] = [];
 
   /**
    * Waits for last task finished and queues a new task
@@ -28,8 +28,8 @@ export class TaskQueue {
    * @returns {Promise<void>}
    */
   public queuing(resolveInfo = false): Promise<void> {
-    const next = this.remaining ? this.tasks[this.tasks.length - 1].promise : Promise.resolve();
-    this.tasks.push(new Task(resolveInfo));
+    const next = this.remaining ? this.#tasks[this.#tasks.length - 1].promise : Promise.resolve();
+    this.#tasks.push(new Task(resolveInfo));
     return next;
   }
 
@@ -37,7 +37,7 @@ export class TaskQueue {
    * Removes the finished task and processes the next task
    */
   public resolve(): void {
-    this.tasks.shift()?.resolve();
+    this.#tasks.shift()?.resolve();
   }
 
   /**
@@ -45,7 +45,7 @@ export class TaskQueue {
    * @type {number}
    */
   public get remaining(): number {
-    return this.tasks.length;
+    return this.#tasks.length;
   }
 
   /**
@@ -53,6 +53,6 @@ export class TaskQueue {
    * @type {boolean}
    */
   public get hasResolveTask(): boolean {
-    return !!this.tasks.find(t => t.resolveInfo);
+    return !!this.#tasks.find(t => t.resolveInfo);
   }
 }

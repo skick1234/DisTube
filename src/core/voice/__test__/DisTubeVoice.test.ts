@@ -217,8 +217,14 @@ describe("Methods", () => {
         voice.volume = volume;
       }).not.toThrow();
       expect(voice.volume).toBe(volume);
-      expect((voice as any)._volume).toBe(volume / 100);
-      expect(audioResource.volume.setVolume).toBeCalledWith(expect.any(Number));
+      expect(audioResource.volume.setVolume).toBeCalledTimes(1);
+      expect(audioResource.volume.setVolume).toHaveBeenNthCalledWith(1, 1);
+      volume = 50;
+      expect(() => {
+        voice.volume = volume;
+      }).not.toThrow();
+      expect(audioResource.volume.setVolume).toBeCalledTimes(2);
+      expect(audioResource.volume.setVolume).toHaveBeenNthCalledWith(2, 0.31622776601683794);
     });
 
     test("Other getters", () => {
@@ -268,6 +274,18 @@ describe("Methods", () => {
       expect(voice.channel).toBe(voiceChannel);
       expect(voice.connection).toBe(connection);
     });
+
+    test("Cannot connect to the voice channel due to deprecated voice system", async () => {
+      const newVC = { guild: { id: 2, me: { voice: { connection: true } } } };
+      Util.isSupportedVoiceChannel.mockReturnValue(true);
+      Util.entersState.mockRejectedValue(undefined);
+      connection.state.status = DiscordVoice.VoiceConnectionStatus.Destroyed;
+      await expect(voice.join(newVC as any)).rejects.toThrow(new DisTubeError("VOICE_DEPRECATED_CONNECTION"));
+      expect(voice.channel).toBe(newVC);
+      expect(connection.destroy).not.toBeCalled();
+      expect(voiceManager.delete).toBeCalledWith(voice.id);
+      connection.state.status = DiscordVoice.VoiceConnectionStatus.Signalling;
+    });
   });
 
   describe("DisTubeVoice#leave()", () => {
@@ -315,6 +333,15 @@ describe("Methods", () => {
     expect(voice.emit).toBeCalledWith("error", error);
     stream.stream.on.mock.calls[0][1](error);
     expect(voice.emit).toBeCalledTimes(1);
+  });
+
+  test("DisTubeVoice#stop()", () => {
+    expect(voice.stop()).toBeUndefined();
+    expect(audioPlayer.stop).toBeCalledTimes(1);
+    expect(audioPlayer.stop).toBeCalledWith(false);
+    expect(voice.stop(true)).toBeUndefined();
+    expect(audioPlayer.stop).toBeCalledTimes(2);
+    expect(audioPlayer.stop).lastCalledWith(true);
   });
 
   test("DisTubeVoice#pause()", () => {

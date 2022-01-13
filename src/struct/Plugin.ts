@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/require-await, @typescript-eslint/no-unused-vars */
-import type { Client, TextChannel } from "discord.js";
+import type { Client, GuildTextBasedChannel } from "discord.js";
 import type {
   DisTube,
   DisTubeEvents,
@@ -43,9 +43,9 @@ export abstract class Plugin {
   /**
    * Emit error event
    * @param {Error} error error
-   * @param {Discord.TextChannel?} channel Text channel where the error is encountered.
+   * @param {Discord.BaseGuildTextChannel} [channel] Text channel where the error is encountered.
    */
-  emitError(error: Error, channel?: TextChannel) {
+  emitError(error: Error, channel?: GuildTextBasedChannel) {
     this.distube.emitError(error, channel);
   }
   /**
@@ -105,15 +105,4 @@ export abstract class Plugin {
   async getStreamURL(url: string): Promise<string> {
     return url;
   }
-  /**
-   * (Optional) Get related songs from a supported url. {@link Song#member} should be `undefined`.
-   * Not needed to add {@link Song#related} because it will be added with this function later.
-   * @param {string} url Input url
-   * @returns {Promise<Song[]>}
-   */
-  async getRelatedSongs(url: string): Promise<Song[]> {
-    return [];
-  }
 }
-
-export default Plugin;
