@@ -149,7 +149,7 @@ export function isSupportedVoiceChannel(channel: any): channel is VoiceBasedChan
     !!channel &&
     typeof channel.joinable === "boolean" &&
     isSnowflake(channel.id) &&
-    isSnowflake(channel.guild?.id) &&
+    isSnowflake(channel.guildId) &&
     typeof channel.full === "boolean" &&
     [
       // Djs v12

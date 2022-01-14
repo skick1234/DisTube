@@ -94,7 +94,7 @@ export class DisTubeHandler extends DisTubeBase {
       voice = message;
     }
     if (!voice) throw new DisTubeError("NOT_IN_VOICE");
-    if (!isSupportedVoiceChannel(voice)) throw new DisTubeError("NOT_SUPPORTED_VOICE");
+    if (!isSupportedVoiceChannel(voice)) throw new DisTubeError("INVALID_TYPE", "BaseGuildVoiceChannel", voice);
     return this.queues.create(voice, song, textChannel);
   }
 

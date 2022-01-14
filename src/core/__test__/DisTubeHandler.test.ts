@@ -252,10 +252,12 @@ describe("DisTubeHandler#createQueue()", () => {
   });
 
   test("User is in an unsupported voice channel", async () => {
-    Util.isMessageInstance.mockReturnValue(false);
+    Util.isMessageInstance.mockReturnValue(true);
     Util.isSupportedVoiceChannel.mockReturnValue(false);
     const message: any = { member: { voice: { channel: { type: "unsupported" } } } };
-    await expect(handler.createQueue(message, song)).rejects.toThrow(new DisTubeError("NOT_SUPPORTED_VOICE"));
+    await expect(handler.createQueue(message, song)).rejects.toThrow(
+      new DisTubeError("INVALID_TYPE", "BaseGuildVoiceChannel", message.member.voice.channel),
+    );
     expect(Util.isMessageInstance).toBeCalledWith(message);
   });
 

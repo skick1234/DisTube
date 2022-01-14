@@ -19,7 +19,6 @@ const ERROR_MESSAGES = {
   ENABLED_OPTION: (o: string) => `DisTubeOptions.${o} is enabled`,
 
   NOT_IN_VOICE: "User is not in any voice channel",
-  NOT_SUPPORTED_VOICE: "DisTubeVoice only supports VoiceChannel or a StageChannel",
   VOICE_FULL: "The voice channel is full",
   VOICE_CONNECT_FAILED: (s: number) => `Cannot connect to the voice channel after ${s} seconds`,
   VOICE_MISSING_PERMS: "You do not have permission to join this voice channel",

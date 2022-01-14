@@ -208,7 +208,9 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
       });
     }
 
-    if (!isSupportedVoiceChannel(voiceChannel)) throw new DisTubeError("NOT_SUPPORTED_VOICE");
+    if (!isSupportedVoiceChannel(voiceChannel)) {
+      throw new DisTubeError("INVALID_TYPE", "BaseGuildVoiceChannel", voiceChannel, "voiceChannel");
+    }
     if (typeof options !== "object" || Array.isArray(options)) {
       throw new DisTubeError("INVALID_TYPE", "object", options, "options");
     }
@@ -326,7 +328,7 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
    * const playlist = await distube.createCustomPlaylist(songs, {
    *     member: message.member,
    *     properties: { name: "My playlist name" },
-   *      parallel: true
+   *     parallel: true
    * });
    * distube.play(voiceChannel, playlist, { ... });
    */
