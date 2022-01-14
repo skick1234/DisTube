@@ -1,10 +1,10 @@
+import { inspect } from "node:util";
+
 const ERROR_MESSAGES = {
   INVALID_TYPE: (expected: (number | string) | readonly (number | string)[], got: any, name?: string) =>
     `Expected ${
       Array.isArray(expected) ? expected.map(e => (typeof e === "number" ? e : `'${e}'`)).join(" or ") : `'${expected}'`
-    }${name ? ` for '${name}'` : ""}, but got ${typeof got === "bigint" ? `${got}` : JSON.stringify(got)} (${
-      got?.constructor?.name ?? typeof got
-    })`,
+    }${name ? ` for '${name}'` : ""}, but got ${inspect(got)}`,
   NUMBER_COMPARE: (name: string, expected: string, value: number) => `'${name}' must be ${expected} ${value}`,
   EMPTY_ARRAY: (name: string) => `'${name}' is an empty array`,
   EMPTY_FILTERED_ARRAY: (name: string, type: string) => `There is no valid '${type}' in the '${name}' array`,
