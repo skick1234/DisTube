@@ -272,7 +272,7 @@ export class Song<T = unknown> {
      * @type {Playlist?}
      */
     this.playlist = playlist;
-    return this._patchMember(member);
+    return this._patchMember(playlist.member ?? member);
   }
 
   /**
@@ -281,16 +281,18 @@ export class Song<T = unknown> {
    * @returns {Song}
    */
   _patchMember(member?: GuildMember) {
-    /**
-     * User requested
-     * @type {Discord.GuildMember?}
-     */
-    this.member = member;
-    /**
-     * User requested
-     * @type {Discord.User?}
-     */
-    this.user = member?.user;
+    if (member) {
+      /**
+       * User requested
+       * @type {Discord.GuildMember?}
+       */
+      this.member = member;
+      /**
+       * User requested
+       * @type {Discord.User?}
+       */
+      this.user = member.user;
+    }
     return this;
   }
 
