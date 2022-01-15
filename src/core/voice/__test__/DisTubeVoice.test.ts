@@ -72,7 +72,7 @@ describe("Constructor", () => {
     Util.isSupportedVoiceChannel.mockReturnValueOnce(false);
     expect(() => {
       new DisTubeVoice(voiceManager as any, {} as any);
-    }).toThrow(new DisTubeError("NOT_SUPPORTED_VOICE"));
+    }).toThrow(new DisTubeError("INVALID_TYPE", "BaseGuildVoiceChannel", {}, "channel"));
     Util.isSupportedVoiceChannel.mockReturnValue(true);
     expect(() => {
       new DisTubeVoice(voiceManager as any, { type: "voice", joinable: false, full: true } as any);
@@ -183,7 +183,7 @@ describe("Methods", () => {
       const newVC: any = { guild: { id: 2 } };
       expect(() => {
         voice.channel = voiceChannel as any;
-      }).toThrow(new DisTubeError("NOT_SUPPORTED_VOICE"));
+      }).toThrow(new DisTubeError("INVALID_TYPE", "BaseGuildVoiceChannel", voiceChannel, "DisTubeVoice#channel"));
       expect(() => {
         voice.channel = { guild: { id: 1 } } as any;
       }).toThrow(new DisTubeError("VOICE_CHANGE_GUILD"));

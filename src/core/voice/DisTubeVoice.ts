@@ -27,7 +27,9 @@ export class DisTubeVoice extends TypedEmitter<DisTubeVoiceEvents> {
   #volume = 100;
   constructor(voiceManager: DisTubeVoiceManager, channel: VoiceBasedChannel) {
     super();
-    if (!isSupportedVoiceChannel(channel)) throw new DisTubeError("NOT_SUPPORTED_VOICE");
+    if (!isSupportedVoiceChannel(channel)) {
+      throw new DisTubeError("INVALID_TYPE", "BaseGuildVoiceChannel", channel, "channel");
+    }
     if (!channel.joinable) {
       if (channel.full) throw new DisTubeError("VOICE_FULL");
       else throw new DisTubeError("VOICE_MISSING_PERMS");
@@ -82,7 +84,9 @@ export class DisTubeVoice extends TypedEmitter<DisTubeVoiceEvents> {
     return this.#channel;
   }
   set channel(channel: VoiceBasedChannel) {
-    if (!isSupportedVoiceChannel(channel)) throw new DisTubeError("NOT_SUPPORTED_VOICE");
+    if (!isSupportedVoiceChannel(channel)) {
+      throw new DisTubeError("INVALID_TYPE", "BaseGuildVoiceChannel", channel, "DisTubeVoice#channel");
+    }
     if (channel.guild.id !== this.id) throw new DisTubeError("VOICE_CHANGE_GUILD");
     this.connection = this.#join(channel);
     this.#channel = channel;
