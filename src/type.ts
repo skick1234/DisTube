@@ -114,7 +114,7 @@ export interface DisTubeOptions {
   emitAddListWhenCreatingQueue?: boolean;
 }
 
-export type GuildIDResolvable =
+export type GuildIdResolvable =
   | Queue
   | DisTubeVoice
   | Snowflake
