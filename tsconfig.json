@@ -3,7 +3,7 @@
   "exclude": ["src/**/__test__", "src/**/__mocks__"],
   "compilerOptions": {
     "module": "commonjs",
-    "target": "es2019",
+    "target": "es2021",
     "lib": ["esnext"],
     "strict": true,
     "alwaysStrict": true,
@@ -13,12 +13,13 @@
     "inlineSources": true,
     "outDir": "dist",
     "moduleResolution": "node",
-    "allowJs": true,
+    "allowJs": false,
     "declaration": true,
     "declarationMap": true,
     "skipLibCheck": true,
     "skipDefaultLibCheck": true,
     "incremental": true,
-    "esModuleInterop": true
+    "esModuleInterop": true,
+    "resolveJsonModule": true
   }
 }

@@ -4,4 +4,4 @@ export * from "./struct";
 export * from "./util";
 export * from "./core";
 export * from "./plugin";
-export { DisTube, DisTube as default } from "./DisTube";
+export { DisTube, DisTube as default, version } from "./DisTube";

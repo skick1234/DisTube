@@ -27,6 +27,10 @@ import type { CustomPlugin, DisTubeEvents, DisTubeOptions, ExtractorPlugin, Filt
 
 // TODO: remove deprecated stuff on the next major version
 
+// Cannot be `import` as it's not under TS root dir
+// eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
+export const { version }: { version: string } = require("../package.json");
+
 /**
  * DisTube class
  * @extends EventEmitter
@@ -107,6 +111,19 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
      */
     this.customPlugins = this.options.plugins.filter((p): p is CustomPlugin => p.type === "custom");
   }
+
+  static get version() {
+    return version;
+  }
+
+  /**
+   * DisTube version
+   * @type {string}
+   */
+  get version() {
+    return version;
+  }
+
   /**
    * Play / add a song or playlist from url. Search and play a song if it is not a valid url.
    *
