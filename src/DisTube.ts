@@ -157,7 +157,7 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
   async play(
     voiceChannel: VoiceBasedChannel,
     song: string | Song | SearchResult | Playlist | null,
-    options: {
+    options?: {
       skip?: boolean;
       unshift?: boolean;
       member?: GuildMember;
@@ -184,7 +184,7 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
   async play(
     message: Message<true>,
     song: string | Song | SearchResult | Playlist,
-    options: { skip?: boolean; unshift?: boolean; metadata?: any },
+    options?: { skip?: boolean; unshift?: boolean; metadata?: any },
   ): Promise<void>;
   async play(
     voiceChannel: Message<true> | VoiceBasedChannel,
