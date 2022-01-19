@@ -3,8 +3,6 @@ import type ytpl from "@distube/ytpl";
 import type { PlaylistInfo, Song } from "..";
 import type { GuildMember, User } from "discord.js";
 
-// TODO: Remove ! on the next major version
-
 /**
  * Class representing a playlist.
  * @prop {string} source Playlist source
@@ -20,14 +18,6 @@ export class Playlist<T = unknown> implements PlaylistInfo {
   url?: string;
   thumbnail?: string;
   [x: string]: any;
-  constructor(playlist: Song[] | ytpl.result | PlaylistInfo);
-  /** @deprecated Passing GuildMember for DisTube#Playlist() is deprecated. */
-  constructor(
-    playlist: Song[] | ytpl.result | PlaylistInfo,
-    member?: GuildMember,
-    properties?: Record<string, any>,
-    metadata?: T,
-  );
   /**
    * Create a playlist
    * @param {Song[]|PlaylistInfo} playlist Playlist
@@ -38,32 +28,12 @@ export class Playlist<T = unknown> implements PlaylistInfo {
    */
   constructor(
     playlist: Song[] | ytpl.result | PlaylistInfo,
-    options?: {
+    options: {
       member?: GuildMember;
       properties?: Record<string, any>;
       metadata?: T;
-    },
-  );
-  constructor(
-    playlist: Song[] | ytpl.result | PlaylistInfo,
-    options:
-      | GuildMember
-      | {
-          member?: GuildMember;
-          properties?: Record<string, any>;
-          metadata?: T;
-        } = {},
-    props: Record<string, any> = {},
-    meta?: T,
+    } = {},
   ) {
-    if (isMemberInstance(options)) {
-      process.emitWarning(
-        "Passing GuildMember for DisTube#Playlist() is deprecated, read the docs for more.",
-        "DeprecationWarning",
-      );
-      return new Playlist(playlist, { member: options, properties: props, metadata: meta });
-    }
-
     const { member, properties, metadata } = Object.assign({ properties: {} }, options);
 
     if (typeof playlist !== "object") {
@@ -141,7 +111,7 @@ export class Playlist<T = unknown> implements PlaylistInfo {
    * @returns {Playlist}
    */
   _patchMember(member?: GuildMember) {
-    if (member) {
+    if (isMemberInstance(member)) {
       /**
        * User requested.
        * @type {?Discord.GuildMember}

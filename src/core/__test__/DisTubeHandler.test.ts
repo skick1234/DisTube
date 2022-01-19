@@ -238,55 +238,6 @@ describe("Constructor", () => {
   });
 });
 
-// TODO: Remove this when DisTubeHandler#createQueue is removed
-/* eslint-disable deprecation/deprecation */
-describe("DisTubeHandler#createQueue()", () => {
-  const distube = createFakeDisTube();
-  const handler = new DisTubeHandler(distube as any);
-
-  test("User is not in a voice channel", async () => {
-    Util.isMessageInstance.mockReturnValue(true);
-    const message: any = { member: { voice: { channel: null } } };
-    await expect(handler.createQueue(message, song)).rejects.toThrow(new DisTubeError("NOT_IN_VOICE"));
-    expect(Util.isMessageInstance).toBeCalledWith(message);
-  });
-
-  test("User is in an unsupported voice channel", async () => {
-    Util.isMessageInstance.mockReturnValue(true);
-    Util.isSupportedVoiceChannel.mockReturnValue(false);
-    const message: any = { member: { voice: { channel: { type: "unsupported" } } } };
-    await expect(handler.createQueue(message, song)).rejects.toThrow(
-      new DisTubeError("INVALID_TYPE", "BaseGuildVoiceChannel", message.member.voice.channel),
-    );
-    expect(Util.isMessageInstance).toBeCalledWith(message);
-  });
-
-  test("User is in a supported voice channel", async () => {
-    Util.isMessageInstance.mockReturnValue(true);
-    Util.isSupportedVoiceChannel.mockReturnValue(true);
-    distube.queues.create.mockReturnValue(true);
-    const message: any = {
-      member: { voice: { channel: { type: "voice" } } },
-      channel: { id: "a text channel" },
-    };
-    await expect(handler.createQueue(message, song)).resolves.toBe(true);
-    expect(Util.isMessageInstance).toBeCalledWith(message);
-    expect(distube.queues.create).toBeCalledWith(message.member.voice.channel, song, message.channel);
-  });
-
-  test("Custom text channel", async () => {
-    Util.isMessageInstance.mockReturnValue(false);
-    Util.isSupportedVoiceChannel.mockReturnValue(true);
-    distube.queues.create.mockReturnValue(true);
-    const channel: any = { id: "a text channel" };
-    const voice: any = { type: "voice" };
-    await expect(handler.createQueue(voice, song, channel)).resolves.toBe(true);
-    expect(Util.isMessageInstance).toBeCalledWith(voice);
-    expect(distube.queues.create).toBeCalledWith(voice, song, channel);
-  });
-});
-/* eslint-enable deprecation/deprecation */
-
 describe("DisTubeHandler#getYouTubeInfo()", () => {
   const distube = createFakeDisTube();
   const handler = new DisTubeHandler(distube as any);
@@ -381,28 +332,6 @@ describe("DisTubeHandler#resolvePlaylist()", () => {
     await expect(result).resolves.toStrictEqual(playlist);
     await expect(result).resolves.not.toBe(playlist);
   });
-});
-
-test("DisTubeHandler#createCustomPlaylist()", () => {
-  const distube = createFakeDisTube();
-  const handler = new DisTubeHandler(distube as any);
-  const m: any = {},
-    s: any = {},
-    p: any = {},
-    a: any = {},
-    t: any = {};
-  // eslint-disable-next-line deprecation/deprecation
-  handler.createCustomPlaylist(m, s, p, a, t);
-  expect(distube.createCustomPlaylist).toBeCalledTimes(1);
-  expect(distube.createCustomPlaylist).toBeCalledWith(
-    s,
-    expect.objectContaining({
-      member: m,
-      properties: p,
-      parallel: a,
-      metadata: t,
-    }),
-  );
 });
 
 describe("DisTubeHandler#handlePlaylist()", () => {

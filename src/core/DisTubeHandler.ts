@@ -1,17 +1,7 @@
 import ytdl from "@distube/ytdl-core";
 import ytpl from "@distube/ytpl";
 import { DisTubeBase, DisTubeStream } from ".";
-import {
-  DisTubeError,
-  Playlist,
-  Queue,
-  SearchResult,
-  Song,
-  isMessageInstance,
-  isSupportedVoiceChannel,
-  isURL,
-  isVoiceChannelEmpty,
-} from "..";
+import { DisTubeError, Playlist, Queue, SearchResult, Song, isMessageInstance, isURL, isVoiceChannelEmpty } from "..";
 import type { DisTube, OtherSongInfo } from "..";
 import type { GuildMember, GuildTextBasedChannel, Message, TextChannel, VoiceBasedChannel } from "discord.js";
 /**
@@ -66,36 +56,6 @@ export class DisTubeHandler extends DisTubeBase {
         }
       });
     }
-  }
-
-  /**
-   * Create a new guild queue
-   * @param {Discord.Message|Discord.VoiceChannel|Discord.StageChannel} message A user message | a voice channel
-   * @param {Song|Song[]} song Song to play
-   * @param {Discord.BaseGuildTextChannel?} textChannel A text channel of the queue
-   * @throws {Error}
-   * @returns {Promise<Queue|true>} `true` if queue is not generated
-   * @deprecated Use {@link QueueManager#create} instead
-   */
-  async createQueue(
-    message: Message<true> | VoiceBasedChannel,
-    song: Song | Song[],
-    textChannel?: GuildTextBasedChannel,
-  ): Promise<Queue | true> {
-    process.emitWarning(
-      "DisTubeHandler#createQueue is deprecated, use QueueManager#create instead.",
-      "DeprecationWarning",
-    );
-    let voice: VoiceBasedChannel | undefined;
-    if (isMessageInstance(message)) {
-      textChannel = message.channel;
-      voice = message.member?.voice?.channel ?? undefined;
-    } else {
-      voice = message;
-    }
-    if (!voice) throw new DisTubeError("NOT_IN_VOICE");
-    if (!isSupportedVoiceChannel(voice)) throw new DisTubeError("INVALID_TYPE", "BaseGuildVoiceChannel", voice);
-    return this.queues.create(voice, song, textChannel);
   }
 
   /**
@@ -177,35 +137,6 @@ export class DisTubeHandler extends DisTubeBase {
       solvablePlaylist = playlist;
     }
     return new Playlist(solvablePlaylist, { member, properties: { source }, metadata });
-  }
-
-  /**
-   * Create a custom playlist
-   * @returns {Promise<Playlist>}
-   * @param {Discord.Message|Discord.GuildMember} message A message from guild channel | A guild member
-   * @param {Array<string|Song|SearchResult>} songs Array of url, Song or SearchResult
-   * @param {Object} [properties={}] Additional properties such as `name`
-   * @param {boolean} [parallel=true] Whether or not fetch the songs in parallel
-   * @param {*} [metadata] Metadata
-   * @deprecated Use {@link DisTube#createCustomPlaylist} instead
-   */
-  async createCustomPlaylist(
-    message: Message<true> | GuildMember,
-    songs: (string | Song | SearchResult)[],
-    properties: any = {},
-    parallel = true,
-    metadata?: any,
-  ): Promise<Playlist> {
-    process.emitWarning(
-      "DisTubeHandler#createCustomPlaylist is deprecated, use DisTube#createCustomPlaylist instead.",
-      "DeprecationWarning",
-    );
-    return this.distube.createCustomPlaylist(songs, {
-      member: (message as Message<true>).member ?? (message as GuildMember),
-      properties,
-      parallel,
-      metadata,
-    });
   }
 
   /**

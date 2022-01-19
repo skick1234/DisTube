@@ -4,8 +4,6 @@ import type ytdl from "@distube/ytdl-core";
 import type { GuildMember, User } from "discord.js";
 import type { Chapter, OtherSongInfo, SearchResult } from "..";
 
-// TODO: Clean parameters on the next major version.
-
 /**
  * Class representing a song.
  *
@@ -42,14 +40,6 @@ export class Song<T = unknown> {
   chapters!: Chapter[];
   reposts!: number;
   playlist?: Playlist;
-  constructor(info: ytdl.videoInfo | SearchResult | OtherSongInfo | ytdl.relatedVideo);
-  /** @deprecated Passing GuildMember for DisTube#Song() is deprecated. */
-  constructor(
-    info: ytdl.videoInfo | SearchResult | OtherSongInfo | ytdl.relatedVideo,
-    member?: GuildMember,
-    source?: string,
-    metadata?: T,
-  );
   /**
    * Create a Song
    * @param {ytdl.videoInfo|SearchResult|OtherSongInfo} info Raw info
@@ -60,32 +50,12 @@ export class Song<T = unknown> {
    */
   constructor(
     info: ytdl.videoInfo | SearchResult | OtherSongInfo | ytdl.relatedVideo,
-    options?: {
+    options: {
       member?: GuildMember;
       source?: string;
       metadata?: T;
-    },
-  );
-  constructor(
-    info: ytdl.videoInfo | SearchResult | OtherSongInfo | ytdl.relatedVideo,
-    options:
-      | GuildMember
-      | {
-          member?: GuildMember;
-          source?: string;
-          metadata?: T;
-        } = {},
-    src = "youtube",
-    meta?: T,
+    } = {},
   ) {
-    if (isMemberInstance(options)) {
-      process.emitWarning(
-        "Passing GuildMember for DisTube#Song() is deprecated, read the docs for more.",
-        "DeprecationWarning",
-      );
-      return new Song(info, { member: options, source: src, metadata: meta });
-    }
-
     const { member, source, metadata } = Object.assign({ source: "youtube" }, options);
 
     if (
@@ -281,7 +251,7 @@ export class Song<T = unknown> {
    * @returns {Song}
    */
   _patchMember(member?: GuildMember) {
-    if (member) {
+    if (isMemberInstance(member)) {
       /**
        * User requested
        * @type {Discord.GuildMember?}
