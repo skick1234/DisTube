@@ -110,7 +110,7 @@ export const defaultOptions = {
  * DisTubeVoice|
  * Queue|
  * string
- * } GuildIDResolvable
+ * } GuildIdResolvable
  */
 /**
  * FFmpeg Filters

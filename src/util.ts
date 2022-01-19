@@ -1,7 +1,7 @@
 import { URL } from "url";
 import { DisTubeError, DisTubeVoice, Queue } from ".";
 import { Intents, SnowflakeUtil } from "discord.js";
-import type { GuildIDResolvable } from ".";
+import type { GuildIdResolvable } from ".";
 import type { EventEmitter } from "node:events";
 import type { AudioPlayer, AudioPlayerStatus, VoiceConnection, VoiceConnectionStatus } from "@discordjs/voice";
 import type {
@@ -149,7 +149,7 @@ export function isSupportedVoiceChannel(channel: any): channel is VoiceBasedChan
     !!channel &&
     typeof channel.joinable === "boolean" &&
     isSnowflake(channel.id) &&
-    isSnowflake(channel.guildId) &&
+    isSnowflake(channel.guild?.id) &&
     typeof channel.full === "boolean" &&
     [
       // Djs v12
@@ -166,7 +166,7 @@ export function isGuildInstance(guild: any): guild is Guild {
   return !!guild && isSnowflake(guild.id) && typeof guild.fetchAuditLogs === "function";
 }
 
-export function resolveGuildID(resolvable: GuildIDResolvable): Snowflake {
+export function resolveGuildID(resolvable: GuildIdResolvable): Snowflake {
   let guildID: string | undefined;
   if (typeof resolvable === "string") {
     guildID = resolvable;
@@ -175,7 +175,7 @@ export function resolveGuildID(resolvable: GuildIDResolvable): Snowflake {
     else if ("guild" in resolvable && isGuildInstance(resolvable.guild)) guildID = resolvable.guild.id;
     else if ("id" in resolvable && isGuildInstance(resolvable)) guildID = resolvable.id;
   }
-  if (!isSnowflake(guildID)) throw new DisTubeError("INVALID_TYPE", "GuildIDResolvable", resolvable);
+  if (!isSnowflake(guildID)) throw new DisTubeError("INVALID_TYPE", "GuildIdResolvable", resolvable);
   return guildID;
 }
 

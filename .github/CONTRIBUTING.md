@@ -11,4 +11,5 @@ If you wish to contribute to DisTube, feel free to fork the repository and submi
 3. Code your idea
 4. Run `npm run prettier` to run Prettier
 5. Run `npm run lint` to run ESLint
-6. [Submit a pull request](https://github.com/skick1234/DisTube/compare) (Make sure you follow the [conventional commit format](https://www.conventionalcommits.org/en/v1.0.0/))
+6. Run `npm run build:check` to run the compiler
+7. [Submit a pull request](https://github.com/skick1234/DisTube/compare) (Make sure you follow the [conventional commit format](https://www.conventionalcommits.org/en/v1.0.0/))

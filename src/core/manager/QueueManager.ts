@@ -45,7 +45,7 @@ export class QueueManager extends BaseManager<Queue> {
    * Get a Queue from this QueueManager.
    * @method get
    * @memberof QueueManager#
-   * @param {GuildIDResolvable} queue Resolvable thing from a guild
+   * @param {GuildIdResolvable} queue Resolvable thing from a guild
    * @returns {Queue?}
    */
   /**

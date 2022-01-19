@@ -182,9 +182,9 @@ test("resolveGuildID()", () => {
   expect(testFn(botVoiceState)).toBe(gID);
   expect(testFn(userVoiceState)).toBe(gID);
   expect(testFn(gID)).toBe(gID);
-  expect(() => testFn(client as any)).toThrow(new DisTubeError("INVALID_TYPE", "GuildIDResolvable", client));
-  expect(() => testFn(client.user as any)).toThrow(new DisTubeError("INVALID_TYPE", "GuildIDResolvable", client.user));
-  expect(() => testFn(1 as any)).toThrow(new DisTubeError("INVALID_TYPE", "GuildIDResolvable", 1));
+  expect(() => testFn(client as any)).toThrow(new DisTubeError("INVALID_TYPE", "GuildIdResolvable", client));
+  expect(() => testFn(client.user as any)).toThrow(new DisTubeError("INVALID_TYPE", "GuildIdResolvable", client.user));
+  expect(() => testFn(1 as any)).toThrow(new DisTubeError("INVALID_TYPE", "GuildIdResolvable", 1));
 });
 
 test("isClientInstance()", () => {

@@ -2,7 +2,7 @@ import { DisTubeVoice } from ".";
 import { resolveGuildID } from "../..";
 import { BaseManager } from "../manager";
 import { VoiceConnectionStatus, getVoiceConnection } from "@discordjs/voice";
-import type { GuildIDResolvable } from "../..";
+import type { GuildIdResolvable } from "../..";
 import type { VoiceBasedChannel } from "discord.js";
 
 /**
@@ -14,7 +14,7 @@ export class DisTubeVoiceManager extends BaseManager<DisTubeVoice> {
    * Get a {@link DisTubeVoice}.
    * @method get
    * @memberof DisTubeVoiceManager#
-   * @param {GuildIDResolvable} queue The queue resolvable to resolve
+   * @param {GuildIdResolvable} queue The queue resolvable to resolve
    * @returns {DisTubeVoice?}
    */
   /**
@@ -47,9 +47,9 @@ export class DisTubeVoiceManager extends BaseManager<DisTubeVoice> {
   }
   /**
    * Leave the connected voice channel in a guild
-   * @param {GuildIDResolvable} guild Queue Resolvable
+   * @param {GuildIdResolvable} guild Queue Resolvable
    */
-  leave(guild: GuildIDResolvable) {
+  leave(guild: GuildIdResolvable) {
     const voice = this.get(guild);
     if (voice) {
       voice.leave();
