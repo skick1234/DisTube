@@ -255,19 +255,14 @@ export class DisTubeHandler extends DisTubeBase {
       results.splice(limit);
       this.emit("searchResult", message, results, query);
       const c = message.channel;
-      const answers = await (c.awaitMessages.length === 0
-        ? c.awaitMessages({
-            filter: (m: Message) => m.author.id === message.author.id,
-            max: 1,
-            time: this.options.searchCooldown * 1e3,
-            errors: ["time"],
-          })
-        : (c.awaitMessages as any)((m: Message) => m.author.id === message.author.id, {
-            max: 1,
-            time: this.options.searchCooldown * 1e3,
-            errors: ["time"],
-          })
-      ).catch(() => undefined);
+      const answers = await c
+        .awaitMessages({
+          filter: (m: Message) => m.author.id === message.author.id,
+          max: 1,
+          time: this.options.searchCooldown * 1e3,
+          errors: ["time"],
+        })
+        .catch(() => undefined);
       const ans = answers?.first();
       if (!ans) {
         this.emit("searchCancel", message, query);

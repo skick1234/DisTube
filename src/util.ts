@@ -1,6 +1,6 @@
 import { URL } from "url";
 import { DisTubeError, DisTubeVoice, Queue } from ".";
-import { Intents, SnowflakeUtil } from "discord.js";
+import { Constants, Intents, SnowflakeUtil } from "discord.js";
 import type { GuildIdResolvable } from ".";
 import type { EventEmitter } from "node:events";
 import type { AudioPlayer, AudioPlayerStatus, VoiceConnection, VoiceConnectionStatus } from "@discordjs/voice";
@@ -82,9 +82,7 @@ export function isURL(input: any): boolean {
  */
 export function checkIntents(options: ClientOptions): void {
   const requiredIntents: BitFieldResolvable<IntentsString, number>[] = ["GUILD_VOICE_STATES"];
-  const bitfield: BitFieldResolvable<IntentsString, number> = options.intents ?? (options?.ws as any)?.intents;
-  if (typeof bitfield === "undefined") return;
-  const intents = new Intents(bitfield);
+  const intents = new Intents(options.intents);
   for (const intent of requiredIntents) {
     if (!intents.has(intent)) throw new DisTubeError("MISSING_INTENTS", intent.toString());
   }
@@ -124,7 +122,7 @@ export function isTextChannelInstance(channel: any): channel is GuildTextBasedCh
   return (
     !!channel &&
     isSnowflake(channel.id) &&
-    isSnowflake(channel.guild?.id) &&
+    isSnowflake(channel.guildId) &&
     typeof channel.send === "function" &&
     typeof channel.awaitMessages === "function"
   );
@@ -135,10 +133,10 @@ export function isMessageInstance(message: any): message is Message<true> {
   return (
     !!message &&
     isSnowflake(message.id) &&
-    isSnowflake(message.guild?.id) &&
+    isSnowflake(message.guildId) &&
     isTextChannelInstance(message.channel) &&
     isMemberInstance(message.member) &&
-    isSnowflake(message.author?.id) &&
+    isSnowflake(message.author.id) &&
     message.member.id === message.author.id &&
     message.guild.id === message.channel.guild.id
   );
@@ -149,16 +147,9 @@ export function isSupportedVoiceChannel(channel: any): channel is VoiceBasedChan
     !!channel &&
     typeof channel.joinable === "boolean" &&
     isSnowflake(channel.id) &&
-    isSnowflake(channel.guild?.id) &&
+    isSnowflake(channel.guildId) &&
     typeof channel.full === "boolean" &&
-    [
-      // Djs v12
-      "voice",
-      "stage",
-      // Djs v13
-      "GUILD_VOICE",
-      "GUILD_STAGE_VOICE",
-    ].includes(channel.type)
+    Constants.VoiceBasedChannelTypes.includes(channel.type)
   );
 }
 
@@ -197,7 +188,9 @@ export function checkInvalidKey(
 }
 
 async function waitEvent(target: EventEmitter, status: string, maxTime: number) {
-  let cleanup = () => undefined as any;
+  let cleanup = () => {
+    // void
+  };
   try {
     await new Promise((resolve, reject) => {
       const timeout = setTimeout(() => reject(new Error(`Didn't trigger ${status} within ${maxTime}ms`)), maxTime);

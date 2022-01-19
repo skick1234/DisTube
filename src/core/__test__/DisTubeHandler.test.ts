@@ -556,7 +556,7 @@ describe("DisTubeHandler#searchSong()", () => {
     const handler = new DisTubeHandler(distube as any);
     const results = [{}, {}, {}, {}, {}];
 
-    test("User choose a result (discord.js v13)", async () => {
+    test("User choose a result", async () => {
       Util.isMessageInstance.mockReturnValue(true);
       distube.listenerCount.mockReturnValue(true);
       distube.options.nsfw = true;
@@ -572,24 +572,6 @@ describe("DisTubeHandler#searchSong()", () => {
           safeSearch: false,
         }),
       );
-      expect(distube.emit).nthCalledWith(1, "searchResult", message, results, query);
-      expect(distube.emit).nthCalledWith(2, "searchDone", message, ans, query);
-      expect(distube.listenerCount).toBeCalledWith("searchNoResult");
-      expect(distube.listenerCount).toBeCalledWith("searchResult");
-      expect(distube.listenerCount).toBeCalledWith("searchCancel");
-      expect(distube.listenerCount).toBeCalledWith("searchInvalidAnswer");
-      expect(distube.listenerCount).toBeCalledWith("searchDone");
-    });
-
-    test("User choose a result (discord.js v12)", async () => {
-      Util.isMessageInstance.mockReturnValue(true);
-      distube.listenerCount.mockReturnValue(true);
-      distube.search.mockResolvedValue(results);
-      const query = "query";
-      const ans = { content: "3", author: { id: 1 } };
-      const message = createV12Message(ans);
-      await expect(handler.searchSong(message, query)).resolves.toBe(results[2]);
-      expect(distube.search).toBeCalledWith(query, expect.objectContaining({ limit: 5 }));
       expect(distube.emit).nthCalledWith(1, "searchResult", message, results, query);
       expect(distube.emit).nthCalledWith(2, "searchDone", message, ans, query);
       expect(distube.listenerCount).toBeCalledWith("searchNoResult");

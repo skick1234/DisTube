@@ -35,7 +35,7 @@
     "music-bot",
     "discord-js"
   ],
-  "author": "Skick (https://github.com/skick1234/)",
+  "author": "Skick (https://github.com/skick1234)",
   "license": "MIT",
   "bugs": {
     "url": "https://github.com/skick1234/DisTube/issues"
@@ -80,8 +80,8 @@
   },
   "peerDependencies": {
     "@discordjs/opus": "*",
-    "@discordjs/voice": ">=0.5.6",
-    "discord.js": "^12.5.0||13.x"
+    "@discordjs/voice": "*",
+    "discord.js": "13"
   },
   "peerDependenciesMeta": {
     "@discordjs/opus": {
@@ -89,6 +89,6 @@
     }
   },
   "engines": {
-    "node": ">=12.0.0"
+    "node": ">=16.6.0"
   }
 }

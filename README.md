@@ -32,8 +32,8 @@ A Discord.js module to simplify your music commands and play songs with audio fi
 
 ### Requirement
 
-- Node v12 or higher
-- [discord.js](https://discord.js.org) v12 or **v13 _(Recommended)_**
+- Node.js 16.6.0 or higher
+- [discord.js](https://discord.js.org) v13
 - [@discordjs/voice](https://github.com/discordjs/voice)
 - [FFmpeg](https://www.ffmpeg.org/download.html)
 - [@discordjs/opus](https://github.com/discordjs/opus)

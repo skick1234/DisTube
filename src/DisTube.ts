@@ -181,6 +181,12 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
     if (message && !isMessageInstance(message)) {
       throw new DisTubeError("INVALID_TYPE", ["Discord.Message", "a falsy value"], message, "options.message");
     }
+    if (textChannel && !isTextChannelInstance(textChannel)) {
+      throw new DisTubeError("INVALID_TYPE", "Discord.GuildTextBasedChannel", textChannel, "options.textChannel");
+    }
+    if (member && !isMemberInstance(member)) {
+      throw new DisTubeError("INVALID_TYPE", "Discord.GuildMember", member, "options.member");
+    }
     try {
       if (typeof song === "string") {
         for (const plugin of this.customPlugins) {

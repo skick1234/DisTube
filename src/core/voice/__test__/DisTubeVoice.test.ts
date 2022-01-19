@@ -17,7 +17,7 @@ const voiceManager = {
 
 const voiceChannel = {
   id: 1,
-  guild: { id: 2, me: { voice: undefined } },
+  guild: { id: 2, me: { voice: undefined }, voiceAdapterCreator: () => undefined },
   joinable: true,
 };
 
@@ -274,23 +274,12 @@ describe("Methods", () => {
       expect(voice.channel).toBe(voiceChannel);
       expect(voice.connection).toBe(connection);
     });
-
-    test("Cannot connect to the voice channel due to deprecated voice system", async () => {
-      const newVC = { guild: { id: 2, me: { voice: { connection: true } } } };
-      Util.isSupportedVoiceChannel.mockReturnValue(true);
-      Util.entersState.mockRejectedValue(undefined);
-      connection.state.status = DiscordVoice.VoiceConnectionStatus.Destroyed;
-      await expect(voice.join(newVC as any)).rejects.toThrow(new DisTubeError("VOICE_DEPRECATED_CONNECTION"));
-      expect(voice.channel).toBe(newVC);
-      expect(connection.destroy).not.toBeCalled();
-      expect(voiceManager.delete).toBeCalledWith(voice.id);
-      connection.state.status = DiscordVoice.VoiceConnectionStatus.Signalling;
-    });
   });
 
   describe("DisTubeVoice#leave()", () => {
     describe("Destroy the connection", () => {
       test("Without error", () => {
+        connection.state.status = DiscordVoice.VoiceConnectionStatus.Ready;
         expect(voice.leave()).toBeUndefined();
         expect(audioPlayer.stop).toBeCalledTimes(1);
         expect(audioPlayer.stop).toBeCalledWith(true);

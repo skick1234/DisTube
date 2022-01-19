@@ -85,7 +85,7 @@ export class Song<T = unknown> {
   _patchYouTube(i: ytdl.videoInfo | SearchResult) {
     // FIXME
     const info = i as any;
-    if ((info as any).full === true) {
+    if (info.full === true) {
       /**
        * Stream formats (Available if the song is from YouTube and playing)
        * @type {ytdl.videoFormat[]?}
