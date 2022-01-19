@@ -87,8 +87,8 @@ export const defaultOptions = {
 };
 
 /**
- * Data that can be resolved to give a guild ID string. This can be:
- * - A guild ID string | a guild {@link https://discord.js.org/#/docs/main/stable/class/Snowflake|Snowflake}
+ * Data that can be resolved to give a guild id string. This can be:
+ * - A guild id string | a guild {@link https://discord.js.org/#/docs/main/stable/class/Snowflake|Snowflake}
  * - A {@link https://discord.js.org/#/docs/main/stable/class/Guild|Guild}
  * - A {@link https://discord.js.org/#/docs/main/stable/class/Message|Message}
  * - A {@link https://discord.js.org/#/docs/main/stable/class/VoiceBasedChannel|VoiceBasedChannel}

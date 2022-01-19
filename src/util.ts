@@ -166,17 +166,17 @@ export function isGuildInstance(guild: any): guild is Guild {
   return !!guild && isSnowflake(guild.id) && typeof guild.fetchAuditLogs === "function";
 }
 
-export function resolveGuildID(resolvable: GuildIdResolvable): Snowflake {
-  let guildID: string | undefined;
+export function resolveGuildId(resolvable: GuildIdResolvable): Snowflake {
+  let guildId: string | undefined;
   if (typeof resolvable === "string") {
-    guildID = resolvable;
+    guildId = resolvable;
   } else if (typeof resolvable === "object") {
-    if (resolvable instanceof Queue || resolvable instanceof DisTubeVoice) guildID = resolvable.id;
-    else if ("guild" in resolvable && isGuildInstance(resolvable.guild)) guildID = resolvable.guild.id;
-    else if ("id" in resolvable && isGuildInstance(resolvable)) guildID = resolvable.id;
+    if (resolvable instanceof Queue || resolvable instanceof DisTubeVoice) guildId = resolvable.id;
+    else if ("guild" in resolvable && isGuildInstance(resolvable.guild)) guildId = resolvable.guild.id;
+    else if ("id" in resolvable && isGuildInstance(resolvable)) guildId = resolvable.id;
   }
-  if (!isSnowflake(guildID)) throw new DisTubeError("INVALID_TYPE", "GuildIdResolvable", resolvable);
-  return guildID;
+  if (!isSnowflake(guildId)) throw new DisTubeError("INVALID_TYPE", "GuildIdResolvable", resolvable);
+  return guildId;
 }
 
 export function isClientInstance(client: any): client is Client {

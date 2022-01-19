@@ -14,7 +14,7 @@ import {
   isURL,
   isVoiceChannelEmpty,
   parseNumber,
-  resolveGuildID,
+  resolveGuildId,
   toSecond,
 } from "..";
 
@@ -169,19 +169,19 @@ test("formatDuration()", () => {
 
 test("resolveGuildID()", () => {
   const voice = new Voice({} as any, voiceChannel);
-  const gID = "737499502763704370";
-  voice.id = gID;
-  const testFn = resolveGuildID;
-  expect(testFn(voice)).toBe(gID);
-  expect(testFn(voiceChannel)).toBe(gID);
-  expect(testFn(stageChannel)).toBe(gID);
-  expect(testFn(textChannel)).toBe(gID);
-  expect(testFn(message)).toBe(gID);
-  expect(testFn(guild)).toBe(gID);
-  expect(testFn(guild.me)).toBe(gID);
-  expect(testFn(botVoiceState)).toBe(gID);
-  expect(testFn(userVoiceState)).toBe(gID);
-  expect(testFn(gID)).toBe(gID);
+  const gId = "737499502763704370";
+  voice.id = gId;
+  const testFn = resolveGuildId;
+  expect(testFn(voice)).toBe(gId);
+  expect(testFn(voiceChannel)).toBe(gId);
+  expect(testFn(stageChannel)).toBe(gId);
+  expect(testFn(textChannel)).toBe(gId);
+  expect(testFn(message)).toBe(gId);
+  expect(testFn(guild)).toBe(gId);
+  expect(testFn(guild.me)).toBe(gId);
+  expect(testFn(botVoiceState)).toBe(gId);
+  expect(testFn(userVoiceState)).toBe(gId);
+  expect(testFn(gId)).toBe(gId);
   expect(() => testFn(client as any)).toThrow(new DisTubeError("INVALID_TYPE", "GuildIdResolvable", client));
   expect(() => testFn(client.user as any)).toThrow(new DisTubeError("INVALID_TYPE", "GuildIdResolvable", client.user));
   expect(() => testFn(1 as any)).toThrow(new DisTubeError("INVALID_TYPE", "GuildIdResolvable", 1));
