@@ -1,5 +1,5 @@
 import { DisTubeVoice } from ".";
-import { resolveGuildID } from "../..";
+import { resolveGuildId } from "../..";
 import { BaseManager } from "../manager";
 import { VoiceConnectionStatus, getVoiceConnection } from "@discordjs/voice";
 import type { GuildIdResolvable } from "../..";
@@ -54,7 +54,7 @@ export class DisTubeVoiceManager extends BaseManager<DisTubeVoice> {
     if (voice) {
       voice.leave();
     } else {
-      const connection = getVoiceConnection(resolveGuildID(guild));
+      const connection = getVoiceConnection(resolveGuildId(guild));
       if (connection && connection.state.status !== VoiceConnectionStatus.Destroyed) {
         connection.destroy();
       }

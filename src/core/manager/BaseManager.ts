@@ -1,5 +1,5 @@
 import { DisTubeBase } from "..";
-import { resolveGuildID } from "../..";
+import { resolveGuildId } from "../..";
 import { Collection } from "discord.js";
 import type { GuildIdResolvable } from "../..";
 
@@ -25,12 +25,12 @@ export abstract class BaseManager<V> extends DisTubeBase {
     return data;
   }
   get(idOrInstance: GuildIdResolvable): V | undefined {
-    return this.collection.get(resolveGuildID(idOrInstance));
+    return this.collection.get(resolveGuildId(idOrInstance));
   }
   delete(idOrInstance: GuildIdResolvable): void {
-    this.collection.delete(resolveGuildID(idOrInstance));
+    this.collection.delete(resolveGuildId(idOrInstance));
   }
   has(idOrInstance: GuildIdResolvable): boolean {
-    return this.collection.has(resolveGuildID(idOrInstance));
+    return this.collection.has(resolveGuildId(idOrInstance));
   }
 }

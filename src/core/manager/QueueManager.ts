@@ -124,7 +124,7 @@ export class QueueManager extends BaseManager<Queue> {
     const song = queue.songs.shift() as Song;
     try {
       error.name = "PlayingError";
-      error.message = `${error.message}\nID: ${song.id}\nName: ${song.name}`;
+      error.message = `${error.message}\nId: ${song.id}\nName: ${song.name}`;
     } catch {}
     this.emitError(error, queue.textChannel);
     if (queue.songs.length > 0) {
