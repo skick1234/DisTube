@@ -200,7 +200,7 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
   ): Promise<void> {
     if (isMessageInstance(voiceChannel)) {
       process.emitWarning(
-        "Passing Message for DisTube#play is deprecated, use VoiceBasedChannel instead.",
+        "Passing Message for DisTube#play is deprecated, use BaseGuildVoiceChannel instead.",
         "DeprecationWarning",
       );
       const message = voiceChannel;
