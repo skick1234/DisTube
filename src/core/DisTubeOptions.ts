@@ -14,8 +14,6 @@ export class Options {
   searchCooldown: number;
   youtubeCookie?: string;
   youtubeIdentityToken?: string;
-  youtubeDL: boolean;
-  updateYouTubeDL: boolean;
   customFilters: Filters;
   ytdlOptions: ytdl.getInfoOptions;
   nsfw: boolean;
@@ -34,8 +32,6 @@ export class Options {
     this.leaveOnFinish = opts.leaveOnFinish;
     this.leaveOnStop = opts.leaveOnStop;
     this.savePreviousSongs = opts.savePreviousSongs;
-    this.youtubeDL = opts.youtubeDL;
-    this.updateYouTubeDL = opts.updateYouTubeDL;
     this.searchSongs = opts.searchSongs;
     this.youtubeCookie = opts.youtubeCookie;
     this.youtubeIdentityToken = opts.youtubeIdentityToken;
@@ -65,12 +61,6 @@ export class Options {
     }
     if (typeof options.savePreviousSongs !== "boolean") {
       throw new DisTubeError("INVALID_TYPE", "boolean", options.savePreviousSongs, "DisTubeOptions.savePreviousSongs");
-    }
-    if (typeof options.youtubeDL !== "boolean") {
-      throw new DisTubeError("INVALID_TYPE", "boolean", options.youtubeDL, "DisTubeOptions.youtubeDL");
-    }
-    if (typeof options.updateYouTubeDL !== "boolean") {
-      throw new DisTubeError("INVALID_TYPE", "boolean", options.updateYouTubeDL, "DisTubeOptions.updateYouTubeDL");
     }
     if (typeof options.youtubeCookie !== "undefined" && typeof options.youtubeCookie !== "string") {
       throw new DisTubeError("INVALID_TYPE", "string", options.youtubeCookie, "DisTubeOptions.youtubeCookie");

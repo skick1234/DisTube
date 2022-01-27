@@ -58,7 +58,6 @@ describe("Constructor", () => {
     jest.spyOn(client, "on");
     Util.isClientInstance.mockReturnValueOnce(true);
     const distube = new DisTube(client, {
-      updateYouTubeDL: false,
       plugins: [new ExtractorPlugin(), new CustomPlugin()],
     });
     expect(distube.client).toBe(client);
@@ -67,7 +66,6 @@ describe("Constructor", () => {
     expect(distube.handler).toBeInstanceOf(DisTubeHandler);
     expect(distube.queues).toBeInstanceOf(QueueManager);
     expect(distube.filters).toEqual(defaultFilters);
-    expect(distube.extractorPlugins.find(p => p.constructor.name === "YouTubeDLPlugin")).toBeTruthy();
     expect(distube.extractorPlugins.find(p => p.type === "custom")).toBeFalsy();
     expect(distube.customPlugins.find(p => p.type === "extractor")).toBeFalsy();
   });
@@ -78,8 +76,6 @@ describe("Constructor", () => {
     Util.isClientInstance.mockReturnValueOnce(true);
     const distube = new DisTube(client, {
       leaveOnEmpty: false,
-      youtubeDL: false,
-      updateYouTubeDL: false,
       plugins: [new ExtractorPlugin(), new CustomPlugin()],
     });
     expect(distube.client).toBe(client);
@@ -88,7 +84,6 @@ describe("Constructor", () => {
     expect(distube.handler).toBeInstanceOf(DisTubeHandler);
     expect(distube.queues).toBeInstanceOf(QueueManager);
     expect(distube.filters).toEqual(defaultFilters);
-    expect(distube.extractorPlugins.find(p => p.constructor.name === "YouTubeDLPlugin")).toBeFalsy();
     expect(distube.extractorPlugins.find(p => p.type === "custom")).toBeFalsy();
     expect(distube.customPlugins.find(p => p.type === "extractor")).toBeFalsy();
     expect(client.on).not.toBeCalled();
@@ -99,7 +94,6 @@ describe("DisTube#createCustomPlaylist()", () => {
   const client = new Client({ intents: ["GUILD_VOICE_STATES"] });
   Util.isClientInstance.mockReturnValueOnce(true);
   const distube = new DisTube(client, {
-    updateYouTubeDL: false,
     plugins: [extractor as unknown as ExtractorPlugin],
   });
   new DisTubeHandler(distube as any);

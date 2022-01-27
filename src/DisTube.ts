@@ -14,7 +14,6 @@ import {
   QueueManager,
   SearchResult,
   Song,
-  YouTubeDLPlugin,
   defaultFilters,
   isClientInstance,
   isMemberInstance,
@@ -94,7 +93,6 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
     Object.assign(this.filters, this.options.customFilters);
     // Default plugin
     this.options.plugins.push(new HTTPPlugin(), new HTTPSPlugin());
-    if (this.options.youtubeDL) this.options.plugins.push(new YouTubeDLPlugin(this.options.updateYouTubeDL));
     this.options.plugins.map(p => p.init(this));
     /**
      * Extractor Plugins

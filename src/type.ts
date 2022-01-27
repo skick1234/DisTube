@@ -105,8 +105,6 @@ export interface DisTubeOptions {
   searchCooldown?: number;
   youtubeCookie?: string;
   youtubeIdentityToken?: string;
-  youtubeDL?: boolean;
-  updateYouTubeDL?: boolean;
   customFilters?: Filters;
   ytdlOptions?: ytdl.downloadOptions;
   nsfw?: boolean;

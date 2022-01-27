@@ -55,8 +55,6 @@ export const defaultFilters: Filters = {
  * {@link https://github.com/fent/node-ytdl-core/blob/997efdd5dd9063363f6ef668bb364e83970756e7/example/cookies.js#L6-L12|YTDL's Example}
  * @prop {string} [youtubeIdentityToken] If not given; ytdl-core will try to find it.
  * You can find this by going to a video's watch page; viewing the source; and searching for "ID_TOKEN".
- * @prop {boolean} [youtubeDL=true] Whether or not using youtube-dl.
- * @prop {boolean} [updateYouTubeDL=true] Whether or not updating youtube-dl automatically.
  * @prop {Filters} [customFilters] Override {@link defaultFilters} or add more ffmpeg filters.
  * Example=`{ "Filter name"="Filter value"; "8d"="apulsator=hz=0.075" }`
  * @prop {ytdl.getInfoOptions} [ytdlOptions] `ytdl-core` get info options
@@ -74,8 +72,6 @@ export const defaultOptions = {
   leaveOnFinish: false,
   leaveOnStop: true,
   savePreviousSongs: true,
-  youtubeDL: true,
-  updateYouTubeDL: true,
   searchSongs: 0,
   customFilters: {},
   ytdlOptions: {},
