@@ -139,7 +139,7 @@ export interface OtherSongInfo {
   webpage_url?: string;
   url: string;
   thumbnail?: string;
-  related?: Song[];
+  related?: RelatedSong[];
   view_count?: string | number;
   views?: string | number;
   like_count?: string | number;
@@ -188,3 +188,5 @@ export interface PlaylistInfo {
    */
   thumbnail?: string;
 }
+
+export type RelatedSong = Omit<Song, "related">;

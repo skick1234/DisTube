@@ -8,7 +8,7 @@ import type {
   Options,
   PluginType,
   QueueManager,
-  Song,
+  RelatedSong,
 } from "..";
 
 /**
@@ -104,5 +104,14 @@ export abstract class Plugin {
    */
   async getStreamURL(url: string): Promise<string> {
     return url;
+  }
+  /**
+   * Get related songs from a supported url. {@link Song#member} should be `undefined`.
+   * Not needed to add {@link Song#related} because it will be added with this function later.
+   * @param {string} url Input url
+   * @returns {Promise<Song[]>}
+   */
+  async getRelatedSongs(url: string): Promise<RelatedSong[]> {
+    return [];
   }
 }

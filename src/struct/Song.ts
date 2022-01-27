@@ -2,7 +2,7 @@ import { Playlist } from "./Playlist";
 import { DisTubeError, formatDuration, isMemberInstance, parseNumber, toSecond } from "..";
 import type ytdl from "@distube/ytdl-core";
 import type { GuildMember, User } from "discord.js";
-import type { Chapter, OtherSongInfo, SearchResult } from "..";
+import type { Chapter, OtherSongInfo, RelatedSong, SearchResult } from "..";
 
 /**
  * Class representing a song.
@@ -28,7 +28,7 @@ export class Song<T = unknown> {
   url!: string;
   streamURL?: string;
   thumbnail?: string;
-  related!: Omit<Song, "related">[];
+  related!: RelatedSong[];
   views!: number;
   likes!: number;
   dislikes!: number;

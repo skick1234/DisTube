@@ -91,8 +91,8 @@ export const defaultOptions = {
  * - A guild id string | a guild {@link https://discord.js.org/#/docs/main/stable/class/Snowflake|Snowflake}
  * - A {@link https://discord.js.org/#/docs/main/stable/class/Guild|Guild}
  * - A {@link https://discord.js.org/#/docs/main/stable/class/Message|Message}
- * - A {@link https://discord.js.org/#/docs/main/stable/class/VoiceBasedChannel|VoiceBasedChannel}
- * - A {@link https://discord.js.org/#/docs/main/stable/class/GuildTextBasedChannel|GuildTextBasedChannel}
+ * - A {@link https://discord.js.org/#/docs/main/stable/class/BaseGuildVoiceChannel|BaseGuildVoiceChannel}
+ * - A {@link https://discord.js.org/#/docs/main/stable/class/BaseGuildTextChannel|BaseGuildTextChannel}
  * - A {@link https://discord.js.org/#/docs/main/stable/class/VoiceState|VoiceState}
  * - A {@link https://discord.js.org/#/docs/main/stable/class/GuildMember|GuildMember}
  * - A {@link https://discord.js.org/#/docs/main/stable/class/Interaction|Interaction}
