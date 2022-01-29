@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/require-await, @typescript-eslint/no-unused-vars */
 import type { Client, GuildTextBasedChannel } from "discord.js";
 import type {
+  Awaitable,
   DisTube,
   DisTubeEvents,
   DisTubeHandler,
@@ -91,9 +92,9 @@ export abstract class Plugin {
   /**
    * Check if the url is working with this plugin
    * @param {string} url Input url
-   * @returns {Promise<boolean>}
+   * @returns {boolean|Promise<boolean>}
    */
-  async validate(url: string): Promise<boolean> {
+  validate(url: string): Awaitable<boolean> {
     return false;
   }
   /**
@@ -102,7 +103,7 @@ export abstract class Plugin {
    * @param {string} url Input url
    * @returns {Promise<string>}
    */
-  async getStreamURL(url: string): Promise<string> {
+  getStreamURL(url: string): Awaitable<string> {
     return url;
   }
   /**
@@ -111,7 +112,7 @@ export abstract class Plugin {
    * @param {string} url Input url
    * @returns {Promise<Song[]>}
    */
-  async getRelatedSongs(url: string): Promise<RelatedSong[]> {
+  getRelatedSongs(url: string): Awaitable<RelatedSong[]> {
     return [];
   }
 }

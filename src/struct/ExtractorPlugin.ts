@@ -1,7 +1,7 @@
 import { Plugin } from ".";
 import { PluginType } from "..";
-import type { Playlist, Song } from ".";
 import type { GuildMember } from "discord.js";
+import type { Awaitable, Playlist, Song } from "..";
 
 /**
  * Extractor Plugin
@@ -35,5 +35,5 @@ export abstract class ExtractorPlugin extends Plugin {
   abstract resolve<T = unknown>(
     url: string,
     options: { member?: GuildMember; metadata?: T },
-  ): Promise<Song<T> | Playlist<T>>;
+  ): Awaitable<Song<T> | Playlist<T>>;
 }

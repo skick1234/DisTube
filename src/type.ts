@@ -12,7 +12,7 @@ import type {
   VoiceState,
 } from "discord.js";
 
-type Awaitable = Promise<void> | void;
+export type Awaitable<T = any> = T | Promise<T>;
 
 export type DisTubeVoiceEvents = {
   disconnect: (error?: Error) => Awaitable;

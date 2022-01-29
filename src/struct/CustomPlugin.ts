@@ -1,5 +1,6 @@
 import { Plugin } from ".";
 import { PluginType } from "..";
+import type { Awaitable } from "..";
 import type { GuildMember, GuildTextBasedChannel, VoiceBasedChannel } from "discord.js";
 
 /**
@@ -34,7 +35,7 @@ export abstract class CustomPlugin extends Plugin {
    * @param {boolean} [options.skip] Skip the playing song (if exists) and play the added song/playlist instantly
    * @param {boolean} [options.unshift] Add the song/playlist after the playing song if exists
    * @param {*} [options.metadata] Metadata
-   * @returns {Promise<void>}
+   * @returns {*}
    * @abstract
    */
   abstract play(
@@ -47,5 +48,5 @@ export abstract class CustomPlugin extends Plugin {
       textChannel?: GuildTextBasedChannel;
       metadata?: any;
     },
-  ): Promise<void>;
+  ): Awaitable;
 }
