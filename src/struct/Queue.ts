@@ -1,7 +1,7 @@
 import { DisTubeBase } from "../core";
 import { DisTubeError, RepeatMode, Song, TaskQueue, formatDuration } from "..";
 import type { GuildMember, GuildTextBasedChannel, Snowflake } from "discord.js";
-import type { DisTube, DisTubeVoice, DisTubeVoiceEvents, SearchResult } from "..";
+import type { DisTube, DisTubeVoice, DisTubeVoiceEvents, SearchResult, Filters } from "..";
 
 /**
  * Represents a queue.
@@ -59,6 +59,11 @@ export class Queue extends DisTubeBase {
    * Available filters: {@link Filters}
    */
   filters: string[];
+  /**
+     * Custom filters only available for this queue.
+     * @type {Filters}
+     */
+  customFilters: Filters;
   /**
    * What time in the song to begin (in seconds).
    */
@@ -166,6 +171,11 @@ export class Queue extends DisTubeBase {
      * @type {Array<string>}
      */
     this.filters = [];
+    /**
+     * Custom filters only available for this queue.
+     * @type {Filters}
+     */
+    this.customFilters = {};
     /**
      * What time in the song to begin (in seconds).
      * @type {number}
@@ -421,8 +431,15 @@ export class Queue extends DisTubeBase {
    * @throws {Error}
    */
   setFilter(filter: string | string[] | false, force = false): Array<string> {
+    // Get filters from distube instace, merge with queue instance filters,
+    // overwriting distube instace filters in case of a conflict
+    let filters = this.distube.filters
+    for (const [name, value] of Object.entries(this.customFilters)) {
+        filters[name] = value
+    }
+
     if (Array.isArray(filter)) {
-      filter = filter.filter(f => Object.prototype.hasOwnProperty.call(this.distube.filters, f));
+      filter = filter.filter(f => Object.prototype.hasOwnProperty.call(filters, f));
       if (!filter.length) throw new DisTubeError("EMPTY_FILTERED_ARRAY", "filter", "filter name");
       for (const f of filter) {
         if (this.filters.includes(f)) {
@@ -433,7 +450,7 @@ export class Queue extends DisTubeBase {
       }
     } else if (filter === false) {
       this.filters = [];
-    } else if (!Object.prototype.hasOwnProperty.call(this.distube.filters, filter)) {
+    } else if (!Object.prototype.hasOwnProperty.call(filters, filter)) {
       throw new DisTubeError("INVALID_TYPE", "filter name", filter, "filter");
     } else if (this.filters.includes(filter)) {
       if (!force) this.filters.splice(this.filters.indexOf(filter), 1);

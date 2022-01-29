@@ -361,7 +361,7 @@ export class DisTubeHandler extends DisTubeBase {
   createStream(queue: Queue): DisTubeStream {
     const { duration, formats, isLive, source, streamURL } = queue.songs[0];
     const filterArgs: string[] = [];
-    queue.filters.forEach((filter: string | number) => filterArgs.push(this.distube.filters[filter]));
+    queue.filters.forEach((filter: string | number) => filterArgs.push(queue.customFilters[filter] ?? this.distube.filters[filter]));
     const ffmpegArgs = queue.filters?.length ? ["-af", filterArgs.join(",")] : undefined;
     const seek = duration ? queue.beginTime : undefined;
     const streamOptions = { ffmpegArgs, seek, isLive };
