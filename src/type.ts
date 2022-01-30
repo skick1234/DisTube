@@ -146,7 +146,7 @@ export interface OtherSongInfo {
   dislikes?: string | number;
   repost_count?: string | number;
   reposts?: string | number;
-  uploader?: string;
+  uploader?: string | { name: string; url: string };
   uploader_url?: string;
   age_limit?: string | number;
   chapters?: Chapter[];
