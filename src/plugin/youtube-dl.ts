@@ -7,10 +7,6 @@ import type { YtResponse } from "@distube/youtube-dl";
 export class YouTubeDLPlugin extends ExtractorPlugin {
   constructor(updateYouTubeDL = true) {
     super();
-    process.emitWarning(
-      "Built-in youtube-dl plugin is deprecated, use `@distube/yt-dlp` instead.",
-      "DeprecationWarning",
-    );
     if (updateYouTubeDL) {
       /* eslint-disable no-console */
       download()

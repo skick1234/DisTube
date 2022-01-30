@@ -48,6 +48,12 @@ export class Options {
     this.emitAddListWhenCreatingQueue = opts.emitAddListWhenCreatingQueue;
     checkInvalidKey(opts, this, "DisTubeOptions");
     this.#validateOptions();
+    if (this.youtubeDL) {
+      process.emitWarning(
+        "DisTubeOptions.youtubeDL is deprecated, use `@distube/yt-dlp` instead.",
+        "DeprecationWarning",
+      );
+    }
   }
 
   #validateOptions(options = this) {
