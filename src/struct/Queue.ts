@@ -1,7 +1,7 @@
 import { DisTubeBase } from "../core";
 import { DisTubeError, RepeatMode, Song, TaskQueue, formatDuration } from "..";
+import type { DisTube, DisTubeVoice, DisTubeVoiceEvents } from "..";
 import type { GuildMember, GuildTextBasedChannel, Snowflake } from "discord.js";
-import type { DisTube, DisTubeVoice, DisTubeVoiceEvents, SearchResult } from "..";
 
 /**
  * Represents a queue.
@@ -237,14 +237,14 @@ export class Queue extends DisTubeBase {
     this.voice.volume = value;
   }
   /**
+   * @private
    * Add a Song or an array of Song to the queue
    * @param {Song|Song[]} song Song to add
    * @param {number} [position=-1] Position to add, < 0 to add to the end of the queue
-   * @param {boolean} [queuing=true] Wether or not waiting for unfinished tasks
    * @throws {Error}
    * @returns {Queue} The guild queue
    */
-  addToQueue(song: Song | SearchResult | (Song | SearchResult)[], position = -1): Queue {
+  addToQueue(song: Song | Song[], position = -1): Queue {
     const isArray = Array.isArray(song);
     if (!song || (isArray && !(song as Song[]).length)) {
       throw new DisTubeError("INVALID_TYPE", ["Song", "SearchResult", "Array<Song|SearchResult>"], song, "song");
