@@ -471,7 +471,7 @@ describe("DisTubeHandler#handlePlaylist()", () => {
     queue.songs = playlist.songs;
     distube.queues.get.mockReturnValue(queue);
     await expect(
-      handler.handlePlaylist(voice, playlist, { textChannel, skip: true, unshift: true }),
+      handler.handlePlaylist(voice, playlist, { textChannel, skip: true, position: 1 }),
     ).resolves.toBeUndefined();
     expect(queue.addToQueue).toBeCalledWith(playlist.songs, 1);
     expect(queue.skip).toBeCalledTimes(1);
@@ -486,7 +486,7 @@ describe("DisTubeHandler#handlePlaylist()", () => {
     queue.songs = playlist.songs;
     distube.queues.get.mockReturnValue(queue);
     await expect(
-      handler.handlePlaylist(voice, playlist, { textChannel, skip: false, unshift: true }),
+      handler.handlePlaylist(voice, playlist, { textChannel, skip: false, position: 1 }),
     ).resolves.toBeUndefined();
     expect(queue.addToQueue).toBeCalledWith(playlist.songs, 1);
     expect(queue.skip).not.toBeCalled();
@@ -499,10 +499,8 @@ describe("DisTubeHandler#handlePlaylist()", () => {
     const queue = new Queue.Queue(distube as any, {} as any, song);
     queue.songs = playlist.songs;
     distube.queues.get.mockReturnValue(queue);
-    await expect(
-      handler.handlePlaylist(voice, playlist, { textChannel, skip: false, unshift: false }),
-    ).resolves.toBeUndefined();
-    expect(queue.addToQueue).toBeCalledWith(playlist.songs, -1);
+    await expect(handler.handlePlaylist(voice, playlist, { textChannel, skip: false })).resolves.toBeUndefined();
+    expect(queue.addToQueue).toBeCalledWith(playlist.songs, 0);
     expect(queue.skip).not.toBeCalled();
     expect(distube.emit).toBeCalledWith("addList", queue, playlist);
     expect(playlist.songs).toContain(nsfwSong);

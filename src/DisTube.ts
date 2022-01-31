@@ -131,8 +131,12 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
    * @param {string|Song|SearchResult|Playlist} song URL | Search string |
    * {@link Song} | {@link SearchResult} | {@link Playlist}
    * @param {Object} [options] Optional options
-   * @param {boolean} [options.skip=false] Skip the playing song (if exists) and play the added song/playlist instantly
-   * @param {boolean} [options.unshift=false] Add the song/playlist to the beginning of the queue
+   * @param {boolean} [options.skip=false]
+   * Skip the playing song (if exists) and play the added song/playlist if `position` is 1.
+   * If `position` is defined and not equal to 1, it will skip to the next song instead of the added song
+   * @param {number} [options.position=0] Position of the song/playlist to add to the queue,
+   * <= 0 to add to the end of the queue.
+   * @param {boolean} [options.unshift=false] (DEPRECATED) Add the song/playlist to the beginning of the queue
    * (after the playing song if exists)
    * @param {Discord.GuildMember} [options.member] Requested user (default is your bot)
    * @param {Discord.BaseGuildTextChannel} [options.textChannel] Default {@link Queue#textChannel}
@@ -159,32 +163,33 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
     song: string | Song | SearchResult | Playlist | null,
     options?: {
       skip?: boolean;
-      unshift?: boolean;
+      position?: number;
       member?: GuildMember;
       textChannel?: GuildTextBasedChannel;
       message?: Message;
       metadata?: any;
     },
   ): Promise<void>;
-  /**
-   * Play / add a song or playlist from url. Search and play a song if it is not a valid url.
-   *
-   * @param {Discord.Message} message A message from guild channel
-   * @param {string|Song|SearchResult|Playlist} song URL | Search string |
-   * {@link Song} | {@link SearchResult} | {@link Playlist}
-   * @param {Object} [options] Optional options
-   * @param {boolean} [options.skip=false] Skip the playing song (if exists) and play the added song/playlist instantly
-   * @param {boolean} [options.unshift=false] Add the song/playlist to the beginning of the queue
-   * (after the playing song if exists)
-   * @param {*} [options.metadata] Optional metadata that can be attached to the song/playlist will be played,
-   * This is useful for identification purposes when the song/playlist is passed around in events.
-   * See {@link Song#metadata} or {@link Playlist#metadata}
-   * @deprecated Message parameter is deprecated, use VoiceChannel instead. See {@link DisTube#play}
-   */
+  /** @deprecated Message parameter is deprecated, use VoiceChannel instead. */
   async play(
     message: Message<true>,
     song: string | Song | SearchResult | Playlist,
     options?: { skip?: boolean; unshift?: boolean; metadata?: any },
+  ): Promise<void>;
+  /** @deprecated `options.unshift` is deprecated, use `options.position` instead */
+  async play(
+    voiceChannel: VoiceBasedChannel,
+    song: string | Song | SearchResult | Playlist | null,
+    options?: {
+      skip?: boolean;
+      /** @deprecated Use `options.position` instead */
+      unshift?: boolean;
+      position?: number;
+      member?: GuildMember;
+      textChannel?: GuildTextBasedChannel;
+      message?: Message;
+      metadata?: any;
+    },
   ): Promise<void>;
   async play(
     voiceChannel: Message<true> | VoiceBasedChannel,
@@ -192,6 +197,7 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
     options: {
       skip?: boolean;
       unshift?: boolean;
+      position?: number;
       member?: GuildMember;
       textChannel?: GuildTextBasedChannel;
       message?: Message;
@@ -215,6 +221,7 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
       const member = message.member as GuildMember;
       const vc = member.voice.channel;
       if (!vc) throw new DisTubeError("NOT_IN_VOICE");
+      // eslint-disable-next-line deprecation/deprecation
       return this.play(vc, song, {
         member,
         textChannel,
@@ -231,6 +238,7 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
     if (typeof options !== "object" || Array.isArray(options)) {
       throw new DisTubeError("INVALID_TYPE", "object", options, "options");
     }
+    // eslint-disable-next-line deprecation/deprecation
     const { textChannel, member, skip, message, unshift, metadata } = Object.assign(
       {
         member: voiceChannel.guild.me,
@@ -239,6 +247,21 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
       },
       options,
     );
+
+    let position = Number(options.position);
+    if (!position) {
+      if (skip && position !== 0) position = 1;
+      else position = 0;
+    }
+
+    if (unshift) {
+      process.emitWarning(
+        "'unshift' option in DisTube#play is deprecated, use 'position' instead.",
+        "DeprecationWarning",
+      );
+      position = 1;
+    }
+
     if (message && !isMessageInstance(message)) {
       throw new DisTubeError("INVALID_TYPE", ["Discord.Message", "a falsy value"], message, "options.message");
     }
@@ -265,13 +288,13 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
         song = await this.handler.resolveSong(song, { member, metadata });
         if (!song) return;
         if (song instanceof Playlist) {
-          await this.handler.handlePlaylist(voiceChannel, song, { textChannel, skip, unshift });
+          await this.handler.handlePlaylist(voiceChannel, song, { textChannel, skip, position });
         } else if (!this.options.nsfw && song.age_restricted && !(textChannel as TextChannel)?.nsfw) {
           throw new DisTubeError("NON_NSFW");
         } else {
           queue = this.getQueue(voiceChannel);
           if (queue) {
-            queue.addToQueue(song, skip || unshift ? 1 : -1);
+            queue.addToQueue(song, position);
             if (skip) queue.skip();
             else this.emit("addSong", queue, song);
           } else {
@@ -304,8 +327,12 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
    * @param {string|Song|SearchResult|Playlist} song URL | Search string |
    * {@link Song} | {@link SearchResult} | {@link Playlist}
    * @param {Object} [options] Optional options
-   * @param {boolean} [options.skip=false] Skip the playing song (if exists) and play the added song/playlist instantly
-   * @param {boolean} [options.unshift=false] Add the song/playlist to the beginning of the queue
+   * @param {boolean} [options.skip=false]
+   * Skip the playing song (if exists) and play the added song/playlist if `position` is 1.
+   * If `position` is defined and not equal to 1, it will skip to the next song instead of the added song
+   * @param {number} [options.position=0] Position of the song/playlist to add to the queue,
+   * <= 0 to add to the end of the queue.
+   * @param {boolean} [options.unshift=false] (DEPRECATED) Add the song/playlist to the beginning of the queue
    * (after the playing song if exists)
    * @param {Discord.GuildMember} [options.member] Requested user (default is your bot)
    * @param {Discord.BaseGuildTextChannel} [options.textChannel] Default {@link Queue#textChannel}
@@ -321,6 +348,7 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
     options: {
       skip?: boolean;
       unshift?: boolean;
+      position?: number;
       member?: GuildMember;
       textChannel?: GuildTextBasedChannel;
       message?: Message;
@@ -410,7 +438,14 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
     message: Message<true>,
     songs: Array<string | Song | SearchResult>,
     properties: Record<string, any> = {},
-    options: { skip?: boolean; unshift?: boolean; parallel?: boolean; metadata?: any } = {},
+    options: {
+      skip?: boolean;
+      /** @deprecated */
+      unshift?: boolean;
+      position?: number;
+      parallel?: boolean;
+      metadata?: any;
+    } = {},
   ): Promise<void> {
     process.emitWarning(
       "DisTube#playCustomPlaylist is deprecated, use DisTube#createCustomPlaylist and DisTube#play instead.",
@@ -420,6 +455,7 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
       if (typeof options !== "object" || Array.isArray(options)) {
         throw new DisTubeError("INVALID_TYPE", "object", options, "options");
       }
+      // eslint-disable-next-line deprecation/deprecation
       const { skip, unshift, parallel, metadata } = Object.assign(
         {
           skip: false,
@@ -428,6 +464,15 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
         },
         options,
       );
+
+      let position = Number(options.position);
+      if (!position) {
+        if (skip && position !== 0) position = 1;
+        else position = 0;
+      }
+
+      if (unshift) position = 1;
+
       const queue = this.getQueue(message);
       const queuing = queue && !queue.taskQueue.hasResolveTask;
       if (queuing) await queue?.taskQueue.queuing(true);
@@ -440,7 +485,7 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
         });
         const voice = message.member?.voice?.channel;
         if (!voice) throw new DisTubeError("NOT_IN_VOICE");
-        await this.play(voice, playlist, { textChannel: message.channel, skip, unshift, metadata });
+        await this.play(voice, playlist, { textChannel: message.channel, skip, position, metadata });
       } finally {
         if (queuing) queue?.taskQueue.resolve();
       }

@@ -34,8 +34,10 @@ export class Options {
     this.leaveOnFinish = opts.leaveOnFinish;
     this.leaveOnStop = opts.leaveOnStop;
     this.savePreviousSongs = opts.savePreviousSongs;
+    /* eslint-disable deprecation/deprecation */
     this.youtubeDL = opts.youtubeDL;
     this.updateYouTubeDL = opts.updateYouTubeDL;
+    /* eslint-enable deprecation/deprecation */
     this.searchSongs = opts.searchSongs;
     this.youtubeCookie = opts.youtubeCookie;
     this.youtubeIdentityToken = opts.youtubeIdentityToken;
@@ -50,7 +52,7 @@ export class Options {
     this.#validateOptions();
     if (this.youtubeDL) {
       process.emitWarning(
-        "DisTubeOptions.youtubeDL is deprecated, use `@distube/yt-dlp` instead.",
+        "DisTubeOptions.youtubeDL is deprecated, set it to false and use `@distube/yt-dlp` instead.",
         "DeprecationWarning",
       );
     }

@@ -105,7 +105,9 @@ export interface DisTubeOptions {
   searchCooldown?: number;
   youtubeCookie?: string;
   youtubeIdentityToken?: string;
+  /** @deprecated */
   youtubeDL?: boolean;
+  /** @deprecated */
   updateYouTubeDL?: boolean;
   customFilters?: Filters;
   ytdlOptions?: ytdl.downloadOptions;
@@ -190,3 +192,13 @@ export interface PlaylistInfo {
 }
 
 export type RelatedSong = Omit<Song, "related">;
+
+export interface CustomPluginPlayOptions {
+  skip?: boolean;
+  /** @deprecated Use `options.position` instead */
+  unshift?: boolean;
+  position?: number;
+  member?: GuildMember;
+  textChannel?: GuildTextBasedChannel;
+  metadata?: any;
+}

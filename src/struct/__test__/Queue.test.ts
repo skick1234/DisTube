@@ -152,13 +152,7 @@ describe("Queue#addToQueue()", () => {
   test("Add an empty array", () => {
     expect(() => {
       queue.addToQueue([]);
-    }).toThrow(new DisTubeError("INVALID_TYPE", ["Song", "SearchResult", "Array<Song|SearchResult>"], [], "song"));
-  });
-
-  test("Add to the playing position", () => {
-    expect(() => {
-      queue.addToQueue(song, 0);
-    }).toThrow(new DisTubeError("ADD_BEFORE_PLAYING"));
+    }).toThrow(new DisTubeError("INVALID_TYPE", ["Song", "Array<Song>"], [], "song"));
   });
 });
 
