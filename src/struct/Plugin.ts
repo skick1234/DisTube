@@ -90,11 +90,13 @@ export abstract class Plugin {
     return this.distube.handler;
   }
   /**
-   * Check if the url is working with this plugin
-   * @param {string} url Input url
+   * Check if the input string is working with this plugin.\
+   * Extractor Plugin: the input string is validated URL\
+   * Custom Plugin: the input string is any string
+   * @param {string} song Input string
    * @returns {boolean|Promise<boolean>}
    */
-  validate(url: string): Awaitable<boolean> {
+  validate(song: string): Awaitable<boolean> {
     return false;
   }
   /**

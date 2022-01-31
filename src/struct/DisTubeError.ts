@@ -27,7 +27,6 @@ const ERROR_MESSAGES = {
 
   NO_QUEUE: "There is no playing queue in this guild",
   QUEUE_EXIST: "This guild has a Queue already",
-  ADD_BEFORE_PLAYING: "Cannot add Song before the playing Song",
   PAUSED: "The queue has been paused already",
   RESUMED: "The queue has been playing already",
   NO_PREVIOUS: "There is no previous song in this queue",

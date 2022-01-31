@@ -152,13 +152,42 @@ export class DisTubeHandler extends DisTubeBase {
   async handlePlaylist(
     voice: VoiceBasedChannel,
     playlist: Playlist,
+    options?: {
+      textChannel?: GuildTextBasedChannel;
+      skip?: boolean;
+      position?: number;
+    },
+  ): Promise<void>;
+  /** @deprecated `options.unshift` is deprecated, use `options.position` instead */
+  async handlePlaylist(
+    voice: VoiceBasedChannel,
+    playlist: Playlist,
+    options?: {
+      textChannel?: GuildTextBasedChannel;
+      skip?: boolean;
+      position?: number;
+      unshift?: boolean;
+    },
+  ): Promise<void>;
+  async handlePlaylist(
+    voice: VoiceBasedChannel,
+    playlist: Playlist,
     options: {
       textChannel?: GuildTextBasedChannel;
       skip?: boolean;
+      position?: number;
       unshift?: boolean;
     } = {},
   ): Promise<void> {
     const { textChannel, skip, unshift } = Object.assign({ skip: false, unshift: false }, options);
+
+    let position = Number(options.position);
+    if (!position) {
+      if (skip && position !== 0) position = 1;
+      else position = 0;
+    }
+    if (unshift) position = 1;
+
     if (!(playlist instanceof Playlist)) throw new DisTubeError("INVALID_TYPE", "Playlist", playlist, "playlist");
     if (!this.options.nsfw && !(textChannel as TextChannel)?.nsfw) {
       playlist.songs = playlist.songs.filter(s => !s.age_restricted);
@@ -170,7 +199,7 @@ export class DisTubeHandler extends DisTubeBase {
     const songs = playlist.songs;
     const queue = this.queues.get(voice);
     if (queue) {
-      queue.addToQueue(songs, skip || unshift ? 1 : -1);
+      queue.addToQueue(songs, position);
       if (skip) queue.skip();
       else this.emit("addList", queue, playlist);
     } else {
