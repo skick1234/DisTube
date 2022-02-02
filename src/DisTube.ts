@@ -266,7 +266,7 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
       metadata?: any;
     } = {},
   ): Promise<Playlist> {
-    const { member, properties, parallel, metadata } = Object.assign({ parallel: true }, options);
+    const { member, properties, parallel, metadata } = Object.assign({ parallel: true, properties: {} }, options);
     if (!Array.isArray(songs)) throw new DisTubeError("INVALID_TYPE", "Array", songs, "songs");
     if (!songs.length) throw new DisTubeError("EMPTY_ARRAY", "songs");
     const filteredSongs = songs.filter(
