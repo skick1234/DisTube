@@ -2,7 +2,6 @@ import { Options, defaultOptions } from "../..";
 
 test("Default DisTubeOptions", () => {
   expect(new Options({})).toEqual({
-    customFilters: {},
     emitNewSongOnly: false,
     emptyCooldown: 60,
     leaveOnEmpty: true,

@@ -170,7 +170,7 @@ export function resolveGuildId(resolvable: GuildIdResolvable): Snowflake {
   let guildId: string | undefined;
   if (typeof resolvable === "string") {
     guildId = resolvable;
-  } else if (typeof resolvable === "object") {
+  } else if (isObject(resolvable)) {
     if (resolvable instanceof Queue || resolvable instanceof DisTubeVoice) guildId = resolvable.id;
     else if ("guild" in resolvable && isGuildInstance(resolvable.guild)) guildId = resolvable.guild.id;
     else if ("id" in resolvable && isGuildInstance(resolvable)) guildId = resolvable.id;
@@ -193,9 +193,7 @@ export function checkInvalidKey(
   source: Record<string, any> | string[],
   sourceName: string,
 ) {
-  if (typeof target !== "object" || Array.isArray(target)) {
-    throw new DisTubeError("INVALID_TYPE", "object", target, sourceName);
-  }
+  if (!isObject(target)) throw new DisTubeError("INVALID_TYPE", "object", target, sourceName);
   const sourceKeys = Array.isArray(source) ? source : Object.keys(source);
   const invalidKey = Object.keys(target).find(key => !sourceKeys.includes(key));
   if (invalidKey) throw new DisTubeError("INVALID_KEY", sourceName, invalidKey);
@@ -227,4 +225,8 @@ export async function entersState<T extends VoiceConnection | AudioPlayer>(
 ) {
   if (target.state.status === status) return target;
   return waitEvent(target, status, maxTime) as Promise<T>;
+}
+
+export function isObject(obj: any): obj is object {
+  return typeof obj === "object" && obj !== null && !Array.isArray(obj);
 }

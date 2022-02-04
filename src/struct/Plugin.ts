@@ -1,6 +1,7 @@
-/* eslint-disable @typescript-eslint/require-await, @typescript-eslint/no-unused-vars */
+/* eslint-disable  @typescript-eslint/no-unused-vars */
 import type { Client, GuildTextBasedChannel } from "discord.js";
 import type {
+  Awaitable,
   DisTube,
   DisTubeEvents,
   DisTubeHandler,
@@ -89,29 +90,21 @@ export abstract class Plugin {
     return this.distube.handler;
   }
   /**
-   * Check if the url is working with this plugin
-   * @param {string} url Input url
-   * @returns {Promise<boolean>}
-   */
-  async validate(url: string): Promise<boolean> {
-    return false;
-  }
-  /**
    * Get the stream url from {@link Song#url}. Returns {@link Song#url} by default.
    * Not needed if the plugin plays song from YouTube.
    * @param {string} url Input url
-   * @returns {Promise<string>}
+   * @returns {string|Promise<string>}
    */
-  async getStreamURL(url: string): Promise<string> {
+  getStreamURL(url: string): Awaitable<string> {
     return url;
   }
   /**
    * Get related songs from a supported url. {@link Song#member} should be `undefined`.
    * Not needed to add {@link Song#related} because it will be added with this function later.
    * @param {string} url Input url
-   * @returns {Promise<Song[]>}
+   * @returns {Song[]|Promise<Song[]>}
    */
-  async getRelatedSongs(url: string): Promise<RelatedSong[]> {
+  getRelatedSongs(url: string): Awaitable<RelatedSong[]> {
     return [];
   }
 }

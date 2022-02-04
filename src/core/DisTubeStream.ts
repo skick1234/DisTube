@@ -4,7 +4,7 @@ import { DisTubeError } from "../struct";
 import { StreamType } from "@discordjs/voice";
 import type ytdl from "@distube/ytdl-core";
 
-interface StreamOptions extends ytdl.downloadOptions {
+interface StreamOptions {
   /**
    * Time to seek in seconds
    */

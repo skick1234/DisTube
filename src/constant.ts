@@ -77,7 +77,6 @@ export const defaultOptions = {
   youtubeDL: true,
   updateYouTubeDL: true,
   searchSongs: 0,
-  customFilters: {},
   ytdlOptions: {},
   searchCooldown: 60,
   emptyCooldown: 60,

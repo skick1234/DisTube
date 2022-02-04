@@ -1,7 +1,7 @@
 import { DisTubeError, formatDuration, isMemberInstance } from "..";
 import type ytpl from "@distube/ytpl";
 import type { PlaylistInfo, Song } from "..";
-import type { GuildMember, User } from "discord.js";
+import type { GuildMember } from "discord.js";
 
 // TODO: Remove ! on the next major version
 
@@ -14,9 +14,8 @@ export class Playlist<T = unknown> implements PlaylistInfo {
   source!: string;
   songs!: Song[];
   name!: string;
-  metadata!: T;
-  member?: GuildMember;
-  user?: User;
+  #metadata!: T;
+  #member?: GuildMember;
   url?: string;
   thumbnail?: string;
   [x: string]: any;
@@ -53,7 +52,7 @@ export class Playlist<T = unknown> implements PlaylistInfo {
           properties?: Record<string, any>;
           metadata?: T;
         } = {},
-    props: Record<string, any> = {},
+    props?: Record<string, any>,
     meta?: T,
   ) {
     if (isMemberInstance(options)) {
@@ -64,12 +63,12 @@ export class Playlist<T = unknown> implements PlaylistInfo {
       return new Playlist(playlist, { member: options, properties: props, metadata: meta });
     }
 
-    const { member, properties, metadata } = Object.assign({ properties: {} }, options);
+    const { member, properties, metadata } = options;
 
     if (typeof playlist !== "object") {
       throw new DisTubeError("INVALID_TYPE", ["Array<Song>", "object"], playlist, "playlist");
     }
-    if (typeof properties !== "object") {
+    if ("properties" in options && typeof properties !== "object") {
       throw new DisTubeError("INVALID_TYPE", "object", properties, "properties");
     }
     // FIXME
@@ -78,7 +77,7 @@ export class Playlist<T = unknown> implements PlaylistInfo {
      * The source of the playlist
      * @type {string}
      */
-    this.source = (info.source || properties.source || "youtube").toLowerCase();
+    this.source = (info.source || properties?.source || "youtube").toLowerCase();
     /**
      * Playlist songs.
      * @type {Array<Song>}
@@ -87,7 +86,8 @@ export class Playlist<T = unknown> implements PlaylistInfo {
     if (!Array.isArray(this.songs) || !this.songs.length) {
       throw new DisTubeError("EMPTY_PLAYLIST");
     }
-    this._patchMember(member || info.member);
+    this.songs.map(s => s.constructor.name === "Song" && (s.playlist = this));
+    this.member = member || info.member || undefined;
     /**
      * Playlist name.
      * @type {string}
@@ -105,18 +105,12 @@ export class Playlist<T = unknown> implements PlaylistInfo {
     this.url = info.url || info.webpage_url;
     /**
      * Playlist thumbnail.
-     * @type {?string}
+     * @type {string?}
      */
     this.thumbnail = info.thumbnail?.url || info.thumbnail || this.songs[0].thumbnail;
-    for (const [key, value] of Object.entries(properties)) {
-      this[key] = value;
-    }
-    /**
-     * Optional metadata that can be used to identify the playlist.
-     * @type {T}
-     */
+    if (properties) for (const [key, value] of Object.entries(properties)) this[key] = value;
+
     this.metadata = metadata as T;
-    this._patchMetadata(metadata);
   }
 
   /**
@@ -136,35 +130,37 @@ export class Playlist<T = unknown> implements PlaylistInfo {
   }
 
   /**
-   * @param {?Discord.GuildMember} [member] Requested user
-   * @private
-   * @returns {Playlist}
+   * User requested.
+   * @type {Discord.GuildMember?}
    */
-  _patchMember(member?: GuildMember) {
-    if (member) {
-      /**
-       * User requested.
-       * @type {?Discord.GuildMember}
-       */
-      this.member = member;
-      /**
-       * User requested.
-       * @type {?Discord.User}
-       */
-      this.user = this.member?.user;
-    }
-    this.songs.map(s => s.constructor.name === "Song" && s._patchPlaylist(this, this.member));
-    return this;
+  get member() {
+    return this.#member;
+  }
+
+  set member(member: GuildMember | undefined) {
+    if (!member) return;
+    this.#member = member;
+    this.songs.map(s => s.constructor.name === "Song" && (s.member = this.member));
   }
 
   /**
-   * @param {*} metadata Metadata
-   * @private
-   * @returns {Playlist}
+   * User requested.
+   * @type {Discord.User?}
    */
-  _patchMetadata<S = unknown>(metadata: S) {
-    this.metadata = metadata as unknown as T;
-    this.songs.map(s => s.constructor.name === "Song" && s._patchMetadata(metadata));
-    return this as unknown as Playlist<S>;
+  get user() {
+    return this.member?.user;
+  }
+
+  /**
+   * Optional metadata that can be used to identify the playlist.
+   * @type {T}
+   */
+  get metadata() {
+    return this.#metadata;
+  }
+
+  set metadata(metadata: T) {
+    this.#metadata = metadata;
+    this.songs.map(s => s.constructor.name === "Song" && (s.metadata = metadata));
   }
 }
