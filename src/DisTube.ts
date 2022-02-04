@@ -1,6 +1,6 @@
 import ytpl from "@distube/ytpl";
 import ytsr from "@distube/ytsr";
-import { checkIntents, isURL } from "./util";
+import { checkIntents, isObject, isURL } from "./util";
 import { TypedEmitter } from "tiny-typed-emitter";
 import {
   DisTubeError,
@@ -89,8 +89,7 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
      * DisTube filters
      * @type {Filters}
      */
-    this.filters = defaultFilters;
-    Object.assign(this.filters, this.options.customFilters);
+    this.filters = { ...defaultFilters, ...this.options.customFilters };
     // Default plugin
     this.options.plugins.push(new HTTPPlugin(), new HTTPSPlugin());
     this.options.plugins.map(p => p.init(this));
@@ -156,7 +155,7 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
    */
   async play(
     voiceChannel: VoiceBasedChannel,
-    song: string | Song | SearchResult | Playlist | null,
+    song: string | Song | SearchResult | Playlist,
     options: {
       skip?: boolean;
       unshift?: boolean;
@@ -170,18 +169,15 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
     if (!isSupportedVoiceChannel(voiceChannel)) {
       throw new DisTubeError("INVALID_TYPE", "BaseGuildVoiceChannel", voiceChannel, "voiceChannel");
     }
-    if (typeof options !== "object" || Array.isArray(options)) {
-      throw new DisTubeError("INVALID_TYPE", "object", options, "options");
-    }
+    if (!isObject(options)) throw new DisTubeError("INVALID_TYPE", "object", options, "options");
+
     // eslint-disable-next-line deprecation/deprecation
-    const { textChannel, member, skip, message, unshift, metadata } = Object.assign(
-      {
-        member: voiceChannel.guild.me,
-        skip: false,
-        unshift: false,
-      },
-      options,
-    );
+    const { textChannel, member, skip, message, unshift, metadata } = {
+      member: voiceChannel.guild.me ?? undefined,
+      skip: false,
+      unshift: false,
+      ...options,
+    };
 
     let position = Number(options.position);
     if (!position) {
@@ -223,11 +219,15 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
           song = await this.handler.resolvePlaylist(song, { member, metadata });
         }
         if (typeof song === "string" && !isURL(song)) {
-          if (!message) song = (await this.search(song, { limit: 1 }))[0];
-          else song = await this.handler.searchSong(message, song);
+          if (!message) {
+            song = (await this.search(song, { limit: 1 }))[0];
+          } else {
+            const result = await this.handler.searchSong(message, song);
+            if (!result) return;
+            song = result;
+          }
         }
         song = await this.handler.resolveSong(song, { member, metadata });
-        if (!song) return;
         if (song instanceof Playlist) {
           await this.handler.handlePlaylist(voiceChannel, song, { textChannel, skip, position });
         } else if (!this.options.nsfw && song.age_restricted && !(textChannel as TextChannel)?.nsfw) {
@@ -266,7 +266,7 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
    * @param {Array<string|Song|SearchResult>} songs Array of url, Song or SearchResult
    * @param {Object} [options] Optional options
    * @param {Discord.GuildMember} [options.message] A message from guild channel | A guild member
-   * @param {Object} [options.properties={}] Additional properties such as `name`
+   * @param {Object} [options.properties] Additional properties such as `name`
    * @param {boolean} [options.parallel=true] Whether or not fetch the songs in parallel
    * @param {*} [options.metadata] Metadata
    * @example
@@ -287,7 +287,7 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
       metadata?: any;
     } = {},
   ): Promise<Playlist> {
-    const { member, properties, parallel, metadata } = Object.assign({ parallel: true }, options);
+    const { member, properties, parallel, metadata } = { parallel: true, ...options };
     if (!Array.isArray(songs)) throw new DisTubeError("INVALID_TYPE", "Array", songs, "songs");
     if (!songs.length) throw new DisTubeError("EMPTY_ARRAY", "songs");
     const filteredSongs = songs.filter(
@@ -330,7 +330,7 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
     string: string,
     options: { type?: "video" | "playlist"; limit?: number; safeSearch?: boolean; retried?: boolean } = {},
   ): Promise<Array<SearchResult>> {
-    const opts = Object.assign({ type: "video", limit: 10, safeSearch: false }, options);
+    const opts = { type: "video" as const, limit: 10, safeSearch: false, ...options };
     if (typeof opts.type !== "string" || !["video", "playlist"].includes(opts.type)) {
       throw new DisTubeError("INVALID_TYPE", ["video", "playlist"], opts.type, "options.type");
     }

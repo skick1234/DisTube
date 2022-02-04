@@ -41,7 +41,7 @@ const ERROR_MESSAGES = {
   UNPLAYABLE_FORMATS: "No playable format found",
   NON_NSFW: "Cannot play age-restricted content in non-NSFW channel",
   NOT_SUPPORTED_URL: "This url is not supported",
-  CANNOT_RESOLVE_SONG: (t: string) => `Cannot resolve ${t} to a Song`,
+  CANNOT_RESOLVE_SONG: (t: any) => `Cannot resolve ${inspect(t)} to a Song`,
   NO_VALID_SONG: "'songs' array does not have any valid Song, SearchResult or url",
   EMPTY_FILTERED_PLAYLIST:
     "There is no valid video in the playlist\n" +

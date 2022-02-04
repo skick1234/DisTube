@@ -73,7 +73,6 @@ export const defaultOptions = {
   leaveOnStop: true,
   savePreviousSongs: true,
   searchSongs: 0,
-  customFilters: {},
   ytdlOptions: {},
   searchCooldown: 60,
   emptyCooldown: 60,

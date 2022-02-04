@@ -14,7 +14,7 @@ export class Options {
   searchCooldown: number;
   youtubeCookie?: string;
   youtubeIdentityToken?: string;
-  customFilters: Filters;
+  customFilters?: Filters;
   ytdlOptions: ytdl.getInfoOptions;
   nsfw: boolean;
   emitAddSongWhenCreatingQueue: boolean;
@@ -23,9 +23,7 @@ export class Options {
     if (typeof options !== "object" || Array.isArray(options)) {
       throw new DisTubeError("INVALID_TYPE", "object", options, "DisTubeOptions");
     }
-    const def = { ...defaultOptions };
-    // Object.assign(this, defaultOptions, options);
-    const opts = Object.assign({}, def, options);
+    const opts = { ...defaultOptions, ...options };
     this.plugins = opts.plugins;
     this.emitNewSongOnly = opts.emitNewSongOnly;
     this.leaveOnEmpty = opts.leaveOnEmpty;
@@ -73,7 +71,10 @@ export class Options {
         "DisTubeOptions.youtubeIdentityToken",
       );
     }
-    if (typeof options.customFilters !== "object" || Array.isArray(options.customFilters)) {
+    if (
+      (typeof options.customFilters !== "undefined" && typeof options.customFilters !== "object") ||
+      Array.isArray(options.customFilters)
+    ) {
       throw new DisTubeError("INVALID_TYPE", "object", options.customFilters, "DisTubeOptions.customFilters");
     }
     if (typeof options.ytdlOptions !== "object" || Array.isArray(options.ytdlOptions)) {

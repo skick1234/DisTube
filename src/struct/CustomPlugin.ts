@@ -1,7 +1,8 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import { Plugin } from ".";
 import { PluginType } from "..";
-import type { CustomPluginPlayOptions } from "..";
 import type { VoiceBasedChannel } from "discord.js";
+import type { Awaitable, CustomPluginPlayOptions, Playlist, SearchResult, Song } from "..";
 
 /**
  * Custom Plugin
@@ -11,14 +12,22 @@ import type { VoiceBasedChannel } from "discord.js";
 export abstract class CustomPlugin extends Plugin {
   type = PluginType.CUSTOM;
   /**
-   * This method will be executed if the url is validated.
+   * This method will be executed if the `song` string is validated.
    * @param {Discord.BaseGuildVoiceChannel} voiceChannel The voice channel will be joined
-   * @param {string} song Validated url
+   * @param {string} song Validated `song`
    * @param {CustomPluginPlayOptions} [options] Optional options
    * @returns {Promise<void>}
    * @abstract
    */
-  abstract play(voiceChannel: VoiceBasedChannel, song: string, options: CustomPluginPlayOptions): Promise<void>;
+  abstract play(voiceChannel: VoiceBasedChannel, song: string, options: CustomPluginPlayOptions): Awaitable<void>;
+  /**
+   * Check if the {@link DisTube#play} `song` parameter is working with this plugin
+   * @param {string} song String need to validate
+   * @returns {boolean|Promise<boolean>}
+   */
+  validate(song: string): Awaitable<boolean> {
+    return false;
+  }
 }
 
 /**
@@ -32,12 +41,13 @@ export abstract class CustomPlugin extends Plugin {
  * <= 0 to add to the end of the queue.
  * @param {boolean} [unshift=false] (DEPRECATED) Add the song/playlist to the beginning of the queue
  * (after the playing song if exists)
- * @param {*} [metadata] Metadata
+ * @param {*} [metadata] Optional metadata that can be attached to the song/playlist will be played.
  */
+
 /**
  * This method will be executed if the url is validated.
  * @param {Discord.BaseGuildVoiceChannel} voiceChannel The voice channel will be joined
- * @param {string} song Validated url
+ * @param {string} song Validated `song`
  * @param {CustomPluginPlayOptions} [options] Optional options
  * @returns {Promise<void>}
  * @abstract

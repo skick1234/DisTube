@@ -4,16 +4,15 @@ import { DisTubeBase, DisTubeStream } from ".";
 import { DisTubeError, Playlist, Queue, SearchResult, Song, isMessageInstance, isURL, isVoiceChannelEmpty } from "..";
 import type { DisTube, OtherSongInfo } from "..";
 import type { GuildMember, GuildTextBasedChannel, Message, TextChannel, VoiceBasedChannel } from "discord.js";
+import { isObject } from "../util";
 /**
  * DisTube's Handler
  * @extends DisTubeBase
  * @private
  */
 export class DisTubeHandler extends DisTubeBase {
-  ytdlOptions: ytdl.downloadOptions;
   constructor(distube: DisTube) {
     super(distube);
-    this.ytdlOptions = this.options.ytdlOptions;
 
     if (this.options.youtubeCookie) {
       const requestOptions: any = {
@@ -58,6 +57,10 @@ export class DisTubeHandler extends DisTubeBase {
     }
   }
 
+  get ytdlOptions() {
+    return this.options.ytdlOptions;
+  }
+
   /**
    * @param {string} url url
    * @param {boolean} [basic=false] getBasicInfo?
@@ -77,23 +80,22 @@ export class DisTubeHandler extends DisTubeBase {
    * @returns {Promise<Song|Playlist|null>} Resolved
    */
   async resolveSong(
-    song: string | ytdl.videoInfo | Song | Playlist | SearchResult | OtherSongInfo | ytdl.relatedVideo | null,
+    song: string | ytdl.videoInfo | Song | Playlist | SearchResult | OtherSongInfo | ytdl.relatedVideo,
     options: {
       member?: GuildMember;
       metadata?: any;
     } = {},
-  ): Promise<Song | Playlist | null> {
-    if (!song) return null;
+  ): Promise<Song | Playlist> {
     if (song instanceof Song || song instanceof Playlist) {
-      if (options.metadata) song._patchMetadata(options.metadata);
-      if (options.member) song._patchMember(options.member);
+      if ("metadata" in options) song.metadata = options.metadata;
+      if ("member" in options) song.member = options.member;
       return song;
     }
     if (song instanceof SearchResult) {
       if (song.type === "video") return new Song(song, options);
       return this.resolvePlaylist(song.url, options);
     }
-    if (typeof song === "object") return new Song(song, options);
+    if (isObject(song)) return new Song(song, options);
     if (ytdl.validateURL(song)) return new Song(await this.getYouTubeInfo(song), options);
     if (isURL(song)) {
       for (const plugin of this.distube.extractorPlugins) {
@@ -101,7 +103,7 @@ export class DisTubeHandler extends DisTubeBase {
       }
       throw new DisTubeError("NOT_SUPPORTED_URL");
     }
-    throw new DisTubeError("CANNOT_RESOLVE_SONG", typeof song);
+    throw new DisTubeError("CANNOT_RESOLVE_SONG", song);
   }
 
   /**
@@ -121,7 +123,7 @@ export class DisTubeHandler extends DisTubeBase {
       metadata?: any;
     } = {},
   ): Promise<Playlist> {
-    const { member, source, metadata } = Object.assign({ source: "youtube" }, options);
+    const { member, source, metadata } = { source: "youtube", ...options };
     if (playlist instanceof Playlist) {
       if (metadata) playlist._patchMetadata(metadata);
       if (member) playlist._patchMember(member);
@@ -179,7 +181,7 @@ export class DisTubeHandler extends DisTubeBase {
       unshift?: boolean;
     } = {},
   ): Promise<void> {
-    const { textChannel, skip, unshift } = Object.assign({ skip: false, unshift: false }, options);
+    const { textChannel, skip, unshift } = { skip: false, unshift: false, ...options };
 
     let position = Number(options.position);
     if (!position) {
@@ -320,7 +322,6 @@ export class DisTubeHandler extends DisTubeBase {
     const ffmpegArgs = queue.filters?.length ? ["-af", filterArgs.join(",")] : undefined;
     const seek = duration ? queue.beginTime : undefined;
     const streamOptions = { ffmpegArgs, seek, isLive };
-    Object.assign(streamOptions, this.ytdlOptions);
     if (source === "youtube") return DisTubeStream.YouTube(formats, streamOptions);
     return DisTubeStream.DirectLink(streamURL as string, streamOptions);
   }

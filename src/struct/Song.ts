@@ -1,7 +1,7 @@
 import { Playlist } from "./Playlist";
 import { DisTubeError, formatDuration, isMemberInstance, parseNumber, toSecond } from "..";
 import type ytdl from "@distube/ytdl-core";
-import type { GuildMember, User } from "discord.js";
+import type { GuildMember } from "discord.js";
 import type { Chapter, OtherSongInfo, RelatedSong, SearchResult } from "..";
 
 /**
@@ -16,10 +16,9 @@ import type { Chapter, OtherSongInfo, RelatedSong, SearchResult } from "..";
  */
 export class Song<T = unknown> {
   source!: string;
-  metadata!: T;
+  #metadata!: T;
   formats?: ytdl.videoFormat[];
-  member?: GuildMember;
-  user?: User;
+  #member?: GuildMember;
   id?: string;
   name?: string;
   isLive!: boolean;
@@ -39,7 +38,7 @@ export class Song<T = unknown> {
   age_restricted!: boolean;
   chapters!: Chapter[];
   reposts!: number;
-  playlist?: Playlist;
+  #playlist?: Playlist;
   /**
    * Create a Song
    * @param {ytdl.videoInfo|SearchResult|OtherSongInfo} info Raw info
@@ -56,7 +55,7 @@ export class Song<T = unknown> {
       metadata?: T;
     } = {},
   ) {
-    const { member, source, metadata } = Object.assign({ source: "youtube" }, options);
+    const { member, source, metadata } = { source: "youtube", ...options };
 
     if (
       typeof source !== "string" ||
@@ -74,7 +73,7 @@ export class Song<T = unknown> {
      * @type {T}
      */
     this.metadata = metadata as T;
-    this._patchMember(member);
+    this.member = member;
     if (this.source === "youtube") {
       this._patchYouTube(info as ytdl.videoInfo);
     } else {
@@ -236,51 +235,44 @@ export class Song<T = unknown> {
   }
 
   /**
-   * @param {Playlist} playlist Playlist
-   * @param {Discord.GuildMember} [member] Requested user
-   * @private
-   * @returns {Song}
+   * The playlist added this song
+   * @type {Playlist?}
    */
-  _patchPlaylist(playlist: Playlist, member?: GuildMember) {
-    if (!(playlist instanceof Playlist)) throw new DisTubeError("INVALID_TYPE", "Playlist", playlist, "playlist");
+  get playlist() {
+    return this.#playlist;
+  }
 
-    /**
-     * The playlist added this song
-     * @type {Playlist?}
-     */
-    this.playlist = playlist;
-    return this._patchMember(playlist.member ?? member);
+  set playlist(playlist: Playlist | undefined) {
+    if (!(playlist instanceof Playlist)) throw new DisTubeError("INVALID_TYPE", "Playlist", playlist, "Song#playlist");
+    this.#playlist = playlist;
+    this.member = playlist.member;
   }
 
   /**
-   * @param {Discord.GuildMember} [member] Requested user
-   * @private
-   * @returns {Song}
+   * User requested.
+   * @type {Discord.GuildMember?}
    */
-  _patchMember(member?: GuildMember) {
-    if (isMemberInstance(member)) {
-      /**
-       * User requested
-       * @type {Discord.GuildMember?}
-       */
-      this.member = member;
-      /**
-       * User requested
-       * @type {Discord.User?}
-       */
-      this.user = member.user;
-    }
-    return this;
+  get member() {
+    return this.#member;
+  }
+
+  set member(member: GuildMember | undefined) {
+    if (isMemberInstance(member)) this.#member = member;
   }
 
   /**
-   * @param {*} metadata Metadata
-   * @private
-   * @returns {Song}
+   * User requested.
+   * @type {Discord.User?}
    */
-  _patchMetadata<S = unknown>(metadata: S) {
-    this.metadata = metadata as unknown as T;
-    this.related.map(s => s._patchMetadata(metadata));
-    return this as unknown as Song<S>;
+  get user() {
+    return this.member?.user;
+  }
+
+  get metadata() {
+    return this.#metadata;
+  }
+
+  set metadata(metadata: T) {
+    this.#metadata = metadata;
   }
 }
