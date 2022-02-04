@@ -218,3 +218,7 @@ export async function entersState<T extends VoiceConnection | AudioPlayer>(
 export function isObject(obj: any): obj is object {
   return typeof obj === "object" && obj !== null && !Array.isArray(obj);
 }
+
+export function isRecord(obj: any): obj is Record<string, unknown> {
+  return isObject(obj);
+}

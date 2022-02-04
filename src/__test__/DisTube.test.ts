@@ -114,6 +114,7 @@ describe("DisTube#createCustomPlaylist()", () => {
   });
 
   test("parallel is true", async () => {
+    Util.isRecord.mockReturnValue(true);
     const name = "a custom playlist";
     Util.isURL.mockReturnValueOnce(true).mockReturnValueOnce(false);
     const result = await distube.createCustomPlaylist(["not an url", song, anotherSong, songResult], {
@@ -130,18 +131,15 @@ describe("DisTube#createCustomPlaylist()", () => {
   });
 
   test("parallel is false", async () => {
-    const name = "a custom playlist";
     Util.isURL.mockReturnValueOnce(true);
     extractor.validate.mockReturnValue(false);
     const result = await distube.createCustomPlaylist(["not an url", anotherSong, song, plResult], {
-      properties: { name },
       parallel: false,
       metadata,
     });
     expect(result.songs.length).toBe(2);
     expect(result.songs[1]).toBe(song);
     expect(result.songs[0]).toBe(anotherSong);
-    expect(result.name).toBe(name);
     expect(result.metadata).toBe(metadata);
   });
 });

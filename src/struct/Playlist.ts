@@ -1,4 +1,4 @@
-import { DisTubeError, formatDuration, isMemberInstance } from "..";
+import { DisTubeError, formatDuration, isMemberInstance, isRecord } from "..";
 import type ytpl from "@distube/ytpl";
 import type { PlaylistInfo, Song } from "..";
 import type { GuildMember } from "discord.js";
@@ -38,7 +38,7 @@ export class Playlist<T = unknown> implements PlaylistInfo {
     if (typeof playlist !== "object") {
       throw new DisTubeError("INVALID_TYPE", ["Array<Song>", "object"], playlist, "playlist");
     }
-    if ("properties" in options && typeof properties !== "object") {
+    if (typeof properties !== "undefined" && !isRecord(properties)) {
       throw new DisTubeError("INVALID_TYPE", "object", properties, "properties");
     }
     // FIXME

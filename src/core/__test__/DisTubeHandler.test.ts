@@ -276,6 +276,7 @@ describe("DisTubeHandler#resolveSong()", () => {
   });
 
   test("Parameter is a SearchResult", async () => {
+    Util.isRecord.mockReturnValue(true);
     await expect(handler.resolveSong(songResult, { member, metadata })).resolves.toBeInstanceOf(Song);
     (ytpl as unknown as jest.Mock).mockReturnValue(firstPlaylistInfo);
     await expect(handler.resolveSong(plResult, { member, metadata })).resolves.toBeInstanceOf(Playlist);
@@ -333,6 +334,7 @@ describe("DisTubeHandler#resolvePlaylist()", () => {
   });
 
   test("playlist is a Song array", async () => {
+    Util.isRecord.mockReturnValue(true);
     const result = handler.resolvePlaylist([song, anotherSong, nsfwSong], { member, metadata });
     await expect(result).resolves.toStrictEqual(playlist);
     await expect(result).resolves.not.toBe(playlist);
