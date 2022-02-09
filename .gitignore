@@ -105,3 +105,4 @@ docs
 
 .vscode
 yarn.lock
+src/example.ts

@@ -2,9 +2,10 @@
   "include": ["src/**/*.ts"],
   "exclude": ["src/**/__test__", "src/**/__mocks__"],
   "compilerOptions": {
-    "module": "commonjs",
-    "target": "es2021",
-    "lib": ["esnext"],
+    "module": "CommonJS",
+    "moduleResolution": "node",
+    "target": "ES2021",
+    "lib": ["ESNext"],
     "strict": true,
     "alwaysStrict": true,
     "removeComments": false,
@@ -12,14 +13,12 @@
     "sourceMap": true,
     "inlineSources": true,
     "outDir": "dist",
-    "moduleResolution": "node",
     "allowJs": false,
     "declaration": true,
     "declarationMap": true,
     "skipLibCheck": true,
     "skipDefaultLibCheck": true,
     "incremental": true,
-    "esModuleInterop": true,
-    "resolveJsonModule": true
+    "esModuleInterop": true
   }
 }

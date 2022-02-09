@@ -54,10 +54,12 @@ describe("Constructor", () => {
   });
 
   test("#2", () => {
-    const client = new Client({ intents: ["GUILD_VOICE_STATES"] });
+    const client = new Client({ intents: ["GuildVoiceStates"] });
     jest.spyOn(client, "on");
     Util.isClientInstance.mockReturnValueOnce(true);
     const distube = new DisTube(client, {
+      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+      // @ts-ignore
       plugins: [new ExtractorPlugin(), new CustomPlugin()],
     });
     expect(distube.client).toBe(client);
@@ -71,11 +73,13 @@ describe("Constructor", () => {
   });
 
   test("#3", () => {
-    const client = new Client({ intents: ["GUILD_VOICE_STATES"] });
+    const client = new Client({ intents: ["GuildVoiceStates"] });
     jest.spyOn(client, "on");
     Util.isClientInstance.mockReturnValueOnce(true);
     const distube = new DisTube(client, {
       leaveOnEmpty: false,
+      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+      // @ts-ignore
       plugins: [new ExtractorPlugin(), new CustomPlugin()],
     });
     expect(distube.client).toBe(client);
@@ -91,7 +95,7 @@ describe("Constructor", () => {
 });
 
 describe("DisTube#createCustomPlaylist()", () => {
-  const client = new Client({ intents: ["GUILD_VOICE_STATES"] });
+  const client = new Client({ intents: ["GuildVoiceStates"] });
   Util.isClientInstance.mockReturnValueOnce(true);
   const distube = new DisTube(client, {
     plugins: [extractor as unknown as ExtractorPlugin],

@@ -1,17 +1,15 @@
 import { URL } from "url";
 import { DisTubeError, DisTubeVoice, Queue } from ".";
-import { Constants, Intents, SnowflakeUtil } from "discord.js";
+import { Constants, GatewayIntentBits, IntentsBitField, SnowflakeUtil } from "discord.js";
 import type { GuildIdResolvable } from ".";
 import type { EventEmitter } from "node:events";
 import type { AudioPlayer, AudioPlayerStatus, VoiceConnection, VoiceConnectionStatus } from "@discordjs/voice";
 import type {
-  BitFieldResolvable,
   Client,
   ClientOptions,
   Guild,
   GuildMember,
   GuildTextBasedChannel,
-  IntentsString,
   Message,
   Snowflake,
   VoiceBasedChannel,
@@ -81,10 +79,12 @@ export function isURL(input: any): boolean {
  * @param {ClientOptions} options options
  */
 export function checkIntents(options: ClientOptions): void {
-  const requiredIntents: BitFieldResolvable<IntentsString, number>[] = ["GUILD_VOICE_STATES"];
-  const intents = new Intents(options.intents);
+  const requiredIntents = [GatewayIntentBits.GuildVoiceStates];
+  const intents = new IntentsBitField(options.intents);
   for (const intent of requiredIntents) {
-    if (!intents.has(intent)) throw new DisTubeError("MISSING_INTENTS", intent.toString());
+    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+    // @ts-ignore
+    if (!intents.has(intent)) throw new DisTubeError("MISSING_INTENTS", GatewayIntentBits[intent.toString()]);
   }
 }
 
@@ -102,7 +102,7 @@ export function isVoiceChannelEmpty(voiceState: VoiceState): boolean {
 
 export function isSnowflake(id: any): id is Snowflake {
   try {
-    return SnowflakeUtil.deconstruct(id).timestamp > SnowflakeUtil.EPOCH;
+    return SnowflakeUtil.deconstruct(id).timestamp > SnowflakeUtil.epoch;
   } catch {
     return false;
   }

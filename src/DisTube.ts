@@ -171,11 +171,10 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
     }
     if (!isObject(options)) throw new DisTubeError("INVALID_TYPE", "object", options, "options");
 
-    // eslint-disable-next-line deprecation/deprecation
-    const { textChannel, member, skip, message, unshift, metadata } = {
+    const { textChannel, member, skip, message, metadata } = {
       member: voiceChannel.guild.me ?? undefined,
+      textChannel: options?.message?.channel,
       skip: false,
-      unshift: false,
       ...options,
     };
 
@@ -183,14 +182,6 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
     if (!position) {
       if (skip && position !== 0) position = 1;
       else position = 0;
-    }
-
-    if (unshift) {
-      process.emitWarning(
-        "'unshift' option in DisTube#play is deprecated, use 'position' instead.",
-        "DeprecationWarning",
-      );
-      position = 1;
     }
 
     if (message && !isMessageInstance(message)) {

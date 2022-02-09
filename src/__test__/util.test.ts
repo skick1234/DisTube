@@ -23,15 +23,25 @@ jest.mock("../core/voice/DisTubeVoice");
 const Voice = _Voice as unknown as jest.Mocked<typeof _Voice>;
 
 const client = new Client({ intents: [] });
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore
 client.user = new ClientUser(client, rawClientUser);
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore
 const guild = new Guild(client, rawGuild);
 const textChannel = guild.channels.cache.get("737499503384461325");
 const voiceChannel = guild.channels.cache.get("853225781604646933");
 Object.defineProperty(voiceChannel, "joinable", { value: true, writable: false });
 const stageChannel = guild.channels.cache.get("835876864458489857");
 Object.defineProperty(stageChannel, "joinable", { value: false, writable: false });
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore
 const botVoiceState = new VoiceState(guild, rawBotVoiceState);
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore
 const userVoiceState = new VoiceState(guild, rawUserVoiceState);
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore
 const message = new Message(client, rawMessage);
 
 test("isSupportedVoiceChannel()", () => {
@@ -100,9 +110,9 @@ test("isVoiceChannelEmpty()", () => {
 });
 
 test("checkIntents()", () => {
-  const intent = "GUILD_VOICE_STATES";
+  const intent = "GuildVoiceStates";
   const client1 = new Client({ intents: [] });
-  const client2 = new Client({ intents: ["GUILDS"] });
+  const client2 = new Client({ intents: ["Guilds"] });
   const client3 = new Client({ intents: [intent] });
   expect(() => {
     checkIntents(client1.options);
@@ -155,6 +165,8 @@ test("formatDuration()", () => {
 test("resolveGuildID()", () => {
   const voice = new Voice({} as any, voiceChannel);
   const gId = "737499502763704370";
+  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+  // @ts-ignore
   voice.id = gId;
   const testFn = resolveGuildId;
   expect(testFn(voice)).toBe(gId);

@@ -1,4 +1,4 @@
-# Updating your code to Version 3
+# Updating your code
 
-v3 contains many new features, optimizations, and is built on `@discordjs/voice`.\
-Visit [the guide](https://distube.js.org/guide/additional-info/update.html) for help with updating your v2 code to v3.
+v4 contains many new features, optimizations.\
+Visit [the guide](https://distube.js.org/guide/additional-info/update.html) for help with updating your code from older versions.
