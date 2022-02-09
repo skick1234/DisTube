@@ -3,7 +3,7 @@
     - name: Welcome
       id: welcome
       path: ../../README.md
-    - name: Updating to v3
+    - name: Updating to v4
       path: update.md
 - name: Plugin
   files:
