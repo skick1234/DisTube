@@ -21,7 +21,7 @@ export type DisTubeVoiceEvents = {
 };
 
 export type DisTubeEvents = {
-  error: (channel: GuildTextBasedChannel, error: Error) => Awaitable;
+  error: (channel: GuildTextBasedChannel | undefined, error: Error) => Awaitable;
   addList: (queue: Queue, playlist: Playlist) => Awaitable;
   addSong: (queue: Queue, song: Song) => Awaitable;
   playSong: (queue: Queue, song: Song) => Awaitable;

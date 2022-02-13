@@ -607,7 +607,6 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
     return q.seek(time);
   }
 
-  /* eslint-disable no-console */
   /**
    * Emit error event
    * @param {Error} error error
@@ -615,20 +614,18 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
    * @private
    */
   emitError(error: Error, channel?: GuildTextBasedChannel): void {
-    if (!channel || !isTextChannelInstance(channel)) {
-      console.error(error);
-      console.warn("This is logged because <Queue>.textChannel is undefined");
-    } else if (this.listeners("error").length) {
+    if (this.listeners("error").length) {
       this.emit("error", channel, error);
     } else {
+      /* eslint-disable no-console */
       console.error(error);
       console.warn("Unhandled 'error' event.");
       console.warn(
         "See: https://distube.js.org/#/docs/DisTube/stable/class/DisTube?scrollTo=e-error and https://nodejs.org/api/events.html#events_error_events",
       );
+      /* eslint-enable no-console */
     }
   }
-  /* eslint-enable no-console */
 }
 
 export default DisTube;
@@ -673,12 +670,13 @@ export default DisTube;
  * Emitted when DisTube encounters an error.
  *
  * @event DisTube#error
- * @param {Discord.BaseGuildTextChannel} channel Text channel where the error is encountered.
+ * @param {Discord.BaseGuildTextChannel?} channel Text channel where the error is encountered.
  * @param {Error} error The error encountered
  * @example
- * distube.on("error", (channel, error) => channel.send(
- *     "An error encountered: " + error
- * ));
+ * distube.on('error', (channel, e) => {
+ *     if (channel) channel.send(`An error encountered: ${e}`)
+ *     else console.error(e)
+ * })
  */
 
 /**
