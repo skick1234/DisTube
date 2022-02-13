@@ -39,8 +39,6 @@ export abstract class CustomPlugin extends Plugin {
  * If `position` is defined and not equal to 1, it will skip to the next song instead of the added song
  * @param {number} [position=0] Position of the song/playlist to add to the queue,
  * <= 0 to add to the end of the queue.
- * @param {boolean} [unshift=false] (DEPRECATED) Add the song/playlist to the beginning of the queue
- * (after the playing song if exists)
  * @param {*} [metadata] Optional metadata that can be attached to the song/playlist will be played.
  */
 

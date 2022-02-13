@@ -79,13 +79,15 @@ export function isURL(input: any): boolean {
  * @param {ClientOptions} options options
  */
 export function checkIntents(options: ClientOptions): void {
-  const requiredIntents = [GatewayIntentBits.GuildVoiceStates];
+  // const requiredIntents = [GatewayIntentBits.GuildVoiceStates];
+  // const intents = new IntentsBitField(options.intents);
+  // for (const intent of requiredIntents) {
+  //   // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+  //   // @ts-ignore
+  //   if (!intents.has(intent)) throw new DisTubeError("MISSING_INTENTS", GatewayIntentBits[intent.toString()]);
+  // }
   const intents = new IntentsBitField(options.intents);
-  for (const intent of requiredIntents) {
-    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-    // @ts-ignore
-    if (!intents.has(intent)) throw new DisTubeError("MISSING_INTENTS", GatewayIntentBits[intent.toString()]);
-  }
+  if (!intents.has(GatewayIntentBits.GuildVoiceStates)) throw new DisTubeError("MISSING_INTENTS", "GuildVoiceStates");
 }
 
 /**

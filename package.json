@@ -9,7 +9,7 @@
     "docs": "docgen -s src/*.ts src/**/*.ts -o docs/docs.json -c pages/index.yml -g -j .jsconfig.json",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "prettier": "prettier --write **/*.{js,ts,json,yml,yaml,md}",
+    "prettier": "prettier --write **/*.{ts,json,yml,yaml,md}",
     "build": "tsc",
     "build:check": "tsc --noEmit --incremental false",
     "publish:dev": "npm publish --tag dev",
@@ -48,7 +48,7 @@
     "@distube/ytdl-core": "^4.9.4",
     "@distube/ytpl": "^1.1.1",
     "@distube/ytsr": "^1.1.5",
-    "prism-media": "https://codeload.github.com/distubejs/prism-media/tar.gz/main",
+    "prism-media": "https://codeload.github.com/distubejs/prism-media/tar.gz/main#workaround.tar.gz",
     "tiny-typed-emitter": "^2.1.0"
   },
   "devDependencies": {
@@ -71,7 +71,7 @@
     "husky": "^7.0.4",
     "jest": "^27.5.0",
     "jsdoc-babel": "^0.5.0",
-    "lint-staged": "^12.3.3",
+    "nano-staged": "^0.5.0",
     "npm-check-updates": "^12.2.1",
     "pinst": "^2.1.6",
     "prettier": "^2.5.1",
@@ -86,6 +86,15 @@
     "@discordjs/opus": {
       "optional": true
     }
+  },
+  "nano-staged": {
+    "*.ts": [
+      "prettier --write",
+      "eslint"
+    ],
+    "*.{json,yml,yaml,md}": [
+      "prettier --write"
+    ]
   },
   "engines": {
     "node": ">=16.6.0"

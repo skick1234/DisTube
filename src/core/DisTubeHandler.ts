@@ -1,6 +1,6 @@
 import ytdl from "@distube/ytdl-core";
 import ytpl from "@distube/ytpl";
-import { DisTubeBase, DisTubeStream } from ".";
+import { DisTubeBase } from ".";
 import { DisTubeError, Playlist, Queue, SearchResult, Song, isMessageInstance, isURL, isVoiceChannelEmpty } from "..";
 import type { DisTube, OtherSongInfo } from "..";
 import type { GuildMember, GuildTextBasedChannel, Message, TextChannel, VoiceBasedChannel } from "discord.js";
@@ -39,17 +39,17 @@ export class DisTubeHandler extends DisTubeBase {
           }
           return;
         }
-        if (queue.emptyTimeout) {
-          clearTimeout(queue.emptyTimeout);
-          delete queue.emptyTimeout;
+        if (queue._emptyTimeout) {
+          clearTimeout(queue._emptyTimeout);
+          delete queue._emptyTimeout;
         }
         if (isVoiceChannelEmpty(oldState)) {
-          queue.emptyTimeout = setTimeout(() => {
-            delete queue.emptyTimeout;
+          queue._emptyTimeout = setTimeout(() => {
+            delete queue._emptyTimeout;
             if (isVoiceChannelEmpty(oldState)) {
               queue.voice.leave();
               this.emit("empty", queue);
-              if (queue.stopped) queue.delete();
+              if (queue.stopped) queue.remove();
             }
           }, this.options.emptyCooldown * 1e3).unref();
         }
@@ -154,31 +154,10 @@ export class DisTubeHandler extends DisTubeBase {
   async handlePlaylist(
     voice: VoiceBasedChannel,
     playlist: Playlist,
-    options?: {
-      textChannel?: GuildTextBasedChannel;
-      skip?: boolean;
-      position?: number;
-    },
-  ): Promise<void>;
-  /** @deprecated `options.unshift` is deprecated, use `options.position` instead */
-  async handlePlaylist(
-    voice: VoiceBasedChannel,
-    playlist: Playlist,
-    options?: {
-      textChannel?: GuildTextBasedChannel;
-      skip?: boolean;
-      position?: number;
-      unshift?: boolean;
-    },
-  ): Promise<void>;
-  async handlePlaylist(
-    voice: VoiceBasedChannel,
-    playlist: Playlist,
     options: {
       textChannel?: GuildTextBasedChannel;
       skip?: boolean;
       position?: number;
-      unshift?: boolean;
     } = {},
   ): Promise<void> {
     const { textChannel, skip, unshift } = { skip: false, unshift: false, ...options };
@@ -308,21 +287,5 @@ export class DisTubeHandler extends DisTubeBase {
       result = results[index - 1];
     }
     return result;
-  }
-
-  /**
-   * Create a ytdl stream
-   * @param {Queue} queue Queue
-   * @returns {DisTubeStream}
-   */
-  createStream(queue: Queue): DisTubeStream {
-    const { duration, formats, isLive, source, streamURL } = queue.songs[0];
-    const filterArgs: string[] = [];
-    queue.filters.forEach((filter: string | number) => filterArgs.push(this.distube.filters[filter]));
-    const ffmpegArgs = queue.filters?.length ? ["-af", filterArgs.join(",")] : undefined;
-    const seek = duration ? queue.beginTime : undefined;
-    const streamOptions = { ffmpegArgs, seek, isLive };
-    if (source === "youtube") return DisTubeStream.YouTube(formats, streamOptions);
-    return DisTubeStream.DirectLink(streamURL as string, streamOptions);
   }
 }

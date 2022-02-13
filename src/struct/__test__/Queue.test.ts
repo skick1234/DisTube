@@ -9,7 +9,7 @@ function createFakeHandler() {
 
 function createFakeQueueManager() {
   return {
-    delete: jest.fn(),
+    remove: jest.fn(),
     playSong: jest.fn(),
   };
 }
@@ -162,10 +162,10 @@ describe("Queue#stop()", () => {
   test("leaveOnStop option is enabled", async () => {
     distube.options.leaveOnStop = true;
     const queue = new Queue(distube as any, voice as any, song);
-    queue.delete = jest.fn();
+    queue.remove = jest.fn();
     await queue.stop();
     expect(queue.stopped).toBe(true);
-    expect(queue.delete).toBeCalledTimes(1);
+    expect(queue.remove).toBeCalledTimes(1);
     expect(voice.stop).not.toBeCalled();
     expect(voice.leave).toBeCalledTimes(1);
   });
@@ -173,10 +173,10 @@ describe("Queue#stop()", () => {
   test("leaveOnStop option is disabled", async () => {
     distube.options.leaveOnStop = false;
     const queue = new Queue(distube as any, voice as any, song);
-    queue.delete = jest.fn();
+    queue.remove = jest.fn();
     await queue.stop();
     expect(queue.stopped).toBe(true);
-    expect(queue.delete).toBeCalledTimes(1);
+    expect(queue.remove).toBeCalledTimes(1);
     expect(voice.stop).toBeCalledTimes(1);
     expect(voice.leave).not.toBeCalled();
   });
@@ -198,7 +198,7 @@ describe("Queue#jump()", () => {
       await expect(queue.jump(position)).resolves.toBe(queue);
       expect(queue.songs[0]).toBe(songAtThisPosition);
       expect(queue.previousSongs[0]).toBe(playingSong);
-      expect(queue.next).toBe(true);
+      expect(queue._next).toBe(true);
       expect(voice.stop).toBeCalledTimes(1);
     });
 
@@ -209,7 +209,7 @@ describe("Queue#jump()", () => {
       await expect(q.jump(position)).resolves.toBe(q);
       expect(q.songs[0]).toBe(songAtThisPosition);
       expect(q.previousSongs[0]).toEqual({ id: playingSong.id });
-      expect(q.next).toBe(true);
+      expect(q._next).toBe(true);
       expect(voice.stop).toBeCalledTimes(1);
     });
   });
@@ -220,7 +220,7 @@ describe("Queue#jump()", () => {
       const previousSongs = queue.previousSongs;
       const nextSongs = queue.songs;
       await expect(queue.jump(position)).resolves.toBe(queue);
-      expect(queue.prev).toBe(true);
+      expect(queue._prev).toBe(true);
       expect(queue.songs).toEqual(nextSongs);
       expect(queue.previousSongs).toEqual(previousSongs);
       expect(voice.stop).toBeCalledTimes(1);
@@ -233,7 +233,7 @@ describe("Queue#jump()", () => {
       await expect(queue.jump(position)).resolves.toBe(queue);
       expect(queue.previousSongs[queue.previousSongs.length - 1]).toBe(songAtThisPosition);
       expect(queue.songs[-1 - position]).toBe(playingSong);
-      expect(queue.prev).toBe(true);
+      expect(queue._prev).toBe(true);
       expect(voice.stop).toBeCalledTimes(1);
     });
 
@@ -261,7 +261,7 @@ describe("Queue#skip()", () => {
   test("Skip to the next song", async () => {
     const queue = new Queue(distube as any, voice as any, [anotherSong, song]);
     await expect(queue.skip()).resolves.toBe(song);
-    expect(queue.next).toBe(true);
+    expect(queue._next).toBe(true);
     expect(voice.stop).toBeCalledTimes(1);
   });
 
@@ -272,7 +272,7 @@ describe("Queue#skip()", () => {
       distube.handler.resolveSong.mockReturnValue(anotherSong);
       await expect(queue.skip()).resolves.toBe(anotherSong);
       expect(queue.songs[1]).toBe(anotherSong);
-      expect(queue.next).toBe(true);
+      expect(queue._next).toBe(true);
       expect(voice.stop).toBeCalledTimes(1);
     });
 
@@ -281,7 +281,7 @@ describe("Queue#skip()", () => {
       queue.autoplay = true;
       distube.handler.resolveSong.mockRejectedValue(new DisTubeError("NO_UP_NEXT"));
       await expect(queue.skip()).rejects.toThrow(new DisTubeError("NO_UP_NEXT"));
-      expect(queue.next).toBe(false);
+      expect(queue._next).toBe(false);
       expect(voice.stop).toBeCalledTimes(0);
     });
 
@@ -304,7 +304,7 @@ describe("Queue#previous()", () => {
     const queue = new Queue(distube as any, voice as any, anotherSong);
     queue.previousSongs.push(song);
     await expect(queue.previous()).resolves.toBe(song);
-    expect(queue.prev).toBe(true);
+    expect(queue._prev).toBe(true);
     expect(voice.stop).toBeCalledTimes(1);
   });
 
@@ -312,7 +312,7 @@ describe("Queue#previous()", () => {
     const queue = new Queue(distube as any, voice as any, anotherSong);
     queue.repeatMode = 2;
     await expect(queue.previous()).resolves.toBe(anotherSong);
-    expect(queue.prev).toBe(true);
+    expect(queue._prev).toBe(true);
     expect(voice.stop).toBeCalledTimes(1);
   });
 
@@ -351,75 +351,6 @@ describe("Queue#pause() & Queue#resume()", () => {
     expect(() => {
       queue.resume();
     }).toThrow(new DisTubeError("RESUMED"));
-  });
-});
-
-describe("Queue#setFilter()", () => {
-  const distube = createFakeDisTube();
-  const queue = new Queue(distube as any, voice as any, song);
-  const filter1 = "3d";
-  const filter2 = "bassboost";
-  const filter3 = "echo";
-  const invalid1 = "invalid1";
-  const invalid2 = "invalid2";
-
-  test("Enable a filter", () => {
-    expect(queue.setFilter(filter1)).toContain(filter1);
-    expect(distube.queues.playSong).toBeCalledWith(queue);
-  });
-
-  test("Force enable a filter", () => {
-    expect(queue.setFilter(filter1, true)).toContain(filter1);
-    expect(distube.queues.playSong).toBeCalledWith(queue);
-    expect(queue.setFilter(filter3, true)).toContain(filter3);
-    expect(distube.queues.playSong).toBeCalledWith(queue);
-    expect(distube.queues.playSong).toBeCalledTimes(2);
-  });
-
-  test("Enable a filter array", () => {
-    const filter = [filter1, filter2, invalid1];
-    queue.setFilter(filter);
-    expect(queue.filters).not.toContain(filter1);
-    expect(queue.filters).not.toContain(invalid1);
-    expect(queue.filters).toContain(filter2);
-    expect(queue.filters).toContain(filter3);
-    expect(distube.queues.playSong).toBeCalledWith(queue);
-  });
-
-  test("Force enable a filter array", () => {
-    const filter = [filter1, filter2, invalid2];
-    queue.setFilter(filter, true);
-    expect(queue.filters).not.toContain(invalid2);
-    expect(queue.filters).toContain(filter1);
-    expect(queue.filters).toContain(filter2);
-    expect(queue.filters).toContain(filter3);
-    expect(distube.queues.playSong).toBeCalledWith(queue);
-  });
-
-  test("Disable a filter", () => {
-    expect(queue.setFilter(filter2)).not.toContain(filter2);
-    expect(queue.filters).toContain(filter1);
-    expect(queue.filters).toContain(filter3);
-    expect(distube.queues.playSong).toBeCalledWith(queue);
-  });
-
-  test("Clear all filters", () => {
-    expect(queue.setFilter(false).length).toBe(0);
-    expect(distube.queues.playSong).toBeCalledWith(queue);
-  });
-
-  test("Enable an invalid filter", () => {
-    const filter = "notAValidFilter";
-    expect(() => {
-      queue.setFilter(filter);
-    }).toThrow(new DisTubeError("INVALID_TYPE", "filter name", filter, "filter"));
-  });
-
-  test("Enable an invalid filter array", () => {
-    const filter = ["thisIs", "anInvalidFilter"];
-    expect(() => {
-      queue.setFilter(filter);
-    }).toThrow(new DisTubeError("EMPTY_FILTERED_ARRAY", "filter", "filter name"));
   });
 });
 
@@ -484,13 +415,13 @@ describe("Queue#setRepeatMode()", () => {
   });
 });
 
-test("Queue#delete()", () => {
+test("Queue#remove()", () => {
   const distube = createFakeDisTube();
   const queue = new Queue(distube as any, voice as any, song);
-  queue.delete();
+  queue.remove();
   expect(queue.songs.length).toBe(0);
   expect(queue.previousSongs.length).toBe(0);
-  expect(distube.queues.delete).toBeCalledWith(voice.id);
+  expect(distube.queues.remove).toBeCalledWith(voice.id);
   expect(distube.emit).toBeCalledWith("deleteQueue", queue);
 });
 

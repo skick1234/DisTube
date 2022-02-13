@@ -12,7 +12,7 @@ const DiscordVoice = _DiscordVoice as unknown as jest.Mocked<typeof _DiscordVoic
 
 const voiceManager = {
   add: jest.fn(),
-  delete: jest.fn(),
+  remove: jest.fn(),
 };
 
 const voiceChannel = {
@@ -249,7 +249,7 @@ describe("Methods", () => {
       await expect(voice.join()).rejects.toThrow(new DisTubeError("VOICE_CONNECT_FAILED", TIMEOUT / 1e3));
       expect(Util.entersState).toBeCalledWith(connection, DiscordVoice.VoiceConnectionStatus.Ready, TIMEOUT);
       expect(connection.destroy).toBeCalledTimes(1);
-      expect(voiceManager.delete).toBeCalledWith(voice.id);
+      expect(voiceManager.remove).toBeCalledWith(voice.id);
     });
 
     test("Timeout when connection destroyed", async () => {
@@ -260,7 +260,7 @@ describe("Methods", () => {
       await expect(voice.join(newVC as any)).rejects.toThrow(new DisTubeError("VOICE_CONNECT_FAILED", TIMEOUT / 1e3));
       expect(voice.channel).toBe(newVC);
       expect(connection.destroy).not.toBeCalled();
-      expect(voiceManager.delete).toBeCalledWith(voice.id);
+      expect(voiceManager.remove).toBeCalledWith(voice.id);
       connection.state.status = DiscordVoice.VoiceConnectionStatus.Signalling;
     });
 
@@ -270,7 +270,7 @@ describe("Methods", () => {
       await expect(voice.join(voiceChannel as any)).resolves.toBe(voice);
       expect(Util.entersState).toBeCalledWith(connection, DiscordVoice.VoiceConnectionStatus.Ready, TIMEOUT);
       expect(connection.destroy).not.toBeCalled();
-      expect(voiceManager.delete).not.toBeCalled();
+      expect(voiceManager.remove).not.toBeCalled();
       expect(voice.channel).toBe(voiceChannel);
       expect(voice.connection).toBe(connection);
     });
@@ -285,7 +285,7 @@ describe("Methods", () => {
         expect(audioPlayer.stop).toBeCalledWith(true);
         expect(connection.destroy).toBeCalledTimes(1);
         expect(voice.emit).toBeCalledWith("disconnect", undefined);
-        expect(voiceManager.delete).toBeCalledWith(voice.id);
+        expect(voiceManager.remove).toBeCalledWith(voice.id);
       });
     });
 
@@ -296,7 +296,7 @@ describe("Methods", () => {
       expect(audioPlayer.stop).toBeCalledWith(true);
       expect(voice.emit).not.toBeCalled();
       expect(connection.destroy).not.toBeCalled();
-      expect(voiceManager.delete).toBeCalledWith(voice.id);
+      expect(voiceManager.remove).toBeCalledWith(voice.id);
       connection.state.status = DiscordVoice.VoiceConnectionStatus.Signalling;
     });
   });

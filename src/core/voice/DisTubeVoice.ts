@@ -69,10 +69,8 @@ export class DisTubeVoice extends TypedEmitter<DisTubeVoiceEvents> {
         }
       })
       .on(VoiceConnectionStatus.Destroyed, () => {
-        this.leave();
-      })
-      // eslint-disable-next-line no-console
-      .on("error", console.warn);
+        this.leave(new DisTubeError("VOICE_RECONNECT_FAILED"));
+      });
     this.connection.subscribe(this.audioPlayer);
     /**
      * Get or set the volume percentage
@@ -89,6 +87,7 @@ export class DisTubeVoice extends TypedEmitter<DisTubeVoiceEvents> {
     }
     if (channel.guild.id !== this.id) throw new DisTubeError("VOICE_CHANGE_GUILD");
     this.connection = this.#join(channel);
+    this.audioResource?.encoder?.setBitrate(channel.bitrate);
     this.#channel = channel;
   }
   #join(channel: VoiceBasedChannel) {
@@ -101,7 +100,6 @@ export class DisTubeVoice extends TypedEmitter<DisTubeVoiceEvents> {
   /**
    * Join a voice channel with this connection
    * @param {Discord.BaseGuildVoiceChannel} [channel] A voice channel
-   * @private
    * @returns {Promise<DisTubeVoice>}
    */
   async join(channel?: VoiceBasedChannel): Promise<DisTubeVoice> {
@@ -115,7 +113,7 @@ export class DisTubeVoice extends TypedEmitter<DisTubeVoiceEvents> {
       if (this.connection.state.status !== VoiceConnectionStatus.Destroyed) {
         this.connection.destroy();
       }
-      this.voices.delete(this.id);
+      this.voices.remove(this.id);
       throw new DisTubeError("VOICE_CONNECT_FAILED", TIMEOUT / 1e3);
     }
     return this;
@@ -131,7 +129,7 @@ export class DisTubeVoice extends TypedEmitter<DisTubeVoiceEvents> {
       this.isDisconnected = true;
     }
     if (this.connection.state.status !== VoiceConnectionStatus.Destroyed) this.connection.destroy();
-    this.voices.delete(this.id);
+    this.voices.remove(this.id);
   }
   /**
    * Stop the playing stream
@@ -158,8 +156,8 @@ export class DisTubeVoice extends TypedEmitter<DisTubeVoiceEvents> {
       inputType: stream.type,
       inlineVolume: true,
     });
-    // eslint-disable-next-line no-self-assign
-    this.volume = this.volume;
+    this.volume = this.#volume;
+    this.audioResource.encoder?.setBitrate(this.channel.bitrate);
     this.audioPlayer.play(this.audioResource);
   }
   set volume(volume: number) {

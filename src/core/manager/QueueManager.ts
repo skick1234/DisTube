@@ -1,13 +1,13 @@
-import { BaseManager } from ".";
-import { DisTubeError, Queue, RepeatMode } from "../..";
+import { GuildIdManager } from ".";
+import { DisTubeError, DisTubeStream, Queue, RepeatMode } from "../..";
 import type { DisTubeVoiceEvents, Song } from "../..";
 import type { GuildTextBasedChannel, VoiceBasedChannel } from "discord.js";
 
 /**
  * Queue manager
- * @extends BaseManager
+ * @extends GuildIdManager
  */
-export class QueueManager extends BaseManager<Queue> {
+export class QueueManager extends GuildIdManager<Queue> {
   /**
    * Collection of {@link Queue}.
    * @name QueueManager#collection
@@ -29,7 +29,7 @@ export class QueueManager extends BaseManager<Queue> {
     if (this.has(channel.guild.id)) throw new DisTubeError("QUEUE_EXIST");
     const voice = this.voices.create(channel);
     const queue = new Queue(this.distube, voice, song, textChannel);
-    await queue.taskQueue.queuing();
+    await queue._taskQueue.queuing();
     try {
       await voice.join();
       this.#voiceEventHandler(queue);
@@ -38,14 +38,14 @@ export class QueueManager extends BaseManager<Queue> {
       const err = await this.playSong(queue);
       return err || queue;
     } finally {
-      queue.taskQueue.resolve();
+      queue._taskQueue.resolve();
     }
   }
   /**
    * Get a Queue from this QueueManager.
    * @method get
    * @memberof QueueManager#
-   * @param {GuildIdResolvable} queue Resolvable thing from a guild
+   * @param {GuildIdResolvable} guild Resolvable thing from a guild
    * @returns {Queue?}
    */
   /**
@@ -54,17 +54,17 @@ export class QueueManager extends BaseManager<Queue> {
    * @param {Queue} queue Queue
    */
   #voiceEventHandler(queue: Queue) {
-    queue.listeners = {
+    queue._listeners = {
       disconnect: error => {
-        queue.delete();
+        queue.remove();
         this.emit("disconnect", queue);
         if (error) this.emitError(error, queue.textChannel);
       },
       error: error => this.#handlePlayingError(queue, error),
       finish: () => this.#handleSongFinish(queue),
     };
-    for (const event of Object.keys(queue.listeners) as (keyof DisTubeVoiceEvents)[]) {
-      queue.voice.on(event, queue.listeners[event]);
+    for (const event of Object.keys(queue._listeners) as (keyof DisTubeVoiceEvents)[]) {
+      queue.voice.on(event, queue._listeners[event]);
     }
   }
   /**
@@ -75,15 +75,15 @@ export class QueueManager extends BaseManager<Queue> {
    */
   async #handleSongFinish(queue: Queue): Promise<void> {
     this.emit("finishSong", queue, queue.songs[0]);
-    await queue.taskQueue.queuing();
+    await queue._taskQueue.queuing();
     try {
       if (queue.stopped) return;
-      if (queue.repeatMode === RepeatMode.QUEUE && !queue.prev) queue.songs.push(queue.songs[0]);
-      if (queue.prev) {
+      if (queue.repeatMode === RepeatMode.QUEUE && !queue._prev) queue.songs.push(queue.songs[0]);
+      if (queue._prev) {
         if (queue.repeatMode === RepeatMode.QUEUE) queue.songs.unshift(queue.songs.pop() as Song);
         else queue.songs.unshift(queue.previousSongs.pop() as Song);
       }
-      if (queue.songs.length <= 1 && (queue.next || queue.repeatMode === RepeatMode.DISABLED)) {
+      if (queue.songs.length <= 1 && (queue._next || queue.repeatMode === RepeatMode.DISABLED)) {
         if (queue.autoplay) {
           try {
             await queue.addRelatedSong();
@@ -94,24 +94,24 @@ export class QueueManager extends BaseManager<Queue> {
         if (queue.songs.length <= 1) {
           if (this.options.leaveOnFinish) queue.voice.leave();
           if (!queue.autoplay) this.emit("finish", queue);
-          queue.delete();
+          queue.remove();
           return;
         }
       }
       const emitPlaySong = this.#emitPlaySong(queue);
-      if (!queue.prev && (queue.repeatMode !== RepeatMode.SONG || queue.next)) {
+      if (!queue._prev && (queue.repeatMode !== RepeatMode.SONG || queue._next)) {
         const prev = queue.songs.shift() as Song;
         delete prev.formats;
         delete prev.streamURL;
         if (this.options.savePreviousSongs) queue.previousSongs.push(prev);
         else queue.previousSongs.push({ id: prev.id } as Song);
       }
-      queue.next = queue.prev = false;
+      queue._next = queue._prev = false;
       queue.beginTime = 0;
       const err = await this.playSong(queue);
       if (!err && emitPlaySong) this.emit("playSong", queue, queue.songs[0]);
     } finally {
-      queue.taskQueue.resolve();
+      queue._taskQueue.resolve();
     }
   }
   /**
@@ -134,6 +134,20 @@ export class QueueManager extends BaseManager<Queue> {
     } else {
       queue.stop();
     }
+  }
+
+  /**
+   * Create a ytdl stream
+   * @param {Queue} queue Queue
+   * @returns {DisTubeStream}
+   */
+  createStream(queue: Queue): DisTubeStream {
+    const { duration, formats, isLive, source, streamURL } = queue.songs[0];
+    const ffmpegArgs = queue.filters.size ? ["-af", queue.filters.values.join(",")] : undefined;
+    const seek = duration ? queue.beginTime : undefined;
+    const streamOptions = { ffmpegArgs, seek, isLive };
+    if (source === "youtube") return DisTubeStream.YouTube(formats, streamOptions);
+    return DisTubeStream.DirectLink(streamURL as string, streamOptions);
   }
 
   /**
@@ -164,7 +178,7 @@ export class QueueManager extends BaseManager<Queue> {
           }
         }
       }
-      const stream = this.handler.createStream(queue);
+      const stream = this.createStream(queue);
       queue.voice.play(stream);
       song.streamURL = stream.url;
       if (queue.stopped) queue.stop();
@@ -184,7 +198,7 @@ export class QueueManager extends BaseManager<Queue> {
   #emitPlaySong(queue: Queue): boolean {
     return (
       !this.options.emitNewSongOnly ||
-      (queue.repeatMode === RepeatMode.SONG && queue.next) ||
+      (queue.repeatMode === RepeatMode.SONG && queue._next) ||
       (queue.repeatMode !== RepeatMode.SONG && queue.songs[0]?.id !== queue.songs[1]?.id)
     );
   }

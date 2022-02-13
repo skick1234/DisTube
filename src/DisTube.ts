@@ -122,7 +122,7 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
   /**
    * Play / add a song or playlist from url. Search and play a song if it is not a valid url.
    *
-   * @param {Discord.BaseGuildVoiceChannel} voiceChannel The voice channel will be joined
+   * @param {Discord.BaseGuildVoiceChannel} voiceChannel The channel will be joined if the bot isn't in any channels
    * @param {string|Song|SearchResult|Playlist} song URL | Search string |
    * {@link Song} | {@link SearchResult} | {@link Playlist}
    * @param {Object} [options] Optional options
@@ -131,8 +131,6 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
    * If `position` is defined and not equal to 1, it will skip to the next song instead of the added song
    * @param {number} [options.position=0] Position of the song/playlist to add to the queue,
    * <= 0 to add to the end of the queue.
-   * @param {boolean} [options.unshift=false] (DEPRECATED) Add the song/playlist to the beginning of the queue
-   * (after the playing song if exists)
    * @param {Discord.GuildMember} [options.member] Requested user (default is your bot)
    * @param {Discord.BaseGuildTextChannel} [options.textChannel] Default {@link Queue#textChannel}
    * @param {Discord.Message} [options.message] Called message (For built-in search events. If this is a {@link https://developer.mozilla.org/en-US/docs/Glossary/Falsy|falsy value}, it will play the first result instead)
@@ -145,7 +143,7 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
    *     const args = message.content.slice(config.prefix.length).trim().split(/ +/g);
    *     const command = args.shift();
    *     if (command == "play")
-   *         distube.play(message.member.voice?.channel, args.join(" "), {
+   *         distube.play(message.member.voice.channel, args.join(" "), {
    *             member: message.member,
    *             textChannel: message.channel,
    *             message
@@ -158,7 +156,6 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
     song: string | Song | SearchResult | Playlist,
     options: {
       skip?: boolean;
-      unshift?: boolean;
       position?: number;
       member?: GuildMember;
       textChannel?: GuildTextBasedChannel;
@@ -202,8 +199,8 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
         }
       }
       let queue = this.getQueue(voiceChannel);
-      const queuing = !!queue && !queue.taskQueue.hasResolveTask;
-      if (queuing) await queue?.taskQueue.queuing(true);
+      const queuing = !!queue && !queue._taskQueue.hasResolveTask;
+      if (queuing) await queue?._taskQueue.queuing(true);
       try {
         if (song instanceof SearchResult && song.type === "playlist") song = song.url;
         if (typeof song === "string" && ytpl.validateID(song)) {
@@ -238,7 +235,7 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
           }
         }
       } finally {
-        if (queuing) queue?.taskQueue.resolve();
+        if (queuing) queue?._taskQueue.resolve();
       }
     } catch (e: any) {
       if (!(e instanceof DisTubeError)) {
@@ -345,7 +342,7 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
 
   /**
    * Get the guild queue
-   * @param {GuildIdResolvable} queue The type can be resolved to give a {@link Queue}
+   * @param {GuildIdResolvable} guild The type can be resolved to give a {@link Queue}
    * @returns {Queue?}
    * @throws {Error}
    * @example
@@ -361,37 +358,37 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
    *     }
    * });
    */
-  getQueue(queue: GuildIdResolvable): Queue | undefined {
-    return this.queues.get(queue);
+  getQueue(guild: GuildIdResolvable): Queue | undefined {
+    return this.queues.get(guild);
   }
 
   /**
    * Pause the guild stream
-   * @param {GuildIdResolvable} queue The type can be resolved to give a {@link Queue}
+   * @param {GuildIdResolvable} guild The type can be resolved to give a {@link Queue}
    * @returns {Queue} The guild queue
    * @throws {Error}
    */
-  pause(queue: GuildIdResolvable): Queue {
-    const q = this.getQueue(queue);
+  pause(guild: GuildIdResolvable): Queue {
+    const q = this.getQueue(guild);
     if (!q) throw new DisTubeError("NO_QUEUE");
     return q.pause();
   }
 
   /**
    * Resume the guild stream
-   * @param {GuildIdResolvable} queue The type can be resolved to give a {@link Queue}
+   * @param {GuildIdResolvable} guild The type can be resolved to give a {@link Queue}
    * @returns {Queue} The guild queue
    * @throws {Error}
    */
-  resume(queue: GuildIdResolvable): Queue {
-    const q = this.getQueue(queue);
+  resume(guild: GuildIdResolvable): Queue {
+    const q = this.getQueue(guild);
     if (!q) throw new DisTubeError("NO_QUEUE");
     return q.resume();
   }
 
   /**
    * Stop the guild stream
-   * @param {GuildIdResolvable} queue The type can be resolved to give a {@link Queue}
+   * @param {GuildIdResolvable} guild The type can be resolved to give a {@link Queue}
    * @returns {Promise<void>}
    * @throws {Error}
    * @example
@@ -405,15 +402,15 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
    *     }
    * });
    */
-  stop(queue: GuildIdResolvable): Promise<void> {
-    const q = this.getQueue(queue);
+  stop(guild: GuildIdResolvable): Promise<void> {
+    const q = this.getQueue(guild);
     if (!q) throw new DisTubeError("NO_QUEUE");
     return q.stop();
   }
 
   /**
    * Set the guild stream's volume
-   * @param {GuildIdResolvable} queue The type can be resolved to give a {@link Queue}
+   * @param {GuildIdResolvable} guild The type can be resolved to give a {@link Queue}
    * @param {number} percent The percentage of volume you want to set
    * @returns {Queue} The guild queue
    * @throws {Error}
@@ -426,8 +423,8 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
    *         distube.setVolume(message, Number(args[0]));
    * });
    */
-  setVolume(queue: GuildIdResolvable, percent: number): Queue {
-    const q = this.getQueue(queue);
+  setVolume(guild: GuildIdResolvable, percent: number): Queue {
+    const q = this.getQueue(guild);
     if (!q) throw new DisTubeError("NO_QUEUE");
     return q.setVolume(percent);
   }
@@ -436,7 +433,7 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
    * Skip the playing song if there is a next song in the queue.
    * <info>If {@link Queue#autoplay} is `true` and there is no up next song,
    * DisTube will add and play a related song.</info>
-   * @param {GuildIdResolvable} queue The type can be resolved to give a {@link Queue}
+   * @param {GuildIdResolvable} guild The type can be resolved to give a {@link Queue}
    * @returns {Promise<Song>} The new Song will be played
    * @throws {Error}
    * @example
@@ -448,15 +445,15 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
    *         distube.skip(message);
    * });
    */
-  skip(queue: GuildIdResolvable): Promise<Song> {
-    const q = this.getQueue(queue);
+  skip(guild: GuildIdResolvable): Promise<Song> {
+    const q = this.getQueue(guild);
     if (!q) throw new DisTubeError("NO_QUEUE");
     return q.skip();
   }
 
   /**
    * Play the previous song
-   * @param {GuildIdResolvable} queue The type can be resolved to give a {@link Queue}
+   * @param {GuildIdResolvable} guild The type can be resolved to give a {@link Queue}
    * @returns {Promise<Song>} The new Song will be played
    * @throws {Error}
    * @example
@@ -468,15 +465,15 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
    *         distube.previous(message);
    * });
    */
-  previous(queue: GuildIdResolvable): Promise<Song> {
-    const q = this.getQueue(queue);
+  previous(guild: GuildIdResolvable): Promise<Song> {
+    const q = this.getQueue(guild);
     if (!q) throw new DisTubeError("NO_QUEUE");
     return q.previous();
   }
 
   /**
    * Shuffle the guild queue songs
-   * @param {GuildIdResolvable} queue The type can be resolved to give a {@link Queue}
+   * @param {GuildIdResolvable} guild The type can be resolved to give a {@link Queue}
    * @returns {Promise<Queue>} The guild queue
    * @example
    * client.on('message', (message) => {
@@ -487,8 +484,8 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
    *         distube.shuffle(message);
    * });
    */
-  shuffle(queue: GuildIdResolvable): Promise<Queue> {
-    const q = this.getQueue(queue);
+  shuffle(guild: GuildIdResolvable): Promise<Queue> {
+    const q = this.getQueue(guild);
     if (!q) throw new DisTubeError("NO_QUEUE");
     return q.shuffle();
   }
@@ -497,7 +494,7 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
    * Jump to the song number in the queue.
    * The next one is 1, 2,...
    * The previous one is -1, -2,...
-   * @param {GuildIdResolvable} queue The type can be resolved to give a {@link Queue}
+   * @param {GuildIdResolvable} guild The type can be resolved to give a {@link Queue}
    * @param {number} num The song number to play
    * @returns {Promise<Queue>} The guild queue
    * @throws {Error} if `num` is invalid number (0 < num < {@link Queue#songs}.length)
@@ -511,8 +508,8 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
    *             .catch(err => message.channel.send("Invalid song number."));
    * });
    */
-  jump(queue: GuildIdResolvable, num: number): Promise<Queue> {
-    const q = this.getQueue(queue);
+  jump(guild: GuildIdResolvable, num: number): Promise<Queue> {
+    const q = this.getQueue(guild);
     if (!q) throw new DisTubeError("NO_QUEUE");
     return q.jump(num);
   }
@@ -520,7 +517,7 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
   /**
    * Set the repeat mode of the guild queue.\
    * Toggle mode `(Disabled -> Song -> Queue -> Disabled ->...)` if `mode` is `undefined`
-   * @param {GuildIdResolvable} queue The type can be resolved to give a {@link Queue}
+   * @param {GuildIdResolvable} guild The type can be resolved to give a {@link Queue}
    * @param {RepeatMode?} [mode] The repeat modes (toggle if `undefined`)
    * @returns {RepeatMode} The new repeat mode
    * @example
@@ -550,15 +547,15 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
    * }
    * message.channel.send("Set repeat mode to `" + mode + "`");
    */
-  setRepeatMode(queue: GuildIdResolvable, mode?: number): number {
-    const q = this.getQueue(queue);
+  setRepeatMode(guild: GuildIdResolvable, mode?: number): number {
+    const q = this.getQueue(guild);
     if (!q) throw new DisTubeError("NO_QUEUE");
     return q.setRepeatMode(mode);
   }
 
   /**
    * Toggle autoplay mode
-   * @param {GuildIdResolvable} queue The type can be resolved to give a {@link Queue}
+   * @param {GuildIdResolvable} guild The type can be resolved to give a {@link Queue}
    * @returns {boolean} Autoplay mode state
    * @throws {Error}
    * @example
@@ -572,8 +569,8 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
    *     }
    * });
    */
-  toggleAutoplay(queue: GuildIdResolvable): boolean {
-    const q = this.getQueue(queue);
+  toggleAutoplay(guild: GuildIdResolvable): boolean {
+    const q = this.getQueue(guild);
     if (!q) throw new DisTubeError("NO_QUEUE");
     q.autoplay = !q.autoplay;
     return q.autoplay;
@@ -581,42 +578,18 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
 
   /**
    * Add related song to the queue
-   * @param {GuildIdResolvable} queue The type can be resolved to give a {@link Queue}
+   * @param {GuildIdResolvable} guild The type can be resolved to give a {@link Queue}
    * @returns {Promise<Song>} The guild queue
    */
-  addRelatedSong(queue: GuildIdResolvable): Promise<Song> {
-    const q = this.getQueue(queue);
+  addRelatedSong(guild: GuildIdResolvable): Promise<Song> {
+    const q = this.getQueue(guild);
     if (!q) throw new DisTubeError("NO_QUEUE");
     return q.addRelatedSong();
   }
 
   /**
-   * Enable or disable filter(s) of the queue.
-   * Available filters: {@link Filters}
-   * @param {GuildIdResolvable} queue The type can be resolved to give a {@link Queue}
-   * @param {string|false} filter A filter name, `false` to clear all the filters
-   * @param {boolean} [force=false] Force enable the input filter(s) even if it's enabled
-   * @returns {Array<string>} Enabled filters.
-   * @example
-   * client.on('message', (message) => {
-   *     if (!message.content.startsWith(config.prefix)) return;
-   *     const args = message.content.slice(config.prefix.length).trim().split(/ +/g);
-   *     const command = args.shift();
-   *     if ([`3d`, `bassboost`, `echo`, `karaoke`, `nightcore`, `vaporwave`].includes(command)) {
-   *         const filter = distube.setFilter(message, command);
-   *         message.channel.send("Current queue filter: " + (filter.join(", ") || "Off"));
-   *     }
-   * });
-   */
-  setFilter(queue: GuildIdResolvable, filter: string | false, force = false): Array<string> {
-    const q = this.getQueue(queue);
-    if (!q) throw new DisTubeError("NO_QUEUE");
-    return q.setFilter(filter, force);
-  }
-
-  /**
    * Set the playing time to another position
-   * @param {GuildIdResolvable} queue The type can be resolved to give a {@link Queue}
+   * @param {GuildIdResolvable} guild The type can be resolved to give a {@link Queue}
    * @param {number} time Time in seconds
    * @returns {Queue} Seeked queue
    * @example
@@ -628,8 +601,8 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
    *         distube.seek(message, Number(args[0]));
    * });
    */
-  seek(queue: GuildIdResolvable, time: number): Queue {
-    const q = this.getQueue(queue);
+  seek(guild: GuildIdResolvable, time: number): Queue {
+    const q = this.getQueue(guild);
     if (!q) throw new DisTubeError("NO_QUEUE");
     return q.seek(time);
   }

@@ -1,6 +1,6 @@
 import { DisTubeVoice } from ".";
 import { resolveGuildId } from "../..";
-import { BaseManager } from "../manager";
+import { GuildIdManager } from "../manager";
 import { VoiceConnectionStatus, getVoiceConnection } from "@discordjs/voice";
 import type { GuildIdResolvable } from "../..";
 import type { VoiceBasedChannel } from "discord.js";
@@ -9,12 +9,12 @@ import type { VoiceBasedChannel } from "discord.js";
  * Manages voice connections for {@link DisTube}
  * @extends BaseManager
  */
-export class DisTubeVoiceManager extends BaseManager<DisTubeVoice> {
+export class DisTubeVoiceManager extends GuildIdManager<DisTubeVoice> {
   /**
    * Get a {@link DisTubeVoice}.
    * @method get
    * @memberof DisTubeVoiceManager#
-   * @param {GuildIdResolvable} queue The queue resolvable to resolve
+   * @param {GuildIdResolvable} guild The queue resolvable to resolve
    * @returns {DisTubeVoice?}
    */
   /**

@@ -8,7 +8,7 @@
     "lib": ["ESNext"],
     "strict": true,
     "alwaysStrict": true,
-    "removeComments": false,
+    "removeComments": true,
     "pretty": true,
     "sourceMap": true,
     "inlineSources": true,

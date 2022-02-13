@@ -6,20 +6,17 @@ import * as _ytpl from "@distube/ytpl";
 import * as _ytdl from "@distube/ytdl-core";
 import * as _Util from "../../util";
 import * as _Queue from "../../struct/Queue";
-import * as _Stream from "../DisTubeStream";
 
 jest.useFakeTimers();
 jest.mock("@distube/ytpl");
 jest.mock("@distube/ytdl-core");
 jest.mock("../../util");
 jest.mock("../../struct/Queue");
-jest.mock("../DisTubeStream");
 
 const ytpl = _ytpl as unknown as jest.Mocked<typeof _ytpl>;
 const ytdl = _ytdl as unknown as jest.Mocked<typeof _ytdl>;
 const Util = _Util as unknown as jest.Mocked<typeof _Util>;
 const Queue = _Queue as unknown as jest.Mocked<typeof _Queue>;
-const Stream = _Stream as unknown as jest.Mocked<typeof _Stream>;
 
 function createFakeQueueManager() {
   return {
@@ -191,7 +188,7 @@ describe("Constructor", () => {
     });
 
     describe("There is a playing Queue in the guild", () => {
-      const queue = { voice: { leave: jest.fn() }, stopped: false, delete: jest.fn() };
+      const queue = { voice: { leave: jest.fn() }, stopped: false, remove: jest.fn() };
       const state = { channel: {} };
       describe("The voice channel is not empty", () => {
         distube.queues.get.mockReturnValue(queue);
@@ -208,7 +205,7 @@ describe("Constructor", () => {
           expect(queue.voice.leave).not.toBeCalled();
           jest.runAllTimers();
           expect(queue.voice.leave).toBeCalledTimes(1);
-          expect(queue.delete).not.toBeCalled();
+          expect(queue.remove).not.toBeCalled();
           // Stopped queue
           queue.stopped = true;
           stateHandle(state);
@@ -216,7 +213,7 @@ describe("Constructor", () => {
           expect(queue.voice.leave).toBeCalledTimes(1);
           jest.runAllTimers();
           expect(queue.voice.leave).toBeCalledTimes(2);
-          expect(queue.delete).toBeCalledTimes(1);
+          expect(queue.remove).toBeCalledTimes(1);
           queue.stopped = false;
         });
 
@@ -440,54 +437,6 @@ describe("DisTubeHandler#handlePlaylist()", () => {
     expect(queue.skip).not.toBeCalled();
     expect(distube.emit).toBeCalledWith("addList", queue, playlist);
     expect(playlist.songs).toContain(nsfwSong);
-  });
-});
-
-describe("DisTubeHandler#createStream()", () => {
-  const distube = createFakeDisTube();
-  const handler = new DisTubeHandler(distube as any);
-
-  test("Create a YouTube stream", () => {
-    const stream = { key: "value" };
-    const mockFn = jest.fn().mockReturnValue(stream);
-    Stream.DisTubeStream.YouTube = mockFn;
-    song.formats = [];
-    song.duration = 1;
-    const queue = {
-      songs: [song],
-      filters: [],
-      beginTime: 1,
-    };
-    const result = handler.createStream(queue as any);
-    expect(result).toBe(stream);
-    expect(mockFn).toBeCalledWith(
-      song.formats,
-      expect.objectContaining({
-        ffmpegArgs: undefined,
-        seek: 1,
-      }),
-    );
-  });
-
-  test("Create a direct link stream", () => {
-    const stream = { key: "value" };
-    const mockFn = jest.fn().mockReturnValue(stream);
-    Stream.DisTubeStream.DirectLink = mockFn;
-    anotherSong.streamURL = anotherSong.url;
-    const queue = {
-      songs: [anotherSong],
-      filters: ["3d", "bassboost"],
-      beginTime: 1,
-    };
-    const result = handler.createStream(queue as _Queue.Queue);
-    expect(result).toBe(stream);
-    expect(mockFn).toBeCalledWith(
-      anotherSong.url,
-      expect.objectContaining({
-        ffmpegArgs: ["-af", `${distube.filters["3d"]},${distube.filters.bassboost}`],
-        seek: undefined,
-      }),
-    );
   });
 });
 

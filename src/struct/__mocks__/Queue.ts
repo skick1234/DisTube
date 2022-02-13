@@ -1,4 +1,4 @@
-const methods = ["addToQueue", "skip", "stop", "delete"];
+const methods = ["addToQueue", "skip", "stop", "remove"];
 
 export class Queue {
   voice: any;
@@ -6,7 +6,7 @@ export class Queue {
   songs: any;
   previousSongs: any;
   textChannel: any;
-  taskQueue: any;
+  _taskQueue: any;
   [x: string]: jest.Mock;
   constructor(distube: any, voice: any, song: any, textChannel: any) {
     this.id = voice.id;
@@ -14,7 +14,7 @@ export class Queue {
     this.songs = Array.isArray(song) ? [...song] : [song];
     this.previousSongs = [];
     this.textChannel = textChannel;
-    this.taskQueue = {
+    this._taskQueue = {
       queuing: jest.fn(),
       resolve: jest.fn(),
     };
