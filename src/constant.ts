@@ -30,6 +30,11 @@ import type { Filters } from ".";
 /**
  * An FFmpeg audio filter object
  * ```
+ * {
+ *   name:  "bassboost",
+ *   value: "bass=g=10"
+ * }
+ * ```
  * @typedef {Object} Filter
  * @prop {string} name Name of the filter
  * @prop {string} value FFmpeg audio filter(s)
@@ -40,7 +45,8 @@ import type { Filters } from ".";
  * - A name of a default filters or custom filters (`string`)
  * - A {@link Filter} object
  * @typedef {string|Filter} FilterResolvable
- * @see {@link defaultFilters} {@link DisTubeOptions|DisTubeOptions.customFilters}
+ * @see {@link defaultFilters}
+ * @see {@link DisTubeOptions|DisTubeOptions.customFilters}
  */
 
 /**

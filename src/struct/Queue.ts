@@ -19,7 +19,7 @@ export class Queue extends DisTubeBase {
   paused: boolean;
   repeatMode: RepeatMode;
   autoplay: boolean;
-  filters: FilterManager;
+  #filters: FilterManager;
   beginTime: number;
   textChannel?: GuildTextBasedChannel;
   _emptyTimeout?: NodeJS.Timeout;
@@ -109,11 +109,7 @@ export class Queue extends DisTubeBase {
      * @type {boolean}
      */
     this.autoplay = false;
-    /**
-     * The filter manager of the queue
-     * @type {FilterManager}
-     */
-    this.filters = new FilterManager(distube, this);
+    this.#filters = new FilterManager(distube, this);
     /**
      * What time in the song to begin (in seconds).
      * @type {number}
@@ -144,8 +140,17 @@ export class Queue extends DisTubeBase {
     this._listeners = undefined;
   }
   /**
+   * The filter manager of the queue
+   * @type {FilterManager}
+   * @readonly
+   */
+  get filters() {
+    return this.#filters;
+  }
+  /**
    * Formatted duration string.
    * @type {string}
+   * @readonly
    */
   get formattedDuration() {
     return formatDuration(this.duration);
@@ -153,6 +158,7 @@ export class Queue extends DisTubeBase {
   /**
    * Queue's duration.
    * @type {number}
+   * @readonly
    */
   get duration() {
     return this.songs.length ? this.songs.reduce((prev, next) => prev + next.duration, 0) : 0;
@@ -160,6 +166,7 @@ export class Queue extends DisTubeBase {
   /**
    * What time in the song is playing (in seconds).
    * @type {number}
+   * @readonly
    */
   get currentTime() {
     return this.voice.playbackDuration + this.beginTime;
@@ -167,6 +174,7 @@ export class Queue extends DisTubeBase {
   /**
    * Formatted {@link Queue#currentTime} string.
    * @type {string}
+   * @readonly
    */
   get formattedCurrentTime() {
     return formatDuration(this.currentTime);
@@ -174,6 +182,7 @@ export class Queue extends DisTubeBase {
   /**
    * The voice channel playing in.
    * @type {Discord.VoiceChannel|Discord.StageChannel|null}
+   * @readonly
    */
   get voiceChannel() {
     return this.clientMember.voice.channel;
