@@ -38,8 +38,8 @@ export class FilterManager extends BaseManager<FilterResolvable> {
   }
 
   /**
-   * Add a filter or multiple filters to the manager
-   * @param {FilterResolvable|FilterResolvable[]} filterOrFilters The filter or filters to add
+   * Enable a filter or multiple filters to the manager
+   * @param {FilterResolvable|FilterResolvable[]} filterOrFilters The filter or filters to enable
    * @param {boolean} [override=false] Wether or not override the applied filter with new filter value
    * @returns {FilterManager}
    */
@@ -66,6 +66,19 @@ export class FilterManager extends BaseManager<FilterResolvable> {
     return this.set([...this.collection.values(), filterOrFilters]);
   }
 
+  /**
+   * Clear enabled filters of the manager
+   * @returns {FilterManager}
+   */
+  clear() {
+    return this.set([]);
+  }
+
+  /**
+   * Set the filters applied to the manager
+   * @param {FilterResolvable[]} filters The filters to apply
+   * @returns {FilterManager}
+   */
   set(filters: FilterResolvable[]) {
     this.collection.clear();
     for (const filter of filters) {
@@ -77,8 +90,8 @@ export class FilterManager extends BaseManager<FilterResolvable> {
   }
 
   /**
-   * Remove a filter or multiple filters to the manager
-   * @param {FilterResolvable|FilterResolvable[]} filterOrFilters The filter or filters to remove
+   * Disable a filter or multiple filters
+   * @param {FilterResolvable|FilterResolvable[]} filterOrFilters The filter or filters to disable
    * @returns {FilterManager}
    */
   remove(filterOrFilters: FilterResolvable | FilterResolvable[]) {
@@ -89,15 +102,29 @@ export class FilterManager extends BaseManager<FilterResolvable> {
     return this;
   }
 
+  /**
+   * Check whether a filter enabled or not
+   * @param {FilterResolvable} filter The filter to check
+   * @returns {boolean}
+   */
   has(filter: FilterResolvable) {
     return this.collection.has(this.#resolveName(filter));
   }
 
+  /**
+   * Array of enabled filter name
+   * @type {Array<string>}
+   * @readonly
+   */
   get names() {
     return this.collection.map(f => this.#resolveName(f));
   }
 
   get values() {
     return this.collection.map(f => this.#resolveValue(f));
+  }
+
+  toString() {
+    return this.names.toString();
   }
 }

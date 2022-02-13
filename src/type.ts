@@ -39,12 +39,12 @@ export type DisTubeEvents = {
   searchResult: (message: Message<true>, results: SearchResult[], query: string) => Awaitable;
 };
 
-export type FilterResolvable =
-  | string
-  | {
-      name: string;
-      value: string;
-    };
+export interface Filter {
+  name: string;
+  value: string;
+}
+
+export type FilterResolvable = string | Filter;
 
 export type Filters = Record<string, string>;
 

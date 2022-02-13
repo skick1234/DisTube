@@ -1,6 +1,61 @@
 import type { Filters } from ".";
 
 /**
+ * Data that can be resolved to give a guild id string. This can be:
+ * - A guild id string | a guild {@link https://discord.js.org/#/docs/main/stable/class/Snowflake|Snowflake}
+ * - A {@link https://discord.js.org/#/docs/main/stable/class/Guild|Guild}
+ * - A {@link https://discord.js.org/#/docs/main/stable/class/Message|Message}
+ * - A {@link https://discord.js.org/#/docs/main/stable/class/BaseGuildVoiceChannel|BaseGuildVoiceChannel}
+ * - A {@link https://discord.js.org/#/docs/main/stable/class/BaseGuildTextChannel|BaseGuildTextChannel}
+ * - A {@link https://discord.js.org/#/docs/main/stable/class/VoiceState|VoiceState}
+ * - A {@link https://discord.js.org/#/docs/main/stable/class/GuildMember|GuildMember}
+ * - A {@link https://discord.js.org/#/docs/main/stable/class/Interaction|Interaction}
+ * - A {@link DisTubeVoice}
+ * - A {@link Queue}
+ * @typedef {
+ * Discord.Snowflake|
+ * Discord.Guild|
+ * Discord.Message|
+ * Discord.BaseGuildVoiceChannel|
+ * Discord.BaseGuildTextChannel|
+ * Discord.VoiceState|
+ * Discord.GuildMember|
+ * Discord.Interaction|
+ * DisTubeVoice|
+ * Queue|
+ * string
+ * } GuildIdResolvable
+ */
+
+/**
+ * An FFmpeg audio filter object
+ * ```
+ * @typedef {Object} Filter
+ * @prop {string} name Name of the filter
+ * @prop {string} value FFmpeg audio filter(s)
+ */
+
+/**
+ * Data that resolves to give an FFmpeg audio filter. This can be:
+ * - A name of a default filters or custom filters (`string`)
+ * - A {@link Filter} object
+ * @typedef {string|Filter} FilterResolvable
+ * @see {@link defaultFilters} {@link DisTubeOptions|DisTubeOptions.customFilters}
+ */
+
+/**
+ * FFmpeg Filters
+ * ```
+ * {
+ *   "Filter Name": "Filter Value",
+ *   "bassboost":   "bass=g=10"
+ * }
+ * ```
+ * @typedef {Object.<string, string>} Filters
+ * @see {@link defaultFilters}
+ */
+
+/**
  * Default DisTube audio filters.
  * @typedef {Object} defaultFilters
  * @prop {string} 3d 3d
@@ -80,44 +135,6 @@ export const defaultOptions = {
   emitAddSongWhenCreatingQueue: true,
   emitAddListWhenCreatingQueue: true,
 };
-
-/**
- * Data that can be resolved to give a guild id string. This can be:
- * - A guild id string | a guild {@link https://discord.js.org/#/docs/main/stable/class/Snowflake|Snowflake}
- * - A {@link https://discord.js.org/#/docs/main/stable/class/Guild|Guild}
- * - A {@link https://discord.js.org/#/docs/main/stable/class/Message|Message}
- * - A {@link https://discord.js.org/#/docs/main/stable/class/BaseGuildVoiceChannel|BaseGuildVoiceChannel}
- * - A {@link https://discord.js.org/#/docs/main/stable/class/BaseGuildTextChannel|BaseGuildTextChannel}
- * - A {@link https://discord.js.org/#/docs/main/stable/class/VoiceState|VoiceState}
- * - A {@link https://discord.js.org/#/docs/main/stable/class/GuildMember|GuildMember}
- * - A {@link https://discord.js.org/#/docs/main/stable/class/Interaction|Interaction}
- * - A {@link DisTubeVoice}
- * - A {@link Queue}
- * @typedef {
- * Discord.Snowflake|
- * Discord.Guild|
- * Discord.Message|
- * Discord.BaseGuildVoiceChannel|
- * Discord.BaseGuildTextChannel|
- * Discord.VoiceState|
- * Discord.GuildMember|
- * Discord.Interaction|
- * DisTubeVoice|
- * Queue|
- * string
- * } GuildIdResolvable
- */
-/**
- * FFmpeg Filters
- * ```
- * {
- *   "Filter Name": "Filter Value",
- *   "bassboost":   "bass=g=10"
- * }
- * ```
- * @typedef {Object.<string, string>} Filters
- * @see {@link defaultFilters}
- */
 
 /**
  * The repeat mode of a {@link Queue} (enum)
