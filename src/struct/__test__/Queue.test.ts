@@ -194,9 +194,9 @@ describe("Queue#jump()", () => {
     test("savePreviousSongs is enabled", async () => {
       const position = 5;
       const playingSong = queue.songs[0];
-      const songAtThisPosition = queue.songs[position - 1];
-      await expect(queue.jump(position)).resolves.toBe(queue);
-      expect(queue.songs[0]).toBe(songAtThisPosition);
+      const songAtThisPosition = queue.songs[position];
+      await expect(queue.jump(position)).resolves.toBe(songAtThisPosition);
+      expect(queue.songs[1]).toBe(songAtThisPosition);
       expect(queue.previousSongs[0]).toBe(playingSong);
       expect(queue._next).toBe(true);
       expect(voice.stop).toBeCalledTimes(1);
@@ -205,9 +205,9 @@ describe("Queue#jump()", () => {
     test("savePreviousSongs is disabled", async () => {
       const position = 3;
       const playingSong = q.songs[0];
-      const songAtThisPosition = q.songs[position - 1];
-      await expect(q.jump(position)).resolves.toBe(q);
-      expect(q.songs[0]).toBe(songAtThisPosition);
+      const songAtThisPosition = q.songs[position];
+      await expect(q.jump(position)).resolves.toBe(songAtThisPosition);
+      expect(q.songs[1]).toBe(songAtThisPosition);
       expect(q.previousSongs[0]).toEqual({ id: playingSong.id });
       expect(q._next).toBe(true);
       expect(voice.stop).toBeCalledTimes(1);
@@ -219,7 +219,7 @@ describe("Queue#jump()", () => {
       const position = -1;
       const previousSongs = queue.previousSongs;
       const nextSongs = queue.songs;
-      await expect(queue.jump(position)).resolves.toBe(queue);
+      await expect(queue.jump(position)).resolves.toBe(previousSongs[previousSongs.length - 1]);
       expect(queue._prev).toBe(true);
       expect(queue.songs).toEqual(nextSongs);
       expect(queue.previousSongs).toEqual(previousSongs);
@@ -230,7 +230,7 @@ describe("Queue#jump()", () => {
       const position = -2;
       const playingSong = queue.songs[0];
       const songAtThisPosition = queue.previousSongs[queue.previousSongs.length + position];
-      await expect(queue.jump(position)).resolves.toBe(queue);
+      await expect(queue.jump(position)).resolves.toBe(songAtThisPosition);
       expect(queue.previousSongs[queue.previousSongs.length - 1]).toBe(songAtThisPosition);
       expect(queue.songs[-1 - position]).toBe(playingSong);
       expect(queue._prev).toBe(true);

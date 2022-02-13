@@ -122,17 +122,18 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
   /**
    * Play / add a song or playlist from url. Search and play a song if it is not a valid url.
    *
-   * @param {Discord.BaseGuildVoiceChannel} voiceChannel The channel will be joined if the bot isn't in any channels
+   * @param {Discord.BaseGuildVoiceChannel} voiceChannel The channel will be joined if the bot isn't in any channels,
+   * the bot will be moved to this channel if `options.move` is `true`
    * @param {string|Song|SearchResult|Playlist} song URL | Search string |
    * {@link Song} | {@link SearchResult} | {@link Playlist}
    * @param {Object} [options] Optional options
+   * @param {Discord.GuildMember} [options.member] Requested user (default is your bot)
+   * @param {Discord.BaseGuildTextChannel} [options.textChannel] Default {@link Queue#textChannel}
    * @param {boolean} [options.skip=false]
    * Skip the playing song (if exists) and play the added song/playlist if `position` is 1.
    * If `position` is defined and not equal to 1, it will skip to the next song instead of the added song
    * @param {number} [options.position=0] Position of the song/playlist to add to the queue,
    * <= 0 to add to the end of the queue.
-   * @param {Discord.GuildMember} [options.member] Requested user (default is your bot)
-   * @param {Discord.BaseGuildTextChannel} [options.textChannel] Default {@link Queue#textChannel}
    * @param {Discord.Message} [options.message] Called message (For built-in search events. If this is a {@link https://developer.mozilla.org/en-US/docs/Glossary/Falsy|falsy value}, it will play the first result instead)
    * @param {*} [options.metadata] Optional metadata that can be attached to the song/playlist will be played,
    * This is useful for identification purposes when the song/playlist is passed around in events.
@@ -496,7 +497,7 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
    * The previous one is -1, -2,...
    * @param {GuildIdResolvable} guild The type can be resolved to give a {@link Queue}
    * @param {number} num The song number to play
-   * @returns {Promise<Queue>} The guild queue
+   * @returns {Promise<Song>} The new Song will be played
    * @throws {Error} if `num` is invalid number (0 < num < {@link Queue#songs}.length)
    * @example
    * client.on('message', (message) => {
@@ -508,7 +509,7 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
    *             .catch(err => message.channel.send("Invalid song number."));
    * });
    */
-  jump(guild: GuildIdResolvable, num: number): Promise<Queue> {
+  jump(guild: GuildIdResolvable, num: number): Promise<Song> {
     const q = this.getQueue(guild);
     if (!q) throw new DisTubeError("NO_QUEUE");
     return q.jump(num);

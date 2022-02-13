@@ -311,16 +311,17 @@ export class Queue extends DisTubeBase {
    * The next one is 1, 2,...
    * The previous one is -1, -2,...
    * @param {number} position The song position to play
-   * @returns {Promise<Queue>} The guild queue
+   * @returns {Promise<Song>} The new Song will be played
    * @throws {Error} if `num` is invalid number
    */
-  async jump(position: number): Promise<Queue> {
+  async jump(position: number): Promise<Song> {
     await this._taskQueue.queuing();
     try {
       if (typeof position !== "number") throw new DisTubeError("INVALID_TYPE", "number", position, "position");
       if (!position || position > this.songs.length || -position > this.previousSongs.length) {
         throw new DisTubeError("NO_SONG_POSITION");
       }
+      let nextSong: Song;
       if (position > 0) {
         const nextSongs = this.songs.splice(position - 1);
         if (this.options.savePreviousSongs) {
@@ -330,14 +331,16 @@ export class Queue extends DisTubeBase {
         }
         this.songs = nextSongs;
         this._next = true;
+        nextSong = nextSongs[1];
       } else if (!this.options.savePreviousSongs) {
         throw new DisTubeError("DISABLED_OPTION", "savePreviousSongs");
       } else {
         this._prev = true;
         if (position !== -1) this.songs.unshift(...this.previousSongs.splice(position + 1));
+        nextSong = this.previousSongs[this.previousSongs.length - 1];
       }
       this.voice.stop();
-      return this;
+      return nextSong;
     } finally {
       this._taskQueue.resolve();
     }
