@@ -95,6 +95,7 @@ export class DisTubeVoice extends TypedEmitter<DisTubeVoiceEvents> {
     return joinVoiceChannel({
       channelId: channel.id,
       guildId: this.id,
+      group: channel.client.user?.id,
       adapterCreator: (channel.guild.voiceAdapterCreator as any) || createDiscordJSAdapter(channel as any),
     });
   }
