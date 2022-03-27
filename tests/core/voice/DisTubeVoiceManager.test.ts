@@ -1,9 +1,8 @@
-import { DisTubeVoiceManager } from "..";
+import { DisTubeVoiceManager, DisTubeVoice as _DTV } from "@";
 
-import { DisTubeVoice as _DTV } from "..";
 import * as _DiscordVoice from "@discordjs/voice";
 
-jest.mock("../DisTubeVoice");
+jest.mock("@/core/voice/DisTubeVoice");
 jest.mock("@discordjs/voice");
 
 const DisTubeVoice = _DTV as unknown as jest.Mocked<typeof _DTV>;
@@ -16,15 +15,15 @@ function createFakeDisTube() {
 const distube = createFakeDisTube();
 const manager = new DisTubeVoiceManager(distube as any);
 const channel1: any = {
-  guild: { id: "123456789123456789", fetchAuditLogs: () => undefined },
+  guildId: "123456789123456789",
 };
 const channel2: any = {
-  guild: { id: "123456789012345678", fetchAuditLogs: () => undefined },
+  guildId: "123456789012345678",
 };
 
 test("DisTubeVoiceManager#create()", () => {
   const voice = manager.create(channel1);
-  manager.add(channel1.guild.id, voice);
+  manager.add(channel1.guildId, voice);
   expect(voice).toBeInstanceOf(DisTubeVoice);
   expect(DisTubeVoice).toBeCalledTimes(1);
   expect(manager.get(channel1)).toBe(voice);
@@ -56,10 +55,10 @@ test("DisTubeVoiceManager#leave()", () => {
   };
   DiscordVoice.getVoiceConnection.mockReturnValue(fConnection as any);
   manager.leave(channel2);
-  expect(DiscordVoice.getVoiceConnection).nthCalledWith(1, channel2.guild.id);
+  expect(DiscordVoice.getVoiceConnection).nthCalledWith(1, channel2.guildId);
   expect(fConnection.destroy).not.toBeCalled();
   fConnection.state.status = DiscordVoice.VoiceConnectionStatus.Ready;
   manager.leave(channel2);
-  expect(DiscordVoice.getVoiceConnection).nthCalledWith(1, channel2.guild.id);
+  expect(DiscordVoice.getVoiceConnection).nthCalledWith(1, channel2.guildId);
   expect(fConnection.destroy).toBeCalledTimes(1);
 });

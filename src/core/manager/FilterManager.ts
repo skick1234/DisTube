@@ -1,6 +1,6 @@
 import { BaseManager } from ".";
 import { DisTubeError } from "../..";
-import type { DisTube, FilterResolvable, Queue } from "../..";
+import type { FilterResolvable, Queue } from "../..";
 
 /**
  * Manage filters of a playing {@link Queue}
@@ -8,8 +8,8 @@ import type { DisTube, FilterResolvable, Queue } from "../..";
  */
 export class FilterManager extends BaseManager<FilterResolvable> {
   queue: Queue;
-  constructor(distube: DisTube, queue: Queue) {
-    super(distube);
+  constructor(queue: Queue) {
+    super(queue.distube);
     this.queue = queue;
   }
 
@@ -124,7 +124,7 @@ export class FilterManager extends BaseManager<FilterResolvable> {
     return this.collection.map(f => this.#resolveValue(f));
   }
 
-  toString() {
+  override toString() {
     return this.names.toString();
   }
 }

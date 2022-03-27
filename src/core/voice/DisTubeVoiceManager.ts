@@ -29,8 +29,9 @@ export class DisTubeVoiceManager extends GuildIdManager<DisTubeVoice> {
    * @private
    */
   create(channel: VoiceBasedChannel): DisTubeVoice {
-    const existing = this.get(channel.guild.id);
+    const existing = this.get(channel.guildId);
     if (existing) {
+      existing.channel = channel;
       return existing;
     }
     return new DisTubeVoice(this, channel);
@@ -41,7 +42,7 @@ export class DisTubeVoiceManager extends GuildIdManager<DisTubeVoice> {
    * @returns {Promise<DisTubeVoice>}
    */
   join(channel: VoiceBasedChannel): Promise<DisTubeVoice> {
-    const existing = this.get(channel.guild.id);
+    const existing = this.get(channel.guildId);
     if (existing) return existing.join(channel);
     return this.create(channel).join();
   }

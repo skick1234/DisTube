@@ -1,17 +1,18 @@
-import { firstPlaylistInfo, playlistResults, videoResults } from "./raw";
-import { DisTubeError, DisTubeHandler, Playlist, SearchResult, Song, defaultFilters, defaultOptions } from "../..";
-import type { DisTubeOptions } from "../..";
+import { firstPlaylistInfo, playlistResults, videoResults } from "../raw";
+import { DisTubeError, DisTubeHandler, SearchResult, defaultFilters, defaultOptions } from "@";
+import { Playlist, Song } from "@/struct";
+import type { DisTubeOptions } from "@";
 
 import * as _ytpl from "@distube/ytpl";
 import * as _ytdl from "@distube/ytdl-core";
-import * as _Util from "../../util";
-import * as _Queue from "../../struct/Queue";
+import * as _Util from "@/util";
+import * as _Queue from "@/struct/Queue";
 
 jest.useFakeTimers();
 jest.mock("@distube/ytpl");
 jest.mock("@distube/ytdl-core");
-jest.mock("../../util");
-jest.mock("../../struct/Queue");
+jest.mock("@/util");
+jest.mock("@/struct/Queue");
 
 const ytpl = _ytpl as unknown as jest.Mocked<typeof _ytpl>;
 const ytdl = _ytdl as unknown as jest.Mocked<typeof _ytdl>;
@@ -254,42 +255,42 @@ describe("DisTubeHandler#getYouTubeInfo()", () => {
   });
 });
 
-describe("DisTubeHandler#resolveSong()", () => {
+describe("DisTubeHandler#resolve()", () => {
   const distube = createFakeDisTube();
   const handler = new DisTubeHandler(distube as any);
 
   test("Parameter is null or undefined", async () => {
-    await expect(handler.resolveSong(null, { member, metadata })).rejects.toThrowError(
+    await expect(handler.resolve(null, { member, metadata })).rejects.toThrowError(
       new DisTubeError("CANNOT_RESOLVE_SONG", null),
     );
-    await expect(handler.resolveSong(undefined, { member, metadata })).rejects.toThrowError(
+    await expect(handler.resolve(undefined, { member, metadata })).rejects.toThrowError(
       new DisTubeError("CANNOT_RESOLVE_SONG", undefined),
     );
   });
 
   test("Parameter is Song or Playlist", async () => {
-    await expect(handler.resolveSong(song, { member, metadata })).resolves.toBe(song);
-    await expect(handler.resolveSong(playlist, { member, metadata })).resolves.toBe(playlist);
+    await expect(handler.resolve(song, { member, metadata })).resolves.toBe(song);
+    await expect(handler.resolve(playlist, { member, metadata })).resolves.toBe(playlist);
   });
 
   test("Parameter is a SearchResult", async () => {
     Util.isRecord.mockReturnValue(true);
-    await expect(handler.resolveSong(songResult, { member, metadata })).resolves.toBeInstanceOf(Song);
+    await expect(handler.resolve(songResult, { member, metadata })).resolves.toBeInstanceOf(Song);
     (ytpl as unknown as jest.Mock).mockReturnValue(firstPlaylistInfo);
-    await expect(handler.resolveSong(plResult, { member, metadata })).resolves.toBeInstanceOf(Playlist);
+    await expect(handler.resolve(plResult, { member, metadata })).resolves.toBeInstanceOf(Playlist);
   });
 
   test("Parameter is a song info object", async () => {
     const songInfo = { id: "z", url: "z url", src: "test" };
     Util.isObject.mockReturnValue(true);
-    await expect(handler.resolveSong(songInfo, { member, metadata })).resolves.toBeInstanceOf(Song);
+    await expect(handler.resolve(songInfo, { member, metadata })).resolves.toBeInstanceOf(Song);
   });
 
   test("Parameter is a youtube url", async () => {
     const url = "a youtube url";
     ytdl.validateURL.mockReturnValue(true);
     ytdl.getInfo.mockReturnValue({ full: true, videoDetails: { id: "test" }, formats: ["a format"] } as any);
-    const resolved = handler.resolveSong(url, { member, metadata });
+    const resolved = handler.resolve(url, { member, metadata });
     await expect(resolved).resolves.toBeInstanceOf(Song);
     expect(ytdl.validateURL).toBeCalledWith(url);
     expect(ytdl.getInfo).toBeCalledWith(url, handler.ytdlOptions);
@@ -303,7 +304,7 @@ describe("DisTubeHandler#resolveSong()", () => {
     extractor.validate.mockReturnValue(true);
     extractor.resolve.mockReturnValue(result);
     const otp = { member, metadata };
-    await expect(handler.resolveSong(url, otp)).resolves.toBe(result);
+    await expect(handler.resolve(url, otp)).resolves.toBe(result);
     expect(extractor.validate).toBeCalledWith(url);
     expect(extractor.resolve).toBeCalledWith(url, otp);
   });
@@ -312,13 +313,13 @@ describe("DisTubeHandler#resolveSong()", () => {
     const url = "an url";
     Util.isURL.mockReturnValue(true);
     extractor.validate.mockReturnValue(false);
-    await expect(handler.resolveSong(url)).rejects.toThrow(new DisTubeError("NOT_SUPPORTED_URL"));
+    await expect(handler.resolve(url)).rejects.toThrow(new DisTubeError("NOT_SUPPORTED_URL"));
   });
 
   test("Parameter is a number", async () => {
     const url: any = 1;
     Util.isURL.mockReturnValue(false);
-    await expect(handler.resolveSong(url)).rejects.toThrow(new DisTubeError("CANNOT_RESOLVE_SONG", url));
+    await expect(handler.resolve(url)).rejects.toThrow(new DisTubeError("CANNOT_RESOLVE_SONG", url));
   });
 });
 
@@ -338,28 +339,28 @@ describe("DisTubeHandler#resolvePlaylist()", () => {
   });
 });
 
-describe("DisTubeHandler#handlePlaylist()", () => {
+describe("DisTubeHandler#playPlaylist()", () => {
   const distube = createFakeDisTube();
   const handler = new DisTubeHandler(distube as any);
   const voice: any = {};
 
   test("Invalid Playlist", async () => {
-    await expect(handler.handlePlaylist(voice, undefined as any)).rejects.toThrow(
+    await expect(handler.playPlaylist(voice, undefined as any)).rejects.toThrow(
       new DisTubeError("INVALID_TYPE", "Playlist", undefined, "playlist"),
     );
-    await expect(handler.handlePlaylist(voice, "not a Playlist" as any)).rejects.toThrow(
+    await expect(handler.playPlaylist(voice, "not a Playlist" as any)).rejects.toThrow(
       new DisTubeError("INVALID_TYPE", "Playlist", "not a Playlist", "playlist"),
     );
   });
 
   test("No valid video in the playlist", async () => {
     const pl1 = new Playlist([nsfwSong]);
-    await expect(handler.handlePlaylist(voice, pl1, { textChannel: { nsfw: false } } as any)).rejects.toThrow(
+    await expect(handler.playPlaylist(voice, pl1, { textChannel: { nsfw: false } } as any)).rejects.toThrow(
       new DisTubeError("EMPTY_FILTERED_PLAYLIST"),
     );
     const pl2 = new Playlist([new Song({ age_restricted: true, url: "test url" }, { member, source: "test" })]);
     pl2.songs = [];
-    await expect(handler.handlePlaylist(voice, pl2, { textChannel: { nsfw: true } } as any)).rejects.toThrow(
+    await expect(handler.playPlaylist(voice, pl2, { textChannel: { nsfw: true } } as any)).rejects.toThrow(
       new DisTubeError("EMPTY_PLAYLIST"),
     );
   });
@@ -368,7 +369,7 @@ describe("DisTubeHandler#handlePlaylist()", () => {
     const textChannel: any = { nsfw: true };
     distube.queues.get.mockReturnValue(undefined);
     distube.queues.create.mockReturnValueOnce(true);
-    await expect(handler.handlePlaylist(voice, playlist, { textChannel })).resolves.toBeUndefined();
+    await expect(handler.playPlaylist(voice, playlist, { textChannel })).resolves.toBeUndefined();
     expect(distube.queues.create).toBeCalledWith(voice, playlist.songs, textChannel);
     expect(distube.emit).not.toBeCalled();
     expect(playlist.songs).toContain(nsfwSong);
@@ -376,7 +377,7 @@ describe("DisTubeHandler#handlePlaylist()", () => {
     queue.songs = playlist.songs;
     distube.options.emitAddListWhenCreatingQueue = false;
     distube.queues.create.mockReturnValueOnce(queue);
-    await expect(handler.handlePlaylist(voice, playlist, { textChannel })).resolves.toBeUndefined();
+    await expect(handler.playPlaylist(voice, playlist, { textChannel })).resolves.toBeUndefined();
     expect(distube.queues.create).toBeCalledWith(voice, playlist.songs, textChannel);
     expect(distube.emit).not.toBeCalledWith("addList", queue, playlist);
     expect(distube.emit).toBeCalledWith("playSong", queue, playlist.songs[0]);
@@ -390,7 +391,7 @@ describe("DisTubeHandler#handlePlaylist()", () => {
     queue.songs = playlist.songs;
     distube.queues.get.mockReturnValue(undefined);
     distube.queues.create.mockReturnValue(queue);
-    await expect(handler.handlePlaylist(voice, playlist, { textChannel })).resolves.toBeUndefined();
+    await expect(handler.playPlaylist(voice, playlist, { textChannel })).resolves.toBeUndefined();
     expect(distube.queues.create).toBeCalledWith(voice, playlist.songs, textChannel);
     expect(distube.emit).nthCalledWith(1, "addList", queue, playlist);
     expect(distube.emit).nthCalledWith(2, "playSong", queue, playlist.songs[0]);
@@ -404,7 +405,7 @@ describe("DisTubeHandler#handlePlaylist()", () => {
     queue.songs = playlist.songs;
     distube.queues.get.mockReturnValue(queue);
     await expect(
-      handler.handlePlaylist(voice, playlist, { textChannel, skip: true, position: 1 }),
+      handler.playPlaylist(voice, playlist, { textChannel, skip: true, position: 1 }),
     ).resolves.toBeUndefined();
     expect(queue.addToQueue).toBeCalledWith(playlist.songs, 1);
     expect(queue.skip).toBeCalledTimes(1);
@@ -419,7 +420,7 @@ describe("DisTubeHandler#handlePlaylist()", () => {
     queue.songs = playlist.songs;
     distube.queues.get.mockReturnValue(queue);
     await expect(
-      handler.handlePlaylist(voice, playlist, { textChannel, skip: false, position: 1 }),
+      handler.playPlaylist(voice, playlist, { textChannel, skip: false, position: 1 }),
     ).resolves.toBeUndefined();
     expect(queue.addToQueue).toBeCalledWith(playlist.songs, 1);
     expect(queue.skip).not.toBeCalled();
@@ -432,7 +433,7 @@ describe("DisTubeHandler#handlePlaylist()", () => {
     const queue = new Queue.Queue(distube as any, {} as any, song);
     queue.songs = playlist.songs;
     distube.queues.get.mockReturnValue(queue);
-    await expect(handler.handlePlaylist(voice, playlist, { textChannel, skip: false })).resolves.toBeUndefined();
+    await expect(handler.playPlaylist(voice, playlist, { textChannel, skip: false })).resolves.toBeUndefined();
     expect(queue.addToQueue).toBeCalledWith(playlist.songs, 0);
     expect(queue.skip).not.toBeCalled();
     expect(distube.emit).toBeCalledWith("addList", queue, playlist);

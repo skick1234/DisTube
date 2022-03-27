@@ -1,0 +1,14 @@
+{
+  "testEnvironment": "node",
+  "collectCoverage": true,
+  "collectCoverageFrom": ["src/**/*.ts"],
+  "coverageDirectory": "coverage",
+  "coverageReporters": ["text", "lcov", "clover"],
+  "testMatch": ["**/?(*.)+(spec|test).[jt]s?(x)"],
+  "roots": ["<rootDir>/tests/"],
+  "moduleNameMapper": {
+    "^@/mock/(.*)$": "<rootDir>/tests/__mocks__/$1",
+    "^@/(.*)$": "<rootDir>/src/$1",
+    "^@$": "<rootDir>/src"
+  }
+}

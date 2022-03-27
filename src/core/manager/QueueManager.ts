@@ -26,7 +26,7 @@ export class QueueManager extends GuildIdManager<Queue> {
     song: Song[] | Song,
     textChannel?: GuildTextBasedChannel,
   ): Promise<Queue | true> {
-    if (this.has(channel.guild.id)) throw new DisTubeError("QUEUE_EXIST");
+    if (this.has(channel.guildId)) throw new DisTubeError("QUEUE_EXIST");
     const voice = this.voices.create(channel);
     const queue = new Queue(this.distube, voice, song, textChannel);
     await queue._taskQueue.queuing();

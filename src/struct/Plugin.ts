@@ -1,4 +1,4 @@
-/* eslint-disable  @typescript-eslint/no-unused-vars */
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import type { Client, GuildTextBasedChannel } from "discord.js";
 import type {
   Awaitable,
@@ -18,7 +18,7 @@ import type {
  * @private
  */
 export abstract class Plugin {
-  type!: PluginType;
+  abstract type: PluginType;
   distube!: DisTube;
   init(distube: DisTube) {
     /**
@@ -33,7 +33,7 @@ export abstract class Plugin {
    * @type {PluginType}
    */
   /**
-   * Emit the {@link DisTube} of this base
+   * Emit an event to the {@link DisTube} class
    * @param {string} eventName Event name
    * @param {...any} args arguments
    * @returns {boolean}
@@ -42,7 +42,7 @@ export abstract class Plugin {
     return this.distube.emit(eventName, ...args);
   }
   /**
-   * Emit error event
+   * Emit error event to the {@link DisTube} class
    * @param {Error} error error
    * @param {Discord.BaseGuildTextChannel} [channel] Text channel where the error is encountered.
    */
@@ -90,6 +90,14 @@ export abstract class Plugin {
     return this.distube.handler;
   }
   /**
+   * Check if the string is working with this plugin
+   * @param {string} _string Input string
+   * @returns {boolean|Promise<boolean>}
+   */
+  validate(_string: string): Awaitable<boolean> {
+    return false;
+  }
+  /**
    * Get the stream url from {@link Song#url}. Returns {@link Song#url} by default.
    * Not needed if the plugin plays song from YouTube.
    * @param {string} url Input url
@@ -101,10 +109,10 @@ export abstract class Plugin {
   /**
    * Get related songs from a supported url. {@link Song#member} should be `undefined`.
    * Not needed to add {@link Song#related} because it will be added with this function later.
-   * @param {string} url Input url
+   * @param {string} _url Input url
    * @returns {Song[]|Promise<Song[]>}
    */
-  getRelatedSongs(url: string): Awaitable<RelatedSong[]> {
+  getRelatedSongs(_url: string): Awaitable<RelatedSong[]> {
     return [];
   }
 }

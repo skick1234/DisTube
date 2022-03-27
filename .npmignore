@@ -1,8 +1,0 @@
-docs/
-pages/
-src/
-coverage/
-
-.*
-tsconfig.json
-tsconfig.eslint.json

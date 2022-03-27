@@ -165,3 +165,8 @@ export enum PluginType {
   CUSTOM = "custom",
   EXTRACTOR = "extractor",
 }
+
+export enum SearchResultType {
+  VIDEO = "video",
+  PLAYLIST = "playlist",
+}

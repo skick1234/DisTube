@@ -1,4 +1,4 @@
-import { Options, defaultOptions } from "../..";
+import { Options, defaultOptions } from "@";
 
 test("Default DisTubeOptions", () => {
   expect(new Options({})).toEqual({

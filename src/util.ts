@@ -64,7 +64,7 @@ export function parseNumber(input: any): number {
  * @param {string} input input
  * @returns {boolean}
  */
-export function isURL(input: any): boolean {
+export function isURL(input: any): input is `http://${string}` | `https://${string}` {
   if (typeof input !== "string" || input.includes(" ")) return false;
   try {
     const url = new URL(input);
@@ -79,13 +79,6 @@ export function isURL(input: any): boolean {
  * @param {ClientOptions} options options
  */
 export function checkIntents(options: ClientOptions): void {
-  // const requiredIntents = [GatewayIntentBits.GuildVoiceStates];
-  // const intents = new IntentsBitField(options.intents);
-  // for (const intent of requiredIntents) {
-  //   // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-  //   // @ts-ignore
-  //   if (!intents.has(intent)) throw new DisTubeError("MISSING_INTENTS", GatewayIntentBits[intent.toString()]);
-  // }
   const intents = new IntentsBitField(options.intents);
   if (!intents.has(GatewayIntentBits.GuildVoiceStates)) throw new DisTubeError("MISSING_INTENTS", "GuildVoiceStates");
 }
@@ -125,8 +118,8 @@ export function isTextChannelInstance(channel: any): channel is GuildTextBasedCh
     !!channel &&
     isSnowflake(channel.id) &&
     isSnowflake(channel.guildId) &&
-    typeof channel.send === "function" &&
-    typeof channel.awaitMessages === "function"
+    typeof channel.name === "string" &&
+    Constants.TextBasedChannelTypes.includes(channel.type)
   );
 }
 
@@ -136,27 +129,24 @@ export function isMessageInstance(message: any): message is Message<true> {
     !!message &&
     isSnowflake(message.id) &&
     isSnowflake(message.guildId) &&
-    isTextChannelInstance(message.channel) &&
     isMemberInstance(message.member) &&
-    isSnowflake(message.author.id) &&
-    message.member.id === message.author.id &&
-    message.guild.id === message.channel.guild.id
+    isTextChannelInstance(message.channel) &&
+    Constants.NonSystemMessageTypes.includes(message.type) &&
+    message.member.id === message.author?.id
   );
 }
 
 export function isSupportedVoiceChannel(channel: any): channel is VoiceBasedChannel {
   return (
     !!channel &&
-    typeof channel.joinable === "boolean" &&
     isSnowflake(channel.id) &&
     isSnowflake(channel.guildId) &&
-    typeof channel.full === "boolean" &&
     Constants.VoiceBasedChannelTypes.includes(channel.type)
   );
 }
 
 export function isGuildInstance(guild: any): guild is Guild {
-  return !!guild && isSnowflake(guild.id) && typeof guild.fetchAuditLogs === "function";
+  return !!guild && isSnowflake(guild.id) && isSnowflake(guild.ownerId) && typeof guild.name === "string";
 }
 
 export function resolveGuildId(resolvable: GuildIdResolvable): Snowflake {
@@ -164,9 +154,13 @@ export function resolveGuildId(resolvable: GuildIdResolvable): Snowflake {
   if (typeof resolvable === "string") {
     guildId = resolvable;
   } else if (isObject(resolvable)) {
-    if (resolvable instanceof Queue || resolvable instanceof DisTubeVoice) guildId = resolvable.id;
-    else if ("guild" in resolvable && isGuildInstance(resolvable.guild)) guildId = resolvable.guild.id;
-    else if ("id" in resolvable && isGuildInstance(resolvable)) guildId = resolvable.id;
+    if ("guildId" in resolvable && resolvable.guildId) {
+      guildId = resolvable.guildId;
+    } else if (resolvable instanceof Queue || resolvable instanceof DisTubeVoice || isGuildInstance(resolvable)) {
+      guildId = resolvable.id;
+    } else if ("guild" in resolvable && isGuildInstance(resolvable.guild)) {
+      guildId = resolvable.guild.id;
+    }
   }
   if (!isSnowflake(guildId)) throw new DisTubeError("INVALID_TYPE", "GuildIdResolvable", resolvable);
   return guildId;

@@ -1,8 +1,7 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
 import { Plugin } from ".";
 import { PluginType } from "..";
 import type { VoiceBasedChannel } from "discord.js";
-import type { Awaitable, CustomPluginPlayOptions, Playlist, SearchResult, Song } from "..";
+import type { Awaitable, CustomPluginPlayOptions } from "..";
 
 /**
  * Custom Plugin
@@ -10,24 +9,8 @@ import type { Awaitable, CustomPluginPlayOptions, Playlist, SearchResult, Song }
  * @abstract
  */
 export abstract class CustomPlugin extends Plugin {
-  type = PluginType.CUSTOM;
-  /**
-   * This method will be executed if the `song` string is validated.
-   * @param {Discord.BaseGuildVoiceChannel} voiceChannel The voice channel will be joined
-   * @param {string} song Validated `song`
-   * @param {CustomPluginPlayOptions} [options] Optional options
-   * @returns {Promise<void>}
-   * @abstract
-   */
+  readonly type = PluginType.CUSTOM;
   abstract play(voiceChannel: VoiceBasedChannel, song: string, options: CustomPluginPlayOptions): Awaitable<void>;
-  /**
-   * Check if the {@link DisTube#play} `song` parameter is working with this plugin
-   * @param {string} song String need to validate
-   * @returns {boolean|Promise<boolean>}
-   */
-  validate(song: string): Awaitable<boolean> {
-    return false;
-  }
 }
 
 /**
@@ -50,5 +33,13 @@ export abstract class CustomPlugin extends Plugin {
  * @returns {Promise<void>}
  * @abstract
  * @method play
+ * @memberof CustomPlugin#
+ */
+
+/**
+ * Check if the string is working with this plugin
+ * @param {string} string String need to validate
+ * @returns {boolean|Promise<boolean>}
+ * @method validate
  * @memberof CustomPlugin#
  */

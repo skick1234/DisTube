@@ -23,7 +23,7 @@ A Discord.js module to simplify your music commands and play songs with audio fi
 
 ## Features
 
-- Build on `@discordjs/voice`
+- Based on `@discordjs/voice`
 - Easy to use and customize
 - Support YouTube and audio link
 - Audio filters (bassboost, nightcore, vaporwave,...)

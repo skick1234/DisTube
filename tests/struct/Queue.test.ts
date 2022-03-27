@@ -1,9 +1,9 @@
-import { DisTubeError, Queue, Song, defaultFilters, defaultOptions } from "../..";
-import type { DisTubeOptions } from "../..";
+import { DisTubeError, Queue, Song, defaultFilters, defaultOptions } from "@";
+import type { DisTubeOptions } from "@";
 
 function createFakeHandler() {
   return {
-    resolveSong: jest.fn(),
+    resolve: jest.fn(),
   };
 }
 
@@ -93,14 +93,14 @@ describe("Queue#addRelatedSong()", () => {
 
   test("Add a related song", async () => {
     queue.addToQueue = jest.fn();
-    distube.handler.resolveSong.mockReturnValue(song);
+    distube.handler.resolve.mockReturnValue(song);
     await expect(queue.addRelatedSong()).resolves.toBe(song);
-    expect(distube.handler.resolveSong).toBeCalledTimes(1);
+    expect(distube.handler.resolve).toBeCalledTimes(1);
     expect(queue.addToQueue).toBeCalledTimes(1);
   });
 
   test("Cannot resolve related song", async () => {
-    distube.handler.resolveSong.mockReturnValue(null);
+    distube.handler.resolve.mockReturnValue(null);
     await expect(queue.addRelatedSong()).rejects.toThrow(new DisTubeError("CANNOT_PLAY_RELATED"));
   });
 
@@ -269,7 +269,7 @@ describe("Queue#skip()", () => {
     test("Autoplay is enabled", async () => {
       const queue = new Queue(distube as any, voice as any, song);
       queue.autoplay = true;
-      distube.handler.resolveSong.mockReturnValue(anotherSong);
+      distube.handler.resolve.mockReturnValue(anotherSong);
       await expect(queue.skip()).resolves.toBe(anotherSong);
       expect(queue.songs[1]).toBe(anotherSong);
       expect(queue._next).toBe(true);
@@ -279,7 +279,7 @@ describe("Queue#skip()", () => {
     test("Autoplay is enabled and cannot get the related song", async () => {
       const queue = new Queue(distube as any, voice as any, song);
       queue.autoplay = true;
-      distube.handler.resolveSong.mockRejectedValue(new DisTubeError("NO_UP_NEXT"));
+      distube.handler.resolve.mockRejectedValue(new DisTubeError("NO_UP_NEXT"));
       await expect(queue.skip()).rejects.toThrow(new DisTubeError("NO_UP_NEXT"));
       expect(queue._next).toBe(false);
       expect(voice.stop).toBeCalledTimes(0);

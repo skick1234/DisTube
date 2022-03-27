@@ -1,59 +1,31 @@
 name: Test
 on: [push, pull_request]
 jobs:
-  lint:
-    name: Lint
+  test:
+    name: Test
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Install Node.js
-        uses: actions/setup-node@v2
+        uses: actions/setup-node@v3
         with:
           node-version: 16
+          cache: "yarn"
+          cache-dependency-path: yarn.lock
 
       - name: Install dependencies
-        run: npm install
+        run: yarn --immutable
 
       - name: Linting
-        run: npm run lint
-
-  compile:
-    name: Compile
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v2
-
-      - name: Install Node.js
-        uses: actions/setup-node@v2
-        with:
-          node-version: 16
-
-      - name: Install dependencies
-        run: npm install
+        run: yarn lint
 
       - name: Run TypeScript compiler
-        run: npm run build:check
-
-  test:
-    name: Test on Node.js v16
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v2
-
-      - name: Install Node.js v16
-        uses: actions/setup-node@v2
-        with:
-          node-version: 16
-
-      - name: Install dependencies
-        run: npm install
+        run: yarn build:check
 
       - name: Run tests
-        run: npm run test
+        run: yarn test
 
       - name: Upload Coverage
         uses: codecov/codecov-action@v2

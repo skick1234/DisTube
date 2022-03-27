@@ -34,7 +34,7 @@ export class DisTubeVoice extends TypedEmitter<DisTubeVoiceEvents> {
       if (channel.full) throw new DisTubeError("VOICE_FULL");
       else throw new DisTubeError("VOICE_MISSING_PERMS");
     }
-    this.id = channel.guild.id;
+    this.id = channel.guildId;
     this.channel = channel;
     /**
      * The voice manager that instantiated this connection
@@ -49,6 +49,7 @@ export class DisTubeVoice extends TypedEmitter<DisTubeVoiceEvents> {
           this.emit("finish");
         }
       })
+      .on(AudioPlayerStatus.Playing, () => this.#br())
       .on("error", error => {
         if (this.emittedError) return;
         this.emittedError = true;
@@ -56,7 +57,9 @@ export class DisTubeVoice extends TypedEmitter<DisTubeVoiceEvents> {
       });
     this.connection
       .on(VoiceConnectionStatus.Disconnected, (_, newState) => {
-        if (newState.reason === VoiceConnectionDisconnectReason.WebSocketClose && newState.closeCode === 4014) {
+        if (newState.reason === VoiceConnectionDisconnectReason.Manual) {
+          this.leave();
+        } else if (newState.reason === VoiceConnectionDisconnectReason.WebSocketClose && newState.closeCode === 4014) {
           entersState(this.connection, VoiceConnectionStatus.Connecting, 5e3).catch(() => {
             this.leave();
           });
@@ -78,6 +81,9 @@ export class DisTubeVoice extends TypedEmitter<DisTubeVoiceEvents> {
      * @type {number}
      */
   }
+  #br() {
+    if (this.audioResource?.encoder?.encoder) this.audioResource.encoder.setBitrate(this.channel.bitrate);
+  }
   get channel() {
     return this.#channel;
   }
@@ -85,16 +91,17 @@ export class DisTubeVoice extends TypedEmitter<DisTubeVoiceEvents> {
     if (!isSupportedVoiceChannel(channel)) {
       throw new DisTubeError("INVALID_TYPE", "BaseGuildVoiceChannel", channel, "DisTubeVoice#channel");
     }
-    if (channel.guild.id !== this.id) throw new DisTubeError("VOICE_CHANGE_GUILD");
+    if (channel.guildId !== this.id) throw new DisTubeError("VOICE_DIFFERENT_GUILD");
     this.connection = this.#join(channel);
-    this.audioResource?.encoder?.setBitrate(channel.bitrate);
     this.#channel = channel;
+    this.#br();
   }
   #join(channel: VoiceBasedChannel) {
     return joinVoiceChannel({
       channelId: channel.id,
       guildId: this.id,
       adapterCreator: channel.guild.voiceAdapterCreator as any,
+      group: channel.client.user?.id,
     });
   }
   /**
@@ -104,15 +111,11 @@ export class DisTubeVoice extends TypedEmitter<DisTubeVoiceEvents> {
    */
   async join(channel?: VoiceBasedChannel): Promise<DisTubeVoice> {
     const TIMEOUT = 30e3;
-    if (channel) {
-      this.channel = channel;
-    }
+    if (channel) this.channel = channel;
     try {
       await entersState(this.connection, VoiceConnectionStatus.Ready, TIMEOUT);
     } catch {
-      if (this.connection.state.status !== VoiceConnectionStatus.Destroyed) {
-        this.connection.destroy();
-      }
+      if (this.connection.state.status !== VoiceConnectionStatus.Destroyed) this.connection.destroy();
       this.voices.remove(this.id);
       throw new DisTubeError("VOICE_CONNECT_FAILED", TIMEOUT / 1e3);
     }
@@ -157,7 +160,6 @@ export class DisTubeVoice extends TypedEmitter<DisTubeVoiceEvents> {
       inlineVolume: true,
     });
     this.volume = this.#volume;
-    this.audioResource.encoder?.setBitrate(this.channel.bitrate);
     this.audioPlayer.play(this.audioResource);
   }
   set volume(volume: number) {

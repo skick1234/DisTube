@@ -1,10 +1,10 @@
-import { DisTubeError, DisTubeVoice } from "../../..";
+import { DisTubeError, DisTubeVoice } from "@";
 
-import * as _Util from "../../../util";
+import * as _Util from "@/util";
 import * as _DiscordVoice from "@discordjs/voice";
 
 jest.useFakeTimers();
-jest.mock("../../../util");
+jest.mock("@/util");
 jest.mock("@discordjs/voice");
 
 const Util = _Util as unknown as jest.Mocked<typeof _Util>;
@@ -17,7 +17,9 @@ const voiceManager = {
 
 const voiceChannel = {
   id: 1,
+  guildId: 2,
   guild: { id: 2, me: { voice: undefined }, voiceAdapterCreator: () => undefined },
+  client: { user: { id: 3 } },
   joinable: true,
 };
 
@@ -87,12 +89,12 @@ describe("Constructor", () => {
     const voice = new DisTubeVoice(voiceManager as any, voiceChannel as any);
     voice.emit = jest.fn();
     expect(voice).toBeInstanceOf(DisTubeVoice);
-    expect(voice.id).toBe(voiceChannel.guild.id);
+    expect(voice.id).toBe(voiceChannel.guildId);
     expect(voice.channel).toBe(voiceChannel);
     expect(DiscordVoice.joinVoiceChannel).toBeCalledWith(
       expect.objectContaining({
         channelId: voiceChannel.id,
-        guildId: voiceChannel.guild.id,
+        guildId: voiceChannel.guildId,
         adapterCreator: expect.any(Function),
       }),
     );
@@ -113,12 +115,12 @@ describe("Constructor", () => {
 
     (voice.emit as jest.Mock).mockClear();
     const error = {};
-    expect(audioPlayer.on).nthCalledWith(2, "error", expect.any(Function));
+    expect(audioPlayer.on).nthCalledWith(3, "error", expect.any(Function));
     voice.emittedError = true;
-    audioPlayer.on.mock.calls[1][1](error);
+    audioPlayer.on.mock.calls[2][1](error);
     expect(voice.emit).not.toBeCalled();
     voice.emittedError = false;
-    audioPlayer.on.mock.calls[1][1](error);
+    audioPlayer.on.mock.calls[2][1](error);
     expect(voice.emittedError).toBe(true);
     expect(voice.emit).toBeCalledWith("error", error);
 
@@ -180,13 +182,13 @@ describe("Methods", () => {
     test("DisTubeVoice#channel", () => {
       Util.isSupportedVoiceChannel.mockReturnValue(true);
       Util.isSupportedVoiceChannel.mockReturnValueOnce(false);
-      const newVC: any = { guild: { id: 2 } };
+      const newVC: any = { guildId: 2, guild: { id: 2 }, client: { user: { id: 0 } } };
       expect(() => {
-        voice.channel = voiceChannel as any;
-      }).toThrow(new DisTubeError("INVALID_TYPE", "BaseGuildVoiceChannel", voiceChannel, "DisTubeVoice#channel"));
+        voice.channel = newVC;
+      }).toThrow(new DisTubeError("INVALID_TYPE", "BaseGuildVoiceChannel", newVC, "DisTubeVoice#channel"));
       expect(() => {
-        voice.channel = { guild: { id: 1 } } as any;
-      }).toThrow(new DisTubeError("VOICE_CHANGE_GUILD"));
+        voice.channel = { guildId: 1 } as any;
+      }).toThrow(new DisTubeError("VOICE_DIFFERENT_GUILD"));
       expect(() => {
         voice.channel = newVC;
       }).not.toThrow();
@@ -235,7 +237,7 @@ describe("Methods", () => {
       expect(voice.selfDeaf).toBe(connection.joinConfig.selfDeaf);
       expect(voice.selfMute).toBe(connection.joinConfig.selfMute);
       expect(voice.voiceState).toBeUndefined();
-      voiceChannel.guild.me = { voice: {} };
+      voiceChannel.guild.me.voice = {};
       expect(voice.voiceState).toBe(voiceChannel.guild.me.voice);
       expect(voice.voiceState).not.toBeUndefined();
     });
@@ -253,7 +255,7 @@ describe("Methods", () => {
     });
 
     test("Timeout when connection destroyed", async () => {
-      const newVC = { guild: { id: 2 } };
+      const newVC = { guildId: 2, guild: { id: 2 }, client: { user: { id: 0 } } };
       Util.isSupportedVoiceChannel.mockReturnValue(true);
       Util.entersState.mockRejectedValue(undefined);
       connection.state.status = DiscordVoice.VoiceConnectionStatus.Destroyed;

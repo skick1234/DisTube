@@ -237,7 +237,10 @@ export const regularFormats: videoFormat[] = [
   },
 ];
 
-export const liveFormats: Omit<videoFormat, "quality" | "contentLength" | "lastModified">[] = [
+export const liveFormats: (
+  | Omit<videoFormat, "quality" | "contentLength" | "lastModified">
+  | Omit<videoFormat, "contentLength">
+)[] = [
   {
     mimeType: 'video/ts; codecs="H.264, aac"',
     qualityLabel: "1080p",

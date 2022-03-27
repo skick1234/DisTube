@@ -1,4 +1,3 @@
-import ytpl from "@distube/ytpl";
 import ytsr from "@distube/ytsr";
 import { checkIntents, isObject, isURL } from "./util";
 import { TypedEmitter } from "tiny-typed-emitter";
@@ -10,7 +9,6 @@ import {
   HTTPSPlugin,
   Options,
   Playlist,
-  Queue,
   QueueManager,
   SearchResult,
   Song,
@@ -21,8 +19,16 @@ import {
   isSupportedVoiceChannel,
   isTextChannelInstance,
 } from ".";
-import type { Client, GuildMember, GuildTextBasedChannel, Message, TextChannel, VoiceBasedChannel } from "discord.js";
-import type { CustomPlugin, DisTubeEvents, DisTubeOptions, ExtractorPlugin, Filters, GuildIdResolvable } from ".";
+import type { Client, GuildMember, GuildTextBasedChannel, Message, VoiceBasedChannel } from "discord.js";
+import type {
+  CustomPlugin,
+  DisTubeEvents,
+  DisTubeOptions,
+  ExtractorPlugin,
+  Filters,
+  GuildIdResolvable,
+  Queue,
+} from ".";
 
 // Cannot be `import` as it's not under TS root dir
 // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
@@ -175,12 +181,7 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
       skip: false,
       ...options,
     };
-
-    let position = Number(options.position);
-    if (!position) {
-      if (skip && position !== 0) position = 1;
-      else position = 0;
-    }
+    const position = Number(options.position) || (skip ? 1 : 0);
 
     if (message && !isMessageInstance(message)) {
       throw new DisTubeError("INVALID_TYPE", ["Discord.Message", "a falsy value"], message, "options.message");
@@ -199,14 +200,10 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
           }
         }
       }
-      let queue = this.getQueue(voiceChannel);
+      const queue = this.getQueue(voiceChannel);
       const queuing = !!queue && !queue._taskQueue.hasResolveTask;
       if (queuing) await queue?._taskQueue.queuing(true);
       try {
-        if (song instanceof SearchResult && song.type === "playlist") song = song.url;
-        if (typeof song === "string" && ytpl.validateID(song)) {
-          song = await this.handler.resolvePlaylist(song, { member, metadata });
-        }
         if (typeof song === "string" && !isURL(song)) {
           if (!message) {
             song = (await this.search(song, { limit: 1 }))[0];
@@ -216,24 +213,11 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
             song = result;
           }
         }
-        song = await this.handler.resolveSong(song, { member, metadata });
+        song = await this.handler.resolve(song, { member, metadata });
         if (song instanceof Playlist) {
-          await this.handler.handlePlaylist(voiceChannel, song, { textChannel, skip, position });
-        } else if (!this.options.nsfw && song.age_restricted && !(textChannel as TextChannel)?.nsfw) {
-          throw new DisTubeError("NON_NSFW");
+          await this.handler.playPlaylist(voiceChannel, song, { textChannel, skip, position });
         } else {
-          queue = this.getQueue(voiceChannel);
-          if (queue) {
-            queue.addToQueue(song, position);
-            if (skip) queue.skip();
-            else this.emit("addSong", queue, song);
-          } else {
-            const newQueue = await this.queues.create(voiceChannel, song, textChannel);
-            if (newQueue instanceof Queue) {
-              if (this.options.emitAddSongWhenCreatingQueue) this.emit("addSong", newQueue, song);
-              this.emit("playSong", newQueue, song);
-            }
-          }
+          await this.handler.playSong(voiceChannel, song, { textChannel, skip, position });
         }
       } finally {
         if (queuing) queue?._taskQueue.resolve();
@@ -290,13 +274,13 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
     let resolvedSongs: Song[];
     if (parallel) {
       const promises = filteredSongs.map((song: string | Song | SearchResult) =>
-        this.handler.resolveSong(song, { member, metadata }).catch(() => undefined),
+        this.handler.resolve(song, { member, metadata }).catch(() => undefined),
       );
       resolvedSongs = (await Promise.all(promises)).filter((s: any): s is Song => !!s);
     } else {
       const resolved = [];
       for (const song of filteredSongs) {
-        resolved.push(await this.handler.resolveSong(song, { member, metadata }).catch(() => undefined));
+        resolved.push(await this.handler.resolve(song, { member, metadata }).catch(() => undefined));
       }
       resolvedSongs = resolved.filter((s: any): s is Song => !!s);
     }

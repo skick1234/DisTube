@@ -1,22 +1,34 @@
 {
   "name": "distube",
   "version": "4.0.0-dev",
-  "description": "A Discord.js module to simplify your music commands and play songs with audio filters on Discord without any API key. Support YouTube, SoundCloud, Bandcamp, Facebook, and 700+ more sites",
-  "main": "dist/index.js",
-  "typings": "dist/index.d.ts",
+  "description": "A Discord.js module to simplify your music commands and play songs with audio filters on Discord without any API key.",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    "import": "./dist/index.mjs",
+    "require": "./dist/index.js"
+  },
+  "directories": {
+    "lib": "src",
+    "test": "tests"
+  },
+  "files": [
+    "dist"
+  ],
   "scripts": {
-    "test": "jest --config .jestrc.json",
-    "docs": "docgen -s src/*.ts src/**/*.ts -o docs/docs.json -c pages/index.yml -g -j .jsconfig.json",
-    "lint": "eslint .",
+    "test": "jest",
+    "docs": "docgen -s src/*.ts src/**/*.ts -o docs.json -c pages/index.yml -g -j jsdoc.config.json",
+    "lint": "prettier --check . && eslint .",
     "lint:fix": "eslint . --fix",
     "prettier": "prettier --write **/*.{ts,json,yml,yaml,md}",
-    "build": "tsc",
-    "build:check": "tsc --noEmit --incremental false",
-    "publish:dev": "npm publish --tag dev",
-    "ncu": "ncu -u --dep dev,prod",
+    "build": "tsup",
+    "build:check": "tsc --noEmit",
+    "update": "ncu -u --dep dev,prod && yarn up '**' -R",
     "postinstall": "husky install",
-    "prepublishOnly": "pinst -d",
-    "postpublish": "pinst -e"
+    "prepublishOnly": "yarn lint && yarn test",
+    "prepack": "yarn build && pinst --disable",
+    "postpack": "pinst --enable"
   },
   "repository": {
     "type": "git",
@@ -40,42 +52,55 @@
   "bugs": {
     "url": "https://github.com/skick1234/DisTube/issues"
   },
-  "funding": {
-    "url": "https://patreon.com/DisTube"
-  },
+  "funding": [
+    {
+      "type": "individual",
+      "url": "https://paypal.me/Skickkk"
+    },
+    {
+      "type": "patreon",
+      "url": "https://patreon.com/DisTube"
+    }
+  ],
   "homepage": "https://distube.js.org/",
   "dependencies": {
-    "@distube/ytdl-core": "^4.9.4",
+    "@distube/ytdl-core": "^4.11.1",
     "@distube/ytpl": "^1.1.1",
     "@distube/ytsr": "^1.1.5",
     "prism-media": "https://codeload.github.com/distubejs/prism-media/tar.gz/main#workaround.tar.gz",
-    "tiny-typed-emitter": "^2.1.0"
+    "tiny-typed-emitter": "^2.1.0",
+    "tslib": "^2.3.1"
   },
   "devDependencies": {
-    "@babel/core": "^7.17.0",
+    "@babel/core": "^7.17.8",
     "@babel/plugin-proposal-class-properties": "^7.16.7",
-    "@babel/plugin-proposal-object-rest-spread": "^7.16.7",
+    "@babel/plugin-proposal-object-rest-spread": "^7.17.3",
     "@babel/preset-env": "^7.16.11",
     "@babel/preset-typescript": "^7.16.7",
-    "@commitlint/cli": "^16.1.0",
-    "@commitlint/config-conventional": "^16.0.0",
-    "@discordjs/voice": "^0.8.0",
-    "@distube/docgen": "github:distubejs/docgen",
-    "@types/jest": "^27.4.0",
-    "@types/node": "^17.0.15",
-    "@typescript-eslint/eslint-plugin": "^5.10.2",
-    "babel-jest": "^27.5.0",
-    "discord.js": "^14.0.0-dev.1644006540.cd5c7fa",
-    "eslint": "^8.8.0",
-    "eslint-config-distube": "^1.6.3",
+    "@commitlint/cli": "^16.2.3",
+    "@commitlint/config-conventional": "^16.2.1",
+    "@discordjs/voice": "dev",
+    "@distube/docgen": "distubejs/docgen",
+    "@types/jest": "^27.4.1",
+    "@types/node": "^17.0.23",
+    "@typescript-eslint/eslint-plugin": "^5.16.0",
+    "@typescript-eslint/parser": "^5.16.0",
+    "babel-jest": "^27.5.1",
+    "discord.js": "dev",
+    "eslint": "^8.12.0",
+    "eslint-config-distube": "^1.6.4",
+    "eslint-config-prettier": "^8.5.0",
+    "eslint-plugin-deprecation": "^1.3.2",
+    "eslint-plugin-jsdoc": "^38.0.7",
     "husky": "^7.0.4",
-    "jest": "^27.5.0",
+    "jest": "^27.5.1",
     "jsdoc-babel": "^0.5.0",
-    "nano-staged": "^0.5.0",
-    "npm-check-updates": "^12.2.1",
-    "pinst": "^2.1.6",
-    "prettier": "^2.5.1",
-    "typescript": "^4.5.5"
+    "nano-staged": "^0.6.0",
+    "npm-check-updates": "^12.5.4",
+    "pinst": "^3.0.0",
+    "prettier": "^2.6.1",
+    "tsup": "^5.12.1",
+    "typescript": "^4.6.3"
   },
   "peerDependencies": {
     "@discordjs/opus": "*",
@@ -97,6 +122,7 @@
     ]
   },
   "engines": {
-    "node": ">=16.6.0"
-  }
+    "node": ">=16.9.0"
+  },
+  "packageManager": "yarn@3.2.0"
 }

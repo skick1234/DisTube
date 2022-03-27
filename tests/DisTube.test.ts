@@ -11,18 +11,18 @@ import {
   SearchResult,
   Song,
   defaultFilters,
-} from "..";
+} from "@";
 import { Client } from "discord.js";
 
-import * as _Util from "../util";
+import * as _Util from "@/util";
 
-jest.mock("../util");
+jest.mock("@/util");
 
 const Util = _Util as unknown as jest.Mocked<typeof _Util>;
 
 const member: any = {};
-const songResult = new SearchResult(videoResults.items[0] as any);
-const plResult = new SearchResult(playlistResults.items[0] as any);
+const songResult = new SearchResult(videoResults.items[0]);
+const plResult = new SearchResult(playlistResults.items[0]);
 const metadata = { test: "sth" };
 const song = new Song({ id: "xxxxxxxxxxx", url: "https://www.youtube.com/watch?v=xxxxxxxxxxx" }, { member, metadata });
 const anotherSong = new Song(
@@ -44,13 +44,13 @@ beforeAll(() => {
 describe("Constructor", () => {
   test("#1", () => {
     Util.isClientInstance.mockReturnValueOnce(false);
-    expect(() => new DisTube({} as any)).toThrow(new DisTubeError("INVALID_TYPE", "Discord.Client", {}, "client"));
+    expect(() => new DisTube({})).toThrow(new DisTubeError("INVALID_TYPE", "Discord.Client", {}, "client"));
     const c = new Client({ intents: [] });
     Util.isClientInstance.mockReturnValueOnce(true);
     Util.checkIntents.mockImplementationOnce(() => {
-      throw new DisTubeError("MISSING_INTENTS", "GUILD_VOICE_STATES");
+      throw new DisTubeError("MISSING_INTENTS", "GuildVoiceStates");
     });
-    expect(() => new DisTube(c)).toThrow(new DisTubeError("MISSING_INTENTS", "GUILD_VOICE_STATES"));
+    expect(() => new DisTube(c)).toThrow(new DisTubeError("MISSING_INTENTS", "GuildVoiceStates"));
   });
 
   test("#2", () => {

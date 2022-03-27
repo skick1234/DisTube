@@ -12,20 +12,35 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Install Node.js
-        uses: actions/setup-node@v2
+        uses: actions/setup-node@v3
         with:
           node-version: 16
+          cache: "yarn"
+          cache-dependency-path: yarn.lock
 
       - name: Install dependencies
-        run: npm install
+        run: yarn --immutable
 
-      - name: Create docs folder
-        run: mkdir docs
+      - name: Checkout docs branch
+        uses: actions/checkout@v3
+        with:
+          ref: "docs"
+          path: "docs"
 
       - name: Generate documentation
-        uses: discordjs/action-docs@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: yarn docs
+
+      - name: Move generated docs file
+        run: mv docs.json docs/${{ github.ref_name }}.json
+
+      - name: Commit and push
+        run: |
+          cd docs
+          git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add .
+          git commit -m "Docs build for ${{ github.ref_type }} ${{ github.ref_name }}: ${{ github.sha }}"
+          git push

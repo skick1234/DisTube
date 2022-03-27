@@ -3,7 +3,7 @@ import { ExtractorPlugin, resolveHttpSong, validateAudioURL } from "..";
 import type { GuildMember } from "discord.js";
 
 export class HTTPPlugin extends ExtractorPlugin {
-  async validate(url: string) {
+  override async validate(url: string) {
     return validateAudioURL(http, "http:", url);
   }
 

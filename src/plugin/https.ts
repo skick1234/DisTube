@@ -45,7 +45,7 @@ export const resolveHttpSong = async (
 };
 
 export class HTTPSPlugin extends ExtractorPlugin {
-  async validate(url: string) {
+  override async validate(url: string) {
     return validateAudioURL(https, "https:", url);
   }
 

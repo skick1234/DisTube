@@ -49,7 +49,7 @@ export class SearchResult {
     if (this.type === "video") {
       info = info as Video;
       /**
-       * [Video only] Video or playlist views count
+       * [Video only] Video views count
        * @type {number}
        */
       this.views = info.views;

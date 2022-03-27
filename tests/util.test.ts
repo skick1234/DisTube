@@ -16,9 +16,9 @@ import {
   parseNumber,
   resolveGuildId,
   toSecond,
-} from "..";
+} from "@";
 
-jest.mock("../core/voice/DisTubeVoice");
+jest.mock("@/core/voice/DisTubeVoice");
 
 const Voice = _Voice as unknown as jest.Mocked<typeof _Voice>;
 

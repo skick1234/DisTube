@@ -23,7 +23,7 @@ const ERROR_MESSAGES = {
   VOICE_CONNECT_FAILED: (s: number) => `Cannot connect to the voice channel after ${s} seconds`,
   VOICE_MISSING_PERMS: "You do not have permission to join this voice channel",
   VOICE_RECONNECT_FAILED: "Cannot reconnect to the voice channel",
-  VOICE_CHANGE_GUILD: "Cannot join a channel in a different guild",
+  VOICE_DIFFERENT_GUILD: "Cannot join a channel in a different guild",
 
   NO_QUEUE: "There is no playing queue in this guild",
   QUEUE_EXIST: "This guild has a Queue already",
@@ -49,30 +49,29 @@ const ERROR_MESSAGES = {
   EMPTY_PLAYLIST: "There is no valid video in the playlist",
 };
 
-type ErrorMessages = typeof ERROR_MESSAGES;
-type ErrorCodes = keyof ErrorMessages;
-type ErrorCode = { [K in ErrorCodes]-?: ErrorMessages[K] extends string ? K : never }[ErrorCodes];
-type ErrorCodeTemplate = Exclude<keyof typeof ERROR_MESSAGES, ErrorCode>;
+type ErrorMessage = typeof ERROR_MESSAGES;
+type ErrorCode = keyof ErrorMessage;
+type StaticErrorCode = { [K in ErrorCode]-?: ErrorMessage[K] extends string ? K : never }[ErrorCode];
+type TemplateErrorCode = Exclude<keyof typeof ERROR_MESSAGES, StaticErrorCode>;
 
-const errMsg = (msg: string | ((...x: any) => string), ...args: any) => (typeof msg === "string" ? msg : msg(...args));
-
-const haveCode = (code: string): code is ErrorCodes => Object.keys(ERROR_MESSAGES).includes(code);
-
+const haveCode = (code: string): code is ErrorCode => Object.keys(ERROR_MESSAGES).includes(code);
+const parseMessage = (m: string | ((...x: any) => string), ...args: any) => (typeof m === "string" ? m : m(...args));
+const getErrorMessage = (code: string, ...args: any): string =>
+  haveCode(code) ? parseMessage(ERROR_MESSAGES[code], ...args) : args[0];
 export class DisTubeError<T extends string> extends Error {
   errorCode: string;
-  constructor(code: ErrorCode);
-  constructor(code: T extends ErrorCodeTemplate ? T : never, ...args: Parameters<ErrorMessages[typeof code]>);
-  constructor(code: ErrorCodeTemplate, _: never);
-  constructor(code: T extends ErrorCodes ? "This is built-in error code" : T, message: string);
+  constructor(code: StaticErrorCode);
+  constructor(code: T extends TemplateErrorCode ? T : never, ...args: Parameters<ErrorMessage[typeof code]>);
+  constructor(code: TemplateErrorCode, _: never);
+  constructor(code: T extends ErrorCode ? "This is built-in error code" : T, message: string);
   constructor(code: string, ...args: any) {
-    if (haveCode(code)) super(errMsg(ERROR_MESSAGES[code], ...args));
-    else super(...args);
+    super(getErrorMessage(code, ...args));
 
     this.errorCode = code;
     if (Error.captureStackTrace) Error.captureStackTrace(this, DisTubeError);
   }
 
-  get name() {
+  override get name() {
     return `DisTubeError [${this.errorCode}]`;
   }
 

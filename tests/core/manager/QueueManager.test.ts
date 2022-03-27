@@ -1,15 +1,23 @@
-import { DisTubeError, QueueManager, Song, Queue as _Queue, defaultFilters, defaultOptions } from "../../..";
+import {
+  DisTubeError,
+  QueueManager,
+  Song,
+  DisTubeVoiceManager as _DTVM,
+  Queue as _Queue,
+  defaultFilters,
+  defaultOptions,
+} from "@";
 
-import { DisTubeVoiceManager as _DTVM } from "../../..";
-import * as _Stream from "../../DisTubeStream";
+import * as _Stream from "@/core/DisTubeStream";
 
-jest.mock("../../voice/DisTubeVoiceManager");
-jest.mock("../../../struct/Queue");
-jest.mock("../../DisTubeStream");
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+jest.mock("@/struct/Queue", () => require("@/mock/Queue"));
+jest.mock("@/core/DisTubeStream");
+jest.mock("@/core/voice/DisTubeVoiceManager");
 
-const DisTubeVoiceManager = _DTVM as unknown as jest.Mocked<typeof _DTVM>;
 const Queue = _Queue as unknown as jest.Mocked<typeof _Queue>;
 const Stream = _Stream as unknown as jest.Mocked<typeof _Stream>;
+const DisTubeVoiceManager = _DTVM as unknown as jest.Mocked<typeof _DTVM>;
 
 function createFakeDisTube() {
   return {
@@ -25,9 +33,9 @@ beforeEach(() => {
   jest.clearAllMocks();
 });
 
-const guild = { id: "123456789123456789", fetchAuditLogs: () => undefined };
-const channel: any = { guild };
-const textChannel: any = { guild };
+const guild = { id: "123456789123456789", ownerId: "987654321234567890" };
+const channel: any = { guildId: guild.id, guild };
+const textChannel: any = { guildId: guild.id, guild };
 const song = 0 as any as Song;
 const songs = [1, 2, 3, 4, 5] as any as Song[];
 const distube = createFakeDisTube();

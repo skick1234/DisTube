@@ -109,7 +109,7 @@ export class Queue extends DisTubeBase {
      * @type {boolean}
      */
     this.autoplay = false;
-    this.#filters = new FilterManager(distube, this);
+    this.#filters = new FilterManager(this);
     /**
      * What time in the song to begin (in seconds).
      * @type {number}
@@ -390,7 +390,7 @@ export class Queue extends DisTubeBase {
     if (!this.songs?.[0]) throw new DisTubeError("NO_PLAYING");
     const related = this.songs[0].related.find(v => !this.previousSongs.map(s => s.id).includes(v.id));
     if (!related || !(related instanceof Song)) throw new DisTubeError("NO_RELATED");
-    const song = await this.handler.resolveSong(related, { member: this.clientMember, metadata: related.metadata });
+    const song = await this.handler.resolve(related, { member: this.clientMember, metadata: related.metadata });
     if (!(song instanceof Song)) throw new DisTubeError("CANNOT_PLAY_RELATED");
     this.addToQueue(song);
     return song;
