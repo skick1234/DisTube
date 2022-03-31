@@ -73,7 +73,8 @@ export class DisTubeVoice extends TypedEmitter<DisTubeVoiceEvents> {
       })
       .on(VoiceConnectionStatus.Destroyed, () => {
         this.leave(new DisTubeError("VOICE_RECONNECT_FAILED"));
-      });
+      })
+      .on("error", () => undefined);
     this.connection.subscribe(this.audioPlayer);
     /**
      * Get or set the volume percentage

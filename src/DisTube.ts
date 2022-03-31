@@ -192,35 +192,32 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
     if (member && !isMemberInstance(member)) {
       throw new DisTubeError("INVALID_TYPE", "Discord.GuildMember", member, "options.member");
     }
+    const queue = this.getQueue(voiceChannel);
+    const queuing = !!queue && !queue._taskQueue.hasResolveTask;
+    if (queuing) await queue?._taskQueue.queuing(true);
     try {
       if (typeof song === "string") {
         for (const plugin of this.customPlugins) {
           if (await plugin.validate(song)) {
-            return plugin.play(voiceChannel, song, options);
+            await plugin.play(voiceChannel, song, options);
+            return;
           }
         }
       }
-      const queue = this.getQueue(voiceChannel);
-      const queuing = !!queue && !queue._taskQueue.hasResolveTask;
-      if (queuing) await queue?._taskQueue.queuing(true);
-      try {
-        if (typeof song === "string" && !isURL(song)) {
-          if (!message) {
-            song = (await this.search(song, { limit: 1 }))[0];
-          } else {
-            const result = await this.handler.searchSong(message, song);
-            if (!result) return;
-            song = result;
-          }
-        }
-        song = await this.handler.resolve(song, { member, metadata });
-        if (song instanceof Playlist) {
-          await this.handler.playPlaylist(voiceChannel, song, { textChannel, skip, position });
+      if (typeof song === "string" && !isURL(song)) {
+        if (!message) {
+          song = (await this.search(song, { limit: 1 }))[0];
         } else {
-          await this.handler.playSong(voiceChannel, song, { textChannel, skip, position });
+          const result = await this.handler.searchSong(message, song);
+          if (!result) return;
+          song = result;
         }
-      } finally {
-        if (queuing) queue?._taskQueue.resolve();
+      }
+      song = await this.handler.resolve(song, { member, metadata });
+      if (song instanceof Playlist) {
+        await this.handler.playPlaylist(voiceChannel, song, { textChannel, skip, position });
+      } else {
+        await this.handler.playSong(voiceChannel, song, { textChannel, skip, position });
       }
     } catch (e: any) {
       if (!(e instanceof DisTubeError)) {
@@ -230,6 +227,8 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
         } catch {}
       }
       this.emitError(e, textChannel);
+    } finally {
+      if (queuing) queue?._taskQueue.resolve();
     }
   }
 
