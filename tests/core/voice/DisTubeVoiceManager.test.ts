@@ -9,7 +9,9 @@ const DisTubeVoice = _DTV as unknown as jest.Mocked<typeof _DTV>;
 const DiscordVoice = _DiscordVoice as unknown as jest.Mocked<typeof _DiscordVoice>;
 
 function createFakeDisTube() {
-  return {};
+  return {
+    client: { user: { id: "123" } },
+  };
 }
 
 const distube = createFakeDisTube();
@@ -55,10 +57,10 @@ test("DisTubeVoiceManager#leave()", () => {
   };
   DiscordVoice.getVoiceConnection.mockReturnValue(fConnection as any);
   manager.leave(channel2);
-  expect(DiscordVoice.getVoiceConnection).nthCalledWith(1, channel2.guildId);
+  expect(DiscordVoice.getVoiceConnection).nthCalledWith(1, channel2.guildId, distube.client.user.id);
   expect(fConnection.destroy).not.toBeCalled();
   fConnection.state.status = DiscordVoice.VoiceConnectionStatus.Ready;
   manager.leave(channel2);
-  expect(DiscordVoice.getVoiceConnection).nthCalledWith(1, channel2.guildId);
+  expect(DiscordVoice.getVoiceConnection).nthCalledWith(1, channel2.guildId, distube.client.user.id);
   expect(fConnection.destroy).toBeCalledTimes(1);
 });

@@ -55,7 +55,8 @@ export class DisTubeVoiceManager extends GuildIdManager<DisTubeVoice> {
     if (voice) {
       voice.leave();
     } else {
-      const connection = getVoiceConnection(resolveGuildId(guild));
+      const connection =
+        getVoiceConnection(resolveGuildId(guild), this.client.user?.id) ?? getVoiceConnection(resolveGuildId(guild));
       if (connection && connection.state.status !== VoiceConnectionStatus.Destroyed) {
         connection.destroy();
       }

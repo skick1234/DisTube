@@ -90,6 +90,7 @@ export class DisTubeVoice extends TypedEmitter<DisTubeVoiceEvents> {
       throw new DisTubeError("INVALID_TYPE", "BaseGuildVoiceChannel", channel, "DisTubeVoice#channel");
     }
     if (channel.guildId !== this.id) throw new DisTubeError("VOICE_DIFFERENT_GUILD");
+    if (channel.id === this.#channel?.id) return;
     if (!channel.joinable) {
       if (channel.full) throw new DisTubeError("VOICE_FULL");
       else throw new DisTubeError("VOICE_MISSING_PERMS");

@@ -77,10 +77,10 @@ describe("Constructor", () => {
     }).toThrow(new DisTubeError("INVALID_TYPE", "BaseGuildVoiceChannel", {}, "DisTubeVoice#channel"));
     Util.isSupportedVoiceChannel.mockReturnValue(true);
     expect(() => {
-      new DisTubeVoice(voiceManager as any, { type: "voice", joinable: false, full: true } as any);
+      new DisTubeVoice(voiceManager as any, { type: "voice", joinable: false, full: true, id: "1" } as any);
     }).toThrow(new DisTubeError("VOICE_FULL"));
     expect(() => {
-      new DisTubeVoice(voiceManager as any, { type: "voice", joinable: false, full: false } as any);
+      new DisTubeVoice(voiceManager as any, { type: "voice", joinable: false, full: false, id: "1" } as any);
     }).toThrow(new DisTubeError("VOICE_MISSING_PERMS"));
   });
 
