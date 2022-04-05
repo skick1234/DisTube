@@ -1,10 +1,10 @@
-import { DisTubeError, formatDuration, toSecond } from "..";
+import { DisTubeError, SearchResultType, formatDuration, toSecond } from "..";
 import type { Playlist, Video } from "@distube/ytsr";
 
 /** Class representing a search result. */
 export class SearchResult {
   source: "youtube";
-  type: "video" | "playlist";
+  type: SearchResultType;
   id: string;
   name: string;
   url: string;
@@ -28,9 +28,9 @@ export class SearchResult {
     this.source = "youtube";
     /**
      * Type of SearchResult (`video` or `playlist`)
-     * @type {string}
+     * @type {SearchResultType}
      */
-    this.type = info.type;
+    this.type = info.type === "video" ? SearchResultType.VIDEO : SearchResultType.PLAYLIST;
     /**
      * YouTube video or playlist id
      * @type {string}
@@ -46,7 +46,7 @@ export class SearchResult {
      * @type {string}
      */
     this.url = info.url;
-    if (this.type === "video") {
+    if (this.type === SearchResultType.VIDEO) {
       info = info as Video;
       /**
        * [Video only] Video views count
