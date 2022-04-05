@@ -125,6 +125,8 @@ export const defaultFilters: Filters = {
  * and disabling safe search in non-NSFW channel.
  * @prop {boolean} [emitAddListWhenCreatingQueue=true] Whether or not emitting `addList` event when creating a new Queue
  * @prop {boolean} [emitAddSongWhenCreatingQueue=true] Whether or not emitting `addSong` event when creating a new Queue
+ * @prop {boolean} [joinNewVoiceChannel=true] Whether or not joining the new voice channel
+ * when using {@link DisTube#play} method
  */
 export const defaultOptions = {
   plugins: [],
@@ -140,6 +142,7 @@ export const defaultOptions = {
   nsfw: false,
   emitAddSongWhenCreatingQueue: true,
   emitAddListWhenCreatingQueue: true,
+  joinNewVoiceChannel: true,
 };
 
 /**

@@ -19,6 +19,7 @@ export class Options {
   nsfw: boolean;
   emitAddSongWhenCreatingQueue: boolean;
   emitAddListWhenCreatingQueue: boolean;
+  joinNewVoiceChannel: boolean;
   constructor(options: DisTubeOptions) {
     if (typeof options !== "object" || Array.isArray(options)) {
       throw new DisTubeError("INVALID_TYPE", "object", options, "DisTubeOptions");
@@ -40,6 +41,7 @@ export class Options {
     this.nsfw = opts.nsfw;
     this.emitAddSongWhenCreatingQueue = opts.emitAddSongWhenCreatingQueue;
     this.emitAddListWhenCreatingQueue = opts.emitAddListWhenCreatingQueue;
+    this.joinNewVoiceChannel = opts.joinNewVoiceChannel;
     checkInvalidKey(opts, this, "DisTubeOptions");
     this.#validateOptions();
   }
@@ -59,6 +61,14 @@ export class Options {
     }
     if (typeof options.savePreviousSongs !== "boolean") {
       throw new DisTubeError("INVALID_TYPE", "boolean", options.savePreviousSongs, "DisTubeOptions.savePreviousSongs");
+    }
+    if (typeof options.joinNewVoiceChannel !== "boolean") {
+      throw new DisTubeError(
+        "INVALID_TYPE",
+        "boolean",
+        options.joinNewVoiceChannel,
+        "DisTubeOptions.joinNewVoiceChannel",
+      );
     }
     if (typeof options.youtubeCookie !== "undefined" && typeof options.youtubeCookie !== "string") {
       throw new DisTubeError("INVALID_TYPE", "string", options.youtubeCookie, "DisTubeOptions.youtubeCookie");

@@ -195,6 +195,7 @@ async function waitEvent(target: EventEmitter, status: string, maxTime: number) 
         target.off(status, resolve);
         target.off("error", reject);
       };
+      if ((target as VoiceConnection)?.state?.status === status) resolve(0);
     });
     return target;
   } finally {
@@ -208,7 +209,7 @@ export async function entersState<T extends VoiceConnection | AudioPlayer>(
   maxTime: number,
 ) {
   if (target.state.status === status) return target;
-  return waitEvent(target, status, maxTime) as Promise<T>;
+  return waitEvent(target, status, maxTime);
 }
 
 export function isObject(obj: any): obj is object {

@@ -21,7 +21,7 @@ const ERROR_MESSAGES = {
   NOT_IN_VOICE: "User is not in any voice channel",
   VOICE_FULL: "The voice channel is full",
   VOICE_CONNECT_FAILED: (s: number) => `Cannot connect to the voice channel after ${s} seconds`,
-  VOICE_MISSING_PERMS: "You do not have permission to join this voice channel",
+  VOICE_MISSING_PERMS: "I do not have permission to join this voice channel",
   VOICE_RECONNECT_FAILED: "Cannot reconnect to the voice channel",
   VOICE_DIFFERENT_GUILD: "Cannot join a channel in a different guild",
 

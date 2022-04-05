@@ -17,6 +17,7 @@ test("Default DisTubeOptions", () => {
     ytdlOptions: {},
     emitAddListWhenCreatingQueue: true,
     emitAddSongWhenCreatingQueue: true,
+    joinNewVoiceChannel: true,
   });
 });
 

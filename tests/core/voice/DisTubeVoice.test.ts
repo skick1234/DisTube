@@ -74,7 +74,7 @@ describe("Constructor", () => {
     Util.isSupportedVoiceChannel.mockReturnValueOnce(false);
     expect(() => {
       new DisTubeVoice(voiceManager as any, {} as any);
-    }).toThrow(new DisTubeError("INVALID_TYPE", "BaseGuildVoiceChannel", {}, "channel"));
+    }).toThrow(new DisTubeError("INVALID_TYPE", "BaseGuildVoiceChannel", {}, "DisTubeVoice#channel"));
     Util.isSupportedVoiceChannel.mockReturnValue(true);
     expect(() => {
       new DisTubeVoice(voiceManager as any, { type: "voice", joinable: false, full: true } as any);
@@ -182,7 +182,7 @@ describe("Methods", () => {
     test("DisTubeVoice#channel", () => {
       Util.isSupportedVoiceChannel.mockReturnValue(true);
       Util.isSupportedVoiceChannel.mockReturnValueOnce(false);
-      const newVC: any = { guildId: 2, guild: { id: 2 }, client: { user: { id: 0 } } };
+      const newVC: any = { guildId: 2, guild: { id: 2 }, client: { user: { id: 0 } }, joinable: true };
       expect(() => {
         voice.channel = newVC;
       }).toThrow(new DisTubeError("INVALID_TYPE", "BaseGuildVoiceChannel", newVC, "DisTubeVoice#channel"));
@@ -255,7 +255,7 @@ describe("Methods", () => {
     });
 
     test("Timeout when connection destroyed", async () => {
-      const newVC = { guildId: 2, guild: { id: 2 }, client: { user: { id: 0 } } };
+      const newVC = { guildId: 2, guild: { id: 2 }, client: { user: { id: 0 } }, joinable: true };
       Util.isSupportedVoiceChannel.mockReturnValue(true);
       Util.entersState.mockRejectedValue(undefined);
       connection.state.status = DiscordVoice.VoiceConnectionStatus.Destroyed;

@@ -69,7 +69,7 @@ export class Song<T = unknown> {
      */
     this.source = ((info as OtherSongInfo)?.src || source).toLowerCase();
     /**
-     * Optional metadata that can be used to identify the song.
+     * Optional metadata that can be used to identify the song. This is attached by the {@link DisTube#play} method.
      * @type {T}
      */
     this.metadata = metadata as T;

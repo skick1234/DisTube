@@ -13,8 +13,8 @@ import {
   isURL,
   isVoiceChannelEmpty,
 } from "..";
-import type { DisTube, OtherSongInfo } from "..";
-import type { GuildMember, GuildTextBasedChannel, Message, TextChannel, VoiceBasedChannel } from "discord.js";
+import type { DisTube, OtherSongInfo, PlayHandlerOptions, ResolveOptions, ResolvePlaylistOptions } from "..";
+import type { Message, TextChannel, VoiceBasedChannel } from "discord.js";
 
 /**
  * DisTube's Handler
@@ -79,67 +79,27 @@ export class DisTubeHandler extends DisTubeBase {
     return ytdl.getInfo(url, this.ytdlOptions);
   }
 
+  resolve<T = unknown>(song: Song<T>, options?: Omit<ResolveOptions, "metadata">): Promise<Song<T>>;
+  resolve<T = unknown>(song: Playlist<T>, options?: Omit<ResolveOptions, "metadata">): Promise<Playlist<T>>;
+  resolve<T = unknown>(song: string | SearchResult, options?: ResolveOptions<T>): Promise<Song<T> | Playlist<T>>;
   resolve<T = unknown>(
-    song: Song<T>,
-    options: {
-      member?: GuildMember;
-    },
-  ): Promise<Song<T>>;
-  resolve<T = unknown>(
-    song: Playlist<T>,
-    options: {
-      member?: GuildMember;
-    },
-  ): Promise<Playlist<T>>;
-  resolve<T = undefined>(
-    song: string | SearchResult,
-    options?: {
-      member?: GuildMember;
-      metadata?: T;
-    },
-  ): Promise<Song<T> | Playlist<T>>;
-  resolve<T = undefined>(
     song: ytdl.videoInfo | OtherSongInfo | ytdl.relatedVideo,
-    options?: {
-      member?: GuildMember;
-      metadata?: T;
-    },
+    options?: ResolveOptions<T>,
   ): Promise<Song<T>>;
-  resolve<T = unknown>(
-    song: string | ytdl.videoInfo | Song | SearchResult | OtherSongInfo | ytdl.relatedVideo,
-    options: {
-      member?: GuildMember;
-      metadata: T;
-    },
-  ): Promise<Song<T>>;
-  resolve<T = unknown>(
-    song: string | Playlist | SearchResult,
-    options: {
-      member?: GuildMember;
-      metadata: T;
-    },
-  ): Promise<Playlist<T>>;
+  resolve<T = unknown>(song: Playlist, options: ResolveOptions<T>): Promise<Playlist<T>>;
   resolve(
     song: string | ytdl.videoInfo | Song | Playlist | SearchResult | OtherSongInfo | ytdl.relatedVideo,
-    options?: {
-      member?: GuildMember;
-      metadata?: any;
-    },
+    options?: ResolveOptions,
   ): Promise<Song | Playlist>;
   /**
    * Resolve a url or a supported object to a {@link Song} or {@link Playlist}
    * @param {string|Song|SearchResult|Playlist} song URL | {@link Song}| {@link SearchResult} | {@link Playlist}
-   * @param {Object} [options] Optional options
-   * @param {Discord.GuildMember} [options.member] Requested user
-   * @param {*} [options.metadata] Metadata
+   * @param {ResolveOptions} [options] Optional options
    * @returns {Promise<Song|Playlist|null>} Resolved
    */
   async resolve(
     song: string | ytdl.videoInfo | Song | Playlist | SearchResult | OtherSongInfo | ytdl.relatedVideo,
-    options: {
-      member?: GuildMember;
-      metadata?: any;
-    } = {},
+    options: ResolveOptions = {},
   ): Promise<Song | Playlist> {
     if (song instanceof Song || song instanceof Playlist) {
       if ("metadata" in options) song.metadata = options.metadata;
@@ -151,7 +111,7 @@ export class DisTubeHandler extends DisTubeBase {
       return this.resolvePlaylist(song.url, options);
     }
     if (isObject(song)) return new Song(song, options);
-    if (ytpl.validateID(song)) return this.handler.resolvePlaylist(song, options);
+    if (ytpl.validateID(song)) return this.resolvePlaylist(song, options);
     if (ytdl.validateURL(song)) return new Song(await this.getYouTubeInfo(song), options);
     if (isURL(song)) {
       for (const plugin of this.distube.extractorPlugins) {
@@ -164,36 +124,20 @@ export class DisTubeHandler extends DisTubeBase {
 
   resolvePlaylist<T = unknown>(
     playlist: Playlist<T> | Song<T>[] | string,
-    options?: {
-      member?: GuildMember;
-      source?: string;
-    },
+    options?: Omit<ResolvePlaylistOptions, "metadata">,
   ): Promise<Playlist<T>>;
   resolvePlaylist<T = undefined>(
     playlist: Playlist | Song[] | string,
-    options: {
-      member?: GuildMember;
-      source?: string;
-      metadata?: T;
-    },
+    options: ResolvePlaylistOptions<T>,
   ): Promise<Playlist<T>>;
+  resolvePlaylist(playlist: Playlist | Song[] | string, options?: ResolvePlaylistOptions): Promise<Playlist>;
   /**
    * Resolve Song[] or YouTube playlist url to a Playlist
    * @param {Playlist|Song[]|string} playlist Resolvable playlist
-   * @param {Object} options Optional options
-   * @param {Discord.GuildMember} [options.member] Requested user
-   * @param {string} [options.source="youtube"] Playlist source
-   * @param {*} [options.metadata] Metadata
+   * @param {ResolvePlaylistOptions} options Optional options
    * @returns {Promise<Playlist>}
    */
-  async resolvePlaylist(
-    playlist: Playlist | Song[] | string,
-    options: {
-      member?: GuildMember;
-      source?: string;
-      metadata?: any;
-    } = {},
-  ): Promise<Playlist> {
+  async resolvePlaylist(playlist: Playlist | Song[] | string, options: ResolvePlaylistOptions = {}): Promise<Playlist> {
     const { member, source, metadata } = { source: "youtube", ...options };
     if (playlist instanceof Playlist) {
       if ("metadata" in options) playlist.metadata = metadata;
@@ -314,20 +258,12 @@ export class DisTubeHandler extends DisTubeBase {
    * @returns {Promise<void>}
    * @param {Discord.BaseGuildVoiceChannel} voiceChannel A voice channel
    * @param {Playlist|string} playlist A YouTube playlist url | a Playlist
-   * @param {Object} [options] Optional options
-   * @param {Discord.BaseGuildTextChannel} [options.textChannel] The default text channel of the queue
-   * @param {boolean} [options.skip=false] Skip the playing song (if exists) and play the added playlist instantly
-   * @param {number} [options.position=0] Position of the song/playlist to add to the queue,
-   * <= 0 to add to the end of the queue.
+   * @param {PlayHandlerOptions} [options] Optional options
    */
   async playPlaylist(
     voiceChannel: VoiceBasedChannel,
     playlist: Playlist,
-    options: {
-      textChannel?: GuildTextBasedChannel;
-      skip?: boolean;
-      position?: number;
-    } = {},
+    options: PlayHandlerOptions = {},
   ): Promise<void> {
     const { textChannel, skip } = { skip: false, ...options };
     const position = Number(options.position) || (skip ? 1 : 0);
@@ -345,6 +281,7 @@ export class DisTubeHandler extends DisTubeBase {
       throw new DisTubeError("EMPTY_PLAYLIST");
     }
     if (queue) {
+      if (this.options.joinNewVoiceChannel) queue.voice.channel = voiceChannel;
       queue.addToQueue(playlist.songs, position);
       if (skip) queue.skip();
       else this.emit("addList", queue, playlist);
@@ -362,21 +299,9 @@ export class DisTubeHandler extends DisTubeBase {
    * @returns {Promise<void>}
    * @param {Discord.BaseGuildVoiceChannel} voiceChannel A voice channel
    * @param {Song} song A YouTube playlist url | a Playlist
-   * @param {Object} [options] Optional options
-   * @param {Discord.BaseGuildTextChannel} [options.textChannel] The default text channel of the queue
-   * @param {boolean} [options.skip=false] Skip the playing song (if exists) and play the added playlist instantly
-   * @param {number} [options.position=0] Position of the song/playlist to add to the queue,
-   * <= 0 to add to the end of the queue.
+   * @param {PlayHandlerOptions} [options] Optional options
    */
-  async playSong(
-    voiceChannel: VoiceBasedChannel,
-    song: Song,
-    options: {
-      textChannel?: GuildTextBasedChannel;
-      skip?: boolean;
-      position?: number;
-    } = {},
-  ): Promise<void> {
+  async playSong(voiceChannel: VoiceBasedChannel, song: Song, options: PlayHandlerOptions = {}): Promise<void> {
     if (!(song instanceof Song)) throw new DisTubeError("INVALID_TYPE", "Song", song, "song");
     const { textChannel, skip } = { skip: false, ...options };
     const position = Number(options.position) || (skip ? 1 : 0);
@@ -386,6 +311,7 @@ export class DisTubeHandler extends DisTubeBase {
       throw new DisTubeError("NON_NSFW");
     }
     if (queue) {
+      if (this.options.joinNewVoiceChannel) queue.voice.channel = voiceChannel;
       queue.addToQueue(song, position);
       if (skip) queue.skip();
       else this.emit("addSong", queue, song);

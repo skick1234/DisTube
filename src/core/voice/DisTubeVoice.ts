@@ -27,13 +27,6 @@ export class DisTubeVoice extends TypedEmitter<DisTubeVoiceEvents> {
   #volume = 100;
   constructor(voiceManager: DisTubeVoiceManager, channel: VoiceBasedChannel) {
     super();
-    if (!isSupportedVoiceChannel(channel)) {
-      throw new DisTubeError("INVALID_TYPE", "BaseGuildVoiceChannel", channel, "channel");
-    }
-    if (!channel.joinable) {
-      if (channel.full) throw new DisTubeError("VOICE_FULL");
-      else throw new DisTubeError("VOICE_MISSING_PERMS");
-    }
     this.id = channel.guildId;
     this.channel = channel;
     /**
@@ -61,7 +54,11 @@ export class DisTubeVoice extends TypedEmitter<DisTubeVoiceEvents> {
           this.leave();
         } else if (newState.reason === VoiceConnectionDisconnectReason.WebSocketClose && newState.closeCode === 4014) {
           entersState(this.connection, VoiceConnectionStatus.Connecting, 5e3).catch(() => {
-            this.leave();
+            if (
+              ![VoiceConnectionStatus.Ready, VoiceConnectionStatus.Connecting].includes(this.connection.state.status)
+            ) {
+              this.leave();
+            }
           });
         } else if (this.connection.rejoinAttempts < 5) {
           setTimeout(() => {
@@ -93,6 +90,10 @@ export class DisTubeVoice extends TypedEmitter<DisTubeVoiceEvents> {
       throw new DisTubeError("INVALID_TYPE", "BaseGuildVoiceChannel", channel, "DisTubeVoice#channel");
     }
     if (channel.guildId !== this.id) throw new DisTubeError("VOICE_DIFFERENT_GUILD");
+    if (!channel.joinable) {
+      if (channel.full) throw new DisTubeError("VOICE_FULL");
+      else throw new DisTubeError("VOICE_MISSING_PERMS");
+    }
     this.connection = this.#join(channel);
     this.#channel = channel;
     this.#br();
@@ -116,6 +117,7 @@ export class DisTubeVoice extends TypedEmitter<DisTubeVoiceEvents> {
     try {
       await entersState(this.connection, VoiceConnectionStatus.Ready, TIMEOUT);
     } catch {
+      if (this.connection.state.status === VoiceConnectionStatus.Ready) return this;
       if (this.connection.state.status !== VoiceConnectionStatus.Destroyed) this.connection.destroy();
       this.voices.remove(this.id);
       throw new DisTubeError("VOICE_CONNECT_FAILED", TIMEOUT / 1e3);

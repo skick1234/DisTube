@@ -19,7 +19,7 @@ import {
   isSupportedVoiceChannel,
   isTextChannelInstance,
 } from ".";
-import type { Client, GuildMember, GuildTextBasedChannel, Message, VoiceBasedChannel } from "discord.js";
+import type { Client, GuildMember, GuildTextBasedChannel, VoiceBasedChannel } from "discord.js";
 import type {
   CustomPlugin,
   DisTubeEvents,
@@ -27,6 +27,7 @@ import type {
   ExtractorPlugin,
   Filters,
   GuildIdResolvable,
+  PlayOptions,
   Queue,
 } from ".";
 
@@ -132,18 +133,7 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
    * the bot will be moved to this channel if `options.move` is `true`
    * @param {string|Song|SearchResult|Playlist} song URL | Search string |
    * {@link Song} | {@link SearchResult} | {@link Playlist}
-   * @param {Object} [options] Optional options
-   * @param {Discord.GuildMember} [options.member] Requested user (default is your bot)
-   * @param {Discord.BaseGuildTextChannel} [options.textChannel] Default {@link Queue#textChannel}
-   * @param {boolean} [options.skip=false]
-   * Skip the playing song (if exists) and play the added song/playlist if `position` is 1.
-   * If `position` is defined and not equal to 1, it will skip to the next song instead of the added song
-   * @param {number} [options.position=0] Position of the song/playlist to add to the queue,
-   * <= 0 to add to the end of the queue.
-   * @param {Discord.Message} [options.message] Called message (For built-in search events. If this is a {@link https://developer.mozilla.org/en-US/docs/Glossary/Falsy|falsy value}, it will play the first result instead)
-   * @param {*} [options.metadata] Optional metadata that can be attached to the song/playlist will be played,
-   * This is useful for identification purposes when the song/playlist is passed around in events.
-   * See {@link Song#metadata} or {@link Playlist#metadata}
+   * @param {PlayOptions} [options] Optional options
    * @example
    * client.on('message', (message) => {
    *     if (!message.content.startsWith(config.prefix)) return;
@@ -161,14 +151,7 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
   async play(
     voiceChannel: VoiceBasedChannel,
     song: string | Song | SearchResult | Playlist,
-    options: {
-      skip?: boolean;
-      position?: number;
-      member?: GuildMember;
-      textChannel?: GuildTextBasedChannel;
-      message?: Message;
-      metadata?: any;
-    } = {},
+    options: PlayOptions = {},
   ): Promise<void> {
     if (!isSupportedVoiceChannel(voiceChannel)) {
       throw new DisTubeError("INVALID_TYPE", "BaseGuildVoiceChannel", voiceChannel, "voiceChannel");
@@ -236,16 +219,12 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
    * Create a custom playlist
    * @returns {Promise<Playlist>}
    * @param {Array<string|Song|SearchResult>} songs Array of url, Song or SearchResult
-   * @param {Object} [options] Optional options
-   * @param {Discord.GuildMember} [options.message] A message from guild channel | A guild member
-   * @param {Object} [options.properties] Additional properties such as `name`
-   * @param {boolean} [options.parallel=true] Whether or not fetch the songs in parallel
-   * @param {*} [options.metadata] Metadata
+   * @param {CustomPlaylistOptions} [options] Optional options
    * @example
    * const songs = ["https://www.youtube.com/watch?v=xxx", "https://www.youtube.com/watch?v=yyy"];
    * const playlist = await distube.createCustomPlaylist(songs, {
    *     member: message.member,
-   *     properties: { name: "My playlist name" },
+   *     properties: { name: "My playlist name", source: "custom" },
    *     parallel: true
    * });
    * distube.play(voiceChannel, playlist, { ... });

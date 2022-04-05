@@ -12,7 +12,8 @@ jest.useFakeTimers();
 jest.mock("@distube/ytpl");
 jest.mock("@distube/ytdl-core");
 jest.mock("@/util");
-jest.mock("@/struct/Queue");
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+jest.mock("@/struct/Queue", () => require("@/mock/Queue"));
 
 const ytpl = _ytpl as unknown as jest.Mocked<typeof _ytpl>;
 const ytdl = _ytdl as unknown as jest.Mocked<typeof _ytdl>;
