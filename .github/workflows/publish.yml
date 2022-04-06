@@ -20,9 +20,6 @@ jobs:
       - name: Install dependencies
         run: yarn --immutable
 
-      - name: Build the package
-        run: yarn build
-
       - name: Change version to ${{ github.event.release.tag_name }}
         run: yarn version ${{ github.event.release.tag_name }}
 
