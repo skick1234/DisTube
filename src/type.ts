@@ -126,6 +126,7 @@ export interface DisTubeOptions {
   nsfw?: boolean;
   emitAddSongWhenCreatingQueue?: boolean;
   emitAddListWhenCreatingQueue?: boolean;
+  joinNewVoiceChannel?: boolean;
 }
 
 /**
