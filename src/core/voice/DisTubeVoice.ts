@@ -27,13 +27,13 @@ export class DisTubeVoice extends TypedEmitter<DisTubeVoiceEvents> {
   #volume = 100;
   constructor(voiceManager: DisTubeVoiceManager, channel: VoiceBasedChannel) {
     super();
-    this.id = channel.guildId;
-    this.channel = channel;
     /**
      * The voice manager that instantiated this connection
      * @type {DisTubeVoiceManager}
      */
     this.voices = voiceManager;
+    this.id = channel.guildId;
+    this.channel = channel;
     this.voices.add(this.id, this);
     this.audioPlayer = createAudioPlayer()
       .on(AudioPlayerStatus.Idle, oldState => {
@@ -90,6 +90,7 @@ export class DisTubeVoice extends TypedEmitter<DisTubeVoiceEvents> {
       throw new DisTubeError("INVALID_TYPE", "BaseGuildVoiceChannel", channel, "DisTubeVoice#channel");
     }
     if (channel.guildId !== this.id) throw new DisTubeError("VOICE_DIFFERENT_GUILD");
+    if (channel.client.user?.id !== this.voices.client.user?.id) throw new DisTubeError("VOICE_DIFFERENT_CLIENT");
     if (channel.id === this.#channel?.id) return;
     if (!channel.joinable) {
       if (channel.full) throw new DisTubeError("VOICE_FULL");

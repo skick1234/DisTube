@@ -10,16 +10,19 @@ jest.mock("@discordjs/voice");
 const Util = _Util as unknown as jest.Mocked<typeof _Util>;
 const DiscordVoice = _DiscordVoice as unknown as jest.Mocked<typeof _DiscordVoice>;
 
+const client = { user: { id: 3 } };
+
 const voiceManager = {
   add: jest.fn(),
   remove: jest.fn(),
+  client,
 };
 
 const voiceChannel = {
   id: 1,
   guildId: 2,
   guild: { id: 2, me: { voice: undefined }, voiceAdapterCreator: () => undefined },
-  client: { user: { id: 3 } },
+  client,
   joinable: true,
 };
 
@@ -77,10 +80,10 @@ describe("Constructor", () => {
     }).toThrow(new DisTubeError("INVALID_TYPE", "BaseGuildVoiceChannel", {}, "DisTubeVoice#channel"));
     Util.isSupportedVoiceChannel.mockReturnValue(true);
     expect(() => {
-      new DisTubeVoice(voiceManager as any, { type: "voice", joinable: false, full: true, id: "1" } as any);
+      new DisTubeVoice(voiceManager as any, { type: "voice", joinable: false, full: true, id: "1", client } as any);
     }).toThrow(new DisTubeError("VOICE_FULL"));
     expect(() => {
-      new DisTubeVoice(voiceManager as any, { type: "voice", joinable: false, full: false, id: "1" } as any);
+      new DisTubeVoice(voiceManager as any, { type: "voice", joinable: false, full: false, id: "1", client } as any);
     }).toThrow(new DisTubeError("VOICE_MISSING_PERMS"));
   });
 
@@ -182,13 +185,16 @@ describe("Methods", () => {
     test("DisTubeVoice#channel", () => {
       Util.isSupportedVoiceChannel.mockReturnValue(true);
       Util.isSupportedVoiceChannel.mockReturnValueOnce(false);
-      const newVC: any = { guildId: 2, guild: { id: 2 }, client: { user: { id: 0 } }, joinable: true };
+      const newVC: any = { guildId: 2, guild: { id: 2 }, client, joinable: true };
       expect(() => {
         voice.channel = newVC;
       }).toThrow(new DisTubeError("INVALID_TYPE", "BaseGuildVoiceChannel", newVC, "DisTubeVoice#channel"));
       expect(() => {
         voice.channel = { guildId: 1 } as any;
       }).toThrow(new DisTubeError("VOICE_DIFFERENT_GUILD"));
+      expect(() => {
+        voice.channel = { guildId: 2, client: { user: { id: 0 } } } as any;
+      }).toThrow(new DisTubeError("VOICE_DIFFERENT_CLIENT"));
       expect(() => {
         voice.channel = newVC;
       }).not.toThrow();
@@ -255,7 +261,7 @@ describe("Methods", () => {
     });
 
     test("Timeout when connection destroyed", async () => {
-      const newVC = { guildId: 2, guild: { id: 2 }, client: { user: { id: 0 } }, joinable: true };
+      const newVC = { guildId: 2, guild: { id: 2 }, client, joinable: true };
       Util.isSupportedVoiceChannel.mockReturnValue(true);
       Util.entersState.mockRejectedValue(undefined);
       connection.state.status = DiscordVoice.VoiceConnectionStatus.Destroyed;
