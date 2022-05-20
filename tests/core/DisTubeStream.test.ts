@@ -1,6 +1,6 @@
-import { StreamType } from "@discordjs/voice";
+import { StreamType as DiscordVoiceStreamType } from "@discordjs/voice";
 import { liveFormats, regularFormats } from "../raw";
-import { DisTubeError, DisTubeStream, chooseBestVideoFormat } from "@";
+import { DisTubeError, DisTubeStream, StreamType, chooseBestVideoFormat } from "@";
 
 import { FFmpeg as _FFmpeg } from "prism-media";
 
@@ -29,11 +29,11 @@ describe("chooseBestVideoFormat()", () => {
 
 describe("DisTubeStream.YouTube()", () => {
   test("Regular video", () => {
-    const stream = DisTubeStream.YouTube(regularFormats, { ffmpegArgs: ["added", "arguments"] });
+    const stream = DisTubeStream.YouTube(regularFormats, { ffmpegArgs: ["added", "arguments"], type: StreamType.RAW });
     const url = regularFormats.find(f => f.itag === regularItag).url;
     expect(stream).toMatchObject({
       url,
-      type: StreamType.Raw,
+      type: DiscordVoiceStreamType.Raw,
       stream: expect.any(FFmpeg),
     });
     expect(FFmpeg).toBeCalledWith(
@@ -55,6 +55,8 @@ describe("DisTubeStream.YouTube()", () => {
           "48000",
           "-ac",
           "2",
+          "-f",
+          "s16le",
           "added",
           "arguments",
         ]),
@@ -67,7 +69,7 @@ describe("DisTubeStream.YouTube()", () => {
     const url = liveFormats.find(f => f.itag === liveItag).url;
     expect(stream).toMatchObject({
       url,
-      type: StreamType.Raw,
+      type: DiscordVoiceStreamType.Opus,
       stream: expect.any(FFmpeg),
     });
     expect(FFmpeg).toBeCalledWith(
@@ -91,6 +93,10 @@ describe("DisTubeStream.YouTube()", () => {
           "2",
           "-ss",
           "1",
+          "-f",
+          "opus",
+          "-acodec",
+          "libopus",
         ]),
       }),
     );
@@ -119,7 +125,7 @@ describe("DisTubeStream.DirectLink()", () => {
     const stream = DisTubeStream.DirectLink(url);
     expect(stream).toMatchObject({
       url,
-      type: StreamType.Raw,
+      type: DiscordVoiceStreamType.Opus,
       stream: expect.any(FFmpeg),
     });
     expect(FFmpeg).toBeCalledWith(
@@ -141,6 +147,10 @@ describe("DisTubeStream.DirectLink()", () => {
           "48000",
           "-ac",
           "2",
+          "-f",
+          "opus",
+          "-acodec",
+          "libopus",
         ]),
       }),
     );

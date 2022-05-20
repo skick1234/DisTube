@@ -1,22 +1,14 @@
-import { isURL } from "..";
 import { FFmpeg } from "prism-media";
-import { DisTubeError } from "../struct";
-import { StreamType } from "@discordjs/voice";
+import { DisTubeError, isURL } from "..";
+import { StreamType as DiscordVoiceStreamType } from "@discordjs/voice";
 import type ytdl from "@distube/ytdl-core";
+import type { StreamType } from "..";
 
 interface StreamOptions {
-  /**
-   * Time to seek in seconds
-   */
   seek?: number;
-  /**
-   * Additional FFmpeg arguments
-   */
   ffmpegArgs?: string[];
-  /**
-   * If the stream url is live
-   */
   isLive?: boolean;
+  type?: StreamType;
 }
 
 export const chooseBestVideoFormat = (formats: ytdl.videoFormat[], isLive = false) => {
@@ -65,7 +57,7 @@ export class DisTubeStream {
     }
     return new DisTubeStream(url, options);
   }
-  type: StreamType.Raw;
+  type: DiscordVoiceStreamType;
   stream: FFmpeg;
   url: string;
   /**
@@ -82,9 +74,9 @@ export class DisTubeStream {
     this.url = url;
     /**
      * Stream type
-     * @type {DiscordVoice.StreamType.Raw}
+     * @type {DiscordVoice.StreamType}
      */
-    this.type = StreamType.Raw;
+    this.type = !options.type ? DiscordVoiceStreamType.Opus : DiscordVoiceStreamType.Raw;
     const args = [
       "-reconnect",
       "1",
@@ -103,8 +95,12 @@ export class DisTubeStream {
       "-ac",
       "2",
       "-f",
-      "s16le",
     ];
+    if (!options.type) {
+      args.push("opus", "-acodec", "libopus");
+    } else {
+      args.push("s16le");
+    }
     if (typeof options.seek === "number" && options.seek > 0) {
       args.unshift("-ss", options.seek.toString());
     }
@@ -112,7 +108,7 @@ export class DisTubeStream {
       args.push(...options.ffmpegArgs);
     }
     /**
-     * FFmpeg stream (Duplex)
+     * FFmpeg stream
      * @type {FFmpeg}
      */
     this.stream = new FFmpeg({ args, shell: false });

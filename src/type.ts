@@ -310,3 +310,16 @@ export enum SearchResultType {
   VIDEO = "video",
   PLAYLIST = "playlist",
 }
+
+/**
+ *
+ * Stream types:
+ * * `OPUS` = `0` (Better quality, use more resources - **Recommended**)
+ * * `RAW` = `1` (Better performance, use less resources)
+ * @typedef {number} StreamType
+ * @type {StreamType}
+ */
+export enum StreamType {
+  OPUS,
+  RAW,
+}
