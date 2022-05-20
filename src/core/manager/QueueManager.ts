@@ -145,7 +145,7 @@ export class QueueManager extends GuildIdManager<Queue> {
     const { duration, formats, isLive, source, streamURL } = queue.songs[0];
     const ffmpegArgs = queue.filters.size ? ["-af", queue.filters.values.join(",")] : undefined;
     const seek = duration ? queue.beginTime : undefined;
-    const streamOptions = { ffmpegArgs, seek, isLive };
+    const streamOptions = { ffmpegArgs, seek, isLive, type: this.options.streamType };
     if (source === "youtube") return DisTubeStream.YouTube(formats, streamOptions);
     return DisTubeStream.DirectLink(streamURL as string, streamOptions);
   }
@@ -163,8 +163,8 @@ export class QueueManager extends GuildIdManager<Queue> {
       return true;
     }
     if (queue.stopped) return false;
-    const song = queue.songs[0];
     try {
+      const song = queue.songs[0];
       const { url, source, formats, streamURL } = song;
       if (source === "youtube" && !formats) song._patchYouTube(await this.handler.getYouTubeInfo(url));
       if (source !== "youtube" && !streamURL) {

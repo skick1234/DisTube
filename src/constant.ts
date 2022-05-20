@@ -1,3 +1,4 @@
+import { StreamType } from ".";
 import type { Filters } from ".";
 
 /**
@@ -52,4 +53,5 @@ export const defaultOptions = {
   emitAddSongWhenCreatingQueue: true,
   emitAddListWhenCreatingQueue: true,
   joinNewVoiceChannel: true,
+  streamType: StreamType.OPUS,
 };

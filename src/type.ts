@@ -108,6 +108,8 @@ export type Filters = Record<string, string>;
  * @prop {boolean} [emitAddSongWhenCreatingQueue=true] Whether or not emitting `addSong` event when creating a new Queue
  * @prop {boolean} [joinNewVoiceChannel=true] Whether or not joining the new voice channel
  * when using {@link DisTube#play} method
+ * @prop {StreamType} [streamType=StreamType.OPUS] Decide the {@link DisTubeStream#type} will be used
+ * (Not the same as {@link DisTubeStream#type})
  */
 export interface DisTubeOptions {
   plugins?: (CustomPlugin | ExtractorPlugin)[];
@@ -127,6 +129,7 @@ export interface DisTubeOptions {
   emitAddSongWhenCreatingQueue?: boolean;
   emitAddListWhenCreatingQueue?: boolean;
   joinNewVoiceChannel?: boolean;
+  streamType?: StreamType;
 }
 
 /**

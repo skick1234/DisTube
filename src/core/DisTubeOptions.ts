@@ -1,4 +1,4 @@
-import { DisTubeError, checkInvalidKey, defaultOptions } from "..";
+import { DisTubeError, StreamType, checkInvalidKey, defaultOptions } from "..";
 import type ytdl from "@distube/ytdl-core";
 import type { CustomPlugin, DisTubeOptions, ExtractorPlugin, Filters } from "..";
 
@@ -20,6 +20,7 @@ export class Options {
   emitAddSongWhenCreatingQueue: boolean;
   emitAddListWhenCreatingQueue: boolean;
   joinNewVoiceChannel: boolean;
+  streamType: StreamType;
   constructor(options: DisTubeOptions) {
     if (typeof options !== "object" || Array.isArray(options)) {
       throw new DisTubeError("INVALID_TYPE", "object", options, "DisTubeOptions");
@@ -42,6 +43,7 @@ export class Options {
     this.emitAddSongWhenCreatingQueue = opts.emitAddSongWhenCreatingQueue;
     this.emitAddListWhenCreatingQueue = opts.emitAddListWhenCreatingQueue;
     this.joinNewVoiceChannel = opts.joinNewVoiceChannel;
+    this.streamType = opts.streamType;
     checkInvalidKey(opts, this, "DisTubeOptions");
     this.#validateOptions();
   }
@@ -120,6 +122,9 @@ export class Options {
         options.emitAddListWhenCreatingQueue,
         "DisTubeOptions.emitAddListWhenCreatingQueue",
       );
+    }
+    if (typeof options.streamType !== "number" || isNaN(options.streamType) || !StreamType[options.streamType]) {
+      throw new DisTubeError("INVALID_TYPE", "StreamType", options.streamType, "DisTubeOptions.streamType");
     }
   }
 }
