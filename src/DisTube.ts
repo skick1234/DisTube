@@ -13,6 +13,7 @@ import {
   SearchResult,
   Song,
   defaultFilters,
+  getClientMember,
   isClientInstance,
   isMemberInstance,
   isMessageInstance,
@@ -159,7 +160,7 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
     if (!isObject(options)) throw new DisTubeError("INVALID_TYPE", "object", options, "options");
 
     const { textChannel, member, skip, message, metadata } = {
-      member: voiceChannel.guild.me ?? undefined,
+      member: getClientMember(voiceChannel.guild),
       textChannel: options?.message?.channel,
       skip: false,
       ...options,

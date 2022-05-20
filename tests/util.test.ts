@@ -43,6 +43,7 @@ const userVoiceState = new VoiceState(guild, rawUserVoiceState);
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore
 const message = new Message(client, rawMessage);
+const clientMember = guild.members.resolve(guild.client.user.id);
 
 test("isSupportedVoiceChannel()", () => {
   const testFn = isSupportedVoiceChannel;
@@ -53,7 +54,7 @@ test("isSupportedVoiceChannel()", () => {
   expect(testFn(guild)).toBe(false);
   expect(testFn(client)).toBe(false);
   expect(testFn(client.user)).toBe(false);
-  expect(testFn(guild.me)).toBe(false);
+  expect(testFn(clientMember)).toBe(false);
   expect(testFn(botVoiceState)).toBe(false);
   expect(testFn(userVoiceState)).toBe(false);
 });
@@ -67,7 +68,7 @@ test("isMessageInstance()", () => {
   expect(testFn(guild)).toBe(false);
   expect(testFn(client)).toBe(false);
   expect(testFn(client.user)).toBe(false);
-  expect(testFn(guild.me)).toBe(false);
+  expect(testFn(clientMember)).toBe(false);
   expect(testFn(botVoiceState)).toBe(false);
   expect(testFn(userVoiceState)).toBe(false);
 });
@@ -81,7 +82,7 @@ test("isTextChannelInstance()", () => {
   expect(testFn(guild)).toBe(false);
   expect(testFn(client)).toBe(false);
   expect(testFn(client.user)).toBe(false);
-  expect(testFn(guild.me)).toBe(false);
+  expect(testFn(clientMember)).toBe(false);
   expect(testFn(botVoiceState)).toBe(false);
   expect(testFn(userVoiceState)).toBe(false);
 });
@@ -95,18 +96,19 @@ test("isMemberInstance()", () => {
   expect(testFn(guild)).toBe(false);
   expect(testFn(client)).toBe(false);
   expect(testFn(client.user)).toBe(false);
-  expect(testFn(guild.me)).toBe(true);
+  expect(testFn(clientMember)).toBe(true);
   expect(testFn(botVoiceState)).toBe(false);
   expect(testFn(userVoiceState)).toBe(false);
 });
 
 test("isVoiceChannelEmpty()", () => {
-  expect(isVoiceChannelEmpty(voiceChannel as any)).toBe(false);
-  expect(isVoiceChannelEmpty(botVoiceState)).toBe(false);
+  const testFn = isVoiceChannelEmpty;
+  expect(testFn(voiceChannel as any)).toBe(false);
+  expect(testFn(botVoiceState)).toBe(false);
   guild.voiceStates.cache.set(botVoiceState.id, botVoiceState);
-  expect(isVoiceChannelEmpty(botVoiceState)).toBe(true);
+  expect(testFn(botVoiceState)).toBe(true);
   guild.voiceStates.cache.set(userVoiceState.id, userVoiceState);
-  expect(isVoiceChannelEmpty(botVoiceState)).toBe(false);
+  expect(testFn(botVoiceState)).toBe(false);
 });
 
 test("checkIntents()", () => {
@@ -175,7 +177,7 @@ test("resolveGuildID()", () => {
   expect(testFn(textChannel)).toBe(gId);
   expect(testFn(message)).toBe(gId);
   expect(testFn(guild)).toBe(gId);
-  expect(testFn(guild.me)).toBe(gId);
+  expect(testFn(clientMember)).toBe(gId);
   expect(testFn(botVoiceState)).toBe(gId);
   expect(testFn(userVoiceState)).toBe(gId);
   expect(testFn(gId)).toBe(gId);
@@ -193,7 +195,7 @@ test("isClientInstance()", () => {
   expect(testFn(guild)).toBe(false);
   expect(testFn(client)).toBe(true);
   expect(testFn(client.user)).toBe(false);
-  expect(testFn(guild.me)).toBe(false);
+  expect(testFn(clientMember)).toBe(false);
   expect(testFn(botVoiceState)).toBe(false);
   expect(testFn(userVoiceState)).toBe(false);
 });

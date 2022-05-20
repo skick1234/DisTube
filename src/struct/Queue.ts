@@ -1,7 +1,7 @@
 import { DisTubeBase, FilterManager } from "../core";
-import { DisTubeError, RepeatMode, Song, TaskQueue, formatDuration } from "..";
+import { DisTubeError, RepeatMode, Song, TaskQueue, formatDuration, getClientMember } from "..";
+import type { GuildTextBasedChannel, Snowflake } from "discord.js";
 import type { DisTube, DisTubeVoice, DisTubeVoiceEvents } from "..";
-import type { GuildMember, GuildTextBasedChannel, Snowflake } from "discord.js";
 
 /**
  * Represents a queue.
@@ -23,7 +23,6 @@ export class Queue extends DisTubeBase {
   beginTime: number;
   textChannel?: GuildTextBasedChannel;
   _emptyTimeout?: NodeJS.Timeout;
-  clientMember: GuildMember;
   _taskQueue: TaskQueue;
   _listeners?: DisTubeVoiceEvents;
   /**
@@ -35,15 +34,6 @@ export class Queue extends DisTubeBase {
    */
   constructor(distube: DisTube, voice: DisTubeVoice, song: Song | Song[], textChannel?: GuildTextBasedChannel) {
     super(distube);
-    /**
-     * The client user as a `GuildMember` of this queue's guild
-     * @type {Discord.GuildMember}
-     */
-    this.clientMember =
-      voice.channel.guild?.me ??
-      (() => {
-        throw new DisTubeError("INVALID_TYPE", "GuildMember", null, "<VoiceChannel>.guild.me");
-      })();
     /**
      * Voice connection of this queue.
      * @type {DisTubeVoice}
@@ -140,6 +130,13 @@ export class Queue extends DisTubeBase {
     this._listeners = undefined;
   }
   /**
+   * The client user as a `GuildMember` of this queue's guild
+   * @type {Discord.GuildMember?}
+   */
+  get clientMember() {
+    return getClientMember(this.voice.channel.guild);
+  }
+  /**
    * The filter manager of the queue
    * @type {FilterManager}
    * @readonly
@@ -185,7 +182,7 @@ export class Queue extends DisTubeBase {
    * @readonly
    */
   get voiceChannel() {
-    return this.clientMember.voice.channel;
+    return this.clientMember?.voice?.channel ?? null;
   }
   get volume() {
     return this.voice.volume;

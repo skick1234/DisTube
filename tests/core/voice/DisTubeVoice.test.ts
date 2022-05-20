@@ -21,7 +21,7 @@ const voiceManager = {
 const voiceChannel = {
   id: 1,
   guildId: 2,
-  guild: { id: 2, me: { voice: undefined }, voiceAdapterCreator: () => undefined },
+  guild: { id: 2, voiceAdapterCreator: () => undefined },
   client,
   joinable: true,
 };
@@ -243,9 +243,6 @@ describe("Methods", () => {
       expect(voice.selfDeaf).toBe(connection.joinConfig.selfDeaf);
       expect(voice.selfMute).toBe(connection.joinConfig.selfMute);
       expect(voice.voiceState).toBeUndefined();
-      voiceChannel.guild.me.voice = {};
-      expect(voice.voiceState).toBe(voiceChannel.guild.me.voice);
-      expect(voice.voiceState).not.toBeUndefined();
     });
   });
 

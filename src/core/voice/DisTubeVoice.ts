@@ -1,5 +1,5 @@
 import { TypedEmitter } from "tiny-typed-emitter";
-import { DisTubeError, entersState, isSupportedVoiceChannel } from "../..";
+import { DisTubeError, entersState, getClientMember, isSupportedVoiceChannel } from "../..";
 import {
   AudioPlayerStatus,
   VoiceConnectionDisconnectReason,
@@ -240,6 +240,6 @@ export class DisTubeVoice extends TypedEmitter<DisTubeVoiceEvents> {
    * @type {Discord.VoiceState?}
    */
   get voiceState(): VoiceState | undefined {
-    return this.channel?.guild?.me?.voice;
+    return getClientMember(this.channel?.guild)?.voice;
   }
 }

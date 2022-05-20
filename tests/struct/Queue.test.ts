@@ -24,21 +24,24 @@ function createFakeDisTube() {
   };
 }
 
+const fakeClientUser = { id: "222222222222222222" };
 const fakeClientMember: {
   id: string;
   voice?: any;
   user?: any;
 } = {
-  id: "222222222222222222",
-  user: { id: "222222222222222222" },
+  id: fakeClientUser.id,
+  user: fakeClientUser,
+};
+const fakeGuild = {
+  id: "111111111111111111",
+  client: { user: fakeClientUser },
+  members: { resolve: jest.fn() },
 };
 const fakeVoiceChannel = {
   id: "000000000000000000",
   type: "voice",
-  guild: {
-    id: "111111111111111111",
-    me: fakeClientMember,
-  },
+  guild: fakeGuild,
 };
 const voice = {
   channel: fakeVoiceChannel,
@@ -61,9 +64,13 @@ afterEach(() => {
 
 test("Create a queue with a song", () => {
   const distube = createFakeDisTube();
+  fakeGuild.members.resolve.mockReturnValue(fakeClientMember);
   const queue = new Queue(distube as any, voice as any, song);
   expect(queue.clientMember).toBe(fakeClientMember);
+  expect(fakeGuild.members.resolve).toBeCalledTimes(1);
   expect(queue.voiceChannel).toBe(fakeVoiceChannel);
+  expect(fakeGuild.members.resolve).toBeCalledTimes(2);
+  expect(fakeGuild.members.resolve).toBeCalledWith(fakeClientUser);
   expect(queue.voice).toBe(voice);
   expect(queue.songs).toContain(song);
   expect(queue.formattedDuration).toEqual(song.formattedDuration);
@@ -72,10 +79,14 @@ test("Create a queue with a song", () => {
 
 test("Create a queue with a playlist", () => {
   const distube = createFakeDisTube();
+  fakeGuild.members.resolve.mockReturnValue(fakeClientMember);
   const songs: any[] = ["song1", "song2"];
   const queue = new Queue(distube as any, voice as any, songs);
   expect(queue.clientMember).toBe(fakeClientMember);
+  expect(fakeGuild.members.resolve).toBeCalledTimes(1);
   expect(queue.voiceChannel).toBe(fakeVoiceChannel);
+  expect(fakeGuild.members.resolve).toBeCalledTimes(2);
+  expect(fakeGuild.members.resolve).toBeCalledWith(fakeClientUser);
   expect(queue.voice).toBe(voice);
   expect(queue.songs).toContain("song1");
   expect(queue.songs).toContain("song2");

@@ -89,7 +89,10 @@ export function checkIntents(options: ClientOptions): void {
  * @returns {boolean}
  */
 export function isVoiceChannelEmpty(voiceState: VoiceState): boolean {
-  const voiceChannel = voiceState.guild?.me?.voice?.channel;
+  const guild = voiceState.guild;
+  const clientId = voiceState.client.user?.id;
+  if (!guild || !clientId) return false;
+  const voiceChannel = guild.members.resolve(clientId)?.voice?.channel;
   if (!voiceChannel) return false;
   const members = voiceChannel.members.filter(m => !m.user.bot);
   return !members.size;
@@ -119,7 +122,8 @@ export function isTextChannelInstance(channel: any): channel is GuildTextBasedCh
     isSnowflake(channel.id) &&
     isSnowflake(channel.guildId) &&
     typeof channel.name === "string" &&
-    Constants.TextBasedChannelTypes.includes(channel.type)
+    Constants.TextBasedChannelTypes.includes(channel.type) &&
+    typeof channel.nsfw === "boolean"
   );
 }
 
@@ -218,4 +222,12 @@ export function isObject(obj: any): obj is object {
 
 export function isRecord(obj: any): obj is Record<string, unknown> {
   return isObject(obj);
+}
+
+export function getClientMember(guild: Guild) {
+  const clientUser = guild.client.user;
+  if (!clientUser) return undefined;
+  const clientMember = guild.members.resolve(clientUser);
+  if (!clientMember) return undefined;
+  return clientMember;
 }
