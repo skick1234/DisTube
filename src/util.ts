@@ -123,7 +123,7 @@ export function isTextChannelInstance(channel: any): channel is GuildTextBasedCh
     isSnowflake(channel.guildId) &&
     typeof channel.name === "string" &&
     Constants.TextBasedChannelTypes.includes(channel.type) &&
-    typeof channel.nsfw === "boolean"
+    typeof channel.messages?.cache === "object"
   );
 }
 

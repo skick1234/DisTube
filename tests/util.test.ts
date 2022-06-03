@@ -75,7 +75,7 @@ test("isMessageInstance()", () => {
 
 test("isTextChannelInstance()", () => {
   const testFn = isTextChannelInstance;
-  expect(testFn(voiceChannel)).toBe(false);
+  expect(testFn(voiceChannel)).toBe(true);
   expect(testFn(stageChannel)).toBe(false);
   expect(testFn(textChannel)).toBe(true);
   expect(testFn(message)).toBe(false);
