@@ -2,8 +2,6 @@ import { URL } from "url";
 import { DisTubeError, DisTubeVoice, Queue } from ".";
 import { Constants, GatewayIntentBits, IntentsBitField, SnowflakeUtil } from "discord.js";
 import type { GuildIdResolvable } from ".";
-import type { EventEmitter } from "node:events";
-import type { AudioPlayer, AudioPlayerStatus, VoiceConnection, VoiceConnectionStatus } from "@discordjs/voice";
 import type {
   Client,
   ClientOptions,
@@ -183,37 +181,6 @@ export function checkInvalidKey(
   const sourceKeys = Array.isArray(source) ? source : Object.keys(source);
   const invalidKey = Object.keys(target).find(key => !sourceKeys.includes(key));
   if (invalidKey) throw new DisTubeError("INVALID_KEY", sourceName, invalidKey);
-}
-
-async function waitEvent(target: EventEmitter, status: string, maxTime: number) {
-  let cleanup = () => {
-    // void
-  };
-  try {
-    await new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => reject(new Error(`Didn't trigger ${status} within ${maxTime}ms`)), maxTime);
-      target.once(status, resolve);
-      target.once("error", reject);
-      cleanup = () => {
-        clearTimeout(timeout);
-        target.off(status, resolve);
-        target.off("error", reject);
-      };
-      if ((target as VoiceConnection)?.state?.status === status) resolve(0);
-    });
-    return target;
-  } finally {
-    cleanup();
-  }
-}
-
-export async function entersState<T extends VoiceConnection | AudioPlayer>(
-  target: T,
-  status: T extends VoiceConnection ? VoiceConnectionStatus : AudioPlayerStatus,
-  maxTime: number,
-) {
-  if (target.state.status === status) return target;
-  return waitEvent(target, status, maxTime);
 }
 
 export function isObject(obj: any): obj is object {
