@@ -1,5 +1,4 @@
 import type ytdl from "@distube/ytdl-core";
-import type { CustomPlugin, DisTubeVoice, ExtractorPlugin, Playlist, Queue, SearchResult, Song } from ".";
 import type {
   Guild,
   GuildMember,
@@ -11,6 +10,7 @@ import type {
   VoiceBasedChannel,
   VoiceState,
 } from "discord.js";
+import type { CustomPlugin, DisTubeVoice, ExtractorPlugin, Playlist, Queue, SearchResult, Song } from ".";
 
 export type Awaitable<T = any> = T | PromiseLike<T>;
 
@@ -267,7 +267,7 @@ export interface ResolvePlaylistOptions<T = unknown> extends ResolveOptions<T> {
 
 /**
  * @typedef {Object} CustomPlaylistOptions
- * @param {Discord.GuildMember} [message] A message from guild channel | A guild member
+ * @param {Discord.GuildMember} [member] A guild member creating the playlist
  * @param {Object} [properties] Additional properties such as `name`
  * @param {boolean} [parallel=true] Whether or not fetch the songs in parallel
  * @param {*} [metadata] Metadata
