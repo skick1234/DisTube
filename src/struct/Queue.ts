@@ -1,5 +1,5 @@
 import { DisTubeBase, FilterManager } from "../core";
-import { DisTubeError, RepeatMode, Song, TaskQueue, formatDuration, getClientMember } from "..";
+import { DisTubeError, RepeatMode, Song, TaskQueue, formatDuration } from "..";
 import type { GuildTextBasedChannel, Snowflake } from "discord.js";
 import type { DisTube, DisTubeVoice, DisTubeVoiceEvents } from "..";
 
@@ -134,7 +134,7 @@ export class Queue extends DisTubeBase {
    * @type {Discord.GuildMember?}
    */
   get clientMember() {
-    return getClientMember(this.voice.channel.guild);
+    return this.voice.channel.guild.members.me ?? undefined;
   }
   /**
    * The filter manager of the queue
@@ -274,7 +274,7 @@ export class Queue extends DisTubeBase {
 
   /**
    * Play the previous song if exists
-   * @returns {Song} The guild queue
+   * @returns {Promise<Song>} The guild queue
    * @throws {Error}
    */
   async previous(): Promise<Song> {

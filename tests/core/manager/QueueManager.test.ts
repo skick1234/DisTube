@@ -13,7 +13,7 @@ import * as _Stream from "@/core/DisTubeStream";
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 jest.mock("@/struct/Queue", () => require("@/mock/Queue"));
 jest.mock("@/core/DisTubeStream");
-jest.mock("@/core/voice/DisTubeVoiceManager");
+jest.mock("@/core/manager/DisTubeVoiceManager");
 
 const Queue = _Queue as unknown as jest.Mocked<typeof _Queue>;
 const Stream = _Stream as unknown as jest.Mocked<typeof _Stream>;

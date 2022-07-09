@@ -2,7 +2,7 @@ import { DisTubeVoiceManager, DisTubeVoice as _DTV } from "@";
 
 import * as _DiscordVoice from "@discordjs/voice";
 
-jest.mock("@/core/voice/DisTubeVoice");
+jest.mock("@/core/DisTubeVoice");
 jest.mock("@discordjs/voice");
 
 const DisTubeVoice = _DTV as unknown as jest.Mocked<typeof _DTV>;

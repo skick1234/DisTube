@@ -18,7 +18,7 @@ import {
   toSecond,
 } from "@";
 
-jest.mock("@/core/voice/DisTubeVoice");
+jest.mock("@/core/DisTubeVoice");
 
 const Voice = _Voice as unknown as jest.Mocked<typeof _Voice>;
 

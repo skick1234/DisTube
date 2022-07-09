@@ -1,5 +1,5 @@
 import { TypedEmitter } from "tiny-typed-emitter";
-import { DisTubeError, getClientMember, isSupportedVoiceChannel } from "../..";
+import { DisTubeError, isSupportedVoiceChannel } from "..";
 import {
   AudioPlayerStatus,
   VoiceConnectionDisconnectReason,
@@ -9,9 +9,9 @@ import {
   entersState,
   joinVoiceChannel,
 } from "@discordjs/voice";
-import type { DisTubeStream, DisTubeVoiceEvents, DisTubeVoiceManager } from "../..";
-import type { AudioPlayer, AudioResource, VoiceConnection } from "@discordjs/voice";
 import type { Snowflake, VoiceBasedChannel, VoiceState } from "discord.js";
+import type { DisTubeStream, DisTubeVoiceEvents, DisTubeVoiceManager } from "..";
+import type { AudioPlayer, AudioResource, VoiceConnection } from "@discordjs/voice";
 
 /**
  * Create a voice connection to the voice channel
@@ -241,6 +241,6 @@ export class DisTubeVoice extends TypedEmitter<DisTubeVoiceEvents> {
    * @type {Discord.VoiceState?}
    */
   get voiceState(): VoiceState | undefined {
-    return getClientMember(this.channel?.guild)?.voice;
+    return this.channel?.guild?.members?.me?.voice;
   }
 }

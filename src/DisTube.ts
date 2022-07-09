@@ -1,5 +1,4 @@
 import ytsr from "@distube/ytsr";
-import { checkIntents, isObject, isURL } from "./util";
 import { TypedEmitter } from "tiny-typed-emitter";
 import {
   DisTubeError,
@@ -10,15 +9,18 @@ import {
   Options,
   Playlist,
   QueueManager,
-  SearchResult,
+  SearchResultPlaylist,
+  SearchResultVideo,
   Song,
+  checkIntents,
   defaultFilters,
-  getClientMember,
   isClientInstance,
   isMemberInstance,
   isMessageInstance,
+  isObject,
   isSupportedVoiceChannel,
   isTextChannelInstance,
+  isURL,
 } from ".";
 import type { Client, GuildMember, GuildTextBasedChannel, VoiceBasedChannel } from "discord.js";
 import type {
@@ -30,7 +32,9 @@ import type {
   GuildIdResolvable,
   PlayOptions,
   Queue,
+  SearchResult,
 } from ".";
+import { SearchResultType } from ".";
 
 // Cannot be `import` as it's not under TS root dir
 // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
@@ -135,6 +139,7 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
    * @param {string|Song|SearchResult|Playlist} song URL | Search string |
    * {@link Song} | {@link SearchResult} | {@link Playlist}
    * @param {PlayOptions} [options] Optional options
+   * @throws {DisTubeError}
    * @example
    * client.on('message', (message) => {
    *     if (!message.content.startsWith(config.prefix)) return;
@@ -160,7 +165,7 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
     if (!isObject(options)) throw new DisTubeError("INVALID_TYPE", "object", options, "options");
 
     const { textChannel, member, skip, message, metadata } = {
-      member: getClientMember(voiceChannel.guild),
+      member: voiceChannel.guild.members.me ?? undefined,
       textChannel: options?.message?.channel,
       skip: false,
       ...options,
@@ -207,10 +212,10 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
       if (!(e instanceof DisTubeError)) {
         try {
           e.name = "PlayError";
-          e.message = `${(song as Song)?.url || song}\n${e.message}`;
+          e.message = `${typeof song === "string" ? song : song.url}\n${e.message}`;
         } catch {}
       }
-      this.emitError(e, textChannel);
+      throw e;
     } finally {
       if (queuing) queue?._taskQueue.resolve();
     }
@@ -243,7 +248,7 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
     if (!Array.isArray(songs)) throw new DisTubeError("INVALID_TYPE", "Array", songs, "songs");
     if (!songs.length) throw new DisTubeError("EMPTY_ARRAY", "songs");
     const filteredSongs = songs.filter(
-      song => song instanceof Song || (song instanceof SearchResult && song.type === "video") || isURL(song),
+      song => song instanceof Song || isURL(song) || (typeof song !== "string" && song.type === SearchResultType.VIDEO),
     );
     if (!filteredSongs.length) throw new DisTubeError("NO_VALID_SONG");
     if (member && !isMemberInstance(member)) {
@@ -266,6 +271,18 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
     return new Playlist(resolvedSongs, { member, properties, metadata });
   }
 
+  search(
+    string: string,
+    options?: { type?: SearchResultType; limit?: number; safeSearch?: boolean; retried?: boolean },
+  ): Promise<Array<SearchResult>>;
+  search(
+    string: string,
+    options?: { type?: SearchResultType.VIDEO; limit?: number; safeSearch?: boolean; retried?: boolean },
+  ): Promise<Array<SearchResultVideo>>;
+  search(
+    string: string,
+    options: { type: SearchResultType.PLAYLIST; limit?: number; safeSearch?: boolean; retried?: boolean },
+  ): Promise<Array<SearchResultPlaylist>>;
   /**
    * Search for a song. You can customize how user answers instead of send a number.
    * Then use {@link DisTube#play} to play it.
@@ -280,9 +297,14 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
    */
   async search(
     string: string,
-    options: { type?: "video" | "playlist"; limit?: number; safeSearch?: boolean; retried?: boolean } = {},
+    options: {
+      type?: SearchResultType.VIDEO | SearchResultType.PLAYLIST;
+      limit?: number;
+      safeSearch?: boolean;
+      retried?: boolean;
+    } = {},
   ): Promise<Array<SearchResult>> {
-    const opts = { type: "video" as const, limit: 10, safeSearch: false, ...options };
+    const opts = { type: SearchResultType.VIDEO, limit: 10, safeSearch: false, ...options };
     if (typeof opts.type !== "string" || !["video", "playlist"].includes(opts.type)) {
       throw new DisTubeError("INVALID_TYPE", ["video", "playlist"], opts.type, "options.type");
     }
@@ -294,7 +316,10 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
 
     try {
       const search = await ytsr(string, opts);
-      const results = search.items.map(i => new SearchResult(i));
+      const results = search.items.map(i => {
+        if (i.type === "video") return new SearchResultVideo(i);
+        return new SearchResultPlaylist(i as any);
+      });
       if (results.length === 0) throw new DisTubeError("NO_RESULT");
       return results;
     } catch (e) {
@@ -631,7 +656,7 @@ export default DisTube;
  */
 
 /**
- * Emitted when DisTube encounters an error.
+ * Emitted when DisTube encounters an error while playing songs.
  *
  * @event DisTube#error
  * @param {Discord.BaseGuildTextChannel?} channel Text channel where the error is encountered.

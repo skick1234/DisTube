@@ -90,7 +90,7 @@ export function isVoiceChannelEmpty(voiceState: VoiceState): boolean {
   const guild = voiceState.guild;
   const clientId = voiceState.client.user?.id;
   if (!guild || !clientId) return false;
-  const voiceChannel = guild.members.resolve(clientId)?.voice?.channel;
+  const voiceChannel = guild.members.me?.voice?.channel;
   if (!voiceChannel) return false;
   const members = voiceChannel.members.filter(m => !m.user.bot);
   return !members.size;
@@ -189,14 +189,6 @@ export function isObject(obj: any): obj is object {
   return typeof obj === "object" && obj !== null && !Array.isArray(obj);
 }
 
-export function isRecord(obj: any): obj is Record<string, unknown> {
+export function isRecord<T = unknown>(obj: any): obj is Record<string, T> {
   return isObject(obj);
-}
-
-export function getClientMember(guild: Guild) {
-  const clientUser = guild.client.user;
-  if (!clientUser) return undefined;
-  const clientMember = guild.members.resolve(clientUser);
-  if (!clientMember) return undefined;
-  return clientMember;
 }

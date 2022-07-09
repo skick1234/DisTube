@@ -1,6 +1,6 @@
 import { firstPlaylistInfo, playlistResults, videoResults } from "../raw";
-import { DisTubeError, DisTubeHandler, SearchResult, defaultFilters, defaultOptions } from "@";
-import { Playlist, Song } from "@/struct";
+import { DisTubeError, DisTubeHandler, defaultFilters, defaultOptions } from "@";
+import { Playlist, SearchResultPlaylist, SearchResultVideo, Song } from "@/struct";
 import type { DisTubeOptions } from "@";
 
 import * as _ytpl from "@distube/ytpl";
@@ -84,8 +84,8 @@ function createV12Message(answerMessage: any): any {
 }
 
 const member: any = {};
-const songResult = new SearchResult(videoResults.items[0] as any);
-const plResult = new SearchResult(playlistResults.items[0] as any);
+const songResult = new SearchResultVideo(videoResults.items[0] as any);
+const plResult = new SearchResultPlaylist(playlistResults.items[0] as any);
 const metadata = { test: "sth" };
 const song = new Song({ id: "xxxxxxxxxxx", url: "https://www.youtube.com/watch?v=xxxxxxxxxxx" }, { member, metadata });
 const anotherSong = new Song(

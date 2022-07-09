@@ -6,7 +6,6 @@ import type {
   Interaction,
   Message,
   Snowflake,
-  User,
   VoiceBasedChannel,
   VoiceState,
 } from "discord.js";
@@ -207,11 +206,14 @@ export interface Chapter {
 export interface PlaylistInfo {
   source: string;
   member?: GuildMember;
-  user?: User;
   songs: Song[];
   name?: string;
   url?: string;
   thumbnail?: string;
+  /** @deprecated */
+  title?: string;
+  /** @deprecated */
+  webpage_url?: string;
 }
 
 export type RelatedSong = Omit<Song, "related">;
@@ -307,7 +309,7 @@ export enum PluginType {
  * Search result types:
  * * `VIDEO` = `"video"`
  * * `PLAYLIST` = `"playlist"`
- * @typedef {"video"|"playlist"} PluginType
+ * @typedef {"video"|"playlist"} SearchResultType
  */
 export enum SearchResultType {
   VIDEO = "video",

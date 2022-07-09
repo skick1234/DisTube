@@ -1,20 +1,27 @@
-import ytdl from "@distube/ytdl-core";
 import ytpl from "@distube/ytpl";
+import ytdl from "@distube/ytdl-core";
 import { DisTubeBase } from ".";
 import {
   DisTubeError,
   Playlist,
   Queue,
-  SearchResult,
-  SearchResultType,
+  SearchResultPlaylist,
+  SearchResultVideo,
   Song,
   isMessageInstance,
   isObject,
   isURL,
   isVoiceChannelEmpty,
 } from "..";
-import type { DisTube, OtherSongInfo, PlayHandlerOptions, ResolveOptions, ResolvePlaylistOptions } from "..";
 import type { Message, TextChannel, VoiceBasedChannel } from "discord.js";
+import type {
+  DisTube,
+  OtherSongInfo,
+  PlayHandlerOptions,
+  ResolveOptions,
+  ResolvePlaylistOptions,
+  SearchResult,
+} from "..";
 
 /**
  * DisTube's Handler
@@ -106,10 +113,8 @@ export class DisTubeHandler extends DisTubeBase {
       if ("member" in options) song.member = options.member;
       return song;
     }
-    if (song instanceof SearchResult) {
-      if (song.type === SearchResultType.VIDEO) return new Song(song, options);
-      return this.resolvePlaylist(song.url, options);
-    }
+    if (song instanceof SearchResultVideo) return new Song(song, options);
+    if (song instanceof SearchResultPlaylist) return this.resolvePlaylist(song.url, options);
     if (isObject(song)) return new Song(song, options);
     if (ytpl.validateID(song)) return this.resolvePlaylist(song, options);
     if (ytdl.validateURL(song)) return new Song(await this.getYouTubeInfo(song), options);
@@ -144,16 +149,24 @@ export class DisTubeHandler extends DisTubeBase {
       if ("member" in options) playlist.member = member;
       return playlist;
     }
-    let solvablePlaylist: Song[] | ytpl.result;
     if (typeof playlist === "string") {
-      solvablePlaylist = await ytpl(playlist, { limit: Infinity });
-      (solvablePlaylist as any).items = solvablePlaylist.items
+      const info = await ytpl(playlist, { limit: Infinity });
+      const songs = info.items
         .filter(v => !v.thumbnail.includes("no_thumbnail"))
         .map(v => new Song(v as OtherSongInfo, { member, metadata }));
-    } else {
-      solvablePlaylist = playlist;
+      return new Playlist(
+        {
+          source,
+          songs,
+          member,
+          name: info.title,
+          url: info.url,
+          thumbnail: songs[0].thumbnail,
+        },
+        { metadata },
+      );
     }
-    return new Playlist(solvablePlaylist, { member, properties: { source }, metadata });
+    return new Playlist(playlist, { member, properties: { source }, metadata });
   }
 
   /**

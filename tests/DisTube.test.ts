@@ -7,8 +7,10 @@ import {
   DisTubeVoiceManager,
   ExtractorPlugin,
   Options,
+  PluginType,
   QueueManager,
-  SearchResult,
+  SearchResultPlaylist,
+  SearchResultVideo,
   Song,
   defaultFilters,
 } from "@";
@@ -21,8 +23,8 @@ jest.mock("@/util");
 const Util = _Util as unknown as jest.Mocked<typeof _Util>;
 
 const member: any = {};
-const songResult = new SearchResult(videoResults.items[0]);
-const plResult = new SearchResult(playlistResults.items[0]);
+const songResult = new SearchResultVideo(videoResults.items[0]);
+const plResult = new SearchResultPlaylist(playlistResults.items[0]);
 const metadata = { test: "sth" };
 const song = new Song({ id: "xxxxxxxxxxx", url: "https://www.youtube.com/watch?v=xxxxxxxxxxx" }, { member, metadata });
 const anotherSong = new Song(
@@ -68,8 +70,8 @@ describe("Constructor", () => {
     expect(distube.handler).toBeInstanceOf(DisTubeHandler);
     expect(distube.queues).toBeInstanceOf(QueueManager);
     expect(distube.filters).toEqual(defaultFilters);
-    expect(distube.extractorPlugins.find(p => p.type === "custom")).toBeFalsy();
-    expect(distube.customPlugins.find(p => p.type === "extractor")).toBeFalsy();
+    expect(distube.extractorPlugins.find(p => p.type === PluginType.CUSTOM)).toBeFalsy();
+    expect(distube.customPlugins.find(p => p.type === PluginType.EXTRACTOR)).toBeFalsy();
   });
 
   test("#3", () => {
@@ -88,8 +90,8 @@ describe("Constructor", () => {
     expect(distube.handler).toBeInstanceOf(DisTubeHandler);
     expect(distube.queues).toBeInstanceOf(QueueManager);
     expect(distube.filters).toEqual(defaultFilters);
-    expect(distube.extractorPlugins.find(p => p.type === "custom")).toBeFalsy();
-    expect(distube.customPlugins.find(p => p.type === "extractor")).toBeFalsy();
+    expect(distube.extractorPlugins.find(p => p.type === PluginType.CUSTOM)).toBeFalsy();
+    expect(distube.customPlugins.find(p => p.type === PluginType.EXTRACTOR)).toBeFalsy();
     expect(client.on).not.toBeCalled();
   });
 });
