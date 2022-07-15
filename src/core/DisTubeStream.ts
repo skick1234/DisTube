@@ -76,7 +76,7 @@ export class DisTubeStream {
      * Stream type
      * @type {DiscordVoice.StreamType}
      */
-    this.type = !options.type ? DiscordVoiceStreamType.Opus : DiscordVoiceStreamType.Raw;
+    this.type = !options.type ? DiscordVoiceStreamType.OggOpus : DiscordVoiceStreamType.Raw;
     const args = [
       "-reconnect",
       "1",

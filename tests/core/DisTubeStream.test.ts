@@ -69,7 +69,7 @@ describe("DisTubeStream.YouTube()", () => {
     const url = liveFormats.find(f => f.itag === liveItag).url;
     expect(stream).toMatchObject({
       url,
-      type: DiscordVoiceStreamType.Opus,
+      type: DiscordVoiceStreamType.OggOpus,
       stream: expect.any(FFmpeg),
     });
     expect(FFmpeg).toBeCalledWith(
@@ -125,7 +125,7 @@ describe("DisTubeStream.DirectLink()", () => {
     const stream = DisTubeStream.DirectLink(url);
     expect(stream).toMatchObject({
       url,
-      type: DiscordVoiceStreamType.Opus,
+      type: DiscordVoiceStreamType.OggOpus,
       stream: expect.any(FFmpeg),
     });
     expect(FFmpeg).toBeCalledWith(
