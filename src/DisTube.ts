@@ -1,15 +1,15 @@
 import ytsr from "@distube/ytsr";
 import { TypedEmitter } from "tiny-typed-emitter";
 import {
+  DirectLinkPlugin,
   DisTubeError,
   DisTubeHandler,
   DisTubeVoiceManager,
-  HTTPPlugin,
-  HTTPSPlugin,
   Options,
   Playlist,
   QueueManager,
   SearchResultPlaylist,
+  SearchResultType,
   SearchResultVideo,
   Song,
   checkIntents,
@@ -22,8 +22,9 @@ import {
   isTextChannelInstance,
   isURL,
 } from ".";
-import type { Client, GuildMember, GuildTextBasedChannel, VoiceBasedChannel } from "discord.js";
+import type { Client, GuildTextBasedChannel, VoiceBasedChannel } from "discord.js";
 import type {
+  CustomPlaylistOptions,
   CustomPlugin,
   DisTubeEvents,
   DisTubeOptions,
@@ -34,7 +35,6 @@ import type {
   Queue,
   SearchResult,
 } from ".";
-import { SearchResultType } from ".";
 
 // Cannot be `import` as it's not under TS root dir
 // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
@@ -103,7 +103,7 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
      */
     this.filters = { ...defaultFilters, ...this.options.customFilters };
     // Default plugin
-    this.options.plugins.push(new HTTPPlugin(), new HTTPSPlugin());
+    this.options.plugins.push(new DirectLinkPlugin());
     this.options.plugins.map(p => p.init(this));
     /**
      * Extractor Plugins
@@ -237,12 +237,7 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
    */
   async createCustomPlaylist(
     songs: (string | Song | SearchResult)[],
-    options: {
-      member?: GuildMember;
-      properties?: Record<string, any>;
-      parallel?: boolean;
-      metadata?: any;
-    } = {},
+    options: CustomPlaylistOptions = {},
   ): Promise<Playlist> {
     const { member, properties, parallel, metadata } = { parallel: true, ...options };
     if (!Array.isArray(songs)) throw new DisTubeError("INVALID_TYPE", "Array", songs, "songs");
@@ -290,7 +285,7 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
    * @param {string} string The string search for
    * @param {Object} options Search options
    * @param {number} [options.limit=10] Limit the results
-   * @param {'video'|'playlist'} [options.type='video'] Type of results (`video` or `playlist`).
+   * @param {SearchResultType} [options.type=SearchResultType.VIDEO] Type of results (`video` or `playlist`).
    * @param {boolean} [options.safeSearch=false] Whether or not use safe search (YouTube restricted mode)
    * @throws {Error}
    * @returns {Promise<Array<SearchResult>>} Array of results
@@ -298,7 +293,7 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
   async search(
     string: string,
     options: {
-      type?: SearchResultType.VIDEO | SearchResultType.PLAYLIST;
+      type?: SearchResultType;
       limit?: number;
       safeSearch?: boolean;
       retried?: boolean;

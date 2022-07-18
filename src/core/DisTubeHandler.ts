@@ -115,7 +115,10 @@ export class DisTubeHandler extends DisTubeBase {
     }
     if (song instanceof SearchResultVideo) return new Song(song, options);
     if (song instanceof SearchResultPlaylist) return this.resolvePlaylist(song.url, options);
-    if (isObject(song)) return new Song(song, options);
+    if (isObject(song)) {
+      if (!("url" in song) && !("id" in song)) throw new DisTubeError("CANNOT_RESOLVE_SONG", song);
+      return new Song(song, options);
+    }
     if (ytpl.validateID(song)) return this.resolvePlaylist(song, options);
     if (ytdl.validateURL(song)) return new Song(await this.getYouTubeInfo(song), options);
     if (isURL(song)) {

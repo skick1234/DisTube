@@ -128,6 +128,8 @@ export class QueueManager extends GuildIdManager<Queue> {
     } catch {}
     this.emitError(error, queue.textChannel);
     if (queue.songs.length > 0) {
+      queue._next = queue._prev = false;
+      queue.beginTime = 0;
       this.playSong(queue).then(e => {
         if (!e) this.emit("playSong", queue, queue.songs[0]);
       });

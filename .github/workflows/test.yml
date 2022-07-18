@@ -2,16 +2,20 @@ name: Test
 on: [push, pull_request]
 jobs:
   test:
-    name: Test
-    runs-on: ubuntu-latest
+    name: Test on node v${{ matrix.node-version }} (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        node-version: [16, 18]
+        os: [ubuntu-latest]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Install Node.js
+      - name: Install Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v3
         with:
-          node-version: 16
+          node-version: ${{ matrix.node-version }}
           cache: "yarn"
           cache-dependency-path: yarn.lock
 

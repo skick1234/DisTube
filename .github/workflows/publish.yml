@@ -1,4 +1,4 @@
-name: Publish distube@dev
+name: Publish distube
 on:
   release:
     types: [created]
@@ -13,7 +13,7 @@ jobs:
       - name: Install Node.js
         uses: actions/setup-node@v3
         with:
-          node-version: 16
+          node-version: 18
           cache: "yarn"
           cache-dependency-path: yarn.lock
 
@@ -24,6 +24,6 @@ jobs:
         run: yarn version ${{ github.event.release.tag_name }}
 
       - name: Publish
-        run: yarn npm publish --tag dev
+        run: yarn npm publish --tag public
         env:
           YARN_NPM_AUTH_TOKEN: ${{ secrets.NPM_PUBLISH_TOKEN }}

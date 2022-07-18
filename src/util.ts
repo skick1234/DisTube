@@ -122,7 +122,7 @@ export function isTextChannelInstance(channel: any): channel is GuildTextBasedCh
     typeof channel.name === "string" &&
     Constants.TextBasedChannelTypes.includes(channel.type) &&
     typeof channel.nsfw === "boolean" &&
-    typeof channel.messages?.cache === "object" &&
+    "messages" in channel &&
     typeof channel.send === "function"
   );
 }

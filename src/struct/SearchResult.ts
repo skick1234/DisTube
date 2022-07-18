@@ -1,7 +1,11 @@
 import { DisTubeError, SearchResultType, formatDuration, toSecond } from "..";
 import type { Playlist, Video } from "@distube/ytsr";
 
-/** A abstract class representing a search result. */
+/**
+ * A abstract class representing a search result.
+ * @abstract
+ * @private
+ */
 abstract class ISearchResult {
   source: "youtube";
   abstract type: SearchResultType;
@@ -51,6 +55,7 @@ abstract class ISearchResult {
   }
 }
 
+/** A class representing a video search result. */
 export class SearchResultVideo extends ISearchResult {
   type: SearchResultType.VIDEO;
   views: number;
@@ -98,6 +103,7 @@ export class SearchResultVideo extends ISearchResult {
   }
 }
 
+/** A class representing a playlist search result. */
 export class SearchResultPlaylist extends ISearchResult {
   type: SearchResultType.PLAYLIST;
   length: number;
