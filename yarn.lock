@@ -3911,7 +3911,7 @@ __metadata:
   peerDependencies:
     "@discordjs/opus": "*"
     "@discordjs/voice": "*"
-    discord.js: 14||^14.0.0-dev
+    discord.js: 14
   peerDependenciesMeta:
     "@discordjs/opus":
       optional: true
