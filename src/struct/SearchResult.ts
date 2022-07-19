@@ -55,7 +55,10 @@ abstract class ISearchResult {
   }
 }
 
-/** A class representing a video search result. */
+/**
+ * A class representing a video search result.
+ * @extends ISearchResult
+ */
 export class SearchResultVideo extends ISearchResult {
   type: SearchResultType.VIDEO;
   views: number;
@@ -103,7 +106,16 @@ export class SearchResultVideo extends ISearchResult {
   }
 }
 
-/** A class representing a playlist search result. */
+/**
+ * A video or playlist search result
+ * @typedef {SearchResultVideo|SearchResultPlaylist} SearchResult
+ */
+export type SearchResult = SearchResultVideo | SearchResultPlaylist;
+
+/**
+ * A class representing a playlist search result.
+ * @extends ISearchResult
+ */
 export class SearchResultPlaylist extends ISearchResult {
   type: SearchResultType.PLAYLIST;
   length: number;
@@ -126,5 +138,3 @@ export class SearchResultPlaylist extends ISearchResult {
     };
   }
 }
-
-export type SearchResult = SearchResultVideo | SearchResultPlaylist;

@@ -24,6 +24,6 @@ jobs:
         run: yarn version ${{ github.event.release.tag_name }}
 
       - name: Publish
-        run: yarn npm publish --tag public
+        run: yarn npm publish --access public --tag latest
         env:
           YARN_NPM_AUTH_TOKEN: ${{ secrets.NPM_PUBLISH_TOKEN }}
