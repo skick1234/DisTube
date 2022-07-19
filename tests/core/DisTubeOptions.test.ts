@@ -19,6 +19,7 @@ test("Default DisTubeOptions", () => {
     emitAddSongWhenCreatingQueue: true,
     joinNewVoiceChannel: true,
     streamType: 0,
+    directLink: true,
   });
 });
 

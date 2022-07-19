@@ -21,6 +21,7 @@ export class Options {
   emitAddListWhenCreatingQueue: boolean;
   joinNewVoiceChannel: boolean;
   streamType: StreamType;
+  directLink: boolean;
   constructor(options: DisTubeOptions) {
     if (typeof options !== "object" || Array.isArray(options)) {
       throw new DisTubeError("INVALID_TYPE", "object", options, "DisTubeOptions");
@@ -44,6 +45,7 @@ export class Options {
     this.emitAddListWhenCreatingQueue = opts.emitAddListWhenCreatingQueue;
     this.joinNewVoiceChannel = opts.joinNewVoiceChannel;
     this.streamType = opts.streamType;
+    this.directLink = opts.directLink;
     checkInvalidKey(opts, this, "DisTubeOptions");
     this.#validateOptions();
   }
@@ -125,6 +127,9 @@ export class Options {
     }
     if (typeof options.streamType !== "number" || isNaN(options.streamType) || !StreamType[options.streamType]) {
       throw new DisTubeError("INVALID_TYPE", "StreamType", options.streamType, "DisTubeOptions.streamType");
+    }
+    if (typeof options.directLink !== "boolean") {
+      throw new DisTubeError("INVALID_TYPE", "boolean", options.directLink, "DisTubeOptions.directLink");
     }
   }
 }

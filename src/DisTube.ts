@@ -103,7 +103,7 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
      */
     this.filters = { ...defaultFilters, ...this.options.customFilters };
     // Default plugin
-    this.options.plugins.push(new DirectLinkPlugin());
+    if (this.options.directLink) this.options.plugins.push(new DirectLinkPlugin());
     this.options.plugins.map(p => p.init(this));
     /**
      * Extractor Plugins

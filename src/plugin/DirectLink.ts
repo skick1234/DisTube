@@ -4,10 +4,12 @@ import type { GuildMember } from "discord.js";
 
 export class DirectLinkPlugin extends ExtractorPlugin {
   override async validate(url: string) {
-    const headers = await request(url, { method: "HEAD" }).then(res => res.headers);
-    const type = headers["content-type"];
+    try {
+      const headers = await request(url, { method: "HEAD" }).then(res => res.headers);
+      const type = headers["content-type"];
 
-    if (type?.startsWith("audio")) return true;
+      if (type?.startsWith("audio")) return true;
+    } catch {}
     return false;
   }
 
