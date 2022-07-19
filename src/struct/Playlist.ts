@@ -64,6 +64,7 @@ export class Playlist<T = unknown> implements PlaylistInfo {
         ? `${this.songs[0].name} and ${this.songs.length - 1} more songs.`
         : `${this.songs.length} songs playlist`;
       this.thumbnail = this.songs[0].thumbnail;
+      this.member = member || undefined;
     } else {
       this.source = (playlist.source || "youtube").toLowerCase();
       if (!Array.isArray(playlist.songs) || !playlist.songs.length) throw new DisTubeError("EMPTY_PLAYLIST");
@@ -86,10 +87,10 @@ export class Playlist<T = unknown> implements PlaylistInfo {
        * @type {string?}
        */
       this.thumbnail = playlist.thumbnail || this.songs[0].thumbnail;
+      this.member = member || playlist.member || undefined;
     }
     this.songs.map(s => s.constructor.name === "Song" && (s.playlist = this));
     if (properties) for (const [key, value] of Object.entries(properties)) this[key] = value;
-    this.member = member;
     /**
      * Optional metadata that can be used to identify the playlist.
      * @type {T}
