@@ -180,8 +180,8 @@ export function checkInvalidKey(
   sourceName: string,
 ) {
   if (!isObject(target)) throw new DisTubeError("INVALID_TYPE", "object", target, sourceName);
-  const sourceKeys = Array.isArray(source) ? source : Object.keys(source);
-  const invalidKey = Object.keys(target).find(key => !sourceKeys.includes(key));
+  const sourceKeys = Array.isArray(source) ? source : objectKeys(source);
+  const invalidKey = objectKeys(target).find(key => !sourceKeys.includes(key));
   if (invalidKey) throw new DisTubeError("INVALID_KEY", sourceName, invalidKey);
 }
 
@@ -191,4 +191,10 @@ export function isObject(obj: any): obj is object {
 
 export function isRecord<T = unknown>(obj: any): obj is Record<string, T> {
   return isObject(obj);
+}
+
+type KeyOf<T> = T extends object ? (keyof T)[] : [];
+export function objectKeys<T>(obj: T): KeyOf<T> {
+  if (!isObject(obj)) return [] as KeyOf<T>;
+  return Object.keys(obj) as KeyOf<T>;
 }

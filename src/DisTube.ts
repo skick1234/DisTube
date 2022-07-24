@@ -26,7 +26,6 @@ import type { Client, GuildTextBasedChannel, VoiceBasedChannel } from "discord.j
 import type {
   CustomPlaylistOptions,
   CustomPlugin,
-  DisTubeEvents,
   DisTubeOptions,
   ExtractorPlugin,
   Filters,
@@ -34,6 +33,7 @@ import type {
   PlayOptions,
   Queue,
   SearchResult,
+  TypedDisTubeEvents,
 } from ".";
 
 // Cannot be `import` as it's not under TS root dir
@@ -44,7 +44,7 @@ export const { version }: { version: string } = require("../package.json");
  * DisTube class
  * @extends EventEmitter
  */
-export class DisTube extends TypedEmitter<DisTubeEvents> {
+export class DisTube extends TypedEmitter<TypedDisTubeEvents> {
   readonly handler: DisTubeHandler;
   readonly options: Options;
   readonly client: Client;
@@ -135,7 +135,7 @@ export class DisTube extends TypedEmitter<DisTubeEvents> {
    * Play / add a song or playlist from url. Search and play a song if it is not a valid url.
    *
    * @param {Discord.BaseGuildVoiceChannel} voiceChannel The channel will be joined if the bot isn't in any channels,
-   * the bot will be moved to this channel if `options.move` is `true`
+   * the bot will be moved to this channel if {@link DisTubeOptions}.joinNewVoiceChannel is `true`
    * @param {string|Song|SearchResult|Playlist} song URL | Search string |
    * {@link Song} | {@link SearchResult} | {@link Playlist}
    * @param {PlayOptions} [options] Optional options

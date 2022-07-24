@@ -19,23 +19,65 @@ export type DisTubeVoiceEvents = {
   finish: () => Awaitable;
 };
 
+/**
+ * @typedef {Object} Events
+ * @prop {string} ERROR error
+ * @prop {string} ADD_LIST addList
+ * @prop {string} ADD_SONG addSong
+ * @prop {string} PLAY_SONG playSong
+ * @prop {string} FINISH_SONG finishSong
+ * @prop {string} EMPTY empty
+ * @prop {string} FINISH finish
+ * @prop {string} INIT_QUEUE initQueue
+ * @prop {string} NO_RELATED noRelated
+ * @prop {string} DISCONNECT disconnect
+ * @prop {string} DELETE_QUEUE deleteQueue
+ * @prop {string} SEARCH_CANCEL searchCancel
+ * @prop {string} SEARCH_NO_RESULT searchNoResult
+ * @prop {string} SEARCH_DONE searchDone
+ * @prop {string} SEARCH_INVALID_ANSWER searchInvalidAnswer
+ * @prop {string} SEARCH_RESULT searchResult
+ */
+export enum Events {
+  ERROR = "error",
+  ADD_LIST = "addList",
+  ADD_SONG = "addSong",
+  PLAY_SONG = "playSong",
+  FINISH_SONG = "finishSong",
+  EMPTY = "empty",
+  FINISH = "finish",
+  INIT_QUEUE = "initQueue",
+  NO_RELATED = "noRelated",
+  DISCONNECT = "disconnect",
+  DELETE_QUEUE = "deleteQueue",
+  SEARCH_CANCEL = "searchCancel",
+  SEARCH_NO_RESULT = "searchNoResult",
+  SEARCH_DONE = "searchDone",
+  SEARCH_INVALID_ANSWER = "searchInvalidAnswer",
+  SEARCH_RESULT = "searchResult",
+}
+
 export type DisTubeEvents = {
-  error: (channel: GuildTextBasedChannel | undefined, error: Error) => Awaitable;
-  addList: (queue: Queue, playlist: Playlist) => Awaitable;
-  addSong: (queue: Queue, song: Song) => Awaitable;
-  playSong: (queue: Queue, song: Song) => Awaitable;
-  finishSong: (queue: Queue, song: Song) => Awaitable;
-  empty: (queue: Queue) => Awaitable;
-  finish: (queue: Queue) => Awaitable;
-  initQueue: (queue: Queue) => Awaitable;
-  noRelated: (queue: Queue) => Awaitable;
-  disconnect: (queue: Queue) => Awaitable;
-  deleteQueue: (queue: Queue) => Awaitable;
-  searchCancel: (message: Message<true>, query: string) => Awaitable;
-  searchNoResult: (message: Message<true>, query: string) => Awaitable;
-  searchDone: (message: Message<true>, answer: Message<true>, query: string) => Awaitable;
-  searchInvalidAnswer: (message: Message<true>, answer: Message<true>, query: string) => Awaitable;
-  searchResult: (message: Message<true>, results: SearchResult[], query: string) => Awaitable;
+  error: [channel: GuildTextBasedChannel | undefined, error: Error];
+  addList: [queue: Queue, playlist: Playlist];
+  addSong: [queue: Queue, song: Song];
+  playSong: [queue: Queue, song: Song];
+  finishSong: [queue: Queue, song: Song];
+  empty: [queue: Queue];
+  finish: [queue: Queue];
+  initQueue: [queue: Queue];
+  noRelated: [queue: Queue];
+  disconnect: [queue: Queue];
+  deleteQueue: [queue: Queue];
+  searchCancel: [message: Message<true>, query: string];
+  searchNoResult: [message: Message<true>, query: string];
+  searchDone: [message: Message<true>, answer: Message<true>, query: string];
+  searchInvalidAnswer: [message: Message<true>, answer: Message<true>, query: string];
+  searchResult: [message: Message<true>, results: SearchResult[], query: string];
+};
+
+export type TypedDisTubeEvents = {
+  [K in keyof DisTubeEvents]: (...args: DisTubeEvents[K]) => Awaitable;
 };
 
 /**

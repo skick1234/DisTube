@@ -1,6 +1,6 @@
 import { GuildIdManager } from ".";
-import { DisTubeError, DisTubeStream, Queue, RepeatMode } from "../..";
-import type { DisTubeVoiceEvents, Song } from "../..";
+import { DisTubeError, DisTubeStream, Queue, RepeatMode, objectKeys } from "../..";
+import type { Song } from "../..";
 import type { GuildTextBasedChannel, VoiceBasedChannel } from "discord.js";
 
 /**
@@ -63,7 +63,7 @@ export class QueueManager extends GuildIdManager<Queue> {
       error: error => this.#handlePlayingError(queue, error),
       finish: () => this.#handleSongFinish(queue),
     };
-    for (const event of Object.keys(queue._listeners) as (keyof DisTubeVoiceEvents)[]) {
+    for (const event of objectKeys(queue._listeners)) {
       queue.voice.on(event, queue._listeners[event]);
     }
   }

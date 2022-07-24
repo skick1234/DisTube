@@ -1,5 +1,5 @@
 import { DisTubeBase, FilterManager } from "../core";
-import { DisTubeError, RepeatMode, Song, TaskQueue, formatDuration } from "..";
+import { DisTubeError, RepeatMode, Song, TaskQueue, formatDuration, objectKeys } from "..";
 import type { GuildTextBasedChannel, Snowflake } from "discord.js";
 import type { DisTube, DisTubeVoice, DisTubeVoiceEvents } from "..";
 
@@ -418,7 +418,7 @@ export class Queue extends DisTubeBase {
     this.songs = [];
     this.previousSongs = [];
     if (this._listeners) {
-      for (const event of Object.keys(this._listeners) as (keyof DisTubeVoiceEvents)[]) {
+      for (const event of objectKeys(this._listeners)) {
         this.voice.removeListener(event, this._listeners[event]);
       }
     }
