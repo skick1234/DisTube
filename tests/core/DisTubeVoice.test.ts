@@ -10,7 +10,7 @@ jest.mock("@discordjs/voice");
 const Util = _Util as unknown as jest.Mocked<typeof _Util>;
 const DiscordVoice = _DiscordVoice as unknown as jest.Mocked<typeof _DiscordVoice>;
 
-const client = { user: { id: 3 } };
+const client = { user: { id: 3 }, channels: { cache: { get: jest.fn() } } };
 
 const voiceManager = {
   add: jest.fn(),
@@ -24,6 +24,7 @@ const voiceChannel = {
   guild: { id: 2, voiceAdapterCreator: () => undefined },
   client,
   joinable: true,
+  type: 2,
 };
 
 const connection = {
@@ -66,7 +67,11 @@ const audioResource = {
 
 beforeEach(() => {
   jest.resetAllMocks();
-  DiscordVoice.joinVoiceChannel.mockReturnValue(connection as any);
+  DiscordVoice.joinVoiceChannel.mockImplementation((joinConfig: any) => {
+    connection.joinConfig = joinConfig;
+    return connection as any;
+  });
+  // DiscordVoice.joinVoiceChannel.mockReturnValue(connection as any);
   DiscordVoice.createAudioPlayer.mockReturnValue(audioPlayer as any);
   audioPlayer.on.mockReturnThis();
   connection.on.mockReturnThis();
@@ -202,6 +207,7 @@ describe("Methods", () => {
       expect(() => {
         voice.channel = voiceChannel as any;
       }).not.toThrow();
+      client.channels.cache.get.mockReturnValue(voiceChannel);
       expect(voice.channel).toBe(voiceChannel);
       expect(voice.connection).toBe(connection);
     });
@@ -276,6 +282,7 @@ describe("Methods", () => {
       expect(DiscordVoice.entersState).toBeCalledWith(connection, DiscordVoice.VoiceConnectionStatus.Ready, TIMEOUT);
       expect(connection.destroy).not.toBeCalled();
       expect(voiceManager.remove).not.toBeCalled();
+      client.channels.cache.get.mockReturnValue({ type: 0 });
       expect(voice.channel).toBe(voiceChannel);
       expect(voice.connection).toBe(connection);
     });

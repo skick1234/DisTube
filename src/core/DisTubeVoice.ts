@@ -1,3 +1,4 @@
+import { Constants } from "discord.js";
 import { TypedEmitter } from "tiny-typed-emitter";
 import { DisTubeError, isSupportedVoiceChannel } from "..";
 import {
@@ -83,7 +84,24 @@ export class DisTubeVoice extends TypedEmitter<DisTubeVoiceEvents> {
   #br() {
     if (this.audioResource?.encoder?.encoder) this.audioResource.encoder.setBitrate(this.channel.bitrate);
   }
+  /**
+   * The voice channel id the bot is in
+   * @type {Snowflake?}
+   */
+  get channelId() {
+    return this.connection?.joinConfig?.channelId ?? undefined;
+  }
   get channel() {
+    if (!this.channelId) return this.#channel;
+    if (this.#channel?.id === this.channelId) return this.#channel;
+    const channel = this.voices.client.channels.cache.get(this.channelId);
+    if (!channel) return this.#channel;
+    for (const type of Constants.VoiceBasedChannelTypes) {
+      if (channel.type === type) {
+        this.#channel = channel;
+        return channel;
+      }
+    }
     return this.#channel;
   }
   set channel(channel: VoiceBasedChannel) {
@@ -92,7 +110,7 @@ export class DisTubeVoice extends TypedEmitter<DisTubeVoiceEvents> {
     }
     if (channel.guildId !== this.id) throw new DisTubeError("VOICE_DIFFERENT_GUILD");
     if (channel.client.user?.id !== this.voices.client.user?.id) throw new DisTubeError("VOICE_DIFFERENT_CLIENT");
-    if (channel.id === this.#channel?.id) return;
+    if (channel.id === this.channelId) return;
     if (!channel.joinable) {
       if (channel.full) throw new DisTubeError("VOICE_FULL");
       else throw new DisTubeError("VOICE_MISSING_PERMS");
