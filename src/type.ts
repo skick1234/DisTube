@@ -19,44 +19,6 @@ export type DisTubeVoiceEvents = {
   finish: () => Awaitable;
 };
 
-/**
- * @typedef {Object} Events
- * @prop {string} ERROR error
- * @prop {string} ADD_LIST addList
- * @prop {string} ADD_SONG addSong
- * @prop {string} PLAY_SONG playSong
- * @prop {string} FINISH_SONG finishSong
- * @prop {string} EMPTY empty
- * @prop {string} FINISH finish
- * @prop {string} INIT_QUEUE initQueue
- * @prop {string} NO_RELATED noRelated
- * @prop {string} DISCONNECT disconnect
- * @prop {string} DELETE_QUEUE deleteQueue
- * @prop {string} SEARCH_CANCEL searchCancel
- * @prop {string} SEARCH_NO_RESULT searchNoResult
- * @prop {string} SEARCH_DONE searchDone
- * @prop {string} SEARCH_INVALID_ANSWER searchInvalidAnswer
- * @prop {string} SEARCH_RESULT searchResult
- */
-export enum Events {
-  ERROR = "error",
-  ADD_LIST = "addList",
-  ADD_SONG = "addSong",
-  PLAY_SONG = "playSong",
-  FINISH_SONG = "finishSong",
-  EMPTY = "empty",
-  FINISH = "finish",
-  INIT_QUEUE = "initQueue",
-  NO_RELATED = "noRelated",
-  DISCONNECT = "disconnect",
-  DELETE_QUEUE = "deleteQueue",
-  SEARCH_CANCEL = "searchCancel",
-  SEARCH_NO_RESULT = "searchNoResult",
-  SEARCH_DONE = "searchDone",
-  SEARCH_INVALID_ANSWER = "searchInvalidAnswer",
-  SEARCH_RESULT = "searchResult",
-}
-
 export type DisTubeEvents = {
   error: [channel: GuildTextBasedChannel | undefined, error: Error];
   addList: [queue: Queue, playlist: Playlist];
@@ -264,9 +226,9 @@ export type RelatedSong = Omit<Song, "related">;
 
 /**
  * @typedef {Object} PlayHandlerOptions
- * @param {Discord.BaseGuildTextChannel} [options.textChannel] The default text channel of the queue
- * @param {boolean} [options.skip=false] Skip the playing song (if exists) and play the added playlist instantly
- * @param {number} [options.position=0] Position of the song/playlist to add to the queue,
+ * @prop {Discord.BaseGuildTextChannel} [options.textChannel] The default text channel of the queue
+ * @prop {boolean} [options.skip=false] Skip the playing song (if exists) and play the added playlist instantly
+ * @prop {number} [options.position=0] Position of the song/playlist to add to the queue,
  * <= 0 to add to the end of the queue.
  */
 export type PlayHandlerOptions = {
@@ -277,15 +239,15 @@ export type PlayHandlerOptions = {
 
 /**
  * @typedef {Object} PlayOptions
- * @param {Discord.GuildMember} [member] Requested user (default is your bot)
- * @param {Discord.BaseGuildTextChannel} [textChannel] Default {@link Queue#textChannel}
- * @param {boolean} [skip=false]
+ * @prop {Discord.GuildMember} [member] Requested user (default is your bot)
+ * @prop {Discord.BaseGuildTextChannel} [textChannel] Default {@link Queue#textChannel}
+ * @prop {boolean} [skip=false]
  * Skip the playing song (if exists) and play the added song/playlist if `position` is 1.
  * If `position` is defined and not equal to 1, it will skip to the next song instead of the added song
- * @param {number} [position=0] Position of the song/playlist to add to the queue,
+ * @prop {number} [position=0] Position of the song/playlist to add to the queue,
  * <= 0 to add to the end of the queue.
- * @param {Discord.Message} [message] Called message (For built-in search events. If this is a {@link https://developer.mozilla.org/en-US/docs/Glossary/Falsy|falsy value}, it will play the first result instead)
- * @param {*} [metadata] Optional metadata that can be attached to the song/playlist will be played,
+ * @prop {Discord.Message} [message] Called message (For built-in search events. If this is a {@link https://developer.mozilla.org/en-US/docs/Glossary/Falsy|falsy value}, it will play the first result instead)
+ * @prop {*} [metadata] Optional metadata that can be attached to the song/playlist will be played,
  * This is useful for identification purposes when the song/playlist is passed around in events.
  * See {@link Song#metadata} or {@link Playlist#metadata}
  */
@@ -295,8 +257,8 @@ export interface PlayOptions extends PlayHandlerOptions, ResolveOptions<any> {
 
 /**
  * @typedef {Object} ResolveOptions
- * @param {Discord.GuildMember} [member] Requested user
- * @param {*} [metadata] Metadata
+ * @prop {Discord.GuildMember} [member] Requested user
+ * @prop {*} [metadata] Metadata
  */
 export interface ResolveOptions<T = unknown> {
   member?: GuildMember;
@@ -305,7 +267,7 @@ export interface ResolveOptions<T = unknown> {
 
 /**
  * @typedef {ResolveOptions} ResolvePlaylistOptions
- * @param {string} [source] Source of the playlist
+ * @prop {string} [source] Source of the playlist
  */
 export interface ResolvePlaylistOptions<T = unknown> extends ResolveOptions<T> {
   source?: string;
@@ -313,10 +275,10 @@ export interface ResolvePlaylistOptions<T = unknown> extends ResolveOptions<T> {
 
 /**
  * @typedef {Object} CustomPlaylistOptions
- * @param {Discord.GuildMember} [member] A guild member creating the playlist
- * @param {Object} [properties] Additional properties such as `name`
- * @param {boolean} [parallel=true] Whether or not fetch the songs in parallel
- * @param {*} [metadata] Metadata
+ * @prop {Discord.GuildMember} [member] A guild member creating the playlist
+ * @prop {Object} [properties] Additional properties such as `name`
+ * @prop {boolean} [parallel=true] Whether or not fetch the songs in parallel
+ * @prop {*} [metadata] Metadata
  */
 export interface CustomPlaylistOptions {
   member?: GuildMember;
@@ -326,7 +288,7 @@ export interface CustomPlaylistOptions {
 }
 
 /**
- * The repeat mode of a {@link Queue} (enum)
+ * The repeat mode of a {@link Queue}
  * * `DISABLED` = 0
  * * `SONG` = 1
  * * `QUEUE` = 2
@@ -361,7 +323,6 @@ export enum SearchResultType {
 }
 
 /**
- *
  * Stream types:
  * * `OPUS` = `0` (Better quality, use more resources - **Recommended**)
  * * `RAW` = `1` (Better performance, use less resources)
@@ -371,4 +332,42 @@ export enum SearchResultType {
 export enum StreamType {
   OPUS,
   RAW,
+}
+
+/**
+ * @typedef {Object} Events
+ * @prop {string} ERROR error
+ * @prop {string} ADD_LIST addList
+ * @prop {string} ADD_SONG addSong
+ * @prop {string} PLAY_SONG playSong
+ * @prop {string} FINISH_SONG finishSong
+ * @prop {string} EMPTY empty
+ * @prop {string} FINISH finish
+ * @prop {string} INIT_QUEUE initQueue
+ * @prop {string} NO_RELATED noRelated
+ * @prop {string} DISCONNECT disconnect
+ * @prop {string} DELETE_QUEUE deleteQueue
+ * @prop {string} SEARCH_CANCEL searchCancel
+ * @prop {string} SEARCH_NO_RESULT searchNoResult
+ * @prop {string} SEARCH_DONE searchDone
+ * @prop {string} SEARCH_INVALID_ANSWER searchInvalidAnswer
+ * @prop {string} SEARCH_RESULT searchResult
+ */
+export enum Events {
+  ERROR = "error",
+  ADD_LIST = "addList",
+  ADD_SONG = "addSong",
+  PLAY_SONG = "playSong",
+  FINISH_SONG = "finishSong",
+  EMPTY = "empty",
+  FINISH = "finish",
+  INIT_QUEUE = "initQueue",
+  NO_RELATED = "noRelated",
+  DISCONNECT = "disconnect",
+  DELETE_QUEUE = "deleteQueue",
+  SEARCH_CANCEL = "searchCancel",
+  SEARCH_NO_RESULT = "searchNoResult",
+  SEARCH_DONE = "searchDone",
+  SEARCH_INVALID_ANSWER = "searchInvalidAnswer",
+  SEARCH_RESULT = "searchResult",
 }

@@ -10,13 +10,13 @@ import { Collection } from "discord.js";
 export abstract class BaseManager<V> extends DisTubeBase {
   /**
    * The collection of items for this manager.
-   * @type {Discord.Collection}
+   * @type {Collection}
+   * @name BaseManager#collection
    */
   collection = new Collection<string, V>();
   /**
    * The size of the collection.
-   * @type {Discord.Collection}
-   * @abstract
+   * @type {number}
    */
   get size() {
     return this.collection.size;

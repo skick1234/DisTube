@@ -7,6 +7,11 @@ import type { FilterResolvable, Queue } from "../..";
  * @extends {BaseManager}
  */
 export class FilterManager extends BaseManager<FilterResolvable> {
+  /**
+   * Collection of {@link FilterResolvable}.
+   * @name FilterManager#collection
+   * @type {Discord.Collection<string, DisTubeVoice>}
+   */
   queue: Queue;
   constructor(queue: Queue) {
     super(queue.distube);
