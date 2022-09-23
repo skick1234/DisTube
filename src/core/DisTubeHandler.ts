@@ -120,7 +120,7 @@ export class DisTubeHandler extends DisTubeBase {
       return new Song(song, options);
     }
     if (ytpl.validateID(song)) return this.resolvePlaylist(song, options);
-    if (ytdl.validateURL(song)) return new Song(await this.getYouTubeInfo(song), options);
+    if (ytdl.validateURL(song)) return new Song(await this.getYouTubeInfo(song, true), options);
     if (isURL(song)) {
       for (const plugin of this.distube.extractorPlugins) {
         if (await plugin.validate(song)) return plugin.resolve(song, options);
@@ -156,7 +156,7 @@ export class DisTubeHandler extends DisTubeBase {
       const info = await ytpl(playlist, { limit: Infinity });
       const songs = info.items
         .filter(v => !v.thumbnail.includes("no_thumbnail"))
-        .map(v => new Song(v as OtherSongInfo, { member, metadata }));
+        .map(v => new Song(v, { member, metadata }));
       return new Playlist(
         {
           source,

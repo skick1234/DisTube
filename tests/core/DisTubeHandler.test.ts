@@ -87,12 +87,12 @@ const member: any = {};
 const songResult = new SearchResultVideo(videoResults.items[0] as any);
 const plResult = new SearchResultPlaylist(playlistResults.items[0] as any);
 const metadata = { test: "sth" };
-const song = new Song({ id: "xxxxxxxxxxx", url: "https://www.youtube.com/watch?v=xxxxxxxxxxx" }, { member, metadata });
-const anotherSong = new Song(
-  { id: "y", url: "https://www.youtube.com/watch?v=y" },
-  { member, source: "test", metadata },
+const song = new Song(
+  { id: "xxxxxxxxxxx", url: "https://www.youtube.com/watch?v=xxxxxxxxxxx", src: "youtube" },
+  { member, metadata },
 );
-const nsfwSong = new Song({ id: "z", url: "z url", age_restricted: true }, { member, source: "test", metadata });
+const anotherSong = new Song({ id: "y", url: "https://www.youtube.com/watch?v=y", src: "test" }, { member, metadata });
+const nsfwSong = new Song({ id: "z", url: "z url", age_restricted: true, src: "test" }, { member, metadata });
 const playlist = new Playlist([song, anotherSong, nsfwSong], { member, metadata });
 
 beforeEach(() => {
@@ -290,11 +290,11 @@ describe("DisTubeHandler#resolve()", () => {
   test("Parameter is a youtube url", async () => {
     const url = "a youtube url";
     ytdl.validateURL.mockReturnValue(true);
-    ytdl.getInfo.mockReturnValue({ full: true, videoDetails: { id: "test" }, formats: ["a format"] } as any);
+    ytdl.getBasicInfo.mockReturnValue({ full: true, videoDetails: { id: "test" }, formats: ["a format"] } as any);
     const resolved = handler.resolve(url, { member, metadata });
     await expect(resolved).resolves.toBeInstanceOf(Song);
     expect(ytdl.validateURL).toBeCalledWith(url);
-    expect(ytdl.getInfo).toBeCalledWith(url, handler.ytdlOptions);
+    expect(ytdl.getBasicInfo).toBeCalledWith(url, handler.ytdlOptions);
   });
 
   test("Parameter is a url supported by an extractor plugin", async () => {
@@ -359,7 +359,7 @@ describe("DisTubeHandler#playPlaylist()", () => {
     await expect(handler.playPlaylist(voice, pl1, { textChannel: { nsfw: false } } as any)).rejects.toThrow(
       new DisTubeError("EMPTY_FILTERED_PLAYLIST"),
     );
-    const pl2 = new Playlist([new Song({ age_restricted: true, url: "test url" }, { member, source: "test" })]);
+    const pl2 = new Playlist([new Song({ age_restricted: true, url: "test url", src: "test" }, { member })]);
     pl2.songs = [];
     await expect(handler.playPlaylist(voice, pl2, { textChannel: { nsfw: true } } as any)).rejects.toThrow(
       new DisTubeError("EMPTY_PLAYLIST"),

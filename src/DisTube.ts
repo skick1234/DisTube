@@ -268,16 +268,16 @@ export class DisTube extends TypedEmitter<TypedDisTubeEvents> {
 
   search(
     string: string,
-    options?: { type?: SearchResultType; limit?: number; safeSearch?: boolean; retried?: boolean },
-  ): Promise<Array<SearchResult>>;
-  search(
-    string: string,
     options?: { type?: SearchResultType.VIDEO; limit?: number; safeSearch?: boolean; retried?: boolean },
   ): Promise<Array<SearchResultVideo>>;
   search(
     string: string,
     options: { type: SearchResultType.PLAYLIST; limit?: number; safeSearch?: boolean; retried?: boolean },
   ): Promise<Array<SearchResultPlaylist>>;
+  search(
+    string: string,
+    options?: { type?: SearchResultType; limit?: number; safeSearch?: boolean; retried?: boolean },
+  ): Promise<Array<SearchResult>>;
   /**
    * Search for a song. You can customize how user answers instead of send a number.
    * Then use {@link DisTube#play} to play it.

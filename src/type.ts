@@ -177,7 +177,7 @@ export type GuildIdResolvable =
   | string;
 
 export interface OtherSongInfo {
-  src?: string;
+  src: string;
   id?: string;
   title?: string;
   name?: string;

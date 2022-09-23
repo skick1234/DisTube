@@ -1,5 +1,6 @@
 import { Playlist } from "./Playlist";
 import { DisTubeError, formatDuration, isMemberInstance, parseNumber, toSecond } from "..";
+import type ytpl from "@distube/ytpl";
 import type ytdl from "@distube/ytdl-core";
 import type { GuildMember } from "discord.js";
 import type { Chapter, OtherSongInfo, RelatedSong, SearchResult } from "..";
@@ -48,7 +49,13 @@ export class Song<T = unknown> {
    * @param {T} [options.metadata] Song metadata
    */
   constructor(
-    info: ytdl.videoInfo | SearchResult | OtherSongInfo | ytdl.relatedVideo | RelatedSong,
+    info:
+      | ytdl.videoInfo
+      | SearchResult
+      | OtherSongInfo
+      | ytdl.relatedVideo
+      | RelatedSong
+      | ytpl.result["items"][number],
     options: {
       member?: GuildMember;
       source?: string;

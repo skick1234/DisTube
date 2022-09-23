@@ -1,5 +1,5 @@
 import { GuildIdManager } from ".";
-import { DisTubeError, DisTubeStream, Queue, RepeatMode, objectKeys } from "../..";
+import { DisTubeError, DisTubeStream, Queue, RepeatMode, chooseBestVideoFormat, objectKeys } from "../..";
 import type { Song } from "../..";
 import type { GuildTextBasedChannel, VoiceBasedChannel } from "discord.js";
 
@@ -167,9 +167,12 @@ export class QueueManager extends GuildIdManager<Queue> {
     if (queue.stopped) return false;
     try {
       const song = queue.songs[0];
-      const { url, source, formats, streamURL } = song;
-      if (source === "youtube" && !formats) song._patchYouTube(await this.handler.getYouTubeInfo(url));
-      if (source !== "youtube" && !streamURL) {
+      const { url, source, formats, streamURL, isLive } = song;
+      if (source === "youtube") {
+        if (!formats || !chooseBestVideoFormat(formats, isLive)) {
+          song._patchYouTube(await this.handler.getYouTubeInfo(url));
+        }
+      } else if (!streamURL) {
         for (const plugin of [...this.distube.extractorPlugins, ...this.distube.customPlugins]) {
           if (await plugin.validate(url)) {
             const info = [plugin.getStreamURL(url), plugin.getRelatedSongs(url)] as const;

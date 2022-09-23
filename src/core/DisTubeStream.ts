@@ -112,5 +112,6 @@ export class DisTubeStream {
      * @type {FFmpeg}
      */
     this.stream = new FFmpeg({ args, shell: false });
+    (<any>this.stream)._readableState && ((<any>this.stream)._readableState.highWaterMark = 1 << 25);
   }
 }
