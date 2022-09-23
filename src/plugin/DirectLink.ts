@@ -20,6 +20,7 @@ export class DirectLinkPlugin extends ExtractorPlugin {
       {
         name: url.substring(url.lastIndexOf("/") + 1).replace(/((\?|#).*)?$/, "") || url,
         url,
+        src: "direct_link",
       },
       options,
     );
