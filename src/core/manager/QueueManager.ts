@@ -160,11 +160,10 @@ export class QueueManager extends GuildIdManager<Queue> {
    */
   async playSong(queue: Queue): Promise<boolean> {
     if (!queue) return true;
-    if (!queue.songs.length) {
+    if (queue.stopped || !queue.songs.length) {
       queue.stop();
       return true;
     }
-    if (queue.stopped) return false;
     try {
       const song = queue.songs[0];
       const { url, source, formats, streamURL, isLive } = song;
@@ -183,11 +182,14 @@ export class QueueManager extends GuildIdManager<Queue> {
           }
         }
       }
+      if (queue.stopped || !queue.songs.length) {
+        queue.stop();
+        return true;
+      }
       const stream = this.createStream(queue);
       queue.voice.play(stream);
       song.streamURL = stream.url;
-      if (queue.stopped) queue.stop();
-      else if (queue.paused) queue.voice.pause();
+      if (queue.paused) queue.voice.pause();
       return false;
     } catch (e: any) {
       this.#handlePlayingError(queue, e);
@@ -196,9 +198,6 @@ export class QueueManager extends GuildIdManager<Queue> {
   }
   /**
    * Whether or not emit playSong event
-   * @param {Queue} queue Queue
-   * @private
-   * @returns {boolean}
    */
   #emitPlaySong(queue: Queue): boolean {
     return (
