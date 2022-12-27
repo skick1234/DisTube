@@ -159,8 +159,12 @@ test("formatDuration()", () => {
   expect(formatDuration(undefined as any)).toBe("00:00");
   expect(formatDuration(0)).toBe("00:00");
   expect(formatDuration(1)).toBe("00:01");
-  expect(formatDuration(70.6)).toBe("01:11");
+  expect(formatDuration(59.99)).toBe("00:59");
+  expect(formatDuration(60.99)).toBe("01:00");
+  expect(formatDuration(70.6)).toBe("01:10");
+  expect(formatDuration(3600.99)).toBe("01:00:00");
   expect(formatDuration(5025)).toBe("01:23:45");
+  expect(formatDuration(7199.99)).toBe("01:59:59");
   expect(formatDuration(91425)).toBe("25:23:45");
 });
 
