@@ -5,6 +5,7 @@
   "coverageDirectory": "coverage",
   "coverageReporters": ["text", "lcov", "clover"],
   "testMatch": ["**/?(*.)+(spec|test).[jt]s?(x)"],
+  "verbose": true,
   "roots": ["<rootDir>/tests/"],
   "moduleNameMapper": {
     "^@/mock/(.*)$": "<rootDir>/tests/__mocks__/$1",

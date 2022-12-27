@@ -33,6 +33,7 @@ const textChannel = guild.channels.cache.get("737499503384461325");
 const voiceChannel = guild.channels.cache.get("853225781604646933");
 Object.defineProperty(voiceChannel, "joinable", { value: true, writable: false });
 const stageChannel = guild.channels.cache.get("835876864458489857");
+const threadChannel = guild.channels.cache.get("1098543313134563338");
 Object.defineProperty(stageChannel, "joinable", { value: false, writable: false });
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore
@@ -50,6 +51,7 @@ test("isSupportedVoiceChannel()", () => {
   expect(testFn(voiceChannel)).toBe(true);
   expect(testFn(stageChannel)).toBe(true);
   expect(testFn(textChannel)).toBe(false);
+  expect(testFn(threadChannel)).toBe(false);
   expect(testFn(message)).toBe(false);
   expect(testFn(guild)).toBe(false);
   expect(testFn(client)).toBe(false);
@@ -64,6 +66,7 @@ test("isMessageInstance()", () => {
   expect(testFn(voiceChannel)).toBe(false);
   expect(testFn(stageChannel)).toBe(false);
   expect(testFn(textChannel)).toBe(false);
+  expect(testFn(threadChannel)).toBe(false);
   expect(testFn(message)).toBe(true);
   expect(testFn(guild)).toBe(false);
   expect(testFn(client)).toBe(false);
@@ -76,8 +79,9 @@ test("isMessageInstance()", () => {
 test("isTextChannelInstance()", () => {
   const testFn = isTextChannelInstance;
   expect(testFn(voiceChannel)).toBe(true);
-  expect(testFn(stageChannel)).toBe(false);
+  expect(testFn(stageChannel)).toBe(true);
   expect(testFn(textChannel)).toBe(true);
+  // TODO: expect(testFn(threadChannel)).toBe(true);
   expect(testFn(message)).toBe(false);
   expect(testFn(guild)).toBe(false);
   expect(testFn(client)).toBe(false);
@@ -92,6 +96,7 @@ test("isMemberInstance()", () => {
   expect(testFn(voiceChannel)).toBe(false);
   expect(testFn(stageChannel)).toBe(false);
   expect(testFn(textChannel)).toBe(false);
+  expect(testFn(threadChannel)).toBe(false);
   expect(testFn(message)).toBe(false);
   expect(testFn(guild)).toBe(false);
   expect(testFn(client)).toBe(false);
@@ -179,6 +184,7 @@ test("resolveGuildID()", () => {
   expect(testFn(voiceChannel)).toBe(gId);
   expect(testFn(stageChannel)).toBe(gId);
   expect(testFn(textChannel)).toBe(gId);
+  expect(testFn(threadChannel)).toBe(gId);
   expect(testFn(message)).toBe(gId);
   expect(testFn(guild)).toBe(gId);
   expect(testFn(clientMember)).toBe(gId);
@@ -195,6 +201,7 @@ test("isClientInstance()", () => {
   expect(testFn(voiceChannel)).toBe(false);
   expect(testFn(stageChannel)).toBe(false);
   expect(testFn(textChannel)).toBe(false);
+  expect(testFn(threadChannel)).toBe(false);
   expect(testFn(message)).toBe(false);
   expect(testFn(guild)).toBe(false);
   expect(testFn(client)).toBe(true);

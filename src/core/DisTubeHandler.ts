@@ -8,6 +8,7 @@ import {
   SearchResultPlaylist,
   SearchResultVideo,
   Song,
+  chooseBestVideoFormat,
   isMessageInstance,
   isObject,
   isURL,
@@ -103,6 +104,7 @@ export class DisTubeHandler extends DisTubeBase {
    * @param {string|Song|SearchResult|Playlist} song URL | {@link Song}| {@link SearchResult} | {@link Playlist}
    * @param {ResolveOptions} [options] Optional options
    * @returns {Promise<Song|Playlist|null>} Resolved
+   * @throws {DisTubeError}
    */
   async resolve(
     song: string | ytdl.videoInfo | Song | Playlist | SearchResult | OtherSongInfo | ytdl.relatedVideo,
@@ -177,6 +179,7 @@ export class DisTubeHandler extends DisTubeBase {
    * @param {Discord.Message} message The original message from an user
    * @param {string} query The query string
    * @returns {Promise<SearchResult?>} Song info
+   * @throws {DisTubeError}
    */
   async searchSong(message: Message<true>, query: string): Promise<SearchResult | null> {
     if (!isMessageInstance(message)) throw new DisTubeError("INVALID_TYPE", "Discord.Message", message, "message");
@@ -208,6 +211,7 @@ export class DisTubeHandler extends DisTubeBase {
    * @param {Array<SearchResult|Song|Playlist>} results The search results
    * @param {string?} [query] The query string
    * @returns {Promise<SearchResult|Song|Playlist|null>} Selected result
+   * @throws {DisTubeError}
    */
   async createSearchMessageCollector<R extends SearchResult | Song | Playlist>(
     message: Message<true>,
@@ -271,10 +275,11 @@ export class DisTubeHandler extends DisTubeBase {
 
   /**
    * Play or add a {@link Playlist} to the queue.
-   * @returns {Promise<void>}
    * @param {Discord.BaseGuildVoiceChannel} voiceChannel A voice channel
    * @param {Playlist|string} playlist A YouTube playlist url | a Playlist
    * @param {PlayHandlerOptions} [options] Optional options
+   * @returns {Promise<void>}
+   * @throws {DisTubeError}
    */
   async playPlaylist(
     voiceChannel: VoiceBasedChannel,
@@ -312,10 +317,11 @@ export class DisTubeHandler extends DisTubeBase {
 
   /**
    * Play or add a {@link Song} to the queue.
-   * @returns {Promise<void>}
    * @param {Discord.BaseGuildVoiceChannel} voiceChannel A voice channel
    * @param {Song} song A YouTube playlist url | a Playlist
    * @param {PlayHandlerOptions} [options] Optional options
+   * @returns {Promise<void>}
+   * @throws {DisTubeError}
    */
   async playSong(voiceChannel: VoiceBasedChannel, song: Song, options: PlayHandlerOptions = {}): Promise<void> {
     if (!(song instanceof Song)) throw new DisTubeError("INVALID_TYPE", "Song", song, "song");
@@ -336,6 +342,29 @@ export class DisTubeHandler extends DisTubeBase {
       if (newQueue instanceof Queue) {
         if (this.options.emitAddSongWhenCreatingQueue) this.emit("addSong", newQueue, song);
         this.emit("playSong", newQueue, song);
+      }
+    }
+  }
+
+  /**
+   * Get {@link Song}'s stream info and attach it to the song.
+   * @param {Song} song A Song
+   */
+  async attachStreamInfo(song: Song) {
+    const { url, source, formats, streamURL, isLive } = song;
+    if (source === "youtube") {
+      if (!formats || !chooseBestVideoFormat(formats, isLive)) {
+        song._patchYouTube(await this.handler.getYouTubeInfo(url));
+      }
+    } else if (!streamURL) {
+      for (const plugin of [...this.distube.extractorPlugins, ...this.distube.customPlugins]) {
+        if (await plugin.validate(url)) {
+          const info = [plugin.getStreamURL(url), plugin.getRelatedSongs(url)] as const;
+          const result = await Promise.all(info);
+          song.streamURL = result[0];
+          song.related = result[1];
+          break;
+        }
       }
     }
   }

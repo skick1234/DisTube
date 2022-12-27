@@ -333,7 +333,7 @@ export class Queue extends DisTubeBase {
         if (this.options.savePreviousSongs) {
           this.previousSongs.push(...this.songs);
         } else {
-          this.previousSongs.push(...this.songs.map(s => ({ id: s.id } as Song)));
+          this.previousSongs.push(...this.songs.map(s => ({ id: s.id }) as Song));
         }
         this.songs = nextSongs;
         this._next = true;

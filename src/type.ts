@@ -113,7 +113,7 @@ export type Filters = Record<string, string>;
  * when using {@link DisTube#play} method
  * @prop {StreamType} [streamType=StreamType.OPUS] Decide the {@link DisTubeStream#type} will be used
  * (Not the same as {@link DisTubeStream#type})
- * @prop {boolean} [directLink=true] Whether or not play direct link of the song
+ * @prop {boolean} [directLink=true] Whether or not playing a song with direct link
  */
 export interface DisTubeOptions {
   plugins?: (CustomPlugin | ExtractorPlugin)[];

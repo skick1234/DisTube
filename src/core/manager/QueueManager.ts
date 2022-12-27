@@ -1,5 +1,5 @@
 import { GuildIdManager } from ".";
-import { DisTubeError, DisTubeStream, Queue, RepeatMode, chooseBestVideoFormat, objectKeys } from "../..";
+import { DisTubeError, DisTubeStream, Queue, RepeatMode, objectKeys } from "../..";
 import type { Song } from "../..";
 import type { GuildTextBasedChannel, VoiceBasedChannel } from "discord.js";
 
@@ -13,6 +13,7 @@ export class QueueManager extends GuildIdManager<Queue> {
    * @name QueueManager#collection
    * @type {Discord.Collection<string, Queue>}
    */
+
   /**
    * Create a {@link Queue}
    * @private
@@ -41,6 +42,7 @@ export class QueueManager extends GuildIdManager<Queue> {
       queue._taskQueue.resolve();
     }
   }
+
   /**
    * Get a Queue from this QueueManager.
    * @method get
@@ -48,6 +50,7 @@ export class QueueManager extends GuildIdManager<Queue> {
    * @param {GuildIdResolvable} guild Resolvable thing from a guild
    * @returns {Queue?}
    */
+
   /**
    * Listen to DisTubeVoice events and handle the Queue
    * @private
@@ -67,6 +70,21 @@ export class QueueManager extends GuildIdManager<Queue> {
       queue.voice.on(event, queue._listeners[event]);
     }
   }
+
+  /**
+   * Whether or not emit playSong event
+   * @param {Queue} queue Queue
+   * @private
+   * @returns {boolean}
+   */
+  #emitPlaySong(queue: Queue): boolean {
+    return (
+      !this.options.emitNewSongOnly ||
+      (queue.repeatMode === RepeatMode.SONG && queue._next) ||
+      (queue.repeatMode !== RepeatMode.SONG && queue.songs[0]?.id !== queue.songs[1]?.id)
+    );
+  }
+
   /**
    * Handle the queue when a Song finish
    * @private
@@ -114,6 +132,7 @@ export class QueueManager extends GuildIdManager<Queue> {
       queue._taskQueue.resolve();
     }
   }
+
   /**
    * Handle error while playing
    * @private
@@ -166,22 +185,7 @@ export class QueueManager extends GuildIdManager<Queue> {
     }
     try {
       const song = queue.songs[0];
-      const { url, source, formats, streamURL, isLive } = song;
-      if (source === "youtube") {
-        if (!formats || !chooseBestVideoFormat(formats, isLive)) {
-          song._patchYouTube(await this.handler.getYouTubeInfo(url));
-        }
-      } else if (!streamURL) {
-        for (const plugin of [...this.distube.extractorPlugins, ...this.distube.customPlugins]) {
-          if (await plugin.validate(url)) {
-            const info = [plugin.getStreamURL(url), plugin.getRelatedSongs(url)] as const;
-            const result = await Promise.all(info);
-            song.streamURL = result[0];
-            song.related = result[1];
-            break;
-          }
-        }
-      }
+      await this.handler.attachStreamInfo(song);
       if (queue.stopped || !queue.songs.length) {
         queue.stop();
         return true;
@@ -195,15 +199,5 @@ export class QueueManager extends GuildIdManager<Queue> {
       this.#handlePlayingError(queue, e);
       return true;
     }
-  }
-  /**
-   * Whether or not emit playSong event
-   */
-  #emitPlaySong(queue: Queue): boolean {
-    return (
-      !this.options.emitNewSongOnly ||
-      (queue.repeatMode === RepeatMode.SONG && queue._next) ||
-      (queue.repeatMode !== RepeatMode.SONG && queue.songs[0]?.id !== queue.songs[1]?.id)
-    );
   }
 }

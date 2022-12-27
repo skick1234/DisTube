@@ -57,6 +57,7 @@ export class DisTube extends TypedEmitter<TypedDisTubeEvents> {
    * Create a new DisTube class.
    * @param {Discord.Client} client Discord.JS client
    * @param {DisTubeOptions} [otp] Custom DisTube options
+   * @throws {DisTubeError}
    * @example
    * const Discord = require('discord.js'),
    *     DisTube = require('distube'),
@@ -249,7 +250,6 @@ export class DisTube extends TypedEmitter<TypedDisTubeEvents> {
     if (member && !isMemberInstance(member)) {
       throw new DisTubeError("INVALID_TYPE", "Discord.Member", member, "options.member");
     }
-    if (!filteredSongs.length) throw new DisTubeError("NO_VALID_SONG");
     let resolvedSongs: Song[];
     if (parallel) {
       const promises = filteredSongs.map((song: string | Song | SearchResult) =>

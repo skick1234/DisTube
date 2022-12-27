@@ -63,9 +63,12 @@ export class DisTubeVoice extends TypedEmitter<DisTubeVoiceEvents> {
             }
           });
         } else if (this.connection.rejoinAttempts < 5) {
-          setTimeout(() => {
-            this.connection.rejoin();
-          }, (this.connection.rejoinAttempts + 1) * 5e3).unref();
+          setTimeout(
+            () => {
+              this.connection.rejoin();
+            },
+            (this.connection.rejoinAttempts + 1) * 5e3,
+          ).unref();
         } else if (this.connection.state.status !== VoiceConnectionStatus.Destroyed) {
           this.leave(new DisTubeError("VOICE_RECONNECT_FAILED"));
         }
