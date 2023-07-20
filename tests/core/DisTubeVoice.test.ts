@@ -49,6 +49,13 @@ const connection = {
   rejoinAttempts: 0,
 };
 
+const audioResource = {
+  volume: {
+    setVolume: jest.fn(),
+  },
+  playbackDuration: 1234,
+};
+
 const audioPlayer = {
   emit: jest.fn(),
   on: jest.fn(),
@@ -56,13 +63,10 @@ const audioPlayer = {
   pause: jest.fn(),
   unpause: jest.fn(),
   play: jest.fn(),
-};
-
-const audioResource = {
-  volume: {
-    setVolume: jest.fn(),
+  state: {
+    status: DiscordVoice.AudioPlayerStatus.Playing,
+    resource: audioResource,
   },
-  playbackDuration: 1234,
 };
 
 beforeEach(() => {
@@ -144,6 +148,19 @@ describe("Constructor", () => {
     catchFn.mock.calls[0][0]();
     expect(voice.leave).toBeCalledTimes(1);
 
+    connection.on.mock.calls[0][1]({}, { reason: DiscordVoice.VoiceConnectionDisconnectReason.Manual });
+    expect(voice.leave).toBeCalledTimes(2);
+
+    DiscordVoice.entersState.mockReturnValue({ catch: catchFn } as any);
+    connection.on.mock.calls[0][1](
+      {},
+      { reason: DiscordVoice.VoiceConnectionDisconnectReason.WebSocketClose, closeCode: 4014 },
+    );
+    connection.state.status = DiscordVoice.VoiceConnectionStatus.Ready;
+    catchFn.mock.calls[0][0]();
+    expect(voice.leave).toBeCalledTimes(2);
+    connection.state.status = DiscordVoice.VoiceConnectionStatus.Signalling;
+
     connection.on.mock.calls[0][1]({}, {});
     expect(connection.rejoinAttempts).toBe(0);
     jest.runAllTimers();
@@ -173,6 +190,9 @@ describe("Constructor", () => {
     expect(connection.on).nthCalledWith(2, DiscordVoice.VoiceConnectionStatus.Destroyed, expect.any(Function));
     connection.on.mock.calls[1][1]();
     expect(voice.leave).toBeCalledTimes(1);
+
+    expect(connection.on).nthCalledWith(3, "error", expect.any(Function));
+    expect(connection.on.mock.calls[2][1]()).toBeUndefined();
   });
 });
 
@@ -255,7 +275,7 @@ describe("Methods", () => {
   describe("DisTubeVoice#join()", () => {
     const TIMEOUT = 30e3;
 
-    test("Timeout when signalling connection", async () => {
+    test("Signalling connection timeout", async () => {
       DiscordVoice.entersState.mockRejectedValue(undefined);
       await expect(voice.join()).rejects.toThrow(new DisTubeError("VOICE_CONNECT_FAILED", TIMEOUT / 1e3));
       expect(DiscordVoice.entersState).toBeCalledWith(connection, DiscordVoice.VoiceConnectionStatus.Ready, TIMEOUT);
@@ -263,7 +283,7 @@ describe("Methods", () => {
       expect(voiceManager.remove).toBeCalledWith(voice.id);
     });
 
-    test("Timeout when connection destroyed", async () => {
+    test("Connection destroyed", async () => {
       const newVC = { guildId: 2, guild: { id: 2 }, client, joinable: true };
       Util.isSupportedVoiceChannel.mockReturnValue(true);
       DiscordVoice.entersState.mockRejectedValue(undefined);
@@ -272,6 +292,22 @@ describe("Methods", () => {
       expect(voice.channel).toBe(newVC);
       expect(connection.destroy).not.toBeCalled();
       expect(voiceManager.remove).toBeCalledWith(voice.id);
+      connection.state.status = DiscordVoice.VoiceConnectionStatus.Signalling;
+    });
+
+    test("Joined a voice channel after timeout", async () => {
+      Util.isSupportedVoiceChannel.mockReturnValue(true);
+      DiscordVoice.entersState.mockImplementationOnce(<any>(() => {
+        connection.state.status = DiscordVoice.VoiceConnectionStatus.Ready;
+        throw new Error();
+      }));
+      await expect(voice.join(voiceChannel as any)).resolves.toBe(voice);
+      expect(DiscordVoice.entersState).toBeCalledWith(connection, DiscordVoice.VoiceConnectionStatus.Ready, TIMEOUT);
+      expect(connection.destroy).not.toBeCalled();
+      expect(voiceManager.remove).not.toBeCalled();
+      client.channels.cache.get.mockReturnValue({ type: 0 });
+      expect(voice.channel).toBe(voiceChannel);
+      expect(voice.connection).toBe(connection);
       connection.state.status = DiscordVoice.VoiceConnectionStatus.Signalling;
     });
 
@@ -327,13 +363,19 @@ describe("Methods", () => {
     expect(voice.emittedError).toBe(false);
     expect(stream.stream.on).toBeCalledWith("error", expect.any(Function));
     expect(voice.audioResource).toBe(audioResource);
-    expect(audioPlayer.play).toBeCalledWith(audioResource);
+    expect(audioPlayer.play).toBeCalledTimes(1);
+    expect(audioPlayer.play).nthCalledWith(1, audioResource);
     const error = {};
     stream.stream.on.mock.calls[0][1](error);
     expect(voice.emittedError).toBe(true);
     expect(voice.emit).toBeCalledWith("error", error);
     stream.stream.on.mock.calls[0][1](error);
     expect(voice.emit).toBeCalledTimes(1);
+
+    audioPlayer.state.status = DiscordVoice.AudioPlayerStatus.Paused;
+    expect(voice.play(stream as any)).toBeUndefined();
+    expect(audioPlayer.play).toBeCalledTimes(1);
+    audioPlayer.state.status = DiscordVoice.AudioPlayerStatus.Playing;
   });
 
   test("DisTubeVoice#stop()", () => {
@@ -350,9 +392,26 @@ describe("Methods", () => {
     expect(audioPlayer.pause).toBeCalledTimes(1);
   });
 
-  test("DisTubeVoice#unpause()", () => {
-    expect(voice.unpause()).toBeUndefined();
-    expect(audioPlayer.unpause).toBeCalledTimes(1);
+  describe("DisTubeVoice#unpause()", () => {
+    test("Unpause when playing", () => {
+      expect(voice.unpause()).toBeUndefined();
+      expect(audioPlayer.unpause).toBeCalledTimes(0);
+    });
+    test("Unpause when paused with same resource", () => {
+      audioPlayer.state.status = DiscordVoice.AudioPlayerStatus.Paused;
+      expect(voice.unpause()).toBeUndefined();
+      expect(audioPlayer.unpause).toBeCalledTimes(1);
+      audioPlayer.state.status = DiscordVoice.AudioPlayerStatus.Playing;
+    });
+    test("Unpause when paused with different resource", () => {
+      audioPlayer.state.status = DiscordVoice.AudioPlayerStatus.Paused;
+      voice.audioResource = {} as any;
+      expect(voice.unpause()).toBeUndefined();
+      expect(audioPlayer.unpause).toBeCalledTimes(0);
+      expect(audioPlayer.play).toBeCalledTimes(1);
+      expect(audioPlayer.play).toBeCalledWith(voice.audioResource);
+      audioPlayer.state.status = DiscordVoice.AudioPlayerStatus.Playing;
+    });
   });
 
   test("DisTubeVoice#setSelfDeaf()", () => {

@@ -193,7 +193,6 @@ export class QueueManager extends GuildIdManager<Queue> {
       const stream = this.createStream(queue);
       queue.voice.play(stream);
       song.streamURL = stream.url;
-      if (queue.paused) queue.voice.pause();
       return false;
     } catch (e: any) {
       this.#handlePlayingError(queue, e);
