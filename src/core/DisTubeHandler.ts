@@ -10,11 +10,12 @@ import {
   Song,
   chooseBestVideoFormat,
   isMessageInstance,
+  isNsfwChannel,
   isObject,
   isURL,
   isVoiceChannelEmpty,
 } from "..";
-import type { Message, TextChannel, VoiceBasedChannel } from "discord.js";
+import type { Message, VoiceBasedChannel } from "discord.js";
 import type {
   DisTube,
   OtherSongInfo,
@@ -189,7 +190,7 @@ export class DisTubeHandler extends DisTubeBase {
     const results = await this.distube
       .search(query, {
         limit,
-        safeSearch: this.options.nsfw ? false : !(message.channel as TextChannel)?.nsfw,
+        safeSearch: this.options.nsfw ? false : !isNsfwChannel(message.channel),
       })
       .catch(() => {
         if (!this.emit("searchNoResult", message, query)) {
@@ -292,13 +293,11 @@ export class DisTubeHandler extends DisTubeBase {
 
     const queue = this.queues.get(voiceChannel);
 
-    if (!this.options.nsfw && !((queue?.textChannel || textChannel) as TextChannel)?.nsfw) {
-      playlist.songs = playlist.songs.filter(s => !s.age_restricted);
-    }
+    const isNsfw = isNsfwChannel(queue?.textChannel || textChannel);
+    if (!this.options.nsfw && !isNsfw) playlist.songs = playlist.songs.filter(s => !s.age_restricted);
+
     if (!playlist.songs.length) {
-      if (!this.options.nsfw && !(textChannel as TextChannel)?.nsfw) {
-        throw new DisTubeError("EMPTY_FILTERED_PLAYLIST");
-      }
+      if (!this.options.nsfw && !isNsfw) throw new DisTubeError("EMPTY_FILTERED_PLAYLIST");
       throw new DisTubeError("EMPTY_PLAYLIST");
     }
     if (queue) {
@@ -329,7 +328,7 @@ export class DisTubeHandler extends DisTubeBase {
     const position = Number(options.position) || (skip ? 1 : 0);
 
     const queue = this.queues.get(voiceChannel);
-    if (!this.options.nsfw && song.age_restricted && !((queue?.textChannel || textChannel) as TextChannel)?.nsfw) {
+    if (!this.options.nsfw && song.age_restricted && !isNsfwChannel(queue?.textChannel || textChannel)) {
       throw new DisTubeError("NON_NSFW");
     }
     if (queue) {

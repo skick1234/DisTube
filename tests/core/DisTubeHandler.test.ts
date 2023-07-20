@@ -57,7 +57,6 @@ function createFakeDisTube() {
 function createV13Message(answerMessage?: any): any {
   return {
     channel: {
-      nsfw: false,
       awaitMessages: (opt: any = {}) =>
         new Promise((resolve, reject) => {
           const a = [answerMessage].filter(opt.filter)[0];
@@ -71,7 +70,6 @@ function createV13Message(answerMessage?: any): any {
 function createV12Message(answerMessage: any): any {
   return {
     channel: {
-      nsfw: false,
       awaitMessages: (filter: any, opt: any = {}) =>
         new Promise((resolve, reject) => {
           const a = [answerMessage].filter(filter)[0];
@@ -356,24 +354,28 @@ describe("DisTubeHandler#playPlaylist()", () => {
 
   test("No valid video in the playlist", async () => {
     const pl1 = new Playlist([nsfwSong]);
-    await expect(handler.playPlaylist(voice, pl1, { textChannel: { nsfw: false } } as any)).rejects.toThrow(
-      new DisTubeError("EMPTY_FILTERED_PLAYLIST"),
-    );
+    Util.isNsfwChannel.mockReturnValue(false);
+    await expect(handler.playPlaylist(voice, pl1)).rejects.toThrow(new DisTubeError("EMPTY_FILTERED_PLAYLIST"));
+    expect(Util.isNsfwChannel).toBeCalledTimes(1);
     const pl2 = new Playlist([new Song({ age_restricted: true, url: "test url", src: "test" }, { member })]);
     pl2.songs = [];
-    await expect(handler.playPlaylist(voice, pl2, { textChannel: { nsfw: true } } as any)).rejects.toThrow(
-      new DisTubeError("EMPTY_PLAYLIST"),
-    );
+    Util.isNsfwChannel.mockReturnValue(true);
+    await expect(handler.playPlaylist(voice, pl2)).rejects.toThrow(new DisTubeError("EMPTY_PLAYLIST"));
+    expect(Util.isNsfwChannel).toBeCalledTimes(2);
   });
 
   test("Play in a nsfw channel", async () => {
-    const textChannel: any = { nsfw: true };
+    const textChannel: any = {};
+    Util.isNsfwChannel.mockReturnValue(true);
     distube.queues.get.mockReturnValue(undefined);
+
     distube.queues.create.mockReturnValueOnce(true);
     await expect(handler.playPlaylist(voice, playlist, { textChannel })).resolves.toBeUndefined();
     expect(distube.queues.create).toBeCalledWith(voice, playlist.songs, textChannel);
     expect(distube.emit).not.toBeCalled();
     expect(playlist.songs).toContain(nsfwSong);
+    expect(Util.isNsfwChannel).toBeCalledTimes(1);
+
     const queue = new Queue.Queue(distube as any, {} as any, playlist.songs);
     queue.songs = playlist.songs;
     distube.options.emitAddListWhenCreatingQueue = false;
@@ -387,7 +389,8 @@ describe("DisTubeHandler#playPlaylist()", () => {
   });
 
   test("Play in a non-nsfw channel", async () => {
-    const textChannel: any = { nsfw: false };
+    const textChannel: any = {};
+    Util.isNsfwChannel.mockReturnValue(false);
     const queue = new Queue.Queue(distube as any, {} as any, song);
     queue.songs = playlist.songs;
     distube.queues.get.mockReturnValue(undefined);
@@ -401,7 +404,8 @@ describe("DisTubeHandler#playPlaylist()", () => {
   });
 
   test("Skip the playing song", async () => {
-    const textChannel: any = { nsfw: false };
+    const textChannel: any = {};
+    Util.isNsfwChannel.mockReturnValue(false);
     const queue = new Queue.Queue(distube as any, {} as any, song);
     queue.songs = playlist.songs;
     distube.queues.get.mockReturnValue(queue);
@@ -416,7 +420,8 @@ describe("DisTubeHandler#playPlaylist()", () => {
   });
 
   test("Add the playlist to the beginning of the queue", async () => {
-    const textChannel: any = { nsfw: true };
+    const textChannel: any = {};
+    Util.isNsfwChannel.mockReturnValue(true);
     const queue = new Queue.Queue(distube as any, {} as any, song);
     queue.songs = playlist.songs;
     distube.queues.get.mockReturnValue(queue);
@@ -430,7 +435,8 @@ describe("DisTubeHandler#playPlaylist()", () => {
   });
 
   test("Add the playlist to the end of the queue", async () => {
-    const textChannel: any = { nsfw: true };
+    const textChannel: any = {};
+    Util.isNsfwChannel.mockReturnValue(true);
     const queue = new Queue.Queue(distube as any, {} as any, song);
     queue.songs = playlist.songs;
     distube.queues.get.mockReturnValue(queue);
@@ -494,7 +500,8 @@ describe("DisTubeHandler#searchSong()", () => {
     distube.options.searchSongs = 0;
     const results = [{}];
     distube.search.mockResolvedValue(results);
-    const message: any = { channel: { nsfw: false } };
+    const message: any = {};
+    Util.isNsfwChannel.mockReturnValue(false);
     const query = "test";
     await expect(handler.searchSong(message, query)).resolves.toBe(results[0]);
     expect(distube.search).toBeCalledWith(
@@ -504,6 +511,7 @@ describe("DisTubeHandler#searchSong()", () => {
         safeSearch: true,
       }),
     );
+    expect(Util.isNsfwChannel).toBeCalledTimes(1);
   });
 
   describe("searchSongs option > 1", () => {

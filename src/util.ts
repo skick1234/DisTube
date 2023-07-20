@@ -122,7 +122,6 @@ export function isTextChannelInstance(channel: any): channel is GuildTextBasedCh
     isSnowflake(channel.guildId) &&
     typeof channel.name === "string" &&
     Constants.TextBasedChannelTypes.includes(channel.type) &&
-    typeof channel.nsfw === "boolean" &&
     "messages" in channel &&
     typeof channel.send === "function"
   );
@@ -198,4 +197,10 @@ type KeyOf<T> = T extends object ? (keyof T)[] : [];
 export function objectKeys<T>(obj: T): KeyOf<T> {
   if (!isObject(obj)) return [] as KeyOf<T>;
   return Object.keys(obj) as KeyOf<T>;
+}
+
+export function isNsfwChannel(channel?: GuildTextBasedChannel): boolean {
+  if (!isTextChannelInstance(channel)) return false;
+  if (channel.isThread()) return channel.parent?.nsfw ?? false;
+  return channel.nsfw;
 }
