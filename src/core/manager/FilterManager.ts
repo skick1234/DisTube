@@ -67,8 +67,15 @@ export class FilterManager extends BaseManager<FilterResolvable> {
         }, [] as FilterResolvable[])
         .reverse();
       return this.set([...this.collection.values(), ...newFilters]);
+    } else if (typeof filterOrFilters === "string") {
+      return this.set([...this.collection.values(), filterOrFilters]);
     }
-    return this.set([...this.collection.values(), filterOrFilters]);
+    throw new DisTubeError(
+      "INVALID_TYPE",
+      ["FilterResolvable", "Array<FilterResolvable>"],
+      filterOrFilters,
+      "filterOrFilters",
+    );
   }
 
   /**
@@ -85,6 +92,7 @@ export class FilterManager extends BaseManager<FilterResolvable> {
    * @returns {FilterManager}
    */
   set(filters: FilterResolvable[]) {
+    if (!Array.isArray(filters)) throw new DisTubeError("INVALID_TYPE", "Array<FilterResolvable>", filters, "filters");
     this.collection.clear();
     for (const filter of filters) {
       const resolved = this.#validate(filter);
@@ -94,15 +102,28 @@ export class FilterManager extends BaseManager<FilterResolvable> {
     return this;
   }
 
+  get #removeFn() {
+    return (f: FilterResolvable) => this.collection.delete(this.#resolveName(this.#validate(f)));
+  }
+
   /**
    * Disable a filter or multiple filters
    * @param {FilterResolvable|FilterResolvable[]} filterOrFilters The filter or filters to disable
    * @returns {FilterManager}
    */
   remove(filterOrFilters: FilterResolvable | FilterResolvable[]) {
-    const remove = (f: FilterResolvable) => this.collection.delete(this.#resolveName(this.#validate(f)));
-    if (Array.isArray(filterOrFilters)) filterOrFilters.map(remove);
-    else remove(filterOrFilters);
+    if (Array.isArray(filterOrFilters)) {
+      filterOrFilters.map(this.#removeFn);
+    } else if (typeof filterOrFilters === "string") {
+      this.#removeFn(filterOrFilters);
+    } else {
+      throw new DisTubeError(
+        "INVALID_TYPE",
+        ["FilterResolvable", "Array<FilterResolvable>"],
+        filterOrFilters,
+        "filterOrFilters",
+      );
+    }
     this.#apply();
     return this;
   }
