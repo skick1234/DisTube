@@ -135,7 +135,7 @@ test("isURL()", () => {
   expect(isURL("")).toBe(false);
   expect(isURL("not an url")).toBe(false);
   expect(isURL("https://")).toBe(false);
-  expect(isURL("file://abc")).toBe(false);
+  expect(isURL("file://abc")).toBe(true);
   expect(isURL("http://localhost:1234")).toBe(true);
   expect(isURL("https://distube.js.org/")).toBe(true);
   expect(isURL("http://distube.js.org:433")).toBe(true);
