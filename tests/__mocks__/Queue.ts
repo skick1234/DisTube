@@ -1,3 +1,5 @@
+import { FilterManager } from "@";
+
 const methods = ["addToQueue", "skip", "stop", "remove"] as const;
 
 export class Queue {
@@ -8,6 +10,7 @@ export class Queue {
   textChannel: any;
   _taskQueue: any;
   distube: any;
+  filters: any;
   [x: string]: jest.Mock;
   constructor(distube: any, voice: any, song: any, textChannel: any) {
     this.distube = distube;
@@ -16,6 +19,7 @@ export class Queue {
     this.songs = Array.isArray(song) ? [...song] : [song];
     this.previousSongs = [];
     this.textChannel = textChannel;
+    this.filters = new FilterManager(<any>this);
     this._taskQueue = {
       queuing: jest.fn(),
       resolve: jest.fn(),

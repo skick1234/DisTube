@@ -170,6 +170,8 @@ test("isNsfwChannel()", () => {
 
 test("isVoiceChannelEmpty()", () => {
   const testFn = isVoiceChannelEmpty;
+  expect(testFn({ client: {} } as any)).toBe(false);
+  expect(testFn({ guild: true, client: {} } as any)).toBe(false);
   expect(testFn(voiceChannel as any)).toBe(false);
   expect(testFn(botVoiceState)).toBe(false);
   guild.voiceStates.cache.set(botVoiceState.id, botVoiceState);
@@ -198,6 +200,9 @@ test("isURL()", () => {
   expect(isURL("not an url")).toBe(false);
   expect(isURL("https://")).toBe(false);
   expect(isURL("file://abc")).toBe(true);
+  expect(isURL("sftp://abc")).toBe(false);
+  expect(isURL("ftp://abc")).toBe(false);
+  expect(isURL("ahihi://abc")).toBe(false);
   expect(isURL("http://localhost:1234")).toBe(true);
   expect(isURL("https://distube.js.org/")).toBe(true);
   expect(isURL("http://distube.js.org:433")).toBe(true);

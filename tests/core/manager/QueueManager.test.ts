@@ -136,55 +136,58 @@ describe("QueueManager#create()", () => {
 
     expect(queues.playSong).toBeCalledWith(queue);
   });
+});
 
-  describe("DisTubeHandler#createStream()", () => {
+describe("QueueManager#createStream()", () => {
+  test("Create a YouTube stream", async () => {
+    const song = new Song(<any>{ id: "xxxxxxxxxxx", url: "https://www.youtube.com/watch?v=xxxxxxxxxxx" });
+    const stream = { key: "value" };
     const queues = new QueueManager(distube as any);
-    const song = new Song({ id: "xxxxxxxxxxx", url: "https://www.youtube.com/watch?v=xxxxxxxxxxx" });
-    const song2 = new Song({ id: "y", url: "https://www.not-youtube.com/watch?v=y" }, { source: "not-youtube" });
+    queues.playSong = jest.fn().mockReturnValue(false);
+    const queue = await queues.create(channel, []);
+    if (queue === true) throw new Error("Failed to create queue");
+    const mockFn = jest.fn().mockReturnValue(stream);
+    Stream.DisTubeStream.YouTube = mockFn;
+    song.formats = [];
+    song.duration = 1;
+    queue.songs = [song];
+    queue.beginTime = 1;
+    const result = queues.createStream(queue as any);
+    expect(result).toBe(stream);
+    expect(mockFn).toBeCalledTimes(1);
+    expect(mockFn).toBeCalledWith(
+      song.formats,
+      expect.objectContaining({
+        ffmpegArgs: [],
+        seek: 1,
+      }),
+    );
+  });
 
-    test("Create a YouTube stream", () => {
-      const stream = { key: "value" };
-      const mockFn = jest.fn().mockReturnValue(stream);
-      Stream.DisTubeStream.YouTube = mockFn;
-      song.formats = [];
-      song.duration = 1;
-      const queue = {
-        songs: [song],
-        beginTime: 1,
-        filters: {
-          size: 0,
-        },
-      };
-      const result = queues.createStream(queue as any);
-      expect(result).toBe(stream);
-      expect(mockFn).toBeCalledWith(
-        song.formats,
-        expect.objectContaining({
-          ffmpegArgs: undefined,
-          seek: 1,
-        }),
-      );
-    });
-
-    test("Create a direct link stream", () => {
-      const stream2 = { key2: "value2" };
-      const mockFn = jest.fn().mockReturnValue(stream2);
-      Stream.DisTubeStream.DirectLink = mockFn;
-      song2.streamURL = song2.url;
-      const queue = {
-        songs: [song2],
-        filters: { size: 2, values: [distube.filters["3d"], distube.filters.bassboost] },
-        beginTime: 1,
-      };
-      const result = queues.createStream(queue as _Queue);
-      expect(result).toBe(stream2);
-      expect(mockFn).toBeCalledWith(
-        song2.url,
-        expect.objectContaining({
-          ffmpegArgs: ["-af", `${distube.filters["3d"]},${distube.filters.bassboost}`],
-          seek: undefined,
-        }),
-      );
-    });
+  test("Create a direct link stream", async () => {
+    const song = new Song(<any>{ id: "y", url: "https://www.not-youtube.com/watch?v=y" }, { source: "not-youtube" });
+    const stream = { key2: "value2" };
+    const queues = new QueueManager(distube as any);
+    (<any>distube).queues = queues;
+    queues.playSong = jest.fn().mockReturnValue(false);
+    const queue = await queues.create(channel, []);
+    if (queue === true) throw new Error("Failed to create queue");
+    const mockFn = jest.fn().mockReturnValue(stream);
+    Stream.DisTubeStream.DirectLink = mockFn;
+    song.streamURL = song.url;
+    queue.songs = [song];
+    queue.beginTime = 1;
+    queue.filters.add(["3d", "bassboost"]);
+    const result = queues.createStream(queue as _Queue);
+    expect(result).toBe(stream);
+    expect(mockFn).toBeCalledTimes(1);
+    expect(mockFn).toBeCalledWith(
+      song.url,
+      expect.objectContaining({
+        ffmpegArgs: ["-af", `${distube.filters["3d"]},${distube.filters.bassboost}`],
+        seek: undefined,
+      }),
+    );
+    delete (<any>distube).queues;
   });
 });
