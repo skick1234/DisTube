@@ -96,17 +96,12 @@ export class DisTubeStream {
       "2",
       "-f",
     ];
-    if (!options.type) {
-      args.push("opus", "-acodec", "libopus");
-    } else {
-      args.push("s16le");
-    }
-    if (typeof options.seek === "number" && options.seek > 0) {
-      args.unshift("-ss", options.seek.toString());
-    }
-    if (Array.isArray(options.ffmpegArgs)) {
-      args.push(...options.ffmpegArgs);
-    }
+
+    if (!options.type) args.push("opus", "-acodec", "libopus");
+    else args.push("s16le");
+    if (typeof options.seek === "number" && options.seek > 0) args.unshift("-ss", options.seek.toString());
+    if (Array.isArray(options.ffmpegArgs) && options.ffmpegArgs.length) args.push(...options.ffmpegArgs);
+
     /**
      * FFmpeg stream
      * @type {FFmpeg}

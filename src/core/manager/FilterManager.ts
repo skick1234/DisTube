@@ -1,14 +1,14 @@
 import { BaseManager } from ".";
 import { DisTubeError } from "../..";
-import type { FilterResolvable, Queue } from "../..";
+import type { Filter, FilterResolvable, Queue } from "../..";
 
 /**
  * Manage filters of a playing {@link Queue}
  * @extends {BaseManager}
  */
-export class FilterManager extends BaseManager<FilterResolvable> {
+export class FilterManager extends BaseManager<Filter> {
   /**
-   * Collection of {@link FilterResolvable}.
+   * Collection of {@link Filter}.
    * @name FilterManager#collection
    * @type {Discord.Collection<string, DisTubeVoice>}
    */
@@ -18,23 +18,17 @@ export class FilterManager extends BaseManager<FilterResolvable> {
     this.queue = queue;
   }
 
-  #validate(filter: FilterResolvable): FilterResolvable {
-    if (
-      (typeof filter === "string" && Object.prototype.hasOwnProperty.call(this.distube.filters, filter)) ||
-      (typeof filter === "object" && typeof filter.name === "string" && typeof filter.value === "string")
-    ) {
+  #resolve(filter: FilterResolvable): Filter {
+    if (typeof filter === "object" && typeof filter.name === "string" && typeof filter.value === "string") {
       return filter;
     }
-
+    if (typeof filter === "string" && Object.prototype.hasOwnProperty.call(this.distube.filters, filter)) {
+      return {
+        name: filter,
+        value: this.distube.filters[filter],
+      };
+    }
     throw new DisTubeError("INVALID_TYPE", "FilterResolvable", filter, "filter");
-  }
-
-  #resolveName(filter: FilterResolvable): string {
-    return typeof filter === "string" ? filter : filter.name;
-  }
-
-  #resolveValue(filter: FilterResolvable): string {
-    return typeof filter === "string" ? this.distube.filters[filter] : filter.value;
   }
 
   #apply() {
@@ -50,32 +44,16 @@ export class FilterManager extends BaseManager<FilterResolvable> {
    */
   add(filterOrFilters: FilterResolvable | FilterResolvable[], override = false) {
     if (Array.isArray(filterOrFilters)) {
-      const resolvedFilters = filterOrFilters.map(f => this.#validate(f));
-      const newFilters = resolvedFilters
-        .reduceRight((unique, o: any) => {
-          if (
-            !unique.some((obj: any) => obj === o && obj.name === o) &&
-            !unique.some((obj: any) => obj !== o.name && obj.name !== o.name)
-          ) {
-            if (!this.has(o)) unique.push(o);
-            if (this.has(o) && override) {
-              this.remove(o);
-              unique.push(o);
-            }
-          }
-          return unique;
-        }, [] as FilterResolvable[])
-        .reverse();
-      return this.set([...this.collection.values(), ...newFilters]);
-    } else if (typeof filterOrFilters === "string") {
-      return this.set([...this.collection.values(), filterOrFilters]);
+      for (const filter of filterOrFilters) {
+        const f = this.#resolve(filter);
+        if (override || !this.has(f)) this.collection.set(f.name, f);
+      }
+    } else {
+      const f = this.#resolve(filterOrFilters);
+      if (override || !this.has(f)) this.collection.set(f.name, f);
     }
-    throw new DisTubeError(
-      "INVALID_TYPE",
-      ["FilterResolvable", "Array<FilterResolvable>"],
-      filterOrFilters,
-      "filterOrFilters",
-    );
+    this.#apply();
+    return this;
   }
 
   /**
@@ -94,16 +72,16 @@ export class FilterManager extends BaseManager<FilterResolvable> {
   set(filters: FilterResolvable[]) {
     if (!Array.isArray(filters)) throw new DisTubeError("INVALID_TYPE", "Array<FilterResolvable>", filters, "filters");
     this.collection.clear();
-    for (const filter of filters) {
-      const resolved = this.#validate(filter);
-      this.collection.set(this.#resolveName(resolved), resolved);
+    for (const f of filters) {
+      const filter = this.#resolve(f);
+      this.collection.set(filter.name, filter);
     }
     this.#apply();
     return this;
   }
 
-  get #removeFn() {
-    return (f: FilterResolvable) => this.collection.delete(this.#resolveName(this.#validate(f)));
+  #removeFn(f: FilterResolvable) {
+    return this.collection.delete(this.#resolve(f).name);
   }
 
   /**
@@ -112,18 +90,8 @@ export class FilterManager extends BaseManager<FilterResolvable> {
    * @returns {FilterManager}
    */
   remove(filterOrFilters: FilterResolvable | FilterResolvable[]) {
-    if (Array.isArray(filterOrFilters)) {
-      filterOrFilters.map(this.#removeFn);
-    } else if (typeof filterOrFilters === "string") {
-      this.#removeFn(filterOrFilters);
-    } else {
-      throw new DisTubeError(
-        "INVALID_TYPE",
-        ["FilterResolvable", "Array<FilterResolvable>"],
-        filterOrFilters,
-        "filterOrFilters",
-      );
-    }
+    if (Array.isArray(filterOrFilters)) filterOrFilters.map(f => this.#removeFn(f));
+    else this.#removeFn(filterOrFilters);
     this.#apply();
     return this;
   }
@@ -134,20 +102,29 @@ export class FilterManager extends BaseManager<FilterResolvable> {
    * @returns {boolean}
    */
   has(filter: FilterResolvable) {
-    return this.collection.has(this.#resolveName(filter));
+    return this.collection.has(typeof filter === "string" ? filter : this.#resolve(filter).name);
   }
 
   /**
-   * Array of enabled filter name
+   * Array of enabled filter names
    * @type {Array<string>}
    * @readonly
    */
-  get names() {
-    return this.collection.map(f => this.#resolveName(f));
+  get names(): string[] {
+    return [...this.collection.keys()];
   }
 
-  get values() {
-    return this.collection.map(f => this.#resolveValue(f));
+  /**
+   * Array of enabled filters
+   * @type {Array<Filter>}
+   * @readonly
+   */
+  get values(): Filter[] {
+    return [...this.collection.values()];
+  }
+
+  get ffmpegArgs(): string[] {
+    return this.size ? ["-af", this.values.map(f => f.value).join(",")] : [];
   }
 
   override toString() {
