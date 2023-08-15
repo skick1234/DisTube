@@ -45,12 +45,12 @@ export class FilterManager extends BaseManager<Filter> {
   add(filterOrFilters: FilterResolvable | FilterResolvable[], override = false) {
     if (Array.isArray(filterOrFilters)) {
       for (const filter of filterOrFilters) {
-        const f = this.#resolve(filter);
-        if (override || !this.has(f)) this.collection.set(f.name, f);
+        const ft = this.#resolve(filter);
+        if (override || !this.has(ft)) this.collection.set(ft.name, ft);
       }
     } else {
-      const f = this.#resolve(filterOrFilters);
-      if (override || !this.has(f)) this.collection.set(f.name, f);
+      const ft = this.#resolve(filterOrFilters);
+      if (override || !this.has(ft)) this.collection.set(ft.name, ft);
     }
     this.#apply();
     return this;
@@ -90,7 +90,7 @@ export class FilterManager extends BaseManager<Filter> {
    * @returns {FilterManager}
    */
   remove(filterOrFilters: FilterResolvable | FilterResolvable[]) {
-    if (Array.isArray(filterOrFilters)) filterOrFilters.map(f => this.#removeFn(f));
+    if (Array.isArray(filterOrFilters)) filterOrFilters.forEach(f => this.#removeFn(f));
     else this.#removeFn(filterOrFilters);
     this.#apply();
     return this;

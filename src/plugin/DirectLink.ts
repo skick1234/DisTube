@@ -9,12 +9,13 @@ export class DirectLinkPlugin extends ExtractorPlugin {
       const types = headers["content-type"];
       const type = Array.isArray(types) ? types[0] : types;
       if (["audio/", "video/", "application/ogg"].some(s => type?.startsWith(s))) return true;
-    } catch {}
+    } catch {
+      // invalid URL
+    }
     return false;
   }
 
-  // eslint-disable-next-line @typescript-eslint/require-await
-  async resolve(url: string, options: { member?: GuildMember; metadata?: any } = {}) {
+  resolve(url: string, options: { member?: GuildMember; metadata?: any } = {}) {
     url = url.replace(/\/+$/, "");
     return new Song(
       {

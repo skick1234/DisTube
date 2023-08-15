@@ -64,9 +64,9 @@ export class Playlist<T = unknown> implements PlaylistInfo {
         ? `${this.songs[0].name} and ${this.songs.length - 1} more songs.`
         : `${this.songs.length} songs playlist`;
       this.thumbnail = this.songs[0].thumbnail;
-      this.member = member || undefined;
+      this.member = member;
     } else {
-      this.source = (playlist.source || "youtube").toLowerCase();
+      this.source = playlist.source.toLowerCase();
       if (!Array.isArray(playlist.songs) || !playlist.songs.length) throw new DisTubeError("EMPTY_PLAYLIST");
       this.songs = playlist.songs;
       this.name =
@@ -87,9 +87,9 @@ export class Playlist<T = unknown> implements PlaylistInfo {
        * @type {string?}
        */
       this.thumbnail = playlist.thumbnail || this.songs[0].thumbnail;
-      this.member = member || playlist.member || undefined;
+      this.member = member || playlist.member;
     }
-    this.songs.map(s => s.constructor.name === "Song" && (s.playlist = this));
+    this.songs.forEach(s => s.constructor.name === "Song" && (s.playlist = this));
     if (properties) for (const [key, value] of Object.entries(properties)) this[key] = value;
     /**
      * Optional metadata that can be used to identify the playlist.
@@ -103,7 +103,7 @@ export class Playlist<T = unknown> implements PlaylistInfo {
    * @type {number}
    */
   get duration() {
-    return this.songs?.reduce((prev, next) => prev + (next.duration || 0), 0) || 0;
+    return this.songs.reduce((prev, next) => prev + next.duration, 0);
   }
 
   /**
@@ -125,7 +125,7 @@ export class Playlist<T = unknown> implements PlaylistInfo {
   set member(member: GuildMember | undefined) {
     if (!isMemberInstance(member)) return;
     this.#member = member;
-    this.songs.map(s => s.constructor.name === "Song" && (s.member = this.member));
+    this.songs.forEach(s => s.constructor.name === "Song" && (s.member = this.member));
   }
 
   /**
@@ -142,6 +142,6 @@ export class Playlist<T = unknown> implements PlaylistInfo {
 
   set metadata(metadata: T) {
     this.#metadata = metadata;
-    this.songs.map(s => s.constructor.name === "Song" && (s.metadata = metadata));
+    this.songs.forEach(s => s.constructor.name === "Song" && (s.metadata = metadata));
   }
 }

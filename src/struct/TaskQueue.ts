@@ -53,6 +53,6 @@ export class TaskQueue {
    * @type {boolean}
    */
   public get hasResolveTask(): boolean {
-    return !!this.#tasks.find(t => t.resolveInfo);
+    return this.#tasks.some(t => t.resolveInfo);
   }
 }

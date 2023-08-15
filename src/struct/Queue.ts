@@ -213,7 +213,7 @@ export class Queue extends DisTubeBase {
     } else {
       this.songs.splice(position, 0, song);
     }
-    if (Array.isArray(song)) song.map(s => delete s.formats);
+    if (Array.isArray(song)) song.forEach(s => delete s.formats);
     else delete song.formats;
     return this;
   }

@@ -105,7 +105,7 @@ export class DisTube extends TypedEmitter<TypedDisTubeEvents> {
     this.filters = { ...defaultFilters, ...this.options.customFilters };
     // Default plugin
     if (this.options.directLink) this.options.plugins.push(new DirectLinkPlugin());
-    this.options.plugins.map(p => p.init(this));
+    this.options.plugins.forEach(p => p.init(this));
     /**
      * Extractor Plugins
      * @type {ExtractorPlugin[]}
@@ -183,7 +183,7 @@ export class DisTube extends TypedEmitter<TypedDisTubeEvents> {
       throw new DisTubeError("INVALID_TYPE", "Discord.GuildMember", member, "options.member");
     }
     const queue = this.getQueue(voiceChannel);
-    const queuing = !!queue && !queue._taskQueue.hasResolveTask;
+    const queuing = queue && !queue._taskQueue.hasResolveTask;
     if (queuing) await queue?._taskQueue.queuing(true);
     try {
       if (typeof song === "string") {
@@ -214,7 +214,9 @@ export class DisTube extends TypedEmitter<TypedDisTubeEvents> {
         try {
           e.name = "PlayError";
           e.message = `${typeof song === "string" ? song : song.url}\n${e.message}`;
-        } catch {}
+        } catch {
+          // Throw original error
+        }
       }
       throw e;
     } finally {
@@ -255,13 +257,13 @@ export class DisTube extends TypedEmitter<TypedDisTubeEvents> {
       const promises = filteredSongs.map((song: string | Song | SearchResult) =>
         this.handler.resolve(song, { member, metadata }).catch(() => undefined),
       );
-      resolvedSongs = (await Promise.all(promises)).filter((s: any): s is Song => !!s);
+      resolvedSongs = (await Promise.all(promises)).filter((s: any): s is Song => Boolean(s));
     } else {
       const resolved = [];
       for (const song of filteredSongs) {
         resolved.push(await this.handler.resolve(song, { member, metadata }).catch(() => undefined));
       }
-      resolvedSongs = resolved.filter((s: any): s is Song => !!s);
+      resolvedSongs = resolved.filter((s: any): s is Song => Boolean(s));
     }
     return new Playlist(resolvedSongs, { member, properties, metadata });
   }
@@ -346,6 +348,12 @@ export class DisTube extends TypedEmitter<TypedDisTubeEvents> {
     return this.queues.get(guild);
   }
 
+  #getQueue(guild: GuildIdResolvable): Queue {
+    const queue = this.getQueue(guild);
+    if (!queue) throw new DisTubeError("NO_QUEUE");
+    return queue;
+  }
+
   /**
    * Pause the guild stream
    * @param {GuildIdResolvable} guild The type can be resolved to give a {@link Queue}
@@ -353,9 +361,7 @@ export class DisTube extends TypedEmitter<TypedDisTubeEvents> {
    * @throws {Error}
    */
   pause(guild: GuildIdResolvable): Queue {
-    const q = this.getQueue(guild);
-    if (!q) throw new DisTubeError("NO_QUEUE");
-    return q.pause();
+    return this.#getQueue(guild).pause();
   }
 
   /**
@@ -365,9 +371,7 @@ export class DisTube extends TypedEmitter<TypedDisTubeEvents> {
    * @throws {Error}
    */
   resume(guild: GuildIdResolvable): Queue {
-    const q = this.getQueue(guild);
-    if (!q) throw new DisTubeError("NO_QUEUE");
-    return q.resume();
+    return this.#getQueue(guild).resume();
   }
 
   /**
@@ -387,9 +391,7 @@ export class DisTube extends TypedEmitter<TypedDisTubeEvents> {
    * });
    */
   stop(guild: GuildIdResolvable): Promise<void> {
-    const q = this.getQueue(guild);
-    if (!q) throw new DisTubeError("NO_QUEUE");
-    return q.stop();
+    return this.#getQueue(guild).stop();
   }
 
   /**
@@ -408,9 +410,7 @@ export class DisTube extends TypedEmitter<TypedDisTubeEvents> {
    * });
    */
   setVolume(guild: GuildIdResolvable, percent: number): Queue {
-    const q = this.getQueue(guild);
-    if (!q) throw new DisTubeError("NO_QUEUE");
-    return q.setVolume(percent);
+    return this.#getQueue(guild).setVolume(percent);
   }
 
   /**
@@ -430,9 +430,7 @@ export class DisTube extends TypedEmitter<TypedDisTubeEvents> {
    * });
    */
   skip(guild: GuildIdResolvable): Promise<Song> {
-    const q = this.getQueue(guild);
-    if (!q) throw new DisTubeError("NO_QUEUE");
-    return q.skip();
+    return this.#getQueue(guild).skip();
   }
 
   /**
@@ -450,9 +448,7 @@ export class DisTube extends TypedEmitter<TypedDisTubeEvents> {
    * });
    */
   previous(guild: GuildIdResolvable): Promise<Song> {
-    const q = this.getQueue(guild);
-    if (!q) throw new DisTubeError("NO_QUEUE");
-    return q.previous();
+    return this.#getQueue(guild).previous();
   }
 
   /**
@@ -469,9 +465,7 @@ export class DisTube extends TypedEmitter<TypedDisTubeEvents> {
    * });
    */
   shuffle(guild: GuildIdResolvable): Promise<Queue> {
-    const q = this.getQueue(guild);
-    if (!q) throw new DisTubeError("NO_QUEUE");
-    return q.shuffle();
+    return this.#getQueue(guild).shuffle();
   }
 
   /**
@@ -493,9 +487,7 @@ export class DisTube extends TypedEmitter<TypedDisTubeEvents> {
    * });
    */
   jump(guild: GuildIdResolvable, num: number): Promise<Song> {
-    const q = this.getQueue(guild);
-    if (!q) throw new DisTubeError("NO_QUEUE");
-    return q.jump(num);
+    return this.#getQueue(guild).jump(num);
   }
 
   /**
@@ -532,9 +524,7 @@ export class DisTube extends TypedEmitter<TypedDisTubeEvents> {
    * message.channel.send("Set repeat mode to `" + mode + "`");
    */
   setRepeatMode(guild: GuildIdResolvable, mode?: number): number {
-    const q = this.getQueue(guild);
-    if (!q) throw new DisTubeError("NO_QUEUE");
-    return q.setRepeatMode(mode);
+    return this.#getQueue(guild).setRepeatMode(mode);
   }
 
   /**
@@ -554,10 +544,9 @@ export class DisTube extends TypedEmitter<TypedDisTubeEvents> {
    * });
    */
   toggleAutoplay(guild: GuildIdResolvable): boolean {
-    const q = this.getQueue(guild);
-    if (!q) throw new DisTubeError("NO_QUEUE");
-    q.autoplay = !q.autoplay;
-    return q.autoplay;
+    const queue = this.#getQueue(guild);
+    queue.autoplay = !queue.autoplay;
+    return queue.autoplay;
   }
 
   /**
@@ -566,9 +555,7 @@ export class DisTube extends TypedEmitter<TypedDisTubeEvents> {
    * @returns {Promise<Song>} The guild queue
    */
   addRelatedSong(guild: GuildIdResolvable): Promise<Song> {
-    const q = this.getQueue(guild);
-    if (!q) throw new DisTubeError("NO_QUEUE");
-    return q.addRelatedSong();
+    return this.#getQueue(guild).addRelatedSong();
   }
 
   /**
@@ -586,9 +573,7 @@ export class DisTube extends TypedEmitter<TypedDisTubeEvents> {
    * });
    */
   seek(guild: GuildIdResolvable, time: number): Queue {
-    const q = this.getQueue(guild);
-    if (!q) throw new DisTubeError("NO_QUEUE");
-    return q.seek(time);
+    return this.#getQueue(guild).seek(time);
   }
 
   /**

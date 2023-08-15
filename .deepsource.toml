@@ -1,0 +1,15 @@
+version = 1
+
+exclude_patterns = ["tests/**"]
+
+[[analyzers]]
+name = "test-coverage"
+
+[[analyzers]]
+name = "javascript"
+
+  [analyzers.meta]
+  environment = [
+    "nodejs",
+    "jest"
+  ]

@@ -38,12 +38,12 @@ export function formatDuration(sec: number): string {
 export function toSecond(input: any): number {
   if (!input) return 0;
   if (typeof input !== "string") return Number(input) || 0;
-  if (input.match(/:/g)) {
+  if (input.includes(":")) {
     const time = input.split(":").reverse();
-    let s = 0;
-    for (let i = 0; i < 3; i++) if (time[i]) s += Number(time[i].replace(/[^\d.]+/g, "")) * Math.pow(60, i);
-    if (time.length > 3) s += Number(time[3].replace(/[^\d.]+/g, "")) * 24 * 60 * 60;
-    return s;
+    let seconds = 0;
+    for (let i = 0; i < 3; i++) if (time[i]) seconds += Number(time[i].replace(/[^\d.]+/g, "")) * Math.pow(60, i);
+    if (time.length > 3) seconds += Number(time[3].replace(/[^\d.]+/g, "")) * 24 * 60 * 60;
+    return seconds;
   } else {
     return Number(input.replace(/[^\d.]+/g, "")) || 0;
   }
@@ -107,7 +107,7 @@ export function isSnowflake(id: any): id is Snowflake {
 
 export function isMemberInstance(member: any): member is GuildMember {
   return (
-    !!member &&
+    Boolean(member) &&
     isSnowflake(member.id) &&
     isSnowflake(member.guild?.id) &&
     isSnowflake(member.user?.id) &&
@@ -117,22 +117,21 @@ export function isMemberInstance(member: any): member is GuildMember {
 
 export function isTextChannelInstance(channel: any): channel is GuildTextBasedChannel {
   return (
-    !!channel &&
+    Boolean(channel) &&
     isSnowflake(channel.id) &&
-    isSnowflake(channel.guildId) &&
-    typeof channel.name === "string" &&
+    isSnowflake(channel.guildId || channel.guild?.id) &&
     Constants.TextBasedChannelTypes.includes(channel.type) &&
-    "messages" in channel &&
-    typeof channel.send === "function"
+    typeof channel.send === "function" &&
+    (typeof channel.nsfw === "boolean" || typeof channel.parent?.nsfw === "boolean")
   );
 }
 
 export function isMessageInstance(message: any): message is Message<true> {
   // Simple check for using distube normally
   return (
-    !!message &&
+    Boolean(message) &&
     isSnowflake(message.id) &&
-    isSnowflake(message.guildId) &&
+    isSnowflake(message.guildId || message.guild?.id) &&
     isMemberInstance(message.member) &&
     isTextChannelInstance(message.channel) &&
     Constants.NonSystemMessageTypes.includes(message.type) &&
@@ -142,15 +141,15 @@ export function isMessageInstance(message: any): message is Message<true> {
 
 export function isSupportedVoiceChannel(channel: any): channel is VoiceBasedChannel {
   return (
-    !!channel &&
+    Boolean(channel) &&
     isSnowflake(channel.id) &&
-    isSnowflake(channel.guildId) &&
+    isSnowflake(channel.guildId || channel.guild?.id) &&
     Constants.VoiceBasedChannelTypes.includes(channel.type)
   );
 }
 
 export function isGuildInstance(guild: any): guild is Guild {
-  return !!guild && isSnowflake(guild.id) && isSnowflake(guild.ownerId) && typeof guild.name === "string";
+  return Boolean(guild) && isSnowflake(guild.id) && isSnowflake(guild.ownerId) && typeof guild.name === "string";
 }
 
 export function resolveGuildId(resolvable: GuildIdResolvable): Snowflake {
@@ -171,7 +170,7 @@ export function resolveGuildId(resolvable: GuildIdResolvable): Snowflake {
 }
 
 export function isClientInstance(client: any): client is Client {
-  return !!client && typeof client.login === "function";
+  return Boolean(client) && typeof client.login === "function";
 }
 
 export function checkInvalidKey(

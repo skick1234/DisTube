@@ -3,7 +3,7 @@
   "collectCoverage": true,
   "collectCoverageFrom": ["src/**/*.ts"],
   "coverageDirectory": "coverage",
-  "coverageReporters": ["text", "lcov", "clover"],
+  "coverageReporters": ["text", "lcov", "clover", "cobertura"],
   "testMatch": ["**/?(*.)+(spec|test).[jt]s?(x)"],
   "verbose": true,
   "roots": ["<rootDir>/tests/"],

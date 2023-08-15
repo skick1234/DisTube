@@ -220,7 +220,7 @@ export class DisTubeHandler extends DisTubeBase {
     query?: string,
   ): Promise<R | null> {
     if (!isMessageInstance(message)) throw new DisTubeError("INVALID_TYPE", "Discord.Message", message, "message");
-    if (!Array.isArray(results) || results.length == 0) {
+    if (!Array.isArray(results) || results.length === 0) {
       throw new DisTubeError("INVALID_TYPE", "Array<SearchResult|Song|Playlist>", results, "results");
     }
     if (this.options.searchSongs > 1) {
@@ -249,8 +249,7 @@ export class DisTubeHandler extends DisTubeBase {
     if (limit > 1) {
       results.splice(limit);
       this.emit("searchResult", message, results, query);
-      const c = message.channel;
-      const answers = await c
+      const answers = await message.channel
         .awaitMessages({
           filter: (m: Message) => m.author.id === message.author.id,
           max: 1,

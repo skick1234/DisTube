@@ -123,7 +123,7 @@ export class Song<T = unknown> {
      * Indicates if the video is an active live.
      * @type {boolean}
      */
-    this.isLive = !!details.isLive;
+    this.isLive = Boolean(details.isLive);
     /**
      * Song duration.
      * @type {number}
@@ -188,7 +188,7 @@ export class Song<T = unknown> {
      * Whether or not an age-restricted content
      * @type {boolean}
      */
-    this.age_restricted = !!details.age_restricted;
+    this.age_restricted = Boolean(details.age_restricted);
     /**
      * @typedef {Object} Chapter
      * @prop {string} title Chapter title
@@ -237,7 +237,7 @@ export class Song<T = unknown> {
         url: info.uploader?.url,
       };
     }
-    this.age_restricted = info.age_restricted || (!!info.age_limit && parseNumber(info.age_limit) >= 18);
+    this.age_restricted = info.age_restricted || (Boolean(info.age_limit) && parseNumber(info.age_limit) >= 18);
     this.chapters = info.chapters || [];
   }
 

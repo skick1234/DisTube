@@ -52,10 +52,11 @@ export class DisTubeVoice extends TypedEmitter<DisTubeVoiceEvents> {
       });
     this.connection
       .on(VoiceConnectionStatus.Disconnected, (_, newState) => {
-        // User disconnect
-        if (newState.reason === VoiceConnectionDisconnectReason.Manual) return this.leave();
-        // Move to other channel
-        if (newState.reason === VoiceConnectionDisconnectReason.WebSocketClose && newState.closeCode === 4014) {
+        if (newState.reason === VoiceConnectionDisconnectReason.Manual) {
+          // User disconnect
+          this.leave();
+        } else if (newState.reason === VoiceConnectionDisconnectReason.WebSocketClose && newState.closeCode === 4014) {
+          // Move to other channel
           entersState(this.connection, VoiceConnectionStatus.Connecting, 5e3).catch(() => {
             if (
               ![VoiceConnectionStatus.Ready, VoiceConnectionStatus.Connecting].includes(this.connection.state.status)
@@ -63,21 +64,17 @@ export class DisTubeVoice extends TypedEmitter<DisTubeVoiceEvents> {
               this.leave();
             }
           });
-          return;
-        }
-        // Try to rejoin
-        if (this.connection.rejoinAttempts < 5) {
+        } else if (this.connection.rejoinAttempts < 5) {
+          // Try to rejoin
           setTimeout(
             () => {
               this.connection.rejoin();
             },
             (this.connection.rejoinAttempts + 1) * 5e3,
           ).unref();
-          return;
-        }
-        // Leave after 5 attempts
-        if (this.connection.state.status !== VoiceConnectionStatus.Destroyed) {
-          return this.leave(new DisTubeError("VOICE_RECONNECT_FAILED"));
+        } else if (this.connection.state.status !== VoiceConnectionStatus.Destroyed) {
+          // Leave after 5 attempts
+          this.leave(new DisTubeError("VOICE_RECONNECT_FAILED"));
         }
       })
       .on(VoiceConnectionStatus.Destroyed, () => {
@@ -222,8 +219,8 @@ export class DisTubeVoice extends TypedEmitter<DisTubeVoiceEvents> {
   unpause() {
     const state = this.audioPlayer.state;
     if (state.status !== AudioPlayerStatus.Paused) return;
-    if (this.audioResource && state.resource !== this.audioResource) return this.audioPlayer.play(this.audioResource);
-    this.audioPlayer.unpause();
+    if (this.audioResource && state.resource !== this.audioResource) this.audioPlayer.play(this.audioResource);
+    else this.audioPlayer.unpause();
   }
   /**
    * Whether the bot is self-deafened

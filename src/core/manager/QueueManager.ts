@@ -144,7 +144,9 @@ export class QueueManager extends GuildIdManager<Queue> {
     try {
       error.name = "PlayingError";
       error.message = `${error.message}\nId: ${song.id}\nName: ${song.name}`;
-    } catch {}
+    } catch {
+      // Emit original error
+    }
     this.emitError(error, queue.textChannel);
     if (queue.songs.length > 0) {
       queue._next = queue._prev = false;
