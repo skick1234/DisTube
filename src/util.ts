@@ -203,3 +203,6 @@ export function isNsfwChannel(channel?: GuildTextBasedChannel): boolean {
   if (channel.isThread()) return channel.parent?.nsfw ?? false;
   return channel.nsfw;
 }
+
+type Falsy = undefined | null | false | 0 | "";
+export const isTruthy = <T>(x: T | Falsy): x is T => Boolean(x);

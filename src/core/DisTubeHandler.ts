@@ -1,6 +1,7 @@
 import ytpl from "@distube/ytpl";
 import ytdl from "@distube/ytdl-core";
 import { DisTubeBase } from ".";
+import { Cookie } from "tough-cookie";
 import {
   DisTubeError,
   Playlist,
@@ -12,6 +13,7 @@ import {
   isMessageInstance,
   isNsfwChannel,
   isObject,
+  isTruthy,
   isURL,
   isVoiceChannelEmpty,
 } from "..";
@@ -31,6 +33,7 @@ import type {
  * @private
  */
 export class DisTubeHandler extends DisTubeBase {
+  #cookie: ytdl.Cookie[] | string = "";
   constructor(distube: DisTube) {
     super(distube);
 
@@ -66,16 +69,33 @@ export class DisTubeHandler extends DisTubeBase {
   }
 
   get ytdlOptions(): ytdl.getInfoOptions {
-    const options: any = this.options.ytdlOptions;
-    if (this.options.youtubeCookie) {
-      if (!options.requestOptions) options.requestOptions = {};
-      if (!options.requestOptions.headers) options.requestOptions.headers = {};
-      options.requestOptions.headers.cookie = this.options.youtubeCookie;
-      if (this.options.youtubeIdentityToken) {
-        options.requestOptions.headers["x-youtube-identity-token"] = this.options.youtubeIdentityToken;
+    const options = this.options.ytdlOptions;
+    if (this.options.youtubeCookie && this.options.youtubeCookie !== this.#cookie) {
+      const cookies = (this.#cookie = this.options.youtubeCookie);
+      if (typeof cookies === "string") {
+        // eslint-disable-next-line no-console
+        console.warn(
+          "\x1b[33mWARNING:\x1B[0m You are using the old YouTube cookie format, " +
+            "please use the new one instead. (https://distube.js.org/#/docs/DisTube/main/general/cookie)",
+        );
+        options.agent = ytdl.createAgent(
+          cookies
+            .split(";")
+            .map(c => Cookie.parse(c))
+            .filter(isTruthy),
+        );
+      } else {
+        options.agent = ytdl.createAgent(cookies);
       }
     }
     return options;
+  }
+
+  get ytCookie(): string {
+    const agent = this.ytdlOptions.agent;
+    if (!agent) return "";
+    const { jar } = agent;
+    return jar.getCookieStringSync("https://www.youtube.com");
   }
 
   /**
@@ -156,7 +176,7 @@ export class DisTubeHandler extends DisTubeBase {
       return playlist;
     }
     if (typeof playlist === "string") {
-      const info = await ytpl(playlist, { limit: Infinity });
+      const info = await ytpl(playlist, { limit: Infinity, requestOptions: { headers: { cookie: this.ytCookie } } });
       const songs = info.items
         .filter(v => !v.thumbnail.includes("no_thumbnail"))
         .map(v => new Song(v, { member, metadata }));

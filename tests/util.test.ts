@@ -24,11 +24,7 @@ jest.mock("@/core/DisTubeVoice");
 const Voice = _Voice as unknown as jest.Mocked<typeof _Voice>;
 
 const client = new Client({ intents: [] });
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-ignore
 client.user = new ClientUser(client, rawClientUser);
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-ignore
 const guild = new Guild(client, rawGuild);
 const textChannel = guild.channels.cache.get("737499503384461325");
 const voiceChannel = guild.channels.cache.get("853225781604646933");
@@ -37,14 +33,8 @@ const threadChannel = guild.channels.cache.get("1098543313134563338");
 const forumChannel = guild.channels.cache.get("737499503384461324");
 Object.defineProperty(voiceChannel, "joinable", { value: true, writable: false });
 Object.defineProperty(stageChannel, "joinable", { value: false, writable: false });
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-ignore
 const botVoiceState = new VoiceState(guild, rawBotVoiceState);
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-ignore
 const userVoiceState = new VoiceState(guild, rawUserVoiceState);
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-ignore
 const message = new Message(client, rawMessage);
 const clientMember = guild.members.resolve(guild.client.user.id);
 
@@ -115,8 +105,6 @@ test("isMemberInstance()", () => {
 test("resolveGuildID()", () => {
   const voice = new Voice({} as any, voiceChannel);
   const gId = "737499502763704370";
-  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-  // @ts-ignore
   voice.id = gId;
   const testFn = resolveGuildId;
   expect(testFn(voice)).toBe(gId);

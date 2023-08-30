@@ -60,8 +60,6 @@ describe("Constructor", () => {
     jest.spyOn(client, "on");
     Util.isClientInstance.mockReturnValueOnce(true);
     const distube = new DisTube(client, {
-      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-      // @ts-ignore
       plugins: [new ExtractorPlugin(), new CustomPlugin()],
     });
     expect(distube.client).toBe(client);
@@ -80,8 +78,6 @@ describe("Constructor", () => {
     Util.isClientInstance.mockReturnValueOnce(true);
     const distube = new DisTube(client, {
       leaveOnEmpty: false,
-      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-      // @ts-ignore
       plugins: [new ExtractorPlugin(), new CustomPlugin()],
     });
     expect(distube.client).toBe(client);

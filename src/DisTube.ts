@@ -53,6 +53,16 @@ export class DisTube extends TypedEmitter<TypedDisTubeEvents> {
   readonly extractorPlugins: ExtractorPlugin[];
   readonly customPlugins: CustomPlugin[];
   readonly filters: Filters;
+
+  /**
+   * @deprecated Use `youtubeCookie: Cookie[]` instead. Guide: {@link https://distube.js.org/#/docs/DisTube/main/general/cookie YouTube Cookies}
+   */
+  constructor(
+    client: Client,
+    otp: DisTubeOptions & {
+      youtubeCookie: string;
+    },
+  );
   /**
    * Create a new DisTube class.
    * @param {Discord.Client} client Discord.JS client
@@ -67,6 +77,7 @@ export class DisTube extends TypedEmitter<TypedDisTubeEvents> {
    * // client.DisTube = distube // make it access easily
    * client.login("Your Discord Bot Token")
    */
+  constructor(client: Client, otp?: DisTubeOptions);
   constructor(client: Client, otp: DisTubeOptions = {}) {
     super();
     this.setMaxListeners(1);
@@ -312,7 +323,7 @@ export class DisTube extends TypedEmitter<TypedDisTubeEvents> {
     }
 
     try {
-      const search = await ytsr(string, opts);
+      const search = await ytsr(string, { ...opts, requestOptions: { headers: { cookie: this.handler.ytCookie } } });
       const results = search.items.map(i => {
         if (i.type === "video") return new SearchResultVideo(i);
         return new SearchResultPlaylist(i as any);

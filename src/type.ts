@@ -10,6 +10,7 @@ import type {
   VoiceState,
 } from "discord.js";
 import type { CustomPlugin, DisTubeVoice, ExtractorPlugin, Playlist, Queue, SearchResult, Song } from ".";
+import type { Cookie } from "@distube/ytdl-core";
 
 export type Awaitable<T = any> = T | PromiseLike<T>;
 
@@ -96,12 +97,8 @@ export type Filters = Record<string, string>;
  * and enable {@link DisTube#previous} method
  * @prop {number} [searchSongs=0] Limit of search results emits in {@link DisTube#event:searchResult} event
  * when {@link DisTube#play} method executed. If `searchSongs <= 1`, play the first result
- * @prop {string} [youtubeCookie] YouTube cookies. Read how to get it in
- * {@link https://github.com/fent/node-ytdl-core/blob/997efdd5dd9063363f6ef668bb364e83970756e7/example/cookies.js#L6-L12|YTDL's Example}
- * @prop {string} [youtubeIdentityToken] If not given; ytdl-core will try to find it.
- * You can find this by going to a video's watch page; viewing the source; and searching for "ID_TOKEN".
+ * @prop {Cookie[]|string} [youtubeCookie] YouTube cookies. Guide: {@link https://distube.js.org/#/docs/DisTube/main/general/cookie YouTube Cookies}
  * @prop {Filters} [customFilters] Override {@link defaultFilters} or add more ffmpeg filters.
- * Example=`{ "Filter name"="Filter value"; "8d"="apulsator=hz=0.075" }`
  * @prop {ytdl.getInfoOptions} [ytdlOptions] `ytdl-core` get info options
  * @prop {number} [searchCooldown=60] Built-in search cooldown in seconds (When searchSongs is bigger than 0)
  * @prop {number} [emptyCooldown=60] Built-in leave on empty cooldown in seconds (When leaveOnEmpty is true)
@@ -115,7 +112,7 @@ export type Filters = Record<string, string>;
  * (Not the same as {@link DisTubeStream#type})
  * @prop {boolean} [directLink=true] Whether or not playing a song with direct link
  */
-export interface DisTubeOptions {
+export type DisTubeOptions = {
   plugins?: (CustomPlugin | ExtractorPlugin)[];
   emitNewSongOnly?: boolean;
   leaveOnFinish?: boolean;
@@ -125,8 +122,7 @@ export interface DisTubeOptions {
   savePreviousSongs?: boolean;
   searchSongs?: number;
   searchCooldown?: number;
-  youtubeCookie?: string;
-  youtubeIdentityToken?: string;
+  youtubeCookie?: Cookie[] | string;
   customFilters?: Filters;
   ytdlOptions?: ytdl.downloadOptions;
   nsfw?: boolean;
@@ -135,7 +131,7 @@ export interface DisTubeOptions {
   joinNewVoiceChannel?: boolean;
   streamType?: StreamType;
   directLink?: boolean;
-}
+};
 
 /**
  * Data that can be resolved to give a guild id string. This can be:

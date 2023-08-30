@@ -13,7 +13,6 @@ test("Default DisTubeOptions", () => {
     searchCooldown: 60,
     searchSongs: 0,
     youtubeCookie: undefined,
-    youtubeIdentityToken: undefined,
     ytdlOptions: {},
     emitAddListWhenCreatingQueue: true,
     emitAddSongWhenCreatingQueue: true,
@@ -48,10 +47,7 @@ test("Validate DisTubeOptions", () => {
   }
   expect(() => {
     new Options({ youtubeCookie: 1 as any });
-  }).toThrow("Expected 'string' for 'DisTubeOptions.youtubeCookie', but got 1");
-  expect(() => {
-    new Options({ youtubeIdentityToken: {} as any });
-  }).toThrow("Expected 'string' for 'DisTubeOptions.youtubeIdentityToken', but got {}");
+  }).toThrow("Expected 'Array<Cookie>' or 'string' for 'DisTubeOptions.youtubeCookie', but got 1 (number)");
   expect(() => {
     new Options({ invalidKey: "an invalid key" } as any);
   }).toThrow("'invalidKey' does not need to be provided in DisTubeOptions");

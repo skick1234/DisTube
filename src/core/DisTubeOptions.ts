@@ -1,6 +1,7 @@
 import { DisTubeError, StreamType, checkInvalidKey, defaultOptions } from "..";
 import type ytdl from "@distube/ytdl-core";
 import type { CustomPlugin, DisTubeOptions, ExtractorPlugin, Filters } from "..";
+import type { Cookie } from "@distube/ytdl-core";
 
 export class Options {
   plugins: (CustomPlugin | ExtractorPlugin)[];
@@ -12,8 +13,7 @@ export class Options {
   savePreviousSongs: boolean;
   searchSongs: number;
   searchCooldown: number;
-  youtubeCookie?: string;
-  youtubeIdentityToken?: string;
+  youtubeCookie?: Cookie[] | string;
   customFilters?: Filters;
   ytdlOptions: ytdl.getInfoOptions;
   nsfw: boolean;
@@ -35,7 +35,6 @@ export class Options {
     this.savePreviousSongs = opts.savePreviousSongs;
     this.searchSongs = opts.searchSongs;
     this.youtubeCookie = opts.youtubeCookie;
-    this.youtubeIdentityToken = opts.youtubeIdentityToken;
     this.customFilters = opts.customFilters;
     this.ytdlOptions = opts.ytdlOptions;
     this.searchCooldown = opts.searchCooldown;
@@ -64,16 +63,18 @@ export class Options {
       "directLink",
     ]);
     const numberOptions = new Set(["searchCooldown", "emptyCooldown", "searchSongs"]);
-    const stringOptions = new Set(["youtubeCookie", "youtubeIdentityToken"]);
+    const stringOptions = new Set();
     const objectOptions = new Set(["customFilters", "ytdlOptions"]);
-    const optionalOptions = new Set(["youtubeCookie", "youtubeIdentityToken", "customFilters"]);
+    const optionalOptions = new Set(["youtubeCookie", "customFilters"]);
 
     for (const [key, value] of Object.entries(options)) {
       if (value === undefined && optionalOptions.has(key)) continue;
-      if (key === "streamType" && (typeof value !== "number" || isNaN(value) || !StreamType[value])) {
+      if (key === "youtubeCookie" && !Array.isArray(value) && typeof value !== "string") {
+        throw new DisTubeError("INVALID_TYPE", ["Array<Cookie>", "string"], value, `DisTubeOptions.${key}`);
+      } else if (key === "streamType" && (typeof value !== "number" || isNaN(value) || !StreamType[value])) {
         throw new DisTubeError("INVALID_TYPE", "StreamType", value, `DisTubeOptions.${key}`);
       } else if (key === "plugins" && !Array.isArray(value)) {
-        throw new DisTubeError("INVALID_TYPE", "Array<Plugin>", value, "DisTubeOptions.plugins");
+        throw new DisTubeError("INVALID_TYPE", "Array<Plugin>", value, `DisTubeOptions.${key}`);
       } else if (booleanOptions.has(key)) {
         if (typeof value !== "boolean") {
           throw new DisTubeError("INVALID_TYPE", "boolean", value, `DisTubeOptions.${key}`);

@@ -109,22 +109,6 @@ describe("Constructor", () => {
     const distube = createFakeDisTube();
     const cookie = "a valid cookie";
     distube.options.youtubeCookie = cookie;
-
-    test("youtubeIdentityToken is undefined", () => {
-      const handler = new DisTubeHandler(distube as any);
-      expect(handler.ytdlOptions).toBe(distube.options.ytdlOptions);
-      expect((handler.ytdlOptions.requestOptions as any).headers.cookie).toBe(cookie);
-      expect((handler.ytdlOptions.requestOptions as any).headers["x-youtube-identity-token"]).not.toBeDefined();
-    });
-
-    test("youtubeIdentityToken is a string", () => {
-      const idToken = "a valid token";
-      distube.options.youtubeIdentityToken = idToken;
-      const handler = new DisTubeHandler(distube as any);
-      expect(handler.ytdlOptions).toBe(distube.options.ytdlOptions);
-      expect((handler.ytdlOptions.requestOptions as any).headers.cookie).toBe(cookie);
-      expect((handler.ytdlOptions.requestOptions as any).headers["x-youtube-identity-token"]).toBe(idToken);
-    });
   });
 
   describe("leaveOnEmpty option", () => {
