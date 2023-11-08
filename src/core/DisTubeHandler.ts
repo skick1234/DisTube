@@ -369,9 +369,9 @@ export class DisTubeHandler extends DisTubeBase {
    * @param {Song} song A Song
    */
   async attachStreamInfo(song: Song) {
-    const { url, source, formats, streamURL, isLive } = song;
+    const { url, source, formats, streamURL } = song;
     if (source === "youtube") {
-      if (!formats || !chooseBestVideoFormat(formats, isLive)) {
+      if (!formats || !chooseBestVideoFormat(song)) {
         song._patchYouTube(await this.handler.getYouTubeInfo(url));
       }
     } else if (!streamURL) {

@@ -156,7 +156,7 @@ describe("QueueManager#createStream()", () => {
     expect(result).toBe(stream);
     expect(mockFn).toBeCalledTimes(1);
     expect(mockFn).toBeCalledWith(
-      song.formats,
+      song,
       expect.objectContaining({
         ffmpegArgs: [],
         seek: 1,

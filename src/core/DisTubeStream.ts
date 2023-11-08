@@ -1,24 +1,19 @@
 import { FFmpeg } from "prism-media";
 import { DisTubeError, isURL } from "..";
 import { StreamType as DiscordVoiceStreamType } from "@discordjs/voice";
-import type ytdl from "@distube/ytdl-core";
-import type { StreamType } from "..";
+import type { Song, StreamType } from "..";
 
 interface StreamOptions {
   seek?: number;
   ffmpegArgs?: string[];
-  isLive?: boolean;
   type?: StreamType;
 }
 
-export const chooseBestVideoFormat = (formats: ytdl.videoFormat[], isLive = false) => {
-  let filter = (format: ytdl.videoFormat) => format.hasAudio;
-  if (isLive) filter = (format: ytdl.videoFormat) => format.hasAudio && format.isHLS;
-  formats = formats
-    .filter(filter)
-    .sort((a, b) => Number(b.audioBitrate) - Number(a.audioBitrate) || Number(a.bitrate) - Number(b.bitrate));
-  return formats.find(format => !format.hasVideo) || formats.sort((a, b) => Number(a.bitrate) - Number(b.bitrate))[0];
-};
+export const chooseBestVideoFormat = ({ duration, formats, isLive }: Song) =>
+  formats &&
+  formats
+    .filter(f => f.hasAudio && (duration < 10 * 60 || f.hasVideo) && (!isLive || f.isHLS))
+    .sort((a, b) => Number(b.audioBitrate) - Number(a.audioBitrate) || Number(a.bitrate) - Number(b.bitrate))[0];
 
 /**
  * Create a stream to play with {@link DisTubeVoice}
@@ -27,17 +22,18 @@ export const chooseBestVideoFormat = (formats: ytdl.videoFormat[], isLive = fals
 export class DisTubeStream {
   /**
    * Create a stream from ytdl video formats
-   * @param {ytdl.videoFormat[]} formats ytdl video formats
+   * @param {Song} song A YouTube Song
    * @param {StreamOptions} options options
    * @returns {DisTubeStream}
    * @private
    */
-  static YouTube(formats: ytdl.videoFormat[] | undefined, options: StreamOptions = {}): DisTubeStream {
-    if (!formats || !formats.length) throw new DisTubeError("UNAVAILABLE_VIDEO");
+  static YouTube(song: Song, options: StreamOptions = {}): DisTubeStream {
+    if (song.source !== "youtube") throw new DisTubeError("INVALID_TYPE", "youtube", song.source, "Song#source");
+    if (!song.formats?.length) throw new DisTubeError("UNAVAILABLE_VIDEO");
     if (!options || typeof options !== "object" || Array.isArray(options)) {
       throw new DisTubeError("INVALID_TYPE", "object", options, "options");
     }
-    const bestFormat = chooseBestVideoFormat(formats, options.isLive);
+    const bestFormat = chooseBestVideoFormat(song);
     if (!bestFormat) throw new DisTubeError("UNPLAYABLE_FORMATS");
     return new DisTubeStream(bestFormat.url, options);
   }

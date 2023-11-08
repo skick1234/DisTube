@@ -9,7 +9,8 @@ jest.mock("prism-media");
 const FFmpeg = _FFmpeg as unknown as jest.Mocked<typeof _FFmpeg>;
 
 const regularItag = 251;
-const liveItag = 91;
+const liveItag = 95;
+const longItag = 18;
 
 afterEach(() => {
   jest.resetAllMocks();
@@ -17,19 +18,34 @@ afterEach(() => {
 
 describe("chooseBestVideoFormat()", () => {
   test("Regular video", () => {
-    expect(chooseBestVideoFormat(regularFormats)).toMatchObject({ itag: regularItag });
+    expect(chooseBestVideoFormat(<any>{ formats: regularFormats, isLive: false, duration: 60 })).toMatchObject({
+      itag: regularItag,
+    });
   });
 
   test("Live video", () => {
-    expect(chooseBestVideoFormat(liveFormats as any, true)).toMatchObject({ itag: liveItag });
-    // Non-HLS live is not supported
-    expect(liveFormats.find(f => f.itag === liveItag).isHLS).toBe(true);
+    expect(chooseBestVideoFormat(<any>{ formats: liveFormats, isLive: true, duration: 0 })).toMatchObject({
+      itag: liveItag,
+      isHLS: true,
+    });
+  });
+
+  test("Long video", () => {
+    expect(chooseBestVideoFormat(<any>{ formats: regularFormats, isLive: false, duration: 15 * 60 })).toMatchObject({
+      itag: longItag,
+    });
   });
 });
 
 describe("DisTubeStream.YouTube()", () => {
   test("Regular video", () => {
-    const stream = DisTubeStream.YouTube(regularFormats, { ffmpegArgs: ["added", "arguments"], type: StreamType.RAW });
+    const stream = DisTubeStream.YouTube(
+      <any>{ source: "youtube", formats: regularFormats, isLive: false, duration: 60 },
+      {
+        ffmpegArgs: ["added", "arguments"],
+        type: StreamType.RAW,
+      },
+    );
     const url = regularFormats.find(f => f.itag === regularItag).url;
     expect(stream).toMatchObject({
       url,
@@ -65,7 +81,9 @@ describe("DisTubeStream.YouTube()", () => {
   });
 
   test("Live video", () => {
-    const stream = DisTubeStream.YouTube(liveFormats as any, { seek: 1, isLive: true });
+    const stream = DisTubeStream.YouTube(<any>{ source: "youtube", formats: liveFormats, isLive: true, duration: 60 }, {
+      seek: 1,
+    });
     const url = liveFormats.find(f => f.itag === liveItag).url;
     expect(stream).toMatchObject({
       url,
@@ -103,17 +121,21 @@ describe("DisTubeStream.YouTube()", () => {
   });
 
   test("Should not return a DisTubeStream", () => {
+    const s: any = { source: "test" };
     expect(() => {
-      DisTubeStream.YouTube([]);
+      DisTubeStream.YouTube(s);
+    }).toThrow(new DisTubeError("INVALID_TYPE", "youtube", s.source, "Song#source"));
+    expect(() => {
+      DisTubeStream.YouTube(<any>{ source: "youtube" });
     }).toThrow(new DisTubeError("UNAVAILABLE_VIDEO"));
     expect(() => {
-      DisTubeStream.YouTube([{}] as any, 0 as any);
+      DisTubeStream.YouTube(<any>{ source: "youtube", formats: [{}] }, 0 as any);
     }).toThrow(new DisTubeError("INVALID_TYPE", "object", 0, "options"));
     expect(() => {
-      DisTubeStream.YouTube([{}] as any, [] as any);
+      DisTubeStream.YouTube(<any>{ source: "youtube", formats: [{}] }, [] as any);
     }).toThrow(new DisTubeError("INVALID_TYPE", "object", [], "options"));
     expect(() => {
-      DisTubeStream.YouTube([{}] as any);
+      DisTubeStream.YouTube(<any>{ source: "youtube", formats: [{}] });
     }).toThrow(new DisTubeError("UNPLAYABLE_FORMATS"));
     expect(FFmpeg).not.toBeCalled();
   });
