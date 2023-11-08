@@ -1,6 +1,6 @@
 {
   "name": "distube",
-  "version": "4.1.0",
+  "version": "4.1.1",
   "description": "A Discord.js module to simplify your music commands and play songs with audio filters on Discord without any API key.",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
