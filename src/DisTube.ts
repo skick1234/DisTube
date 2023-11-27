@@ -635,8 +635,7 @@ export default DisTube;
  */
 
 /**
- * Emitted when there is no user in the voice channel,
- * {@link DisTubeOptions}.leaveOnEmpty is `true` and there is a playing queue.
+ * Emitted when there is no user in the voice channel and there is a playing queue.
  *
  * If there is no playing queue (stopped and {@link DisTubeOptions}.leaveOnStop is `false`),
  * it will leave the channel without emitting this event.

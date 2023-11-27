@@ -38,34 +38,32 @@ export class DisTubeHandler extends DisTubeBase {
     super(distube);
 
     const client = this.client;
-    if (this.options.leaveOnEmpty) {
-      client.on("voiceStateUpdate", oldState => {
-        if (!oldState?.channel) return;
-        const queue = this.queues.get(oldState);
-        if (!queue) {
-          if (isVoiceChannelEmpty(oldState)) {
-            setTimeout(() => {
-              if (!this.queues.get(oldState) && isVoiceChannelEmpty(oldState)) this.voices.leave(oldState);
-            }, this.options.emptyCooldown * 1e3).unref();
-          }
-          return;
-        }
-        if (queue._emptyTimeout) {
-          clearTimeout(queue._emptyTimeout);
-          delete queue._emptyTimeout;
-        }
-        if (isVoiceChannelEmpty(oldState)) {
-          queue._emptyTimeout = setTimeout(() => {
-            delete queue._emptyTimeout;
-            if (isVoiceChannelEmpty(oldState)) {
-              queue.voice.leave();
-              this.emit("empty", queue);
-              if (queue.stopped) queue.remove();
-            }
+    client.on("voiceStateUpdate", oldState => {
+      if (!oldState?.channel) return;
+      const queue = this.queues.get(oldState);
+      if (!queue) {
+        if (this.options.leaveOnEmpty && isVoiceChannelEmpty(oldState)) {
+          setTimeout(() => {
+            if (!this.queues.get(oldState) && isVoiceChannelEmpty(oldState)) this.voices.leave(oldState);
           }, this.options.emptyCooldown * 1e3).unref();
         }
-      });
-    }
+        return;
+      }
+      if (queue._emptyTimeout) {
+        clearTimeout(queue._emptyTimeout);
+        delete queue._emptyTimeout;
+      }
+      if (isVoiceChannelEmpty(oldState)) {
+        queue._emptyTimeout = setTimeout(() => {
+          delete queue._emptyTimeout;
+          if (isVoiceChannelEmpty(oldState)) {
+            if (this.options.leaveOnEmpty) queue.voice.leave();
+            this.emit("empty", queue);
+            if (queue.stopped) queue.remove();
+          }
+        }, this.options.emptyCooldown * 1e3).unref();
+      }
+    });
   }
 
   get ytdlOptions(): ytdl.getInfoOptions {

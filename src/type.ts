@@ -101,7 +101,7 @@ export type Filters = Record<string, string>;
  * @prop {Filters} [customFilters] Override {@link defaultFilters} or add more ffmpeg filters.
  * @prop {ytdl.getInfoOptions} [ytdlOptions] `ytdl-core` get info options
  * @prop {number} [searchCooldown=60] Built-in search cooldown in seconds (When searchSongs is bigger than 0)
- * @prop {number} [emptyCooldown=60] Built-in leave on empty cooldown in seconds (When leaveOnEmpty is true)
+ * @prop {number} [emptyCooldown=60] Built-in leave on empty cooldown in seconds
  * @prop {boolean} [nsfw=false] Whether or not playing age-restricted content
  * and disabling safe search in non-NSFW channel.
  * @prop {boolean} [emitAddListWhenCreatingQueue=true] Whether or not emitting `addList` event when creating a new Queue
