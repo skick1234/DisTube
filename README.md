@@ -49,7 +49,7 @@ npm install distube@latest
 
 Read DisTube's definitions, properties and events details in the [Documentation page](https://distube.js.org/).
 
-Learn how to build a music bot from scratch with [DisTube Guide](https://distube.js.org/guide)
+Learn how to build a music bot from scratch with [DisTube Guide](https://github.com/skick1234/DisTube/wiki)
 
 ## Example Bot
 
