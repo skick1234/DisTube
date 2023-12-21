@@ -6,30 +6,30 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        node-version: [16, 18]
+        node-version: [18, 20]
         os: [ubuntu-latest]
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install Node.js ${{ matrix.node-version }}
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
-          cache: "yarn"
-          cache-dependency-path: yarn.lock
+          cache: "pnpm"
+          cache-dependency-path: pnpm-lock.yaml
 
       - name: Install dependencies
-        run: yarn --immutable
+        run: pnpm install --frozen-lockfile
 
       - name: Linting
-        run: yarn lint
+        run: pnpm run lint
 
       - name: Run TypeScript compiler
-        run: yarn build:check
+        run: pnpm run build:check
 
       - name: Run tests
-        run: yarn test
+        run: pnpm run test
 
       - name: Upload Coverage
         uses: codecov/codecov-action@v3

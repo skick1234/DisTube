@@ -1,6 +1,6 @@
 #!/bin/sh
 . "$(dirname "$0")/_/husky.sh"
 
-yarn --immutable
-yarn build:check
-yarn test
+pnpm install --frozen-lockfile
+pnpm run build:check
+pnpm run test

@@ -8,28 +8,25 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
-          node-version: 18
-          cache: "yarn"
-          cache-dependency-path: yarn.lock
+          node-version: 20
+          cache: "pnpm"
+          cache-dependency-path: pnpm-lock.yaml
           registry-url: "https://registry.npmjs.org"
 
       - name: Install dependencies
-        run: yarn --immutable
+        run: pnpm install --frozen-lockfile
 
-      - name: Change version to ${{ github.event.release.tag_name }}
-        run: yarn version ${{ github.event.release.tag_name }}
+      # - name: Change version to ${{ github.event.release.tag_name }}
+      #   run: pnpm version ${{ github.event.release.tag_name }}
 
       - name: Publish
-        run: yarn npm publish --access public --tag latest
-        env:
-          YARN_NPM_AUTH_TOKEN: ${{ secrets.NPM_PUBLISH_TOKEN }}
-
-      - name: Deprecate older versions
-        run: npm deprecate distube@"< ${{ github.event.release.tag_name }}" "This version is deprecated, please upgrade to the latest version."
+        run: |
+          pnpm publish --access public
+          pnpm deprecate distube@"< ${{ github.event.release.tag_name }}" "This version is deprecated, please upgrade to the latest version."
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_PUBLISH_TOKEN }}

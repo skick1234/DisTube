@@ -12,17 +12,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
-          node-version: 18
-          cache: "yarn"
-          cache-dependency-path: yarn.lock
+          node-version: 20
+          cache: "pnpm"
+          cache-dependency-path: pnpm-lock.yaml
 
       - name: Install dependencies
-        run: yarn --immutable
+        run: pnpm install --frozen-lockfile
 
       - name: Checkout docs branch
         uses: actions/checkout@v3
@@ -31,7 +31,7 @@ jobs:
           path: "docs"
 
       - name: Generate documentation
-        run: yarn docs
+        run: pnpm run docs
 
       - name: Move generated docs file
         run: mv docs.json docs/${{ github.ref_name }}.json

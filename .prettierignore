@@ -1,4 +1,4 @@
 dist/
 docs/
 coverage/
-.yarn/
+pnpm-lock.yaml
