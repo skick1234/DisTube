@@ -44,120 +44,181 @@ export type TypedDisTubeEvents = {
 };
 
 /**
+ * @remarks
  * An FFmpeg audio filter object
- * ```
+ *
+ * ```ts
  * {
  *   name:  "bassboost",
  *   value: "bass=g=10"
  * }
- * ```
- * @typedef {Object} Filter
- * @prop {string} name Name of the filter
- * @prop {string} value FFmpeg audio filter(s)
+ * ```ts
  */
 export interface Filter {
+  /**
+   * @remarks
+   * Name of the filter
+   */
   name: string;
+  /**
+   * @remarks
+   * FFmpeg audio filter argument
+   */
   value: string;
 }
 
 /**
+ * @remarks
  * Data that resolves to give an FFmpeg audio filter. This can be:
+ *
  * - A name of a default filters or custom filters (`string`)
  * - A {@link Filter} object
- * @typedef {string|Filter} FilterResolvable
+ *
  * @see {@link defaultFilters}
  * @see {@link DisTubeOptions|DisTubeOptions.customFilters}
  */
 export type FilterResolvable = string | Filter;
 
 /**
+ * @remarks
  * FFmpeg Filters
- * ```
+ *
+ * ```ts
  * {
  *   "Filter Name": "Filter Value",
  *   "bassboost":   "bass=g=10"
  * }
- * ```
- * @typedef {Object.<string, string>} Filters
+ * ```ts
+ *
  * @see {@link defaultFilters}
  */
 export type Filters = Record<string, string>;
 
 /**
- * DisTube options.
- * @typedef {Object} DisTubeOptions
- * @prop {Array<CustomPlugin|ExtractorPlugin>} [plugins] DisTube plugins.
- * @prop {boolean} [emitNewSongOnly=false] Whether or not emitting {@link DisTube#event:playSong} event
- * when looping a song or next song is the same as the previous one
- * @prop {boolean} [leaveOnEmpty=true] Whether or not leaving voice channel
- * if the voice channel is empty after {@link DisTubeOptions}.emptyCooldown seconds.
- * @prop {boolean} [leaveOnFinish=false] Whether or not leaving voice channel when the queue ends.
- * @prop {boolean} [leaveOnStop=true] Whether or not leaving voice channel after using {@link DisTube#stop} function.
- * @prop {boolean} [savePreviousSongs=true] Whether or not saving the previous songs of the queue
- * and enable {@link DisTube#previous} method
- * @prop {number} [searchSongs=0] Limit of search results emits in {@link DisTube#event:searchResult} event
- * when {@link DisTube#play} method executed. If `searchSongs <= 1`, play the first result
- * @prop {Cookie[]|string} [youtubeCookie] YouTube cookies. Guide: {@link https://distube.js.org/#/docs/DisTube/main/general/cookie YouTube Cookies}
- * @prop {Filters} [customFilters] Override {@link defaultFilters} or add more ffmpeg filters.
- * @prop {ytdl.getInfoOptions} [ytdlOptions] `ytdl-core` get info options
- * @prop {number} [searchCooldown=60] Built-in search cooldown in seconds (When searchSongs is bigger than 0)
- * @prop {number} [emptyCooldown=60] Built-in leave on empty cooldown in seconds (When leaveOnEmpty is true)
- * @prop {boolean} [nsfw=false] Whether or not playing age-restricted content
- * and disabling safe search in non-NSFW channel.
- * @prop {boolean} [emitAddListWhenCreatingQueue=true] Whether or not emitting `addList` event when creating a new Queue
- * @prop {boolean} [emitAddSongWhenCreatingQueue=true] Whether or not emitting `addSong` event when creating a new Queue
- * @prop {boolean} [joinNewVoiceChannel=true] Whether or not joining the new voice channel
- * when using {@link DisTube#play} method
- * @prop {StreamType} [streamType=StreamType.OPUS] Decide the {@link DisTubeStream#type} will be used
- * (Not the same as {@link DisTubeStream#type})
- * @prop {boolean} [directLink=true] Whether or not playing a song with direct link
+ * @remarks
+ * DisTube options
  */
 export type DisTubeOptions = {
+  /**
+   * @remarks
+   * DisTube plugins
+   */
   plugins?: (CustomPlugin | ExtractorPlugin)[];
+  /**
+   * @remarks
+   * Whether or not emitting {@link DisTube#(event:playSong)} event when looping a song
+   * or next song is the same as the previous one
+   */
   emitNewSongOnly?: boolean;
-  leaveOnFinish?: boolean;
-  leaveOnStop?: boolean;
+  /**
+   * @remarks
+   * Whether or not leaving voice channel if the voice channel is empty after {@link
+   * DisTubeOptions}.emptyCooldown seconds
+   */
   leaveOnEmpty?: boolean;
+  /**
+   * @remarks
+   * Whether or not leaving voice channel when the queue ends
+   */
+  leaveOnFinish?: boolean;
+  /**
+   * @remarks
+   * Whether or not leaving voice channel after using {@link DisTube#stop} function
+   */
+  leaveOnStop?: boolean;
+  /**
+   * @remarks
+   * Built-in leave on empty cooldown in seconds (When leaveOnEmpty is true)
+   */
   emptyCooldown?: number;
+  /**
+   * @remarks
+   * Whether or not saving the previous songs of the queue and enable {@link
+   * DisTube#previous} method
+   */
   savePreviousSongs?: boolean;
+  /**
+   * @remarks
+   * Limit of search results emits in {@link DisTube#(event:searchResult)} event when
+   * {@link DisTube#play} method executed. If `searchSongs <= 1`, play the first
+   * result
+   */
   searchSongs?: number;
+  /**
+   * @remarks
+   * Built-in search cooldown in seconds (When searchSongs is bigger than 0)
+   */
   searchCooldown?: number;
+  /**
+   * @remarks
+   * YouTube cookies. Guide: {@link
+   * https://distube.js.org/#/docs/DisTube/main/general/cookie | YouTube Cookies}
+   */
   youtubeCookie?: Cookie[] | string;
+  /**
+   * @remarks
+   * Override {@link defaultFilters} or add more ffmpeg filters
+   */
   customFilters?: Filters;
+  /**
+   * @remarks
+   * `ytdl-core` get info options
+   */
   ytdlOptions?: ytdl.downloadOptions;
+  /**
+   * @remarks
+   * Whether or not playing age-restricted content and disabling safe search in
+   * non-NSFW channel
+   */
   nsfw?: boolean;
+  /**
+   * @remarks
+   * Whether or not emitting `addSong` event when creating a new Queue
+   */
   emitAddSongWhenCreatingQueue?: boolean;
+  /**
+   * @remarks
+   * Whether or not emitting `addList` event when creating a new Queue
+   */
   emitAddListWhenCreatingQueue?: boolean;
+  /**
+   * @remarks
+   * Whether or not joining the new voice channel when using {@link DisTube#play}
+   * method
+   */
   joinNewVoiceChannel?: boolean;
+  /**
+   * @remarks
+   * Decide the {@link DisTubeStream#type} will be used (Not the same as {@link
+   * DisTubeStream#type})
+   */
   streamType?: StreamType;
+  /**
+   * @remarks
+   * Whether or not playing a song with direct link
+   */
   directLink?: boolean;
 };
 
 /**
+ * @remarks
  * Data that can be resolved to give a guild id string. This can be:
+ *
  * - A guild id string | a guild {@link https://discord.js.org/#/docs/main/stable/class/Snowflake|Snowflake}
- * - A {@link https://discord.js.org/#/docs/main/stable/class/Guild|Guild}
- * - A {@link https://discord.js.org/#/docs/main/stable/class/Message|Message}
- * - A {@link https://discord.js.org/#/docs/main/stable/class/BaseGuildVoiceChannel|BaseGuildVoiceChannel}
- * - A {@link https://discord.js.org/#/docs/main/stable/class/BaseGuildTextChannel|BaseGuildTextChannel}
- * - A {@link https://discord.js.org/#/docs/main/stable/class/VoiceState|VoiceState}
- * - A {@link https://discord.js.org/#/docs/main/stable/class/GuildMember|GuildMember}
- * - A {@link https://discord.js.org/#/docs/main/stable/class/Interaction|Interaction}
+ * - A {@link https://discord.js.org/#/docs/main/stable/class/Guild | Guild}
+ * - A {@link https://discord.js.org/#/docs/main/stable/class/Message | Message}
+ * - A {@link https://discord.js.org/#/docs/main/stable/class/BaseGuildVoiceChannel
+ *   | BaseGuildVoiceChannel}
+ * - A {@link https://discord.js.org/#/docs/main/stable/class/BaseGuildTextChannel
+ *   | BaseGuildTextChannel}
+ * - A {@link https://discord.js.org/#/docs/main/stable/class/VoiceState |
+ *   VoiceState}
+ * - A {@link https://discord.js.org/#/docs/main/stable/class/GuildMember |
+ *   GuildMember}
+ * - A {@link https://discord.js.org/#/docs/main/stable/class/Interaction |
+ *   Interaction}
  * - A {@link DisTubeVoice}
  * - A {@link Queue}
- * @typedef {
- * Discord.Snowflake|
- * Discord.Guild|
- * Discord.Message|
- * Discord.BaseGuildVoiceChannel|
- * Discord.BaseGuildTextChannel|
- * Discord.VoiceState|
- * Discord.GuildMember|
- * Discord.Interaction|
- * DisTubeVoice|
- * Queue|
- * string
- * } GuildIdResolvable
  */
 export type GuildIdResolvable =
   | Queue
@@ -212,83 +273,99 @@ export interface PlaylistInfo {
   name?: string;
   url?: string;
   thumbnail?: string;
-  /** @deprecated */
+  /**
+   * @deprecated Use {@link PlaylistInfo#name}
+   */
   title?: string;
-  /** @deprecated */
+  /**
+   * @deprecated Use {@link PlaylistInfo#url}
+   */
   webpage_url?: string;
 }
 
 export type RelatedSong = Omit<Song, "related">;
 
-/**
- * @typedef {Object} PlayHandlerOptions
- * @prop {Discord.BaseGuildTextChannel} [options.textChannel] The default text channel of the queue
- * @prop {boolean} [options.skip=false] Skip the playing song (if exists) and play the added playlist instantly
- * @prop {number} [options.position=0] Position of the song/playlist to add to the queue,
- * <= 0 to add to the end of the queue.
- */
 export type PlayHandlerOptions = {
+  /**
+   * @remarks
+   * [Default: false] Skip the playing song (if exists) and play the added playlist
+   * instantly
+   */
   skip?: boolean;
+  /**
+   * @remarks
+   * [Default: 0] Position of the song/playlist to add to the queue, \<= 0 to add to
+   * the end of the queue
+   */
   position?: number;
+  /**
+   * @remarks
+   * The default text channel of the queue
+   */
   textChannel?: GuildTextBasedChannel;
 };
 
-/**
- * @typedef {Object} PlayOptions
- * @prop {Discord.GuildMember} [member] Requested user (default is your bot)
- * @prop {Discord.BaseGuildTextChannel} [textChannel] Default {@link Queue#textChannel}
- * @prop {boolean} [skip=false]
- * Skip the playing song (if exists) and play the added song/playlist if `position` is 1.
- * If `position` is defined and not equal to 1, it will skip to the next song instead of the added song
- * @prop {number} [position=0] Position of the song/playlist to add to the queue,
- * <= 0 to add to the end of the queue.
- * @prop {Discord.Message} [message] Called message (For built-in search events. If this is a {@link https://developer.mozilla.org/en-US/docs/Glossary/Falsy|falsy value}, it will play the first result instead)
- * @prop {*} [metadata] Optional metadata that can be attached to the song/playlist will be played,
- * This is useful for identification purposes when the song/playlist is passed around in events.
- * See {@link Song#metadata} or {@link Playlist#metadata}
- */
 export interface PlayOptions extends PlayHandlerOptions, ResolveOptions<any> {
+  /**
+   * @remarks
+   * Called message (For built-in search events. If this is a {@link
+   * https://developer.mozilla.org/en-US/docs/Glossary/Falsy | falsy value}, it will
+   * play the first result instead)
+   */
   message?: Message;
 }
 
-/**
- * @typedef {Object} ResolveOptions
- * @prop {Discord.GuildMember} [member] Requested user
- * @prop {*} [metadata] Metadata
- */
 export interface ResolveOptions<T = unknown> {
+  /**
+   * @remarks
+   * Requested user
+   */
   member?: GuildMember;
+  /**
+   * @remarks
+   * Metadata
+   */
   metadata?: T;
 }
 
-/**
- * @typedef {ResolveOptions} ResolvePlaylistOptions
- * @prop {string} [source] Source of the playlist
- */
 export interface ResolvePlaylistOptions<T = unknown> extends ResolveOptions<T> {
+  /**
+   * @remarks
+   * Source of the playlist
+   */
   source?: string;
 }
 
-/**
- * @typedef {Object} CustomPlaylistOptions
- * @prop {Discord.GuildMember} [member] A guild member creating the playlist
- * @prop {Object} [properties] Additional properties such as `name`
- * @prop {boolean} [parallel=true] Whether or not fetch the songs in parallel
- * @prop {*} [metadata] Metadata
- */
 export interface CustomPlaylistOptions {
+  /**
+   * @remarks
+   * A guild member creating the playlist
+   */
   member?: GuildMember;
+  /**
+   * @remarks
+   * Additional properties such as `name`
+   */
   properties?: Record<string, any>;
+  /**
+   * @remarks
+   * Whether or not fetch the songs in parallel
+   */
   parallel?: boolean;
+  /**
+   * @remarks
+   * Metadata
+   */
   metadata?: any;
 }
 
 /**
+ * @remarks
  * The repeat mode of a {@link Queue}
- * * `DISABLED` = 0
- * * `SONG` = 1
- * * `QUEUE` = 2
- * @typedef {number} RepeatMode
+ *
+ * - `DISABLED` = 0
+ * - `SONG` = 1
+ * - `QUEUE` = 2
  */
 export enum RepeatMode {
   DISABLED,
@@ -297,10 +374,11 @@ export enum RepeatMode {
 }
 
 /**
+ * @remarks
  * All available plugin types:
- * * `CUSTOM` = `"custom"`: {@link CustomPlugin}
- * * `EXTRACTOR` = `"extractor"`: {@link ExtractorPlugin}
- * @typedef {"custom"|"extractor"} PluginType
+ *
+ * - `CUSTOM` = `"custom"`: {@link CustomPlugin}
+ * - `EXTRACTOR` = `"extractor"`: {@link ExtractorPlugin}
  */
 export enum PluginType {
   CUSTOM = "custom",
@@ -308,10 +386,11 @@ export enum PluginType {
 }
 
 /**
+ * @remarks
  * Search result types:
- * * `VIDEO` = `"video"`
- * * `PLAYLIST` = `"playlist"`
- * @typedef {"video"|"playlist"} SearchResultType
+ *
+ * - `VIDEO` = `"video"`
+ * - `PLAYLIST` = `"playlist"`
  */
 export enum SearchResultType {
   VIDEO = "video",
@@ -319,36 +398,17 @@ export enum SearchResultType {
 }
 
 /**
+ * @remarks
  * Stream types:
- * * `OPUS` = `0` (Better quality, use more resources - **Recommended**)
- * * `RAW` = `1` (Better performance, use less resources)
- * @typedef {number} StreamType
- * @type {StreamType}
+ *
+ * - `OPUS` = `0` (Better quality, use more resources - **Recommended**)
+ * - `RAW` = `1` (Better performance, use less resources)
  */
 export enum StreamType {
   OPUS,
   RAW,
 }
 
-/**
- * @typedef {Object} Events
- * @prop {string} ERROR error
- * @prop {string} ADD_LIST addList
- * @prop {string} ADD_SONG addSong
- * @prop {string} PLAY_SONG playSong
- * @prop {string} FINISH_SONG finishSong
- * @prop {string} EMPTY empty
- * @prop {string} FINISH finish
- * @prop {string} INIT_QUEUE initQueue
- * @prop {string} NO_RELATED noRelated
- * @prop {string} DISCONNECT disconnect
- * @prop {string} DELETE_QUEUE deleteQueue
- * @prop {string} SEARCH_CANCEL searchCancel
- * @prop {string} SEARCH_NO_RESULT searchNoResult
- * @prop {string} SEARCH_DONE searchDone
- * @prop {string} SEARCH_INVALID_ANSWER searchInvalidAnswer
- * @prop {string} SEARCH_RESULT searchResult
- */
 export enum Events {
   ERROR = "error",
   ADD_LIST = "addList",

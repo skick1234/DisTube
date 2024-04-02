@@ -4,9 +4,10 @@ import type { GuildMember } from "discord.js";
 import type { Awaitable, Playlist, Song } from "..";
 
 /**
+ * @remarks
  * Extractor Plugin
- * @extends Plugin
- * @abstract
+ *
+ * @virtual
  */
 export abstract class ExtractorPlugin extends Plugin {
   readonly type = PluginType.EXTRACTOR;
@@ -17,22 +18,20 @@ export abstract class ExtractorPlugin extends Plugin {
 }
 
 /**
+ * @remarks
  * Resolve the validated url to a {@link Song} or a {@link Playlist}.
  *
- * @param {string} url URL
- * @param {Object} [options] Optional options
- * @param {Discord.GuildMember} [options.member] Requested user
- * @param {*} [options.metadata] Metadata
- * @returns {Song|Playlist|Promise<Song|Playlist>}
- * @method resolve
- * @memberof ExtractorPlugin#
- * @abstract
+ * @virtual
+ *
+ * @param url              - URL
+ * @param options          - Optional options
+ * @param options.member   - Requested user
+ * @param options.metadata - Metadata
  */
 
 /**
+ * @remarks
  * Check if the url is working with this plugin
- * @param {string} url Input url
- * @returns {boolean|Promise<boolean>}
- * @method validate
- * @memberof ExtractorPlugin#
+ *
+ * @param url - Input url
  */

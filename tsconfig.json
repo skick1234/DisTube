@@ -30,5 +30,12 @@
     "downlevelIteration": true,
     "skipLibCheck": true,
     "isolatedModules": true
+  },
+  "typedocOptions": {
+    "name": "DisTube API Documentation",
+    "plugin": ["typedoc-material-theme"],
+    "themeColor": "#ED4245",
+    "entryPoints": ["src/index.ts"],
+    "out": "docs"
   }
 }

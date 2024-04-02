@@ -14,7 +14,7 @@
   ],
   "scripts": {
     "test": "jest",
-    "docs": "docgen -s src/**/*.ts -o docs.json -c pages/index.yml -g -j jsdoc.config.json",
+    "docs": "typedoc",
     "lint": "prettier --check . && eslint .",
     "lint:fix": "eslint . --fix",
     "prettier": "prettier --write \"**/*.{ts,json,yml,yaml,md}\"",
@@ -80,7 +80,6 @@
     "@commitlint/cli": "^18.4.3",
     "@commitlint/config-conventional": "^18.4.3",
     "@discordjs/voice": "^0.16.1",
-    "@distubejs/docgen": "github:distubejs/docgen",
     "@types/jest": "^29.5.11",
     "@types/node": "^20.10.5",
     "@types/tough-cookie": "^4.0.5",
@@ -95,11 +94,12 @@
     "eslint-plugin-jsdoc": "^46.9.1",
     "husky": "^8.0.3",
     "jest": "^29.7.0",
-    "jsdoc-babel": "^0.5.0",
     "nano-staged": "^0.8.0",
     "pinst": "^3.0.0",
     "prettier": "^3.1.1",
     "tsup": "^8.0.1",
+    "typedoc": "^0.25.12",
+    "typedoc-material-theme": "^1.0.2",
     "typescript": "^5.3.3"
   },
   "peerDependencies": {
@@ -122,6 +122,6 @@
     ]
   },
   "engines": {
-    "node": ">=16.9.0"
+    "node": ">=18.0"
   }
 }

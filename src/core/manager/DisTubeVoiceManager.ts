@@ -6,27 +6,25 @@ import type { GuildIdResolvable } from "../..";
 import type { VoiceBasedChannel } from "discord.js";
 
 /**
+ * @remarks
  * Manages voice connections for {@link DisTube}
- * @extends BaseManager
  */
 export class DisTubeVoiceManager extends GuildIdManager<DisTubeVoice> {
   /**
+   * @remarks
    * Get a {@link DisTubeVoice}.
-   * @method get
-   * @memberof DisTubeVoiceManager#
-   * @param {GuildIdResolvable} guild The queue resolvable to resolve
-   * @returns {DisTubeVoice?}
+   *
+   * @param guild - The queue resolvable to resolve
    */
   /**
+   * @remarks
    * Collection of {@link DisTubeVoice}.
-   * @name DisTubeVoiceManager#collection
-   * @type {Discord.Collection<string, DisTubeVoice>}
    */
   /**
+   * @remarks
    * Create a {@link DisTubeVoice}
-   * @param {Discord.BaseGuildVoiceChannel} channel A voice channel to join
-   * @returns {DisTubeVoice}
-   * @private
+   *
+   * @param channel - A voice channel to join
    */
   create(channel: VoiceBasedChannel): DisTubeVoice {
     const existing = this.get(channel.guildId);
@@ -37,9 +35,10 @@ export class DisTubeVoiceManager extends GuildIdManager<DisTubeVoice> {
     return new DisTubeVoice(this, channel);
   }
   /**
+   * @remarks
    * Join a voice channel
-   * @param {Discord.BaseGuildVoiceChannel} channel A voice channel to join
-   * @returns {Promise<DisTubeVoice>}
+   *
+   * @param channel - A voice channel to join
    */
   join(channel: VoiceBasedChannel): Promise<DisTubeVoice> {
     const existing = this.get(channel.guildId);
@@ -47,8 +46,10 @@ export class DisTubeVoiceManager extends GuildIdManager<DisTubeVoice> {
     return this.create(channel).join();
   }
   /**
+   * @remarks
    * Leave the connected voice channel in a guild
-   * @param {GuildIdResolvable} guild Queue Resolvable
+   *
+   * @param guild - Queue Resolvable
    */
   leave(guild: GuildIdResolvable) {
     const voice = this.get(guild);

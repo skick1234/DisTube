@@ -16,16 +16,16 @@ export const chooseBestVideoFormat = ({ duration, formats, isLive }: Song) =>
     .sort((a, b) => Number(b.audioBitrate) - Number(a.audioBitrate) || Number(a.bitrate) - Number(b.bitrate))[0];
 
 /**
+ * @remarks
  * Create a stream to play with {@link DisTubeVoice}
- * @private
  */
 export class DisTubeStream {
   /**
+   * @remarks
    * Create a stream from ytdl video formats
-   * @param {Song} song A YouTube Song
-   * @param {StreamOptions} options options
-   * @returns {DisTubeStream}
-   * @private
+   *
+   * @param song    - A YouTube Song
+   * @param options - options
    */
   static YouTube(song: Song, options: StreamOptions = {}): DisTubeStream {
     if (song.source !== "youtube") throw new DisTubeError("INVALID_TYPE", "youtube", song.source, "Song#source");
@@ -38,11 +38,11 @@ export class DisTubeStream {
     return new DisTubeStream(bestFormat.url, options);
   }
   /**
+   * @remarks
    * Create a stream from a stream url
-   * @param {string} url stream url
-   * @param {StreamOptions} options options
-   * @returns {DisTubeStream}
-   * @private
+   *
+   * @param url     - stream url
+   * @param options - options
    */
   static DirectLink(url: string, options: StreamOptions = {}): DisTubeStream {
     if (!options || typeof options !== "object" || Array.isArray(options)) {
@@ -57,20 +57,21 @@ export class DisTubeStream {
   stream: FFmpeg;
   url: string;
   /**
+   * @remarks
    * Create a DisTubeStream to play with {@link DisTubeVoice}
-   * @param {string} url Stream URL
-   * @param {StreamOptions} options Stream options
-   * @private
+   *
+   * @param url     - Stream URL
+   * @param options - Stream options
    */
   constructor(url: string, options: StreamOptions) {
     /**
+     * @remarks
      * Stream URL
-     * @type {string}
      */
     this.url = url;
     /**
+     * @remarks
      * Stream type
-     * @type {DiscordVoice.StreamType}
      */
     this.type = !options.type ? DiscordVoiceStreamType.OggOpus : DiscordVoiceStreamType.Raw;
     const args = [
@@ -99,8 +100,8 @@ export class DisTubeStream {
     if (Array.isArray(options.ffmpegArgs) && options.ffmpegArgs.length) args.push(...options.ffmpegArgs);
 
     /**
+     * @remarks
      * FFmpeg stream
-     * @type {FFmpeg}
      */
     this.stream = new FFmpeg({ args, shell: false });
     (<any>this.stream)._readableState && ((<any>this.stream)._readableState.highWaterMark = 1 << 25);

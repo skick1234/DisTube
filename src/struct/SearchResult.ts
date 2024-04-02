@@ -2,9 +2,10 @@ import { DisTubeError, SearchResultType, formatDuration, toSecond } from "..";
 import type { Playlist, Video } from "@distube/ytsr";
 
 /**
+ * @remarks
  * A abstract class representing a search result.
- * @abstract
- * @private
+ *
+ * @virtual
  */
 abstract class ISearchResult {
   source: "youtube";
@@ -18,35 +19,35 @@ abstract class ISearchResult {
   };
 
   /**
+   * @remarks
    * Create a search result
-   * @param {Object} info ytsr result
+   *
+   * @param info - ytsr result
    */
   constructor(info: Video | Playlist) {
     /**
+     * @remarks
      * The source of the search result
-     * @type {"youtube"}
      */
     this.source = "youtube";
     /**
+     * @remarks
      * YouTube video or playlist id
-     * @type {string}
      */
     this.id = info.id;
     /**
+     * @remarks
      * Video or playlist title.
-     * @type {string}
      */
     this.name = info.name;
     /**
+     * @remarks
      * Video or playlist URL.
-     * @type {string}
      */
     this.url = info.url;
     /**
+     * @remarks
      * Video or playlist uploader
-     * @type {Object}
-     * @prop {string?} name Uploader name
-     * @prop {string?} url Uploader url
      */
     this.uploader = {
       name: undefined,
@@ -56,8 +57,8 @@ abstract class ISearchResult {
 }
 
 /**
+ * @remarks
  * A class representing a video search result.
- * @extends ISearchResult
  */
 export class SearchResultVideo extends ISearchResult {
   type: SearchResultType.VIDEO;
@@ -70,33 +71,33 @@ export class SearchResultVideo extends ISearchResult {
     super(info);
     if (info.type !== "video") throw new DisTubeError("INVALID_TYPE", "video", info.type, "type");
     /**
+     * @remarks
      * Type of SearchResult
-     * @type {SearchResultType.VIDEO}
      */
     this.type = SearchResultType.VIDEO;
     /**
+     * @remarks
      * Video views count
-     * @type {number}
      */
     this.views = info.views;
     /**
+     * @remarks
      * Indicates if the video is an active live.
-     * @type {boolean}
      */
     this.isLive = info.isLive;
     /**
+     * @remarks
      * Video duration.
-     * @type {number}
      */
     this.duration = this.isLive ? 0 : toSecond(info.duration);
     /**
+     * @remarks
      * Formatted duration string `hh:mm:ss` or `mm:ss`.
-     * @type {string}
      */
     this.formattedDuration = this.isLive ? "Live" : formatDuration(this.duration);
     /**
+     * @remarks
      * Video thumbnail.
-     * @type {string}
      */
     this.thumbnail = info.thumbnail;
     this.uploader = {
@@ -107,14 +108,14 @@ export class SearchResultVideo extends ISearchResult {
 }
 
 /**
+ * @remarks
  * A video or playlist search result
- * @typedef {SearchResultVideo|SearchResultPlaylist} SearchResult
  */
 export type SearchResult = SearchResultVideo | SearchResultPlaylist;
 
 /**
+ * @remarks
  * A class representing a playlist search result.
- * @extends ISearchResult
  */
 export class SearchResultPlaylist extends ISearchResult {
   type: SearchResultType.PLAYLIST;
@@ -123,13 +124,13 @@ export class SearchResultPlaylist extends ISearchResult {
     super(info);
     if (info.type !== "playlist") throw new DisTubeError("INVALID_TYPE", "playlist", info.type, "type");
     /**
+     * @remarks
      * Type of SearchResult
-     * @type {SearchResultType.PLAYLIST}
      */
     this.type = SearchResultType.PLAYLIST;
     /**
+     * @remarks
      * Length of the playlist
-     * @type {number}
      */
     this.length = info.length;
     this.uploader = {

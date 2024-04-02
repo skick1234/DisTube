@@ -17,9 +17,10 @@ import type {
 const formatInt = (int: number) => (int < 10 ? `0${int}` : int);
 
 /**
+ * @remarks
  * Format duration to string
- * @param {number} sec Duration in seconds
- * @returns {string}
+ *
+ * @param sec - Duration in seconds
  */
 export function formatDuration(sec: number): string {
   if (!sec || !Number(sec)) return "00:00";
@@ -31,9 +32,10 @@ export function formatDuration(sec: number): string {
   return `00:${formatInt(seconds)}`;
 }
 /**
+ * @remarks
  * Convert formatted duration to seconds
- * @param {*} input Formatted duration string
- * @returns {number}
+ *
+ * @param input - Formatted duration string
  */
 export function toSecond(input: any): number {
   if (!input) return 0;
@@ -49,9 +51,10 @@ export function toSecond(input: any): number {
   }
 }
 /**
+ * @remarks
  * Parse number from input
- * @param {*} input Any
- * @returns {number}
+ *
+ * @param input - Any
  */
 export function parseNumber(input: any): number {
   if (typeof input === "string") return Number(input.replace(/[^\d.]+/g, "")) || 0;
@@ -59,9 +62,10 @@ export function parseNumber(input: any): number {
 }
 const SUPPORTED_PROTOCOL = ["https:", "http:", "file:"] as const;
 /**
+ * @remarks
  * Check if the string is an URL
- * @param {string} input input
- * @returns {boolean}
+ *
+ * @param input - input
  */
 export function isURL(input: any): input is `${(typeof SUPPORTED_PROTOCOL)[number]}//${string}` {
   if (typeof input !== "string" || input.includes(" ")) return false;
@@ -74,8 +78,10 @@ export function isURL(input: any): input is `${(typeof SUPPORTED_PROTOCOL)[numbe
   return true;
 }
 /**
+ * @remarks
  * Check if the Client has enough intents to using DisTube
- * @param {ClientOptions} options options
+ *
+ * @param options - options
  */
 export function checkIntents(options: ClientOptions): void {
   const intents = new IntentsBitField(options.intents);
@@ -83,9 +89,10 @@ export function checkIntents(options: ClientOptions): void {
 }
 
 /**
+ * @remarks
  * Check if the voice channel is empty
- * @param {Discord.VoiceState} voiceState voiceState
- * @returns {boolean}
+ *
+ * @param voiceState - voiceState
  */
 export function isVoiceChannelEmpty(voiceState: VoiceState): boolean {
   const guild = voiceState.guild;

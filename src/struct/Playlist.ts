@@ -3,9 +3,8 @@ import type { PlaylistInfo, Song } from "..";
 import type { GuildMember } from "discord.js";
 
 /**
+ * @remarks
  * Class representing a playlist.
- * @prop {string} source Playlist source
- * @template T - The type for the metadata (if any) of the playlist
  */
 export class Playlist<T = unknown> implements PlaylistInfo {
   source!: string;
@@ -17,12 +16,11 @@ export class Playlist<T = unknown> implements PlaylistInfo {
   thumbnail?: string;
   [x: string]: any;
   /**
+   * @remarks
    * Create a playlist
-   * @param {Song[]|PlaylistInfo} playlist Playlist
-   * @param {Object} [options] Optional options
-   * @param {Discord.GuildMember} [options.member] Requested user
-   * @param {Object} [options.properties] Custom properties
-   * @param {T} [options.metadata] Playlist metadata
+   *
+   * @param playlist           - Playlist
+   * @param options            - Optional options
    */
   constructor(
     playlist: Song[] | PlaylistInfo,
@@ -46,19 +44,19 @@ export class Playlist<T = unknown> implements PlaylistInfo {
 
     if (Array.isArray(playlist)) {
       /**
+       * @remarks
        * The source of the playlist
-       * @type {string}
        */
       this.source = "youtube";
       if (!playlist.length) throw new DisTubeError("EMPTY_PLAYLIST");
       /**
+       * @remarks
        * Playlist songs.
-       * @type {Array<Song>}
        */
       this.songs = playlist;
       /**
+       * @remarks
        * Playlist name.
-       * @type {string}
        */
       this.name = this.songs[0].name
         ? `${this.songs[0].name} and ${this.songs.length - 1} more songs.`
@@ -77,14 +75,14 @@ export class Playlist<T = unknown> implements PlaylistInfo {
           ? `${this.songs[0].name} and ${this.songs.length - 1} more songs.`
           : `${this.songs.length} songs playlist`);
       /**
+       * @remarks
        * Playlist URL.
-       * @type {string}
        */
       // eslint-disable-next-line deprecation/deprecation
       this.url = playlist.url || playlist.webpage_url;
       /**
+       * @remarks
        * Playlist thumbnail.
-       * @type {string?}
        */
       this.thumbnail = playlist.thumbnail || this.songs[0].thumbnail;
       this.member = member || playlist.member;
@@ -92,31 +90,31 @@ export class Playlist<T = unknown> implements PlaylistInfo {
     this.songs.forEach(s => s.constructor.name === "Song" && (s.playlist = this));
     if (properties) for (const [key, value] of Object.entries(properties)) this[key] = value;
     /**
+     * @remarks
      * Optional metadata that can be used to identify the playlist.
-     * @type {T}
      */
     this.metadata = metadata as T;
   }
 
   /**
+   * @remarks
    * Playlist duration in second.
-   * @type {number}
    */
   get duration() {
     return this.songs.reduce((prev, next) => prev + next.duration, 0);
   }
 
   /**
+   * @remarks
    * Formatted duration string `hh:mm:ss`.
-   * @type {string}
    */
   get formattedDuration() {
     return formatDuration(this.duration);
   }
 
   /**
+   * @remarks
    * User requested.
-   * @type {Discord.GuildMember?}
    */
   get member() {
     return this.#member;
@@ -129,8 +127,8 @@ export class Playlist<T = unknown> implements PlaylistInfo {
   }
 
   /**
+   * @remarks
    * User requested.
-   * @type {Discord.User?}
    */
   get user() {
     return this.member?.user;

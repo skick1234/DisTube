@@ -28,9 +28,8 @@ import type {
 } from "..";
 
 /**
+ * @remarks
  * DisTube's Handler
- * @extends DisTubeBase
- * @private
  */
 export class DisTubeHandler extends DisTubeBase {
   #cookie: ytdl.Cookie[] | string = "";
@@ -99,9 +98,8 @@ export class DisTubeHandler extends DisTubeBase {
   }
 
   /**
-   * @param {string} url url
-   * @param {boolean} [basic=false] getBasicInfo?
-   * @returns {Promise<ytdl.videoInfo>}
+   * @param url   - url
+   * @param basic - getBasicInfo?
    */
   getYouTubeInfo(url: string, basic = false): Promise<ytdl.videoInfo> {
     if (basic) return ytdl.getBasicInfo(url, this.ytdlOptions);
@@ -121,11 +119,15 @@ export class DisTubeHandler extends DisTubeBase {
     options?: ResolveOptions,
   ): Promise<Song | Playlist>;
   /**
+   * @remarks
    * Resolve a url or a supported object to a {@link Song} or {@link Playlist}
-   * @param {string|Song|SearchResult|Playlist} song URL | {@link Song}| {@link SearchResult} | {@link Playlist}
-   * @param {ResolveOptions} [options] Optional options
-   * @returns {Promise<Song|Playlist|null>} Resolved
-   * @throws {DisTubeError}
+   *
+   * @throws {@link DisTubeError}
+   *
+   * @param song    - URL | {@link Song}| {@link SearchResult} | {@link Playlist}
+   * @param options - Optional options
+   *
+   * @returns Resolved
    */
   async resolve(
     song: string | ytdl.videoInfo | Song | Playlist | SearchResult | OtherSongInfo | ytdl.relatedVideo,
@@ -163,10 +165,11 @@ export class DisTubeHandler extends DisTubeBase {
   ): Promise<Playlist<T>>;
   resolvePlaylist(playlist: Playlist | Song[] | string, options?: ResolvePlaylistOptions): Promise<Playlist>;
   /**
+   * @remarks
    * Resolve Song[] or YouTube playlist url to a Playlist
-   * @param {Playlist|Song[]|string} playlist Resolvable playlist
-   * @param {ResolvePlaylistOptions} options Optional options
-   * @returns {Promise<Playlist>}
+   *
+   * @param playlist - Resolvable playlist
+   * @param options  - Optional options
    */
   async resolvePlaylist(playlist: Playlist | Song[] | string, options: ResolvePlaylistOptions = {}): Promise<Playlist> {
     const { member, source, metadata } = { source: "youtube", ...options };
@@ -196,11 +199,15 @@ export class DisTubeHandler extends DisTubeBase {
   }
 
   /**
-   * Search for a song, fire {@link DisTube#event:error} if not found.
-   * @param {Discord.Message} message The original message from an user
-   * @param {string} query The query string
-   * @returns {Promise<SearchResult?>} Song info
-   * @throws {DisTubeError}
+   * @remarks
+   * Search for a song, fire {@link DisTube#(event:error)} if not found.
+   *
+   * @throws {@link DisTubeError}
+   *
+   * @param message - The original message from an user
+   * @param query   - The query string
+   *
+   * @returns Song info
    */
   async searchSong(message: Message<true>, query: string): Promise<SearchResult | null> {
     if (!isMessageInstance(message)) throw new DisTubeError("INVALID_TYPE", "Discord.Message", message, "message");
@@ -224,15 +231,19 @@ export class DisTubeHandler extends DisTubeBase {
   }
 
   /**
+   * @remarks
    * Create a message collector for selecting search results.
    *
-   * Needed events: {@link DisTube#event:searchResult}, {@link DisTube#event:searchCancel},
-   * {@link DisTube#event:searchInvalidAnswer}, {@link DisTube#event:searchDone}.
-   * @param {Discord.Message} message The original message from an user
-   * @param {Array<SearchResult|Song|Playlist>} results The search results
-   * @param {string?} [query] The query string
-   * @returns {Promise<SearchResult|Song|Playlist|null>} Selected result
-   * @throws {DisTubeError}
+   * Needed events: {@link DisTube#(event:searchResult)}, {@link DisTube#(event:searchCancel)},
+   * {@link DisTube#(event:searchInvalidAnswer)}, {@link DisTube#(event:searchDone)}.
+   *
+   * @throws {@link DisTubeError}
+   *
+   * @param message - The original message from an user
+   * @param results - The search results
+   * @param query   - The query string
+   *
+   * @returns Selected result
    */
   async createSearchMessageCollector<R extends SearchResult | Song | Playlist>(
     message: Message<true>,
@@ -294,12 +305,14 @@ export class DisTubeHandler extends DisTubeBase {
   }
 
   /**
+   * @remarks
    * Play or add a {@link Playlist} to the queue.
-   * @param {Discord.BaseGuildVoiceChannel} voiceChannel A voice channel
-   * @param {Playlist|string} playlist A YouTube playlist url | a Playlist
-   * @param {PlayHandlerOptions} [options] Optional options
-   * @returns {Promise<void>}
-   * @throws {DisTubeError}
+   *
+   * @throws {@link DisTubeError}
+   *
+   * @param voiceChannel - A voice channel
+   * @param playlist     - A YouTube playlist url | a Playlist
+   * @param options      - Optional options
    */
   async playPlaylist(
     voiceChannel: VoiceBasedChannel,
@@ -334,12 +347,14 @@ export class DisTubeHandler extends DisTubeBase {
   }
 
   /**
+   * @remarks
    * Play or add a {@link Song} to the queue.
-   * @param {Discord.BaseGuildVoiceChannel} voiceChannel A voice channel
-   * @param {Song} song A YouTube playlist url | a Playlist
-   * @param {PlayHandlerOptions} [options] Optional options
-   * @returns {Promise<void>}
-   * @throws {DisTubeError}
+   *
+   * @throws {@link DisTubeError}
+   *
+   * @param voiceChannel - A voice channel
+   * @param song         - A YouTube playlist url | a Playlist
+   * @param options      - Optional options
    */
   async playSong(voiceChannel: VoiceBasedChannel, song: Song, options: PlayHandlerOptions = {}): Promise<void> {
     if (!(song instanceof Song)) throw new DisTubeError("INVALID_TYPE", "Song", song, "song");
@@ -365,8 +380,10 @@ export class DisTubeHandler extends DisTubeBase {
   }
 
   /**
+   * @remarks
    * Get {@link Song}'s stream info and attach it to the song.
-   * @param {Song} song A Song
+   *
+   * @param song - A Song
    */
   async attachStreamInfo(song: Song) {
     const { url, source, formats, streamURL } = song;

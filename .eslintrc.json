@@ -2,5 +2,9 @@
   "parserOptions": {
     "project": "./tsconfig.eslint.json"
   },
+  "rules": {
+    "valid-jsdoc": "off",
+    "jsdoc/check-tag-names": "off"
+  },
   "extends": "distube"
 }

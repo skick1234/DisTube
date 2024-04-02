@@ -13,104 +13,106 @@ import type {
 } from "..";
 
 /**
+ * @remarks
  * DisTube Plugin
- * @abstract
- * @private
+ *
+ * @virtual
  */
 export abstract class Plugin {
   abstract type: PluginType;
   distube!: DisTube;
   init(distube: DisTube) {
     /**
+     * @remarks
      * DisTube
-     * @type {DisTube}
      */
     this.distube = distube;
   }
   /**
+   * @remarks
    * Type of the plugin
-   * @name Plugin#type
-   * @type {PluginType}
    */
   /**
+   * @remarks
    * Emit an event to the {@link DisTube} class
-   * @param {string} eventName Event name
-   * @param {...any} args arguments
-   * @returns {boolean}
+   *
+   * @param eventName - Event name
+   * @param args      - arguments
    */
   emit(eventName: keyof DisTubeEvents, ...args: any): boolean {
     return this.distube.emit(eventName, ...args);
   }
   /**
+   * @remarks
    * Emit error event to the {@link DisTube} class
-   * @param {Error} error error
-   * @param {Discord.BaseGuildTextChannel} [channel] Text channel where the error is encountered.
+   *
+   * @param error   - error
+   * @param channel - Text channel where the error is encountered.
    */
   emitError(error: Error, channel?: GuildTextBasedChannel) {
     this.distube.emitError(error, channel);
   }
   /**
+   * @remarks
    * The queue manager
-   * @type {QueueManager}
-   * @readonly
    */
   get queues(): QueueManager {
     return this.distube.queues;
   }
   /**
+   * @remarks
    * The voice manager
-   * @type {DisTubeVoiceManager}
-   * @readonly
    */
   get voices(): DisTubeVoiceManager {
     return this.distube.voices;
   }
   /**
+   * @remarks
    * Discord.js client
-   * @type {Discord.Client}
-   * @readonly
    */
   get client(): Client {
     return this.distube.client;
   }
   /**
+   * @remarks
    * DisTube options
-   * @type {DisTubeOptions}
-   * @readonly
    */
   get options(): Options {
     return this.distube.options;
   }
   /**
+   * @remarks
    * DisTube handler
-   * @type {DisTubeHandler}
-   * @readonly
    */
   get handler(): DisTubeHandler {
     return this.distube.handler;
   }
   /**
+   * @remarks
    * Check if the string is working with this plugin
-   * @param {string} _string Input string
-   * @returns {boolean|Promise<boolean>}
+   *
+   * @param _string - Input string
    */
   validate(_string: string): Awaitable<boolean> {
     return false;
   }
   /**
+   * @remarks
    * Get the stream url from {@link Song#url}. Returns {@link Song#url} by default.
    * Not needed if the plugin plays song from YouTube.
-   * @param {string} url Input url
-   * @returns {string|Promise<string>}
+   *
+   * @param url - Input url
    */
   getStreamURL(url: string): Awaitable<string> {
     return url;
   }
   /**
-   * Get related songs from a supported url. {@link Song#member} should be `undefined`.
-   * Not needed to add {@link Song#related} because it will be added with this function later.
-   * @param {string} _url Input url
-   * @returns {Song[]|Promise<Song[]>}
+   * @remarks
+   * Get related songs from a supported url. {@link Song#member} should be
+   * `undefined`. Not needed to add {@link Song#related} because it will be added
+   * with this function later.
+   *
+   * @param _url - Input url
    */
   getRelatedSongs(_url: string): Awaitable<RelatedSong[]> {
     return [];

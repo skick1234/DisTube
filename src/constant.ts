@@ -2,23 +2,8 @@ import { StreamType } from ".";
 import type { Filters } from ".";
 
 /**
+ * @remarks
  * Default DisTube audio filters.
- * @typedef {Object} defaultFilters
- * @prop {string} 3d 3d
- * @prop {string} bassboost bassboost
- * @prop {string} echo echo
- * @prop {string} karaoke karaoke
- * @prop {string} nightcore nightcore
- * @prop {string} vaporwave vaporwave
- * @prop {string} flanger flanger
- * @prop {string} gate gate
- * @prop {string} haas haas
- * @prop {string} reverse reverse
- * @prop {string} surround surround
- * @prop {string} mcompand mcompand
- * @prop {string} phaser phaser
- * @prop {string} tremolo tremolo
- * @prop {string} earwax earwax
  */
 export const defaultFilters: Filters = {
   "3d": "apulsator=hz=0.125",

@@ -4,23 +4,24 @@ import type { Song } from "../..";
 import type { GuildTextBasedChannel, VoiceBasedChannel } from "discord.js";
 
 /**
+ * @remarks
  * Queue manager
- * @extends GuildIdManager
  */
 export class QueueManager extends GuildIdManager<Queue> {
   /**
+   * @remarks
    * Collection of {@link Queue}.
-   * @name QueueManager#collection
-   * @type {Discord.Collection<string, Queue>}
    */
 
   /**
+   * @remarks
    * Create a {@link Queue}
-   * @private
-   * @param {Discord.BaseGuildVoiceChannel} channel A voice channel
-   * @param {Song|Song[]} song First song
-   * @param {Discord.BaseGuildTextChannel} textChannel Default text channel
-   * @returns {Promise<Queue|true>} Returns `true` if encounter an error
+   *
+   * @param channel     - A voice channel
+   * @param song        - First song
+   * @param textChannel - Default text channel
+   *
+   * @returns Returns `true` if encounter an error
    */
   async create(
     channel: VoiceBasedChannel,
@@ -44,17 +45,17 @@ export class QueueManager extends GuildIdManager<Queue> {
   }
 
   /**
+   * @remarks
    * Get a Queue from this QueueManager.
-   * @method get
-   * @memberof QueueManager#
-   * @param {GuildIdResolvable} guild Resolvable thing from a guild
-   * @returns {Queue?}
+   *
+   * @param guild - Resolvable thing from a guild
    */
 
   /**
+   * @remarks
    * Listen to DisTubeVoice events and handle the Queue
-   * @private
-   * @param {Queue} queue Queue
+   *
+   * @param queue - Queue
    */
   #voiceEventHandler(queue: Queue) {
     queue._listeners = {
@@ -72,10 +73,10 @@ export class QueueManager extends GuildIdManager<Queue> {
   }
 
   /**
+   * @remarks
    * Whether or not emit playSong event
-   * @param {Queue} queue Queue
-   * @private
-   * @returns {boolean}
+   *
+   * @param queue - Queue
    */
   #emitPlaySong(queue: Queue): boolean {
     return (
@@ -86,10 +87,10 @@ export class QueueManager extends GuildIdManager<Queue> {
   }
 
   /**
+   * @remarks
    * Handle the queue when a Song finish
-   * @private
-   * @param {Queue} queue queue
-   * @returns {Promise<void>}
+   *
+   * @param queue - queue
    */
   async #handleSongFinish(queue: Queue): Promise<void> {
     this.emit("finishSong", queue, queue.songs[0]);
@@ -134,10 +135,11 @@ export class QueueManager extends GuildIdManager<Queue> {
   }
 
   /**
+   * @remarks
    * Handle error while playing
-   * @private
-   * @param {Queue} queue queue
-   * @param {Error} error error
+   *
+   * @param queue - queue
+   * @param error - error
    */
   #handlePlayingError(queue: Queue, error: Error) {
     const song = queue.songs.shift() as Song;
@@ -160,9 +162,10 @@ export class QueueManager extends GuildIdManager<Queue> {
   }
 
   /**
+   * @remarks
    * Create a ytdl stream
-   * @param {Queue} queue Queue
-   * @returns {DisTubeStream}
+   *
+   * @param queue - Queue
    */
   createStream(queue: Queue): DisTubeStream {
     const song = queue.songs[0];
@@ -177,10 +180,12 @@ export class QueueManager extends GuildIdManager<Queue> {
   }
 
   /**
+   * @remarks
    * Play a song on voice connection
-   * @private
-   * @param {Queue} queue The guild queue
-   * @returns {Promise<boolean>} error?
+   *
+   * @param queue - The guild queue
+   *
+   * @returns error?
    */
   async playSong(queue: Queue): Promise<boolean> {
     if (!queue) return true;

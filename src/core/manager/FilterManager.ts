@@ -3,14 +3,13 @@ import { DisTubeError } from "../..";
 import type { Filter, FilterResolvable, Queue } from "../..";
 
 /**
+ * @remarks
  * Manage filters of a playing {@link Queue}
- * @extends {BaseManager}
  */
 export class FilterManager extends BaseManager<Filter> {
   /**
+   * @remarks
    * Collection of {@link Filter}.
-   * @name FilterManager#collection
-   * @type {Discord.Collection<string, DisTubeVoice>}
    */
   queue: Queue;
   constructor(queue: Queue) {
@@ -37,10 +36,11 @@ export class FilterManager extends BaseManager<Filter> {
   }
 
   /**
+   * @remarks
    * Enable a filter or multiple filters to the manager
-   * @param {FilterResolvable|FilterResolvable[]} filterOrFilters The filter or filters to enable
-   * @param {boolean} [override=false] Wether or not override the applied filter with new filter value
-   * @returns {FilterManager}
+   *
+   * @param filterOrFilters - The filter or filters to enable
+   * @param override        - Wether or not override the applied filter with new filter value
    */
   add(filterOrFilters: FilterResolvable | FilterResolvable[], override = false) {
     if (Array.isArray(filterOrFilters)) {
@@ -57,17 +57,18 @@ export class FilterManager extends BaseManager<Filter> {
   }
 
   /**
+   * @remarks
    * Clear enabled filters of the manager
-   * @returns {FilterManager}
    */
   clear() {
     return this.set([]);
   }
 
   /**
+   * @remarks
    * Set the filters applied to the manager
-   * @param {FilterResolvable[]} filters The filters to apply
-   * @returns {FilterManager}
+   *
+   * @param filters - The filters to apply
    */
   set(filters: FilterResolvable[]) {
     if (!Array.isArray(filters)) throw new DisTubeError("INVALID_TYPE", "Array<FilterResolvable>", filters, "filters");
@@ -85,9 +86,10 @@ export class FilterManager extends BaseManager<Filter> {
   }
 
   /**
+   * @remarks
    * Disable a filter or multiple filters
-   * @param {FilterResolvable|FilterResolvable[]} filterOrFilters The filter or filters to disable
-   * @returns {FilterManager}
+   *
+   * @param filterOrFilters - The filter or filters to disable
    */
   remove(filterOrFilters: FilterResolvable | FilterResolvable[]) {
     if (Array.isArray(filterOrFilters)) filterOrFilters.forEach(f => this.#removeFn(f));
@@ -97,27 +99,26 @@ export class FilterManager extends BaseManager<Filter> {
   }
 
   /**
+   * @remarks
    * Check whether a filter enabled or not
-   * @param {FilterResolvable} filter The filter to check
-   * @returns {boolean}
+   *
+   * @param filter - The filter to check
    */
   has(filter: FilterResolvable) {
     return this.collection.has(typeof filter === "string" ? filter : this.#resolve(filter).name);
   }
 
   /**
+   * @remarks
    * Array of enabled filter names
-   * @type {Array<string>}
-   * @readonly
    */
   get names(): string[] {
     return [...this.collection.keys()];
   }
 
   /**
+   * @remarks
    * Array of enabled filters
-   * @type {Array<Filter>}
-   * @readonly
    */
   get values(): Filter[] {
     return [...this.collection.values()];
