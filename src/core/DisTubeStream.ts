@@ -41,9 +41,9 @@ export class DisTubeStream extends TypedEmitter<{ debug: (debug: string) => Awai
     this.url = url;
     this.type = !type ? DiscordVoiceStreamType.OggOpus : DiscordVoiceStreamType.Raw;
     const opts: FFmpegOptions = {
-      reconnect: true,
-      reconnect_on_network_error: true,
-      reconnect_streamed: true,
+      reconnect: 1,
+      reconnect_on_network_error: 1,
+      reconnect_streamed: 1,
       reconnect_delay_max: 5,
       i: url,
       ar: 48000,
@@ -106,7 +106,7 @@ export class DisTubeStream extends TypedEmitter<{ debug: (debug: string) => Awai
   }
 
   private debug(debug: string) {
-    if (this.listenerCount("debug") > 0) this.emit("debug", debug);
+    this.emit("debug", debug);
   }
 
   kill() {
