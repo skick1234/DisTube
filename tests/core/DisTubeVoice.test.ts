@@ -103,7 +103,7 @@ describe("Constructor", () => {
     expect(voice).toBeInstanceOf(DisTubeVoice);
     expect(voice.id).toBe(voiceChannel.guildId);
     expect(voice.channel).toBe(voiceChannel);
-    expect(DiscordVoice.joinVoiceChannel).toBeCalledWith(
+    expect(DiscordVoice.joinVoiceChannel).toHaveBeenCalledWith(
       expect.objectContaining({
         channelId: voiceChannel.id,
         guildId: voiceChannel.guildId,
@@ -111,34 +111,38 @@ describe("Constructor", () => {
       }),
     );
     expect(voice.voices).toBe(voiceManager);
-    expect(voiceManager.add).toBeCalledWith(voice.id, voice);
+    expect(voiceManager.add).toHaveBeenCalledWith(voice.id, voice);
     expect(voice.audioPlayer).toBe(audioPlayer);
     expect(voice.connection).toBe(connection);
-    expect(connection.subscribe).toBeCalledWith(audioPlayer);
+    expect(connection.subscribe).toHaveBeenCalledWith(audioPlayer);
 
     (voice.emit as jest.Mock).mockClear();
-    expect(audioPlayer.on).nthCalledWith(1, DiscordVoice.AudioPlayerStatus.Idle, expect.any(Function));
+    expect(audioPlayer.on).toHaveBeenNthCalledWith(1, DiscordVoice.AudioPlayerStatus.Idle, expect.any(Function));
     audioPlayer.on.mock.calls[0][1]({ status: DiscordVoice.AudioPlayerStatus.Idle });
-    expect(voice.emit).not.toBeCalled();
+    expect(voice.emit).not.toHaveBeenCalled();
     voice.audioResource = {} as any;
     audioPlayer.on.mock.calls[0][1]({ status: DiscordVoice.AudioPlayerStatus.Playing });
     expect(voice.audioResource).toBeUndefined();
-    expect(voice.emit).toBeCalledWith("finish");
+    expect(voice.emit).toHaveBeenCalledWith("finish");
 
     (voice.emit as jest.Mock).mockClear();
     const error = {};
-    expect(audioPlayer.on).nthCalledWith(3, "error", expect.any(Function));
+    expect(audioPlayer.on).toHaveBeenNthCalledWith(3, "error", expect.any(Function));
     voice.emittedError = true;
     audioPlayer.on.mock.calls[2][1](error);
-    expect(voice.emit).not.toBeCalled();
+    expect(voice.emit).not.toHaveBeenCalled();
     voice.emittedError = false;
     audioPlayer.on.mock.calls[2][1](error);
     expect(voice.emittedError).toBe(true);
-    expect(voice.emit).toBeCalledWith("error", error);
+    expect(voice.emit).toHaveBeenCalledWith("error", error);
 
     voice.leave = jest.fn();
     (voice.emit as jest.Mock).mockClear();
-    expect(connection.on).nthCalledWith(1, DiscordVoice.VoiceConnectionStatus.Disconnected, expect.any(Function));
+    expect(connection.on).toHaveBeenNthCalledWith(
+      1,
+      DiscordVoice.VoiceConnectionStatus.Disconnected,
+      expect.any(Function),
+    );
     const catchFn = jest.fn();
     DiscordVoice.entersState.mockReturnValue({ catch: catchFn } as any);
     connection.on.mock.calls[0][1](
@@ -146,10 +150,10 @@ describe("Constructor", () => {
       { reason: DiscordVoice.VoiceConnectionDisconnectReason.WebSocketClose, closeCode: 4014 },
     );
     catchFn.mock.calls[0][0]();
-    expect(voice.leave).toBeCalledTimes(1);
+    expect(voice.leave).toHaveBeenCalledTimes(1);
 
     connection.on.mock.calls[0][1]({}, { reason: DiscordVoice.VoiceConnectionDisconnectReason.Manual });
-    expect(voice.leave).toBeCalledTimes(2);
+    expect(voice.leave).toHaveBeenCalledTimes(2);
 
     DiscordVoice.entersState.mockReturnValue({ catch: catchFn } as any);
     connection.on.mock.calls[0][1](
@@ -158,7 +162,7 @@ describe("Constructor", () => {
     );
     connection.state.status = DiscordVoice.VoiceConnectionStatus.Ready;
     catchFn.mock.calls[0][0]();
-    expect(voice.leave).toBeCalledTimes(2);
+    expect(voice.leave).toHaveBeenCalledTimes(2);
     connection.state.status = DiscordVoice.VoiceConnectionStatus.Signalling;
 
     connection.on.mock.calls[0][1]({}, {});
@@ -173,7 +177,7 @@ describe("Constructor", () => {
     expect(connection.rejoinAttempts).toBe(5);
     jest.runAllTimers();
     expect(connection.rejoinAttempts).toBe(5);
-    expect(voice.leave).toBeCalledWith(new DisTubeError("VOICE_RECONNECT_FAILED"));
+    expect(voice.leave).toHaveBeenCalledWith(new DisTubeError("VOICE_RECONNECT_FAILED"));
 
     (voice.emit as jest.Mock).mockClear();
     (voice.leave as jest.Mock).mockClear();
@@ -183,15 +187,19 @@ describe("Constructor", () => {
     expect(connection.rejoinAttempts).toBe(5);
     jest.runAllTimers();
     expect(connection.rejoinAttempts).toBe(5);
-    expect(voice.emit).not.toBeCalled();
-    expect(voice.leave).not.toBeCalled();
+    expect(voice.emit).not.toHaveBeenCalled();
+    expect(voice.leave).not.toHaveBeenCalled();
 
     (voice.leave as jest.Mock).mockClear();
-    expect(connection.on).nthCalledWith(2, DiscordVoice.VoiceConnectionStatus.Destroyed, expect.any(Function));
+    expect(connection.on).toHaveBeenNthCalledWith(
+      2,
+      DiscordVoice.VoiceConnectionStatus.Destroyed,
+      expect.any(Function),
+    );
     connection.on.mock.calls[1][1]();
-    expect(voice.leave).toBeCalledTimes(1);
+    expect(voice.leave).toHaveBeenCalledTimes(1);
 
-    expect(connection.on).nthCalledWith(3, "error", expect.any(Function));
+    expect(connection.on).toHaveBeenNthCalledWith(3, "error", expect.any(Function));
     expect(connection.on.mock.calls[2][1]()).toBeUndefined();
   });
 });
@@ -251,13 +259,13 @@ describe("Methods", () => {
         voice.volume = volume;
       }).not.toThrow();
       expect(voice.volume).toBe(volume);
-      expect(audioResource.volume.setVolume).toBeCalledTimes(1);
+      expect(audioResource.volume.setVolume).toHaveBeenCalledTimes(1);
       expect(audioResource.volume.setVolume).toHaveBeenNthCalledWith(1, 1);
       volume = 50;
       expect(() => {
         voice.volume = volume;
       }).not.toThrow();
-      expect(audioResource.volume.setVolume).toBeCalledTimes(2);
+      expect(audioResource.volume.setVolume).toHaveBeenCalledTimes(2);
       expect(audioResource.volume.setVolume).toHaveBeenNthCalledWith(2, 0.31622776601683794);
     });
 
@@ -278,9 +286,13 @@ describe("Methods", () => {
     test("Signalling connection timeout", async () => {
       DiscordVoice.entersState.mockRejectedValue(undefined);
       await expect(voice.join()).rejects.toThrow(new DisTubeError("VOICE_CONNECT_FAILED", TIMEOUT / 1e3));
-      expect(DiscordVoice.entersState).toBeCalledWith(connection, DiscordVoice.VoiceConnectionStatus.Ready, TIMEOUT);
-      expect(connection.destroy).toBeCalledTimes(1);
-      expect(voiceManager.remove).toBeCalledWith(voice.id);
+      expect(DiscordVoice.entersState).toHaveBeenCalledWith(
+        connection,
+        DiscordVoice.VoiceConnectionStatus.Ready,
+        TIMEOUT,
+      );
+      expect(connection.destroy).toHaveBeenCalledTimes(1);
+      expect(voiceManager.remove).toHaveBeenCalledWith(voice.id);
     });
 
     test("Connection destroyed", async () => {
@@ -290,8 +302,8 @@ describe("Methods", () => {
       connection.state.status = DiscordVoice.VoiceConnectionStatus.Destroyed;
       await expect(voice.join(newVC as any)).rejects.toThrow(new DisTubeError("VOICE_CONNECT_FAILED", TIMEOUT / 1e3));
       expect(voice.channel).toBe(newVC);
-      expect(connection.destroy).not.toBeCalled();
-      expect(voiceManager.remove).toBeCalledWith(voice.id);
+      expect(connection.destroy).not.toHaveBeenCalled();
+      expect(voiceManager.remove).toHaveBeenCalledWith(voice.id);
       connection.state.status = DiscordVoice.VoiceConnectionStatus.Signalling;
     });
 
@@ -302,9 +314,13 @@ describe("Methods", () => {
         throw new Error();
       }));
       await expect(voice.join(voiceChannel as any)).resolves.toBe(voice);
-      expect(DiscordVoice.entersState).toBeCalledWith(connection, DiscordVoice.VoiceConnectionStatus.Ready, TIMEOUT);
-      expect(connection.destroy).not.toBeCalled();
-      expect(voiceManager.remove).not.toBeCalled();
+      expect(DiscordVoice.entersState).toHaveBeenCalledWith(
+        connection,
+        DiscordVoice.VoiceConnectionStatus.Ready,
+        TIMEOUT,
+      );
+      expect(connection.destroy).not.toHaveBeenCalled();
+      expect(voiceManager.remove).not.toHaveBeenCalled();
       client.channels.cache.get.mockReturnValue({ type: 0 });
       expect(voice.channel).toBe(voiceChannel);
       expect(voice.connection).toBe(connection);
@@ -315,9 +331,13 @@ describe("Methods", () => {
       Util.isSupportedVoiceChannel.mockReturnValue(true);
       DiscordVoice.entersState.mockResolvedValue(undefined);
       await expect(voice.join(voiceChannel as any)).resolves.toBe(voice);
-      expect(DiscordVoice.entersState).toBeCalledWith(connection, DiscordVoice.VoiceConnectionStatus.Ready, TIMEOUT);
-      expect(connection.destroy).not.toBeCalled();
-      expect(voiceManager.remove).not.toBeCalled();
+      expect(DiscordVoice.entersState).toHaveBeenCalledWith(
+        connection,
+        DiscordVoice.VoiceConnectionStatus.Ready,
+        TIMEOUT,
+      );
+      expect(connection.destroy).not.toHaveBeenCalled();
+      expect(voiceManager.remove).not.toHaveBeenCalled();
       client.channels.cache.get.mockReturnValue({ type: 0 });
       expect(voice.channel).toBe(voiceChannel);
       expect(voice.connection).toBe(connection);
@@ -329,22 +349,22 @@ describe("Methods", () => {
       test("Without error", () => {
         connection.state.status = DiscordVoice.VoiceConnectionStatus.Ready;
         expect(voice.leave()).toBeUndefined();
-        expect(audioPlayer.stop).toBeCalledTimes(1);
-        expect(audioPlayer.stop).toBeCalledWith(true);
-        expect(connection.destroy).toBeCalledTimes(1);
-        expect(voice.emit).toBeCalledWith("disconnect", undefined);
-        expect(voiceManager.remove).toBeCalledWith(voice.id);
+        expect(audioPlayer.stop).toHaveBeenCalledTimes(1);
+        expect(audioPlayer.stop).toHaveBeenCalledWith(true);
+        expect(connection.destroy).toHaveBeenCalledTimes(1);
+        expect(voice.emit).toHaveBeenCalledWith("disconnect", undefined);
+        expect(voiceManager.remove).toHaveBeenCalledWith(voice.id);
       });
     });
 
     test("Leave the destroyed connection", () => {
       connection.state.status = DiscordVoice.VoiceConnectionStatus.Destroyed;
       expect(voice.leave()).toBeUndefined();
-      expect(audioPlayer.stop).toBeCalledTimes(1);
-      expect(audioPlayer.stop).toBeCalledWith(true);
-      expect(voice.emit).not.toBeCalled();
-      expect(connection.destroy).not.toBeCalled();
-      expect(voiceManager.remove).toBeCalledWith(voice.id);
+      expect(audioPlayer.stop).toHaveBeenCalledTimes(1);
+      expect(audioPlayer.stop).toHaveBeenCalledWith(true);
+      expect(voice.emit).not.toHaveBeenCalled();
+      expect(connection.destroy).not.toHaveBeenCalled();
+      expect(voiceManager.remove).toHaveBeenCalledWith(voice.id);
       connection.state.status = DiscordVoice.VoiceConnectionStatus.Signalling;
     });
   });
@@ -361,55 +381,55 @@ describe("Methods", () => {
     };
     expect(voice.play(stream as any)).toBeUndefined();
     expect(voice.emittedError).toBe(false);
-    expect(stream.stream.on).toBeCalledWith("error", expect.any(Function));
+    expect(stream.stream.on).toHaveBeenCalledWith("error", expect.any(Function));
     expect(voice.audioResource).toBe(audioResource);
-    expect(audioPlayer.play).toBeCalledTimes(1);
-    expect(audioPlayer.play).nthCalledWith(1, audioResource);
+    expect(audioPlayer.play).toHaveBeenCalledTimes(1);
+    expect(audioPlayer.play).toHaveBeenNthCalledWith(1, audioResource);
     const error = {};
     stream.stream.on.mock.calls[0][1](error);
     expect(voice.emittedError).toBe(true);
-    expect(voice.emit).toBeCalledWith("error", error);
+    expect(voice.emit).toHaveBeenCalledWith("error", error);
     stream.stream.on.mock.calls[0][1](error);
-    expect(voice.emit).toBeCalledTimes(1);
+    expect(voice.emit).toHaveBeenCalledTimes(1);
 
     audioPlayer.state.status = DiscordVoice.AudioPlayerStatus.Paused;
     expect(voice.play(stream as any)).toBeUndefined();
-    expect(audioPlayer.play).toBeCalledTimes(1);
+    expect(audioPlayer.play).toHaveBeenCalledTimes(1);
     audioPlayer.state.status = DiscordVoice.AudioPlayerStatus.Playing;
   });
 
   test("DisTubeVoice#stop()", () => {
     expect(voice.stop()).toBeUndefined();
-    expect(audioPlayer.stop).toBeCalledTimes(1);
-    expect(audioPlayer.stop).toBeCalledWith(false);
+    expect(audioPlayer.stop).toHaveBeenCalledTimes(1);
+    expect(audioPlayer.stop).toHaveBeenCalledWith(false);
     expect(voice.stop(true)).toBeUndefined();
-    expect(audioPlayer.stop).toBeCalledTimes(2);
-    expect(audioPlayer.stop).lastCalledWith(true);
+    expect(audioPlayer.stop).toHaveBeenCalledTimes(2);
+    expect(audioPlayer.stop).toHaveBeenLastCalledWith(true);
   });
 
   test("DisTubeVoice#pause()", () => {
     expect(voice.pause()).toBeUndefined();
-    expect(audioPlayer.pause).toBeCalledTimes(1);
+    expect(audioPlayer.pause).toHaveBeenCalledTimes(1);
   });
 
   describe("DisTubeVoice#unpause()", () => {
     test("Unpause when playing", () => {
       expect(voice.unpause()).toBeUndefined();
-      expect(audioPlayer.unpause).toBeCalledTimes(0);
+      expect(audioPlayer.unpause).toHaveBeenCalledTimes(0);
     });
     test("Unpause when paused with same resource", () => {
       audioPlayer.state.status = DiscordVoice.AudioPlayerStatus.Paused;
       expect(voice.unpause()).toBeUndefined();
-      expect(audioPlayer.unpause).toBeCalledTimes(1);
+      expect(audioPlayer.unpause).toHaveBeenCalledTimes(1);
       audioPlayer.state.status = DiscordVoice.AudioPlayerStatus.Playing;
     });
     test("Unpause when paused with different resource", () => {
       audioPlayer.state.status = DiscordVoice.AudioPlayerStatus.Paused;
       voice.audioResource = {} as any;
       expect(voice.unpause()).toBeUndefined();
-      expect(audioPlayer.unpause).toBeCalledTimes(0);
-      expect(audioPlayer.play).toBeCalledTimes(1);
-      expect(audioPlayer.play).toBeCalledWith(voice.audioResource);
+      expect(audioPlayer.unpause).toHaveBeenCalledTimes(0);
+      expect(audioPlayer.play).toHaveBeenCalledTimes(1);
+      expect(audioPlayer.play).toHaveBeenCalledWith(voice.audioResource);
       audioPlayer.state.status = DiscordVoice.AudioPlayerStatus.Playing;
     });
   });

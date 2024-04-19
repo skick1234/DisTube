@@ -116,7 +116,7 @@ describe("Constructor", () => {
       const distube = createFakeDisTube();
       distube.options.leaveOnEmpty = false;
       new DisTubeHandler(distube as any);
-      expect(distube.client.on).not.toBeCalled();
+      expect(distube.client.on).not.toHaveBeenCalled();
     });
 
     const distube = createFakeDisTube();
@@ -127,7 +127,7 @@ describe("Constructor", () => {
     test("Client is not in a voice channel", () => {
       stateHandle(undefined);
       stateHandle({ channel: undefined });
-      expect(distube.queues.get).not.toBeCalled();
+      expect(distube.queues.get).not.toHaveBeenCalled();
     });
 
     describe("There is no playing Queue in the guild", () => {
@@ -145,28 +145,28 @@ describe("Constructor", () => {
           Util.isVoiceChannelEmpty.mockReturnValue(true);
           stateHandle(state);
           expect(jest.getTimerCount()).toBe(1);
-          expect(distube.voices.leave).not.toBeCalled();
+          expect(distube.voices.leave).not.toHaveBeenCalled();
           jest.runAllTimers();
-          expect(distube.voices.leave).toBeCalledWith(state);
+          expect(distube.voices.leave).toHaveBeenCalledWith(state);
         });
 
         test("The voice channel is not empty after timeout", () => {
           Util.isVoiceChannelEmpty.mockReturnValue(false).mockReturnValueOnce(true);
           stateHandle(state);
           expect(jest.getTimerCount()).toBe(1);
-          expect(distube.voices.leave).not.toBeCalled();
+          expect(distube.voices.leave).not.toHaveBeenCalled();
           jest.runAllTimers();
-          expect(distube.voices.leave).not.toBeCalled();
+          expect(distube.voices.leave).not.toHaveBeenCalled();
         });
 
         test("A queue is created after timeout", () => {
           Util.isVoiceChannelEmpty.mockReturnValue(true);
           stateHandle(state);
           expect(jest.getTimerCount()).toBe(1);
-          expect(distube.voices.leave).not.toBeCalled();
+          expect(distube.voices.leave).not.toHaveBeenCalled();
           distube.queues.get.mockReturnValueOnce({});
           jest.runAllTimers();
-          expect(distube.voices.leave).not.toBeCalled();
+          expect(distube.voices.leave).not.toHaveBeenCalled();
         });
       });
     });
@@ -186,18 +186,18 @@ describe("Constructor", () => {
           Util.isVoiceChannelEmpty.mockReturnValue(true);
           stateHandle(state);
           expect(jest.getTimerCount()).toBe(1);
-          expect(queue.voice.leave).not.toBeCalled();
+          expect(queue.voice.leave).not.toHaveBeenCalled();
           jest.runAllTimers();
-          expect(queue.voice.leave).toBeCalledTimes(1);
-          expect(queue.remove).not.toBeCalled();
+          expect(queue.voice.leave).toHaveBeenCalledTimes(1);
+          expect(queue.remove).not.toHaveBeenCalled();
           // Stopped queue
           queue.stopped = true;
           stateHandle(state);
           expect(jest.getTimerCount()).toBe(1);
-          expect(queue.voice.leave).toBeCalledTimes(1);
+          expect(queue.voice.leave).toHaveBeenCalledTimes(1);
           jest.runAllTimers();
-          expect(queue.voice.leave).toBeCalledTimes(2);
-          expect(queue.remove).toBeCalledTimes(1);
+          expect(queue.voice.leave).toHaveBeenCalledTimes(2);
+          expect(queue.remove).toHaveBeenCalledTimes(1);
           queue.stopped = false;
         });
 
@@ -206,13 +206,13 @@ describe("Constructor", () => {
           Util.isVoiceChannelEmpty.mockReturnValue(false).mockReturnValueOnce(true);
           stateHandle(state);
           expect(jest.getTimerCount()).toBe(1);
-          expect(queue.voice.leave).not.toBeCalled();
+          expect(queue.voice.leave).not.toHaveBeenCalled();
           // Test clear previous timeout
           Util.isVoiceChannelEmpty.mockReturnValueOnce(true);
           stateHandle(state);
           expect(jest.getTimerCount()).toBe(1);
           jest.runAllTimers();
-          expect(queue.voice.leave).not.toBeCalled();
+          expect(queue.voice.leave).not.toHaveBeenCalled();
         });
       });
     });
@@ -226,15 +226,15 @@ describe("DisTubeHandler#getYouTubeInfo()", () => {
   const url = "an URL";
   test("Get basic info", () => {
     handler.getYouTubeInfo(url, true);
-    expect(ytdl.getBasicInfo).toBeCalledWith(url, handler.ytdlOptions);
+    expect(ytdl.getBasicInfo).toHaveBeenCalledWith(url, handler.ytdlOptions);
   });
   test("Get full info", () => {
     handler.getYouTubeInfo(url);
-    expect(ytdl.getInfo).toBeCalledWith(url, handler.ytdlOptions);
-    expect(ytdl.getInfo).toBeCalledTimes(1);
+    expect(ytdl.getInfo).toHaveBeenCalledWith(url, handler.ytdlOptions);
+    expect(ytdl.getInfo).toHaveBeenCalledTimes(1);
     handler.getYouTubeInfo(url, false);
-    expect(ytdl.getInfo).toBeCalledWith(url, handler.ytdlOptions);
-    expect(ytdl.getInfo).toBeCalledTimes(2);
+    expect(ytdl.getInfo).toHaveBeenCalledWith(url, handler.ytdlOptions);
+    expect(ytdl.getInfo).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -243,10 +243,10 @@ describe("DisTubeHandler#resolve()", () => {
   const handler = new DisTubeHandler(distube as any);
 
   test("Parameter is null or undefined", async () => {
-    await expect(handler.resolve(null, { member, metadata })).rejects.toThrowError(
+    await expect(handler.resolve(null, { member, metadata })).rejects.toThrow(
       new DisTubeError("CANNOT_RESOLVE_SONG", null),
     );
-    await expect(handler.resolve(undefined, { member, metadata })).rejects.toThrowError(
+    await expect(handler.resolve(undefined, { member, metadata })).rejects.toThrow(
       new DisTubeError("CANNOT_RESOLVE_SONG", undefined),
     );
   });
@@ -275,8 +275,8 @@ describe("DisTubeHandler#resolve()", () => {
     ytdl.getBasicInfo.mockReturnValue({ full: true, videoDetails: { id: "test" }, formats: ["a format"] } as any);
     const resolved = handler.resolve(url, { member, metadata });
     await expect(resolved).resolves.toBeInstanceOf(Song);
-    expect(ytdl.validateURL).toBeCalledWith(url);
-    expect(ytdl.getBasicInfo).toBeCalledWith(url, handler.ytdlOptions);
+    expect(ytdl.validateURL).toHaveBeenCalledWith(url);
+    expect(ytdl.getBasicInfo).toHaveBeenCalledWith(url, handler.ytdlOptions);
   });
 
   test("Parameter is a url supported by an extractor plugin", async () => {
@@ -288,8 +288,8 @@ describe("DisTubeHandler#resolve()", () => {
     extractor.resolve.mockReturnValue(result);
     const otp = { member, metadata };
     await expect(handler.resolve(url, otp)).resolves.toBe(result);
-    expect(extractor.validate).toBeCalledWith(url);
-    expect(extractor.resolve).toBeCalledWith(url, otp);
+    expect(extractor.validate).toHaveBeenCalledWith(url);
+    expect(extractor.resolve).toHaveBeenCalledWith(url, otp);
   });
 
   test("Parameter is an unsupported URL", async () => {
@@ -340,12 +340,12 @@ describe("DisTubeHandler#playPlaylist()", () => {
     const pl1 = new Playlist([nsfwSong]);
     Util.isNsfwChannel.mockReturnValue(false);
     await expect(handler.playPlaylist(voice, pl1)).rejects.toThrow(new DisTubeError("EMPTY_FILTERED_PLAYLIST"));
-    expect(Util.isNsfwChannel).toBeCalledTimes(1);
+    expect(Util.isNsfwChannel).toHaveBeenCalledTimes(1);
     const pl2 = new Playlist([new Song({ age_restricted: true, url: "test url", src: "test" }, { member })]);
     pl2.songs = [];
     Util.isNsfwChannel.mockReturnValue(true);
     await expect(handler.playPlaylist(voice, pl2)).rejects.toThrow(new DisTubeError("EMPTY_PLAYLIST"));
-    expect(Util.isNsfwChannel).toBeCalledTimes(2);
+    expect(Util.isNsfwChannel).toHaveBeenCalledTimes(2);
   });
 
   test("Play in a nsfw channel", async () => {
@@ -355,19 +355,19 @@ describe("DisTubeHandler#playPlaylist()", () => {
 
     distube.queues.create.mockReturnValueOnce(true);
     await expect(handler.playPlaylist(voice, playlist, { textChannel })).resolves.toBeUndefined();
-    expect(distube.queues.create).toBeCalledWith(voice, playlist.songs, textChannel);
-    expect(distube.emit).not.toBeCalled();
+    expect(distube.queues.create).toHaveBeenCalledWith(voice, playlist.songs, textChannel);
+    expect(distube.emit).not.toHaveBeenCalled();
     expect(playlist.songs).toContain(nsfwSong);
-    expect(Util.isNsfwChannel).toBeCalledTimes(1);
+    expect(Util.isNsfwChannel).toHaveBeenCalledTimes(1);
 
     const queue = new Queue.Queue(distube as any, {} as any, playlist.songs);
     queue.songs = playlist.songs;
     distube.options.emitAddListWhenCreatingQueue = false;
     distube.queues.create.mockReturnValueOnce(queue);
     await expect(handler.playPlaylist(voice, playlist, { textChannel })).resolves.toBeUndefined();
-    expect(distube.queues.create).toBeCalledWith(voice, playlist.songs, textChannel);
-    expect(distube.emit).not.toBeCalledWith("addList", queue, playlist);
-    expect(distube.emit).toBeCalledWith("playSong", queue, playlist.songs[0]);
+    expect(distube.queues.create).toHaveBeenCalledWith(voice, playlist.songs, textChannel);
+    expect(distube.emit).not.toHaveBeenCalledWith("addList", queue, playlist);
+    expect(distube.emit).toHaveBeenCalledWith("playSong", queue, playlist.songs[0]);
     expect(playlist.songs).toContain(nsfwSong);
     distube.options.emitAddListWhenCreatingQueue = true;
   });
@@ -380,9 +380,9 @@ describe("DisTubeHandler#playPlaylist()", () => {
     distube.queues.get.mockReturnValue(undefined);
     distube.queues.create.mockReturnValue(queue);
     await expect(handler.playPlaylist(voice, playlist, { textChannel })).resolves.toBeUndefined();
-    expect(distube.queues.create).toBeCalledWith(voice, playlist.songs, textChannel);
-    expect(distube.emit).nthCalledWith(1, "addList", queue, playlist);
-    expect(distube.emit).nthCalledWith(2, "playSong", queue, playlist.songs[0]);
+    expect(distube.queues.create).toHaveBeenCalledWith(voice, playlist.songs, textChannel);
+    expect(distube.emit).toHaveBeenNthCalledWith(1, "addList", queue, playlist);
+    expect(distube.emit).toHaveBeenNthCalledWith(2, "playSong", queue, playlist.songs[0]);
     expect(playlist.songs).not.toContain(nsfwSong);
     playlist.songs.push(nsfwSong);
   });
@@ -396,9 +396,9 @@ describe("DisTubeHandler#playPlaylist()", () => {
     await expect(
       handler.playPlaylist(voice, playlist, { textChannel, skip: true, position: 1 }),
     ).resolves.toBeUndefined();
-    expect(queue.addToQueue).toBeCalledWith(playlist.songs, 1);
-    expect(queue.skip).toBeCalledTimes(1);
-    expect(distube.emit).not.toBeCalled();
+    expect(queue.addToQueue).toHaveBeenCalledWith(playlist.songs, 1);
+    expect(queue.skip).toHaveBeenCalledTimes(1);
+    expect(distube.emit).not.toHaveBeenCalled();
     expect(playlist.songs).not.toContain(nsfwSong);
     playlist.songs.push(nsfwSong);
   });
@@ -412,9 +412,9 @@ describe("DisTubeHandler#playPlaylist()", () => {
     await expect(
       handler.playPlaylist(voice, playlist, { textChannel, skip: false, position: 1 }),
     ).resolves.toBeUndefined();
-    expect(queue.addToQueue).toBeCalledWith(playlist.songs, 1);
-    expect(queue.skip).not.toBeCalled();
-    expect(distube.emit).toBeCalledWith("addList", queue, playlist);
+    expect(queue.addToQueue).toHaveBeenCalledWith(playlist.songs, 1);
+    expect(queue.skip).not.toHaveBeenCalled();
+    expect(distube.emit).toHaveBeenCalledWith("addList", queue, playlist);
     expect(playlist.songs).toContain(nsfwSong);
   });
 
@@ -425,9 +425,9 @@ describe("DisTubeHandler#playPlaylist()", () => {
     queue.songs = playlist.songs;
     distube.queues.get.mockReturnValue(queue);
     await expect(handler.playPlaylist(voice, playlist, { textChannel, skip: false })).resolves.toBeUndefined();
-    expect(queue.addToQueue).toBeCalledWith(playlist.songs, 0);
-    expect(queue.skip).not.toBeCalled();
-    expect(distube.emit).toBeCalledWith("addList", queue, playlist);
+    expect(queue.addToQueue).toHaveBeenCalledWith(playlist.songs, 0);
+    expect(queue.skip).not.toHaveBeenCalled();
+    expect(distube.emit).toHaveBeenCalledWith("addList", queue, playlist);
     expect(playlist.songs).toContain(nsfwSong);
   });
 });
@@ -458,7 +458,7 @@ describe("DisTubeHandler#searchSong()", () => {
       const message: any = {};
       const query = "test";
       await expect(handler.searchSong(message, query)).resolves.toBe(null);
-      expect(distube.emit).toBeCalledWith("searchNoResult", message, query);
+      expect(distube.emit).toHaveBeenCalledWith("searchNoResult", message, query);
     });
 
     test("Without listening searchNoResult event", async () => {
@@ -472,8 +472,10 @@ describe("DisTubeHandler#searchSong()", () => {
       const message: any = {};
       const query = "test";
       await expect(handler.searchSong(message, query)).rejects.toThrow(err);
-      expect(distube.emit).toBeCalledWith("searchNoResult", message, query);
-      expect(warn).toBeCalledWith("searchNoResult event does not have any listeners! Emits `error` event instead.");
+      expect(distube.emit).toHaveBeenCalledWith("searchNoResult", message, query);
+      expect(warn).toHaveBeenCalledWith(
+        "searchNoResult event does not have any listeners! Emits `error` event instead.",
+      );
     });
   });
 
@@ -488,14 +490,14 @@ describe("DisTubeHandler#searchSong()", () => {
     Util.isNsfwChannel.mockReturnValue(false);
     const query = "test";
     await expect(handler.searchSong(message, query)).resolves.toBe(results[0]);
-    expect(distube.search).toBeCalledWith(
+    expect(distube.search).toHaveBeenCalledWith(
       query,
       expect.objectContaining({
         limit: 1,
         safeSearch: true,
       }),
     );
-    expect(Util.isNsfwChannel).toBeCalledTimes(1);
+    expect(Util.isNsfwChannel).toHaveBeenCalledTimes(1);
   });
 
   describe("searchSongs option > 1", () => {
@@ -513,20 +515,20 @@ describe("DisTubeHandler#searchSong()", () => {
       const message = createV13Message(ans);
       const query = "query";
       await expect(handler.searchSong(message, query)).resolves.toBe(results[1]);
-      expect(distube.search).toBeCalledWith(
+      expect(distube.search).toHaveBeenCalledWith(
         query,
         expect.objectContaining({
           limit: 5,
           safeSearch: false,
         }),
       );
-      expect(distube.emit).nthCalledWith(1, "searchResult", message, results, query);
-      expect(distube.emit).nthCalledWith(2, "searchDone", message, ans, query);
-      expect(distube.listenerCount).toBeCalledWith("searchNoResult");
-      expect(distube.listenerCount).toBeCalledWith("searchResult");
-      expect(distube.listenerCount).toBeCalledWith("searchCancel");
-      expect(distube.listenerCount).toBeCalledWith("searchInvalidAnswer");
-      expect(distube.listenerCount).toBeCalledWith("searchDone");
+      expect(distube.emit).toHaveBeenNthCalledWith(1, "searchResult", message, results, query);
+      expect(distube.emit).toHaveBeenNthCalledWith(2, "searchDone", message, ans, query);
+      expect(distube.listenerCount).toHaveBeenCalledWith("searchNoResult");
+      expect(distube.listenerCount).toHaveBeenCalledWith("searchResult");
+      expect(distube.listenerCount).toHaveBeenCalledWith("searchCancel");
+      expect(distube.listenerCount).toHaveBeenCalledWith("searchInvalidAnswer");
+      expect(distube.listenerCount).toHaveBeenCalledWith("searchDone");
     });
 
     test("Message timeout", async () => {
@@ -537,13 +539,13 @@ describe("DisTubeHandler#searchSong()", () => {
       const message = createV12Message(ans);
       const query = "query";
       await expect(handler.searchSong(message, query)).resolves.toBe(null);
-      expect(distube.emit).nthCalledWith(1, "searchResult", message, results, query);
-      expect(distube.emit).nthCalledWith(2, "searchCancel", message, query);
-      expect(distube.listenerCount).toBeCalledWith("searchNoResult");
-      expect(distube.listenerCount).toBeCalledWith("searchResult");
-      expect(distube.listenerCount).toBeCalledWith("searchCancel");
-      expect(distube.listenerCount).toBeCalledWith("searchInvalidAnswer");
-      expect(distube.listenerCount).toBeCalledWith("searchDone");
+      expect(distube.emit).toHaveBeenNthCalledWith(1, "searchResult", message, results, query);
+      expect(distube.emit).toHaveBeenNthCalledWith(2, "searchCancel", message, query);
+      expect(distube.listenerCount).toHaveBeenCalledWith("searchNoResult");
+      expect(distube.listenerCount).toHaveBeenCalledWith("searchResult");
+      expect(distube.listenerCount).toHaveBeenCalledWith("searchCancel");
+      expect(distube.listenerCount).toHaveBeenCalledWith("searchInvalidAnswer");
+      expect(distube.listenerCount).toHaveBeenCalledWith("searchDone");
     });
 
     test("User sends an invalid number", async () => {
@@ -555,23 +557,23 @@ describe("DisTubeHandler#searchSong()", () => {
       const message = createV13Message(ans);
       const query = "query";
       await expect(handler.searchSong(message, query)).resolves.toBe(null);
-      expect(distube.emit).nthCalledWith(1, "searchResult", message, results, query);
-      expect(distube.emit).nthCalledWith(2, "searchInvalidAnswer", message, ans, query);
+      expect(distube.emit).toHaveBeenNthCalledWith(1, "searchResult", message, results, query);
+      expect(distube.emit).toHaveBeenNthCalledWith(2, "searchInvalidAnswer", message, ans, query);
       // Smaller than 1
       ans.content = "0";
       await expect(handler.searchSong(message, query)).resolves.toBe(null);
-      expect(distube.emit).nthCalledWith(3, "searchResult", message, results, query);
-      expect(distube.emit).nthCalledWith(4, "searchInvalidAnswer", message, ans, query);
+      expect(distube.emit).toHaveBeenNthCalledWith(3, "searchResult", message, results, query);
+      expect(distube.emit).toHaveBeenNthCalledWith(4, "searchInvalidAnswer", message, ans, query);
       // Not a number
       ans.content = "not a number";
       await expect(handler.searchSong(message, query)).resolves.toBe(null);
-      expect(distube.emit).nthCalledWith(5, "searchResult", message, results, query);
-      expect(distube.emit).nthCalledWith(6, "searchInvalidAnswer", message, ans, query);
-      expect(distube.listenerCount).toBeCalledWith("searchNoResult");
-      expect(distube.listenerCount).toBeCalledWith("searchResult");
-      expect(distube.listenerCount).toBeCalledWith("searchCancel");
-      expect(distube.listenerCount).toBeCalledWith("searchInvalidAnswer");
-      expect(distube.listenerCount).toBeCalledWith("searchDone");
+      expect(distube.emit).toHaveBeenNthCalledWith(5, "searchResult", message, results, query);
+      expect(distube.emit).toHaveBeenNthCalledWith(6, "searchInvalidAnswer", message, ans, query);
+      expect(distube.listenerCount).toHaveBeenCalledWith("searchNoResult");
+      expect(distube.listenerCount).toHaveBeenCalledWith("searchResult");
+      expect(distube.listenerCount).toHaveBeenCalledWith("searchCancel");
+      expect(distube.listenerCount).toHaveBeenCalledWith("searchInvalidAnswer");
+      expect(distube.listenerCount).toHaveBeenCalledWith("searchDone");
     });
 
     test("Disabled `searchSongs` due to missing listener", async () => {
@@ -586,7 +588,7 @@ describe("DisTubeHandler#searchSong()", () => {
         const message = createV13Message(ans);
         const query = "query";
         await expect(handler.searchSong(message, query)).resolves.toBe(results[0]);
-        expect(warn).toBeCalledWith(`"searchSongs" option is disabled due to missing "${evn}" listener.`);
+        expect(warn).toHaveBeenCalledWith(`"searchSongs" option is disabled due to missing "${evn}" listener.`);
         expect(distube.options.searchSongs).toBeLessThanOrEqual(1);
       }
     });

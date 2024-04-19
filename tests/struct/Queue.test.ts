@@ -98,8 +98,8 @@ describe("Queue#addRelatedSong()", () => {
     queue.addToQueue = jest.fn();
     distube.handler.resolve.mockReturnValue(song);
     await expect(queue.addRelatedSong()).resolves.toBe(song);
-    expect(distube.handler.resolve).toBeCalledTimes(1);
-    expect(queue.addToQueue).toBeCalledTimes(1);
+    expect(distube.handler.resolve).toHaveBeenCalledTimes(1);
+    expect(queue.addToQueue).toHaveBeenCalledTimes(1);
   });
 
   test("Cannot resolve related song", async () => {
@@ -168,9 +168,9 @@ describe("Queue#stop()", () => {
     queue.remove = jest.fn();
     await queue.stop();
     expect(queue.stopped).toBe(true);
-    expect(queue.remove).toBeCalledTimes(1);
-    expect(voice.stop).not.toBeCalled();
-    expect(voice.leave).toBeCalledTimes(1);
+    expect(queue.remove).toHaveBeenCalledTimes(1);
+    expect(voice.stop).not.toHaveBeenCalled();
+    expect(voice.leave).toHaveBeenCalledTimes(1);
   });
 
   test("leaveOnStop option is disabled", async () => {
@@ -179,9 +179,9 @@ describe("Queue#stop()", () => {
     queue.remove = jest.fn();
     await queue.stop();
     expect(queue.stopped).toBe(true);
-    expect(queue.remove).toBeCalledTimes(1);
-    expect(voice.stop).toBeCalledTimes(1);
-    expect(voice.leave).not.toBeCalled();
+    expect(queue.remove).toHaveBeenCalledTimes(1);
+    expect(voice.stop).toHaveBeenCalledTimes(1);
+    expect(voice.leave).not.toHaveBeenCalled();
   });
 });
 
@@ -202,7 +202,7 @@ describe("Queue#jump()", () => {
       expect(queue.songs[1]).toBe(songAtThisPosition);
       expect(queue.previousSongs[0]).toBe(playingSong);
       expect(queue._next).toBe(true);
-      expect(voice.stop).toBeCalledTimes(1);
+      expect(voice.stop).toHaveBeenCalledTimes(1);
     });
 
     test("savePreviousSongs is disabled", async () => {
@@ -213,7 +213,7 @@ describe("Queue#jump()", () => {
       expect(q.songs[1]).toBe(songAtThisPosition);
       expect(q.previousSongs[0]).toEqual({ id: playingSong.id });
       expect(q._next).toBe(true);
-      expect(voice.stop).toBeCalledTimes(1);
+      expect(voice.stop).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -226,7 +226,7 @@ describe("Queue#jump()", () => {
       expect(queue._prev).toBe(true);
       expect(queue.songs).toEqual(nextSongs);
       expect(queue.previousSongs).toEqual(previousSongs);
-      expect(voice.stop).toBeCalledTimes(1);
+      expect(voice.stop).toHaveBeenCalledTimes(1);
     });
 
     test("savePreviousSongs is enabled", async () => {
@@ -237,7 +237,7 @@ describe("Queue#jump()", () => {
       expect(queue.previousSongs[queue.previousSongs.length - 1]).toBe(songAtThisPosition);
       expect(queue.songs[-1 - position]).toBe(playingSong);
       expect(queue._prev).toBe(true);
-      expect(voice.stop).toBeCalledTimes(1);
+      expect(voice.stop).toHaveBeenCalledTimes(1);
     });
 
     test("savePreviousSongs is disabled", async () => {
@@ -265,7 +265,7 @@ describe("Queue#skip()", () => {
     const queue = new Queue(distube as any, voice as any, [anotherSong, song]);
     await expect(queue.skip()).resolves.toBe(song);
     expect(queue._next).toBe(true);
-    expect(voice.stop).toBeCalledTimes(1);
+    expect(voice.stop).toHaveBeenCalledTimes(1);
   });
 
   describe("No song to skip", () => {
@@ -276,7 +276,7 @@ describe("Queue#skip()", () => {
       await expect(queue.skip()).resolves.toBe(anotherSong);
       expect(queue.songs[1]).toBe(anotherSong);
       expect(queue._next).toBe(true);
-      expect(voice.stop).toBeCalledTimes(1);
+      expect(voice.stop).toHaveBeenCalledTimes(1);
     });
 
     test("Autoplay is enabled and cannot get the related song", async () => {
@@ -285,7 +285,7 @@ describe("Queue#skip()", () => {
       distube.handler.resolve.mockRejectedValue(new DisTubeError("NO_UP_NEXT"));
       await expect(queue.skip()).rejects.toThrow(new DisTubeError("NO_UP_NEXT"));
       expect(queue._next).toBe(false);
-      expect(voice.stop).toBeCalledTimes(0);
+      expect(voice.stop).toHaveBeenCalledTimes(0);
     });
 
     test("Autoplay is disabled", async () => {
@@ -308,7 +308,7 @@ describe("Queue#previous()", () => {
     queue.previousSongs.push(song);
     await expect(queue.previous()).resolves.toBe(song);
     expect(queue._prev).toBe(true);
-    expect(voice.stop).toBeCalledTimes(1);
+    expect(voice.stop).toHaveBeenCalledTimes(1);
   });
 
   test("Play the last song if repeat mode is all the queue", async () => {
@@ -316,7 +316,7 @@ describe("Queue#previous()", () => {
     queue.repeatMode = 2;
     await expect(queue.previous()).resolves.toBe(anotherSong);
     expect(queue._prev).toBe(true);
-    expect(voice.stop).toBeCalledTimes(1);
+    expect(voice.stop).toHaveBeenCalledTimes(1);
   });
 
   test("savePreviousSongs is disabled", async () => {
@@ -334,7 +334,7 @@ describe("Queue#pause() & Queue#resume()", () => {
     expect(queue.pause()).toBe(queue);
     expect(queue.playing).toBe(false);
     expect(queue.paused).toBe(true);
-    expect(voice.pause).toBeCalledTimes(1);
+    expect(voice.pause).toHaveBeenCalledTimes(1);
   });
 
   test("Pause when paused", () => {
@@ -347,7 +347,7 @@ describe("Queue#pause() & Queue#resume()", () => {
     expect(queue.resume()).toBe(queue);
     expect(queue.playing).toBe(true);
     expect(queue.paused).toBe(false);
-    expect(voice.unpause).toBeCalledTimes(1);
+    expect(voice.unpause).toHaveBeenCalledTimes(1);
   });
 
   test("Resume when playing", () => {
@@ -365,7 +365,7 @@ describe("Queue#seek()", () => {
     const position = 1;
     queue.seek(position);
     expect(queue.beginTime).toBe(position);
-    expect(distube.queues.playSong).toBeCalledWith(queue);
+    expect(distube.queues.playSong).toHaveBeenCalledWith(queue);
   });
 
   test("Seek to a string", () => {
@@ -424,8 +424,8 @@ test("Queue#remove()", () => {
   queue.remove();
   expect(queue.songs.length).toBe(0);
   expect(queue.previousSongs.length).toBe(0);
-  expect(distube.queues.remove).toBeCalledWith(voice.id);
-  expect(distube.emit).toBeCalledWith("deleteQueue", queue);
+  expect(distube.queues.remove).toHaveBeenCalledWith(voice.id);
+  expect(distube.emit).toHaveBeenCalledWith("deleteQueue", queue);
 });
 
 test("Queue#shuffle()", async () => {

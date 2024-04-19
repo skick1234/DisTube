@@ -1,25 +1,7 @@
 import { Options, defaultOptions } from "@";
 
 test("Default DisTubeOptions", () => {
-  expect(new Options({})).toEqual({
-    emitNewSongOnly: false,
-    emptyCooldown: 60,
-    leaveOnEmpty: true,
-    leaveOnFinish: false,
-    leaveOnStop: true,
-    nsfw: false,
-    plugins: [],
-    savePreviousSongs: true,
-    searchCooldown: 60,
-    searchSongs: 0,
-    youtubeCookie: undefined,
-    ytdlOptions: {},
-    emitAddListWhenCreatingQueue: true,
-    emitAddSongWhenCreatingQueue: true,
-    joinNewVoiceChannel: true,
-    streamType: 0,
-    directLink: true,
-  });
+  expect(new Options({})).toEqual(defaultOptions);
 });
 
 const typeOfOption = (option: string) => {
@@ -34,13 +16,12 @@ const typeOfOption = (option: string) => {
 };
 
 test("Validate DisTubeOptions", () => {
-  const n: any = NaN;
   expect(() => {
-    new Options(n);
+    new Options(<any>NaN);
   }).toThrow("Expected 'object' for 'DisTubeOptions', but got NaN");
   for (const option of Object.keys(defaultOptions)) {
     const options = {};
-    options[option] = n;
+    options[option] = NaN;
     expect(() => {
       new Options(options);
     }).toThrow(`Expected '${typeOfOption(option)}' for 'DisTubeOptions.${option}', but got NaN`);

@@ -27,28 +27,28 @@ test("DisTubeVoiceManager#create()", () => {
   const voice = manager.create(channel1);
   manager.add(channel1.guildId, voice);
   expect(voice).toBeInstanceOf(DisTubeVoice);
-  expect(DisTubeVoice).toBeCalledTimes(1);
+  expect(DisTubeVoice).toHaveBeenCalledTimes(1);
   expect(manager.get(channel1)).toBe(voice);
   const existing = manager.create(channel1);
   expect(existing).toBe(voice);
-  expect(DisTubeVoice).toBeCalledTimes(1);
+  expect(DisTubeVoice).toHaveBeenCalledTimes(1);
 });
 
 test("DisTubeVoiceManager#join()", () => {
   manager.join(channel1);
-  expect(manager.get(channel1).join).toBeCalledTimes(1);
-  expect(manager.get(channel1).join).toBeCalledWith(channel1);
+  expect(manager.get(channel1).join).toHaveBeenCalledTimes(1);
+  expect(manager.get(channel1).join).toHaveBeenCalledWith(channel1);
   manager.create = jest.fn();
   const fVoice = { join: jest.fn() };
   (manager.create as jest.Mock).mockReturnValueOnce(fVoice);
   manager.join(channel2);
-  expect(manager.create).toBeCalledWith(channel2);
-  expect(fVoice.join).toBeCalledTimes(1);
+  expect(manager.create).toHaveBeenCalledWith(channel2);
+  expect(fVoice.join).toHaveBeenCalledTimes(1);
 });
 
 test("DisTubeVoiceManager#leave()", () => {
   manager.leave(channel1);
-  expect(manager.get(channel1).leave).toBeCalledTimes(1);
+  expect(manager.get(channel1).leave).toHaveBeenCalledTimes(1);
   const fConnection = {
     destroy: jest.fn(),
     state: {
@@ -57,10 +57,10 @@ test("DisTubeVoiceManager#leave()", () => {
   };
   DiscordVoice.getVoiceConnection.mockReturnValue(fConnection as any);
   manager.leave(channel2);
-  expect(DiscordVoice.getVoiceConnection).nthCalledWith(1, channel2.guildId, distube.client.user.id);
-  expect(fConnection.destroy).not.toBeCalled();
+  expect(DiscordVoice.getVoiceConnection).toHaveBeenNthCalledWith(1, channel2.guildId, distube.client.user.id);
+  expect(fConnection.destroy).not.toHaveBeenCalled();
   fConnection.state.status = DiscordVoice.VoiceConnectionStatus.Ready;
   manager.leave(channel2);
-  expect(DiscordVoice.getVoiceConnection).nthCalledWith(1, channel2.guildId, distube.client.user.id);
-  expect(fConnection.destroy).toBeCalledTimes(1);
+  expect(DiscordVoice.getVoiceConnection).toHaveBeenNthCalledWith(1, channel2.guildId, distube.client.user.id);
+  expect(fConnection.destroy).toHaveBeenCalledTimes(1);
 });

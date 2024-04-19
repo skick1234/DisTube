@@ -55,33 +55,33 @@ describe("QueueManager#create()", () => {
     queues.playSong = jest.fn().mockReturnValue(false);
 
     await expect(queues.create(channel, song, textChannel)).resolves.toBeInstanceOf(Queue);
-    expect(queues.playSong).toBeCalledTimes(1);
-    expect(queues.playSong).toBeCalledWith(expect.any(Queue));
+    expect(queues.playSong).toHaveBeenCalledTimes(1);
+    expect(queues.playSong).toHaveBeenCalledWith(expect.any(Queue));
     const queue: _Queue = (queues.playSong as jest.Mock).mock.calls[0][0];
-    expect(distube.voices.create).toBeCalledTimes(1);
-    expect(distube.voices.create).toBeCalledWith(channel);
-    expect(fakeVoice.join).toBeCalledTimes(1);
+    expect(distube.voices.create).toHaveBeenCalledTimes(1);
+    expect(distube.voices.create).toHaveBeenCalledWith(channel);
+    expect(fakeVoice.join).toHaveBeenCalledTimes(1);
     expect(queues.has(channel)).toBe(true);
-    expect(distube.emit).nthCalledWith(1, "initQueue", queue);
-    expect(queue._taskQueue.queuing).toBeCalledTimes(1);
-    expect(queue._taskQueue.resolve).toBeCalledTimes(1);
+    expect(distube.emit).toHaveBeenNthCalledWith(1, "initQueue", queue);
+    expect(queue._taskQueue.queuing).toHaveBeenCalledTimes(1);
+    expect(queue._taskQueue.resolve).toHaveBeenCalledTimes(1);
 
-    expect(fakeVoice.on).nthCalledWith(1, "disconnect", expect.any(Function));
+    expect(fakeVoice.on).toHaveBeenNthCalledWith(1, "disconnect", expect.any(Function));
     fakeVoice.on.mock.calls[0][1]();
-    expect(queue.remove).toBeCalledTimes(1);
-    expect(distube.emit).nthCalledWith(2, "disconnect", queue);
+    expect(queue.remove).toHaveBeenCalledTimes(1);
+    expect(distube.emit).toHaveBeenNthCalledWith(2, "disconnect", queue);
     const err1 = {};
     fakeVoice.on.mock.calls[0][1](err1);
-    expect(queue.remove).toBeCalledTimes(2);
-    expect(distube.emitError).nthCalledWith(1, err1, textChannel);
+    expect(queue.remove).toHaveBeenCalledTimes(2);
+    expect(distube.emitError).toHaveBeenNthCalledWith(1, err1, textChannel);
 
-    expect(fakeVoice.on).nthCalledWith(2, "error", expect.any(Function));
+    expect(fakeVoice.on).toHaveBeenNthCalledWith(2, "error", expect.any(Function));
     const err2 = {};
     fakeVoice.on.mock.calls[1][1](err2);
-    expect(queue.stop).toBeCalledTimes(1);
-    expect(distube.emitError).nthCalledWith(2, err2, textChannel);
+    expect(queue.stop).toHaveBeenCalledTimes(1);
+    expect(distube.emitError).toHaveBeenNthCalledWith(2, err2, textChannel);
 
-    expect(fakeVoice.on).nthCalledWith(3, "finish", expect.any(Function));
+    expect(fakeVoice.on).toHaveBeenNthCalledWith(3, "finish", expect.any(Function));
     queues.remove(channel);
     queues.playSong = jest.fn().mockReturnValue(true);
     await expect(queues.create(channel, song)).resolves.toBe(true);
@@ -92,49 +92,49 @@ describe("QueueManager#create()", () => {
     queues.playSong = jest.fn().mockResolvedValue(false);
 
     await expect(queues.create(channel, songs, textChannel)).resolves.toBeInstanceOf(Queue);
-    expect(queues.playSong).toBeCalledTimes(1);
-    expect(queues.playSong).toBeCalledWith(expect.any(Queue));
+    expect(queues.playSong).toHaveBeenCalledTimes(1);
+    expect(queues.playSong).toHaveBeenCalledWith(expect.any(Queue));
     const queue: _Queue = (queues.playSong as jest.Mock).mock.calls[0][0];
-    expect(distube.voices.create).toBeCalledTimes(1);
-    expect(distube.voices.create).toBeCalledWith(channel);
-    expect(fakeVoice.join).toBeCalledTimes(1);
+    expect(distube.voices.create).toHaveBeenCalledTimes(1);
+    expect(distube.voices.create).toHaveBeenCalledWith(channel);
+    expect(fakeVoice.join).toHaveBeenCalledTimes(1);
     expect(queues.has(channel)).toBe(true);
-    expect(distube.emit).nthCalledWith(1, "initQueue", queue);
-    expect(queue._taskQueue.queuing).toBeCalledTimes(1);
-    expect(queue._taskQueue.resolve).toBeCalledTimes(1);
+    expect(distube.emit).toHaveBeenNthCalledWith(1, "initQueue", queue);
+    expect(queue._taskQueue.queuing).toHaveBeenCalledTimes(1);
+    expect(queue._taskQueue.resolve).toHaveBeenCalledTimes(1);
 
-    expect(fakeVoice.on).nthCalledWith(1, "disconnect", expect.any(Function));
+    expect(fakeVoice.on).toHaveBeenNthCalledWith(1, "disconnect", expect.any(Function));
     fakeVoice.on.mock.calls[0][1]();
-    expect(queue.remove).toBeCalledTimes(1);
-    expect(distube.emit).nthCalledWith(2, "disconnect", queue);
+    expect(queue.remove).toHaveBeenCalledTimes(1);
+    expect(distube.emit).toHaveBeenNthCalledWith(2, "disconnect", queue);
     const err1 = {};
     fakeVoice.on.mock.calls[0][1](err1);
-    expect(queue.remove).toBeCalledTimes(2);
-    expect(distube.emit).nthCalledWith(3, "disconnect", queue);
-    expect(distube.emitError).nthCalledWith(1, err1, textChannel);
+    expect(queue.remove).toHaveBeenCalledTimes(2);
+    expect(distube.emit).toHaveBeenNthCalledWith(3, "disconnect", queue);
+    expect(distube.emitError).toHaveBeenNthCalledWith(1, err1, textChannel);
 
-    expect(fakeVoice.on).nthCalledWith(2, "error", expect.any(Function));
+    expect(fakeVoice.on).toHaveBeenNthCalledWith(2, "error", expect.any(Function));
     const err2 = {};
     fakeVoice.on.mock.calls[1][1](err2);
     await (queues.playSong as jest.Mock).mock.results[1].value;
-    expect(queue.stop).not.toBeCalled();
-    expect(distube.emitError).nthCalledWith(2, err2, textChannel);
-    expect(queues.playSong).toBeCalledTimes(2);
-    expect(distube.emit).nthCalledWith(4, "playSong", queue, songs[1]);
+    expect(queue.stop).not.toHaveBeenCalled();
+    expect(distube.emitError).toHaveBeenNthCalledWith(2, err2, textChannel);
+    expect(queues.playSong).toHaveBeenCalledTimes(2);
+    expect(distube.emit).toHaveBeenNthCalledWith(4, "playSong", queue, songs[1]);
     (queues.playSong as jest.Mock).mockResolvedValue(true);
     const err3 = {};
     fakeVoice.on.mock.calls[1][1](err3);
-    expect(distube.emitError).nthCalledWith(3, err3, textChannel);
-    expect(queues.playSong).toBeCalledTimes(3);
-    expect(distube.emit).toBeCalledTimes(4);
+    expect(distube.emitError).toHaveBeenNthCalledWith(3, err3, textChannel);
+    expect(queues.playSong).toHaveBeenCalledTimes(3);
+    expect(distube.emit).toHaveBeenCalledTimes(4);
 
-    expect(fakeVoice.on).nthCalledWith(3, "finish", expect.any(Function));
+    expect(fakeVoice.on).toHaveBeenNthCalledWith(3, "finish", expect.any(Function));
     await fakeVoice.on.mock.calls[2][1](err3);
-    expect(distube.emit).nthCalledWith(5, "finishSong", queue, songs[2]);
-    expect(queue._taskQueue.queuing).toBeCalledTimes(2);
-    expect(queue._taskQueue.resolve).toBeCalledTimes(2);
+    expect(distube.emit).toHaveBeenNthCalledWith(5, "finishSong", queue, songs[2]);
+    expect(queue._taskQueue.queuing).toHaveBeenCalledTimes(2);
+    expect(queue._taskQueue.resolve).toHaveBeenCalledTimes(2);
 
-    expect(queues.playSong).toBeCalledWith(queue);
+    expect(queues.playSong).toHaveBeenCalledWith(queue);
   });
 });
 
@@ -154,11 +154,14 @@ describe("QueueManager#createStream()", () => {
     queue.beginTime = 1;
     const result = queues.createStream(queue as any);
     expect(result).toBe(stream);
-    expect(mockFn).toBeCalledTimes(1);
-    expect(mockFn).toBeCalledWith(
+    expect(mockFn).toHaveBeenCalledTimes(1);
+    expect(mockFn).toHaveBeenCalledWith(
       song,
       expect.objectContaining({
-        ffmpegArgs: [],
+        ffmpeg: expect.objectContaining({
+          path: "ffmpeg",
+          args: { ...defaultOptions.ffmpegDefaultArgs },
+        }),
         seek: 1,
       }),
     );
@@ -180,11 +183,14 @@ describe("QueueManager#createStream()", () => {
     queue.filters.add(["3d", "bassboost"]);
     const result = queues.createStream(queue as _Queue);
     expect(result).toBe(stream);
-    expect(mockFn).toBeCalledTimes(1);
-    expect(mockFn).toBeCalledWith(
+    expect(mockFn).toHaveBeenCalledTimes(1);
+    expect(mockFn).toHaveBeenCalledWith(
       song.url,
       expect.objectContaining({
-        ffmpegArgs: ["-af", `${distube.filters["3d"]},${distube.filters.bassboost}`],
+        ffmpeg: expect.objectContaining({
+          path: "ffmpeg",
+          args: { ...defaultOptions.ffmpegDefaultArgs, af: `${distube.filters["3d"]},${distube.filters.bassboost}` },
+        }),
         seek: undefined,
       }),
     );

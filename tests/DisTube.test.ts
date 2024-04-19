@@ -88,7 +88,7 @@ describe("Constructor", () => {
     expect(distube.filters).toEqual(defaultFilters);
     expect(distube.extractorPlugins.find(p => p.type === PluginType.CUSTOM)).toBeFalsy();
     expect(distube.customPlugins.find(p => p.type === PluginType.EXTRACTOR)).toBeFalsy();
-    expect(client.on).not.toBeCalled();
+    expect(client.on).not.toHaveBeenCalled();
   });
 });
 
