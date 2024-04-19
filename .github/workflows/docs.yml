@@ -14,12 +14,16 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: latest
+
       - name: Install Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: "pnpm"
-          cache-dependency-path: pnpm-lock.yaml
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -27,21 +31,23 @@ jobs:
       - name: Checkout docs branch
         uses: actions/checkout@v4
         with:
-          ref: "distubejs/distubejs.github.io"
-          path: "docs"
+          repository: distubejs/distubejs.github.io
+          ref: gh-pages
+          path: gh-pages
           token: ${{ secrets.DISTUBE_TOKEN }}
 
       - name: Delete old docs
-        run: rm -rf docs
+        run: find gh-pages -mindepth 1 ! -regex 'gh-pages/\.git.*' ! -name 'CNAME' -exec rm -rf {} +
 
       - name: Generate documentation
         run: pnpm run docs
 
       - name: Commit and push
         run: |
-          cd docs
+          rsync -av docs/ gh-pages/
+          cd gh-pages
           git config --local user.email github-actions@github.com
           git config --local user.name github-actions
           git add .
-          git commit -m "Docs build for ${{ github.ref_type }} ${{ github.ref_name }}: ${{ github.sha }}"
+          git commit -m "${{ github.repository }}@${{ github.sha }} 🚀"
           git push
