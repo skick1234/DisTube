@@ -1,20 +1,17 @@
 import { GuildIdManager } from ".";
-import { DisTubeError, DisTubeStream, Queue, RepeatMode, objectKeys } from "../..";
+import { DisTubeError, DisTubeStream, Events, Queue, RepeatMode, objectKeys } from "../..";
 import type { Song } from "../..";
 import type { GuildTextBasedChannel, VoiceBasedChannel } from "discord.js";
 
 /**
- * @remarks
  * Queue manager
  */
 export class QueueManager extends GuildIdManager<Queue> {
   /**
-   * @remarks
    * Collection of {@link Queue}.
    */
 
   /**
-   * @remarks
    * Create a {@link Queue}
    *
    * @param channel     - A voice channel
@@ -36,7 +33,7 @@ export class QueueManager extends GuildIdManager<Queue> {
       await voice.join();
       this.#voiceEventHandler(queue);
       this.add(queue.id, queue);
-      this.emit("initQueue", queue);
+      this.emit(Events.INIT_QUEUE, queue);
       const err = await this.playSong(queue);
       return err || queue;
     } finally {
@@ -45,14 +42,12 @@ export class QueueManager extends GuildIdManager<Queue> {
   }
 
   /**
-   * @remarks
    * Get a Queue from this QueueManager.
    *
    * @param guild - Resolvable thing from a guild
    */
 
   /**
-   * @remarks
    * Listen to DisTubeVoice events and handle the Queue
    *
    * @param queue - Queue
@@ -61,7 +56,7 @@ export class QueueManager extends GuildIdManager<Queue> {
     queue._listeners = {
       disconnect: error => {
         queue.remove();
-        this.emit("disconnect", queue);
+        this.emit(Events.DISCONNECT, queue);
         if (error) this.emitError(error, queue.textChannel);
       },
       error: error => this.#handlePlayingError(queue, error),
@@ -73,7 +68,6 @@ export class QueueManager extends GuildIdManager<Queue> {
   }
 
   /**
-   * @remarks
    * Whether or not emit playSong event
    *
    * @param queue - Queue
@@ -87,13 +81,12 @@ export class QueueManager extends GuildIdManager<Queue> {
   }
 
   /**
-   * @remarks
    * Handle the queue when a Song finish
    *
    * @param queue - queue
    */
   async #handleSongFinish(queue: Queue): Promise<void> {
-    this.emit("finishSong", queue, queue.songs[0]);
+    this.emit(Events.FINISH_SONG, queue, queue.songs[0]);
     await queue._taskQueue.queuing();
     try {
       if (queue.stopped) return;
@@ -107,12 +100,12 @@ export class QueueManager extends GuildIdManager<Queue> {
           try {
             await queue.addRelatedSong();
           } catch {
-            this.emit("noRelated", queue);
+            this.emit(Events.NO_RELATED, queue);
           }
         }
         if (queue.songs.length <= 1) {
           if (this.options.leaveOnFinish) queue.voice.leave();
-          if (!queue.autoplay) this.emit("finish", queue);
+          if (!queue.autoplay) this.emit(Events.FINISH, queue);
           queue.remove();
           return;
         }
@@ -128,14 +121,13 @@ export class QueueManager extends GuildIdManager<Queue> {
       queue._next = queue._prev = false;
       queue.beginTime = 0;
       const err = await this.playSong(queue);
-      if (!err && emitPlaySong) this.emit("playSong", queue, queue.songs[0]);
+      if (!err && emitPlaySong) this.emit(Events.PLAY_SONG, queue, queue.songs[0]);
     } finally {
       queue._taskQueue.resolve();
     }
   }
 
   /**
-   * @remarks
    * Handle error while playing
    *
    * @param queue - queue
@@ -154,7 +146,7 @@ export class QueueManager extends GuildIdManager<Queue> {
       queue._next = queue._prev = false;
       queue.beginTime = 0;
       this.playSong(queue).then(e => {
-        if (!e) this.emit("playSong", queue, queue.songs[0]);
+        if (!e) this.emit(Events.PLAY_SONG, queue, queue.songs[0]);
       });
     } else {
       queue.stop();
@@ -162,7 +154,6 @@ export class QueueManager extends GuildIdManager<Queue> {
   }
 
   /**
-   * @remarks
    * Create a ytdl stream
    *
    * @param queue - Queue
@@ -187,7 +178,6 @@ export class QueueManager extends GuildIdManager<Queue> {
   }
 
   /**
-   * @remarks
    * Play a song on voice connection
    *
    * @param queue - The guild queue
@@ -208,6 +198,7 @@ export class QueueManager extends GuildIdManager<Queue> {
         return true;
       }
       const stream = this.createStream(queue);
+      stream.on("debug", data => this.emit(Events.FFMPEG_DEBUG, `[${queue.id}] - ${data}`));
       queue.voice.play(stream);
       song.streamURL = stream.url;
       return false;

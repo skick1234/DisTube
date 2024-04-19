@@ -4,7 +4,6 @@ import type { VoiceBasedChannel } from "discord.js";
 import type { Awaitable, PlayOptions } from "..";
 
 /**
- * @remarks
  * Custom Plugin
  *
  * @virtual
@@ -15,7 +14,6 @@ export abstract class CustomPlugin extends Plugin {
 }
 
 /**
- * @remarks
  * This method will be executed if the url is validated.
  *
  * @virtual
@@ -26,7 +24,6 @@ export abstract class CustomPlugin extends Plugin {
  */
 
 /**
- * @remarks
  * Check if the string is working with this plugin
  *
  * @param string - String need to validate

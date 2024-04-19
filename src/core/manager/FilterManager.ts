@@ -3,12 +3,10 @@ import { DisTubeError } from "../..";
 import type { FFmpegOptions, Filter, FilterResolvable, Queue } from "../..";
 
 /**
- * @remarks
  * Manage filters of a playing {@link Queue}
  */
 export class FilterManager extends BaseManager<Filter> {
   /**
-   * @remarks
    * Collection of {@link Filter}.
    */
   queue: Queue;
@@ -36,7 +34,6 @@ export class FilterManager extends BaseManager<Filter> {
   }
 
   /**
-   * @remarks
    * Enable a filter or multiple filters to the manager
    *
    * @param filterOrFilters - The filter or filters to enable
@@ -57,7 +54,6 @@ export class FilterManager extends BaseManager<Filter> {
   }
 
   /**
-   * @remarks
    * Clear enabled filters of the manager
    */
   clear() {
@@ -65,7 +61,6 @@ export class FilterManager extends BaseManager<Filter> {
   }
 
   /**
-   * @remarks
    * Set the filters applied to the manager
    *
    * @param filters - The filters to apply
@@ -86,7 +81,6 @@ export class FilterManager extends BaseManager<Filter> {
   }
 
   /**
-   * @remarks
    * Disable a filter or multiple filters
    *
    * @param filterOrFilters - The filter or filters to disable
@@ -99,7 +93,6 @@ export class FilterManager extends BaseManager<Filter> {
   }
 
   /**
-   * @remarks
    * Check whether a filter enabled or not
    *
    * @param filter - The filter to check
@@ -109,7 +102,6 @@ export class FilterManager extends BaseManager<Filter> {
   }
 
   /**
-   * @remarks
    * Array of enabled filter names
    */
   get names(): string[] {
@@ -117,7 +109,6 @@ export class FilterManager extends BaseManager<Filter> {
   }
 
   /**
-   * @remarks
    * Array of enabled filters
    */
   get values(): Filter[] {

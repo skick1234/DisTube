@@ -25,22 +25,23 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Checkout docs branch
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
-          ref: "docs"
+          ref: "distubejs/distubejs.github.io"
           path: "docs"
+          token: ${{ secrets.DISTUBE_TOKEN }}
+
+      - name: Delete old docs
+        run: rm -rf docs
 
       - name: Generate documentation
         run: pnpm run docs
 
-      - name: Move generated docs file
-        run: mv docs.json docs/${{ github.ref_name }}.json
-
       - name: Commit and push
         run: |
           cd docs
-          git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git config --local user.name "github-actions[bot]"
+          git config --local user.email github-actions@github.com
+          git config --local user.name github-actions
           git add .
           git commit -m "Docs build for ${{ github.ref_type }} ${{ github.ref_name }}: ${{ github.sha }}"
           git push

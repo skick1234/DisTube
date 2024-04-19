@@ -26,29 +26,23 @@ A Discord.js module to simplify your music commands and play songs with audio fi
 
 ## Features
 
-- Based on `@discordjs/voice`
 - Easy to use and customize
 - Support YouTube and audio link
 - Audio filters (bassboost, nightcore, vaporwave,...)
-- Autoplay related songs
-- Plugin system to support more sites ([Plugin List](https://distube.js.org/#/docs/DisTube/stable/plugin/list))
+- Auto-play related songs
+- Plugin system to support more sites ([Plugin List](https://github.com/skick1234/DisTube/wiki/Projects-Hub#plugins))
 
 ## Requirement
 
-- Node.js 16.9.0 or higher
+- Node.js 18.17.0 or higher
 - [discord.js](https://discord.js.org) v14
 - [@discordjs/voice](https://github.com/discordjs/voice)
 - [FFmpeg](https://www.ffmpeg.org/download.html)
 - [@discordjs/opus](https://github.com/discordjs/opus)
-- [sodium-native](https://www.npmjs.com/package/sodium-native) or [sodium](https://www.npmjs.com/package/sodium)
+- [sodium-native](https://www.npmjs.com/package/sodium-native)
 
 ## Documentation
 
-Read DisTube's definitions, properties and events details in the [Documentation page](https://distube.js.org/).
+Read DisTube's definitions, properties and events details in the [API Documentation page](https://distube.js.org/).
 
-Learn how to build a music bot from scratch with [DisTube Guide](https://distube.js.org/guide)
-
-## Example Bot
-
-- [DisTube Bot](https://skick.xyz/DisTube) - A music bot with reaction controller, filters, DJ mode, user's custom playlist and voting.
-- [DisTube Example](https://github.com/distubejs/example) - Example bot with simple command handler.
+Learn how to build a music bot from scratch with [DisTube Guide](https://github.com/skick1234/DisTube/wiki)

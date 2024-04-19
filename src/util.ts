@@ -17,7 +17,6 @@ import type {
 const formatInt = (int: number) => (int < 10 ? `0${int}` : int);
 
 /**
- * @remarks
  * Format duration to string
  *
  * @param sec - Duration in seconds
@@ -32,7 +31,6 @@ export function formatDuration(sec: number): string {
   return `00:${formatInt(seconds)}`;
 }
 /**
- * @remarks
  * Convert formatted duration to seconds
  *
  * @param input - Formatted duration string
@@ -51,7 +49,6 @@ export function toSecond(input: any): number {
   }
 }
 /**
- * @remarks
  * Parse number from input
  *
  * @param input - Any
@@ -62,7 +59,6 @@ export function parseNumber(input: any): number {
 }
 const SUPPORTED_PROTOCOL = ["https:", "http:", "file:"] as const;
 /**
- * @remarks
  * Check if the string is an URL
  *
  * @param input - input
@@ -78,7 +74,6 @@ export function isURL(input: any): input is `${(typeof SUPPORTED_PROTOCOL)[numbe
   return true;
 }
 /**
- * @remarks
  * Check if the Client has enough intents to using DisTube
  *
  * @param options - options
@@ -89,7 +84,6 @@ export function checkIntents(options: ClientOptions): void {
 }
 
 /**
- * @remarks
  * Check if the voice channel is empty
  *
  * @param voiceState - voiceState

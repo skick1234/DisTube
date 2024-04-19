@@ -3,7 +3,6 @@ import { resolveGuildId } from "../..";
 import type { GuildIdResolvable } from "../..";
 
 /**
- * @remarks
  * Manages the collection of a data model paired with a guild id.
  *
  * @virtual

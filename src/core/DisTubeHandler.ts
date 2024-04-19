@@ -4,6 +4,7 @@ import { DisTubeBase } from ".";
 import { Cookie } from "tough-cookie";
 import {
   DisTubeError,
+  Events,
   Playlist,
   Queue,
   SearchResultPlaylist,
@@ -27,7 +28,6 @@ import type {
 } from "..";
 
 /**
- * @remarks
  * DisTube's Handler
  */
 export class DisTubeHandler extends DisTubeBase {
@@ -57,7 +57,7 @@ export class DisTubeHandler extends DisTubeBase {
             delete queue._emptyTimeout;
             if (isVoiceChannelEmpty(oldState)) {
               queue.voice.leave();
-              this.emit("empty", queue);
+              this.emit(Events.EMPTY, queue);
               if (queue.stopped) queue.remove();
             }
           }, this.options.emptyCooldown * 1e3).unref();
@@ -118,7 +118,6 @@ export class DisTubeHandler extends DisTubeBase {
     options?: ResolveOptions,
   ): Promise<Song | Playlist>;
   /**
-   * @remarks
    * Resolve a url or a supported object to a {@link Song} or {@link Playlist}
    *
    * @throws {@link DisTubeError}
@@ -164,7 +163,6 @@ export class DisTubeHandler extends DisTubeBase {
   ): Promise<Playlist<T>>;
   resolvePlaylist(playlist: Playlist | Song[] | string, options?: ResolvePlaylistOptions): Promise<Playlist>;
   /**
-   * @remarks
    * Resolve Song[] or YouTube playlist url to a Playlist
    *
    * @param playlist - Resolvable playlist
@@ -198,8 +196,7 @@ export class DisTubeHandler extends DisTubeBase {
   }
 
   /**
-   * @remarks
-   * Search for a song, fire {@link DisTube#(event:error)} if not found.
+   * Search for a song, fire {@link DisTube#error} if not found.
    *
    * @throws {@link DisTubeError}
    *
@@ -219,7 +216,7 @@ export class DisTubeHandler extends DisTubeBase {
         safeSearch: this.options.nsfw ? false : !isNsfwChannel(message.channel),
       })
       .catch(() => {
-        if (!this.emit("searchNoResult", message, query)) {
+        if (!this.emit(Events.SEARCH_NO_RESULT, message, query)) {
           // eslint-disable-next-line no-console
           console.warn("searchNoResult event does not have any listeners! Emits `error` event instead.");
           throw new DisTubeError("NO_RESULT");
@@ -230,11 +227,10 @@ export class DisTubeHandler extends DisTubeBase {
   }
 
   /**
-   * @remarks
    * Create a message collector for selecting search results.
    *
-   * Needed events: {@link DisTube#(event:searchResult)}, {@link DisTube#(event:searchCancel)},
-   * {@link DisTube#(event:searchInvalidAnswer)}, {@link DisTube#(event:searchDone)}.
+   * Needed events: {@link DisTube#searchResult}, {@link DisTube#searchCancel},
+   * {@link DisTube#searchInvalidAnswer}, {@link DisTube#searchDone}.
    *
    * @throws {@link DisTubeError}
    *
@@ -255,12 +251,12 @@ export class DisTubeHandler extends DisTubeBase {
     }
     if (this.options.searchSongs > 1) {
       const searchEvents = [
-        "searchNoResult",
-        "searchResult",
-        "searchCancel",
-        "searchInvalidAnswer",
-        "searchDone",
-      ] as const;
+        Events.SEARCH_NO_RESULT,
+        Events.SEARCH_RESULT,
+        Events.SEARCH_CANCEL,
+        Events.SEARCH_INVALID_ANSWER,
+        Events.SEARCH_DONE,
+      ];
       for (const evn of searchEvents) {
         if (this.distube.listenerCount(evn) === 0) {
           /* eslint-disable no-console */
@@ -278,7 +274,7 @@ export class DisTubeHandler extends DisTubeBase {
     let result = results[0];
     if (limit > 1) {
       results.splice(limit);
-      this.emit("searchResult", message, results, query);
+      this.emit(Events.SEARCH_RESULT, message, results, query);
       const answers = await message.channel
         .awaitMessages({
           filter: (m: Message) => m.author.id === message.author.id,
@@ -289,22 +285,21 @@ export class DisTubeHandler extends DisTubeBase {
         .catch(() => undefined);
       const ans = answers?.first();
       if (!ans) {
-        this.emit("searchCancel", message, query);
+        this.emit(Events.SEARCH_CANCEL, message, query);
         return null;
       }
       const index = parseInt(ans.content, 10);
       if (isNaN(index) || index > results.length || index < 1) {
-        this.emit("searchInvalidAnswer", message, ans, query);
+        this.emit(Events.SEARCH_INVALID_ANSWER, message, ans, query);
         return null;
       }
-      this.emit("searchDone", message, ans, query);
+      this.emit(Events.SEARCH_DONE, message, ans, query);
       result = results[index - 1];
     }
     return result;
   }
 
   /**
-   * @remarks
    * Play or add a {@link Playlist} to the queue.
    *
    * @throws {@link DisTubeError}
@@ -335,18 +330,17 @@ export class DisTubeHandler extends DisTubeBase {
       if (this.options.joinNewVoiceChannel) queue.voice.channel = voiceChannel;
       queue.addToQueue(playlist.songs, position);
       if (skip) queue.skip();
-      else this.emit("addList", queue, playlist);
+      else this.emit(Events.ADD_LIST, queue, playlist);
     } else {
       const newQueue = await this.queues.create(voiceChannel, playlist.songs, textChannel);
       if (newQueue instanceof Queue) {
-        if (this.options.emitAddListWhenCreatingQueue) this.emit("addList", newQueue, playlist);
-        this.emit("playSong", newQueue, newQueue.songs[0]);
+        if (this.options.emitAddListWhenCreatingQueue) this.emit(Events.ADD_LIST, newQueue, playlist);
+        this.emit(Events.PLAY_SONG, newQueue, newQueue.songs[0]);
       }
     }
   }
 
   /**
-   * @remarks
    * Play or add a {@link Song} to the queue.
    *
    * @throws {@link DisTubeError}
@@ -368,18 +362,17 @@ export class DisTubeHandler extends DisTubeBase {
       if (this.options.joinNewVoiceChannel) queue.voice.channel = voiceChannel;
       queue.addToQueue(song, position);
       if (skip) queue.skip();
-      else this.emit("addSong", queue, song);
+      else this.emit(Events.ADD_SONG, queue, song);
     } else {
       const newQueue = await this.queues.create(voiceChannel, song, textChannel);
       if (newQueue instanceof Queue) {
-        if (this.options.emitAddSongWhenCreatingQueue) this.emit("addSong", newQueue, song);
-        this.emit("playSong", newQueue, song);
+        if (this.options.emitAddSongWhenCreatingQueue) this.emit(Events.ADD_SONG, newQueue, song);
+        this.emit(Events.PLAY_SONG, newQueue, song);
       }
     }
   }
 
   /**
-   * @remarks
    * Get {@link Song}'s stream info and attach it to the song.
    *
    * @param song - A Song

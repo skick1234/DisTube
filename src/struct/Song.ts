@@ -6,7 +6,6 @@ import type { GuildMember } from "discord.js";
 import type { Chapter, OtherSongInfo, RelatedSong, SearchResult } from "..";
 
 /**
- * @remarks
  * Class representing a song.
  *
  * <info>If {@link Song} is added from a YouTube {@link SearchResult} or {@link
@@ -42,7 +41,6 @@ export class Song<T = unknown> {
   reposts!: number;
   #playlist?: Playlist;
   /**
-   * @remarks
    * Create a Song
    *
    * @param info             - Raw info
@@ -71,12 +69,10 @@ export class Song<T = unknown> {
       throw new DisTubeError("INVALID_TYPE", "string", source, "source");
     }
     /**
-     * @remarks
      * The source of the song
      */
     this.source = ((info as OtherSongInfo)?.src || source).toLowerCase();
     /**
-     * @remarks
      * Optional metadata that can be used to identify the song. This is attached by the
      * {@link DisTube#play} method.
      */
@@ -94,7 +90,6 @@ export class Song<T = unknown> {
     const info = i as any;
     if (info.full === true) {
       /**
-       * @remarks
        * Stream formats (Available if the song is from YouTube and playing)
        */
       this.formats = info.formats;
@@ -110,42 +105,34 @@ export class Song<T = unknown> {
     }
     const details = info.videoDetails || info;
     /**
-     * @remarks
      * YouTube video id
      */
     this.id = details.videoId || details.id;
     /**
-     * @remarks
      * Song name.
      */
     this.name = details.title || details.name;
     /**
-     * @remarks
      * Indicates if the video is an active live.
      */
     this.isLive = Boolean(details.isLive);
     /**
-     * @remarks
      * Song duration.
      */
     this.duration = this.isLive ? 0 : toSecond(details.lengthSeconds || details.length_seconds || details.duration);
     /**
-     * @remarks
      * Formatted duration string (`hh:mm:ss`, `mm:ss` or `Live`).
      */
     this.formattedDuration = this.isLive ? "Live" : formatDuration(this.duration);
     /**
-     * @remarks
      * Song URL.
      */
     this.url = `https://www.youtube.com/watch?v=${this.id}`;
     /**
-     * @remarks
      * Stream / Download URL (Available if the song is playing)
      */
     this.streamURL = undefined;
     /**
-     * @remarks
      * Song thumbnail.
      */
     this.thumbnail =
@@ -153,29 +140,24 @@ export class Song<T = unknown> {
       details.thumbnail?.url ||
       details.thumbnail;
     /**
-     * @remarks
      * Related songs (without {@link Song#related} properties)
      */
     this.related = info?.related_videos || details.related || [];
     if (!Array.isArray(this.related)) throw new DisTubeError("INVALID_TYPE", "Array", this.related, "Song#related");
     this.related = this.related.map((v: any) => new Song(v, { source: this.source, metadata: this.metadata }));
     /**
-     * @remarks
      * Song views count
      */
     this.views = parseNumber(details.viewCount || details.view_count || details.views);
     /**
-     * @remarks
      * Song like count
      */
     this.likes = parseNumber(details.likes);
     /**
-     * @remarks
      * Song dislike count
      */
     this.dislikes = parseNumber(details.dislikes);
     /**
-     * @remarks
      * Song uploader
      */
     this.uploader = {
@@ -183,25 +165,21 @@ export class Song<T = unknown> {
       url: info.uploader?.url || details.author?.channel_url || details.author?.url,
     };
     /**
-     * @remarks
      * Whether or not an age-restricted content
      */
     this.age_restricted = Boolean(details.age_restricted);
 
     /**
-     * @remarks
      * Chapters information (YouTube only)
      */
     this.chapters = details.chapters || [];
     /**
-     * @remarks
      * Song repost count
      */
     this.reposts = 0;
   }
 
   /**
-   * @remarks
    * Patch data from other source
    *
    * @param info - Video info
@@ -237,7 +215,6 @@ export class Song<T = unknown> {
   }
 
   /**
-   * @remarks
    * The playlist added this song
    */
   get playlist() {
@@ -251,7 +228,6 @@ export class Song<T = unknown> {
   }
 
   /**
-   * @remarks
    * User requested.
    */
   get member() {
@@ -263,7 +239,6 @@ export class Song<T = unknown> {
   }
 
   /**
-   * @remarks
    * User requested.
    */
   get user() {

@@ -22,7 +22,6 @@ export const chooseBestVideoFormat = ({ duration, formats, isLive }: Song) =>
     .sort((a, b) => Number(b.audioBitrate) - Number(a.audioBitrate) || Number(a.bitrate) - Number(b.bitrate))[0];
 
 /**
- * @remarks
  * Create a stream to play with {@link DisTubeVoice}
  */
 export class DisTubeStream extends TypedEmitter<{ debug: (debug: string) => Awaitable }> {
@@ -32,7 +31,6 @@ export class DisTubeStream extends TypedEmitter<{ debug: (debug: string) => Awai
   type: DiscordVoiceStreamType;
   url: string;
   /**
-   * @remarks
    * Create a DisTubeStream to play with {@link DisTubeVoice}
    *
    * @param url     - Stream URL
@@ -117,7 +115,6 @@ export class DisTubeStream extends TypedEmitter<{ debug: (debug: string) => Awai
     this.killed = true;
   }
   /**
-   * @remarks
    * Create a stream from a YouTube {@link Song}
    *
    * @param song    - A YouTube Song
@@ -134,7 +131,6 @@ export class DisTubeStream extends TypedEmitter<{ debug: (debug: string) => Awai
     return new DisTubeStream(bestFormat.url, options);
   }
   /**
-   * @remarks
    * Create a stream from a stream url
    *
    * @param url     - stream url

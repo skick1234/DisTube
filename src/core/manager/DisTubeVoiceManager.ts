@@ -6,22 +6,18 @@ import type { GuildIdResolvable } from "../..";
 import type { VoiceBasedChannel } from "discord.js";
 
 /**
- * @remarks
  * Manages voice connections for {@link DisTube}
  */
 export class DisTubeVoiceManager extends GuildIdManager<DisTubeVoice> {
   /**
-   * @remarks
    * Get a {@link DisTubeVoice}.
    *
    * @param guild - The queue resolvable to resolve
    */
   /**
-   * @remarks
    * Collection of {@link DisTubeVoice}.
    */
   /**
-   * @remarks
    * Create a {@link DisTubeVoice}
    *
    * @param channel - A voice channel to join
@@ -35,7 +31,6 @@ export class DisTubeVoiceManager extends GuildIdManager<DisTubeVoice> {
     return new DisTubeVoice(this, channel);
   }
   /**
-   * @remarks
    * Join a voice channel
    *
    * @param channel - A voice channel to join
@@ -46,7 +41,6 @@ export class DisTubeVoiceManager extends GuildIdManager<DisTubeVoice> {
     return this.create(channel).join();
   }
   /**
-   * @remarks
    * Leave the connected voice channel in a guild
    *
    * @param guild - Queue Resolvable

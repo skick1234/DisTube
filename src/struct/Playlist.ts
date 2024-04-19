@@ -3,7 +3,6 @@ import type { PlaylistInfo, Song } from "..";
 import type { GuildMember } from "discord.js";
 
 /**
- * @remarks
  * Class representing a playlist.
  */
 export class Playlist<T = unknown> implements PlaylistInfo {
@@ -16,7 +15,6 @@ export class Playlist<T = unknown> implements PlaylistInfo {
   thumbnail?: string;
   [x: string]: any;
   /**
-   * @remarks
    * Create a playlist
    *
    * @param playlist           - Playlist
@@ -44,18 +42,15 @@ export class Playlist<T = unknown> implements PlaylistInfo {
 
     if (Array.isArray(playlist)) {
       /**
-       * @remarks
        * The source of the playlist
        */
       this.source = "youtube";
       if (!playlist.length) throw new DisTubeError("EMPTY_PLAYLIST");
       /**
-       * @remarks
        * Playlist songs.
        */
       this.songs = playlist;
       /**
-       * @remarks
        * Playlist name.
        */
       this.name = this.songs[0].name
@@ -75,13 +70,11 @@ export class Playlist<T = unknown> implements PlaylistInfo {
           ? `${this.songs[0].name} and ${this.songs.length - 1} more songs.`
           : `${this.songs.length} songs playlist`);
       /**
-       * @remarks
        * Playlist URL.
        */
       // eslint-disable-next-line deprecation/deprecation
       this.url = playlist.url || playlist.webpage_url;
       /**
-       * @remarks
        * Playlist thumbnail.
        */
       this.thumbnail = playlist.thumbnail || this.songs[0].thumbnail;
@@ -90,14 +83,12 @@ export class Playlist<T = unknown> implements PlaylistInfo {
     this.songs.forEach(s => s.constructor.name === "Song" && (s.playlist = this));
     if (properties) for (const [key, value] of Object.entries(properties)) this[key] = value;
     /**
-     * @remarks
      * Optional metadata that can be used to identify the playlist.
      */
     this.metadata = metadata as T;
   }
 
   /**
-   * @remarks
    * Playlist duration in second.
    */
   get duration() {
@@ -105,7 +96,6 @@ export class Playlist<T = unknown> implements PlaylistInfo {
   }
 
   /**
-   * @remarks
    * Formatted duration string `hh:mm:ss`.
    */
   get formattedDuration() {
@@ -113,7 +103,6 @@ export class Playlist<T = unknown> implements PlaylistInfo {
   }
 
   /**
-   * @remarks
    * User requested.
    */
   get member() {
@@ -127,7 +116,6 @@ export class Playlist<T = unknown> implements PlaylistInfo {
   }
 
   /**
-   * @remarks
    * User requested.
    */
   get user() {

@@ -21,7 +21,7 @@
     "build": "tsup",
     "build:check": "tsc --noEmit",
     "update": "pnpm up -L",
-    "postinstall": "husky install",
+    "postinstall": "husky",
     "prepublishOnly": "pnpm run lint && pnpm run test",
     "prepack": "pnpm run build && pinst --disable",
     "postpack": "pinst --enable",
@@ -109,6 +109,6 @@
     ]
   },
   "engines": {
-    "node": ">=18.0"
+    "node": ">=18.17"
   }
 }

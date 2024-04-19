@@ -2,7 +2,6 @@ import { StreamType } from ".";
 import type { DisTubeOptions, Filters } from ".";
 
 /**
- * @remarks
  * Default DisTube audio filters.
  */
 export const defaultFilters: Filters = {

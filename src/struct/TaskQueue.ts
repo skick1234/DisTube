@@ -11,18 +11,15 @@ class Task {
 }
 
 /**
- * @remarks
  * Task queuing system
  */
 export class TaskQueue {
   /**
-   * @remarks
    * The task array
    */
   #tasks: Task[] = [];
 
   /**
-   * @remarks
    * Waits for last task finished and queues a new task
    *
    * @param resolveInfo - Whether the task is a resolving info task
@@ -34,7 +31,6 @@ export class TaskQueue {
   }
 
   /**
-   * @remarks
    * Removes the finished task and processes the next task
    */
   public resolve(): void {
@@ -42,7 +38,6 @@ export class TaskQueue {
   }
 
   /**
-   * @remarks
    * The remaining number of tasks
    */
   public get remaining(): number {
@@ -50,7 +45,6 @@ export class TaskQueue {
   }
 
   /**
-   * @remarks
    * Whether or not having a resolving info task
    */
   public get hasResolveTask(): boolean {

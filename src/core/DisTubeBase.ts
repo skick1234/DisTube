@@ -8,13 +8,11 @@ export abstract class DisTubeBase {
   distube: DisTube;
   constructor(distube: DisTube) {
     /**
-     * @remarks
      * DisTube
      */
     this.distube = distube;
   }
   /**
-   * @remarks
    * Emit the {@link DisTube} of this base
    *
    * @param eventName - Event name
@@ -24,7 +22,6 @@ export abstract class DisTubeBase {
     return this.distube.emit(eventName, ...args);
   }
   /**
-   * @remarks
    * Emit error event
    *
    * @param error   - error
@@ -34,35 +31,30 @@ export abstract class DisTubeBase {
     this.distube.emitError(error, channel);
   }
   /**
-   * @remarks
    * The queue manager
    */
   get queues(): QueueManager {
     return this.distube.queues;
   }
   /**
-   * @remarks
    * The voice manager
    */
   get voices(): DisTubeVoiceManager {
     return this.distube.voices;
   }
   /**
-   * @remarks
    * Discord.js client
    */
   get client(): Client {
     return this.distube.client;
   }
   /**
-   * @remarks
    * DisTube options
    */
   get options(): Options {
     return this.distube.options;
   }
   /**
-   * @remarks
    * DisTube handler
    */
   get handler(): DisTubeHandler {
