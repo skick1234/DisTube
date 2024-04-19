@@ -9,7 +9,6 @@ import {
   SearchResultPlaylist,
   SearchResultVideo,
   Song,
-  chooseBestVideoFormat,
   isMessageInstance,
   isNsfwChannel,
   isObject,
@@ -386,12 +385,10 @@ export class DisTubeHandler extends DisTubeBase {
    * @param song - A Song
    */
   async attachStreamInfo(song: Song) {
-    const { url, source, formats, streamURL } = song;
+    const { url, source } = song;
     if (source === "youtube") {
-      if (!formats || !chooseBestVideoFormat(song)) {
-        song._patchYouTube(await this.handler.getYouTubeInfo(url));
-      }
-    } else if (!streamURL) {
+      song._patchYouTube(await this.handler.getYouTubeInfo(url));
+    } else {
       for (const plugin of [...this.distube.extractorPlugins, ...this.distube.customPlugins]) {
         if (await plugin.validate(url)) {
           const info = [plugin.getStreamURL(url), plugin.getRelatedSongs(url)] as const;

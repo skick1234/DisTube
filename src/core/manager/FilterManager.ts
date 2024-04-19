@@ -1,6 +1,6 @@
 import { BaseManager } from ".";
 import { DisTubeError } from "../..";
-import type { Filter, FilterResolvable, Queue } from "../..";
+import type { FFmpegOptions, Filter, FilterResolvable, Queue } from "../..";
 
 /**
  * @remarks
@@ -124,8 +124,8 @@ export class FilterManager extends BaseManager<Filter> {
     return [...this.collection.values()];
   }
 
-  get ffmpegArgs(): string[] {
-    return this.size ? ["-af", this.values.map(f => f.value).join(",")] : [];
+  get ffmpegArgs(): FFmpegOptions {
+    return this.size ? { af: this.values.map(f => f.value).join(",") } : {};
   }
 
   override toString() {

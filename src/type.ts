@@ -37,6 +37,7 @@ export type DisTubeEvents = {
   searchDone: [message: Message<true>, answer: Message<true>, query: string];
   searchInvalidAnswer: [message: Message<true>, answer: Message<true>, query: string];
   searchResult: [message: Message<true>, results: SearchResult[], query: string];
+  ffmpegDebug: [debug: string];
 };
 
 export type TypedDisTubeEvents = {
@@ -198,6 +199,16 @@ export type DisTubeOptions = {
    * Whether or not playing a song with direct link
    */
   directLink?: boolean;
+  /**
+   * @remarks
+   * FFmpeg path
+   */
+  ffmpegPath?: string;
+  /**
+   * @remarks
+   * FFmpeg default arguments
+   */
+  ffmpegDefaultArgs?: FFmpegOptions;
 };
 
 /**
@@ -427,3 +438,8 @@ export enum Events {
   SEARCH_INVALID_ANSWER = "searchInvalidAnswer",
   SEARCH_RESULT = "searchResult",
 }
+
+export type FFmpegOptions = Record<
+  string,
+  string | number | boolean | Array<string | null | undefined> | null | undefined
+>;

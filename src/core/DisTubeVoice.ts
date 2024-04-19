@@ -26,6 +26,7 @@ export class DisTubeVoice extends TypedEmitter<DisTubeVoiceEvents> {
   audioResource?: AudioResource;
   emittedError!: boolean;
   isDisconnected = false;
+  stream?: DisTubeStream;
   #channel!: VoiceBasedChannel;
   #volume = 100;
   constructor(voiceManager: DisTubeVoiceManager, channel: VoiceBasedChannel) {
@@ -46,7 +47,7 @@ export class DisTubeVoice extends TypedEmitter<DisTubeVoiceEvents> {
         }
       })
       .on(AudioPlayerStatus.Playing, () => this.#br())
-      .on("error", error => {
+      .on("error", (error: NodeJS.ErrnoException) => {
         if (this.emittedError) return;
         this.emittedError = true;
         this.emit("error", error);
@@ -177,26 +178,29 @@ export class DisTubeVoice extends TypedEmitter<DisTubeVoiceEvents> {
    */
   stop(force = false) {
     this.audioPlayer.stop(force);
+    this.stream?.kill?.();
   }
   /**
    * @remarks
-   * Play a readable stream
+   * Play a {@link DisTubeStream}
    *
-   * @param stream - Readable stream
+   * @param dtStream - DisTubeStream
    */
-  play(stream: DisTubeStream) {
+  play(dtStream: DisTubeStream) {
     this.emittedError = false;
-    stream.stream.on("error", (error: NodeJS.ErrnoException) => {
+    dtStream.stream.on("error", (error: NodeJS.ErrnoException) => {
       if (this.emittedError || error.code === "ERR_STREAM_PREMATURE_CLOSE") return;
       this.emittedError = true;
       this.emit("error", error);
     });
-    this.audioResource = createAudioResource(stream.stream, {
-      inputType: stream.type,
+    this.audioResource = createAudioResource(dtStream.stream, {
+      inputType: dtStream.type,
       inlineVolume: true,
     });
     this.volume = this.#volume;
     if (this.audioPlayer.state.status !== AudioPlayerStatus.Paused) this.audioPlayer.play(this.audioResource);
+    this.stream?.kill?.();
+    this.stream = dtStream;
   }
   set volume(volume: number) {
     if (typeof volume !== "number" || isNaN(volume)) {

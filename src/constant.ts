@@ -1,5 +1,5 @@
 import { StreamType } from ".";
-import type { Filters } from ".";
+import type { DisTubeOptions, Filters } from ".";
 
 /**
  * @remarks
@@ -40,4 +40,9 @@ export const defaultOptions = {
   joinNewVoiceChannel: true,
   streamType: StreamType.OPUS,
   directLink: true,
-};
+  ffmpegPath: "ffmpeg",
+  ffmpegDefaultArgs: {
+    analyzeduration: 0,
+    hide_banner: true,
+  },
+} satisfies DisTubeOptions;

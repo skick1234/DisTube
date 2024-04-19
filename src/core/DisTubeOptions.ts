@@ -1,6 +1,6 @@
 import { DisTubeError, StreamType, checkInvalidKey, defaultOptions } from "..";
 import type ytdl from "@distube/ytdl-core";
-import type { CustomPlugin, DisTubeOptions, ExtractorPlugin, Filters } from "..";
+import type { CustomPlugin, DisTubeOptions, ExtractorPlugin, FFmpegOptions, Filters } from "..";
 import type { Cookie } from "@distube/ytdl-core";
 
 export class Options {
@@ -22,6 +22,8 @@ export class Options {
   joinNewVoiceChannel: boolean;
   streamType: StreamType;
   directLink: boolean;
+  ffmpegPath: string;
+  ffmpegDefaultArgs: FFmpegOptions;
   constructor(options: DisTubeOptions) {
     if (typeof options !== "object" || Array.isArray(options)) {
       throw new DisTubeError("INVALID_TYPE", "object", options, "DisTubeOptions");
@@ -45,6 +47,8 @@ export class Options {
     this.joinNewVoiceChannel = opts.joinNewVoiceChannel;
     this.streamType = opts.streamType;
     this.directLink = opts.directLink;
+    this.ffmpegPath = opts.ffmpegPath;
+    this.ffmpegDefaultArgs = opts.ffmpegDefaultArgs;
     checkInvalidKey(opts, this, "DisTubeOptions");
     this.#validateOptions();
   }
@@ -63,8 +67,8 @@ export class Options {
       "directLink",
     ]);
     const numberOptions = new Set(["searchCooldown", "emptyCooldown", "searchSongs"]);
-    const stringOptions = new Set();
-    const objectOptions = new Set(["customFilters", "ytdlOptions"]);
+    const stringOptions = new Set(["ffmpegPath"]);
+    const objectOptions = new Set(["customFilters", "ytdlOptions", "ffmpegDefaultArgs"]);
     const optionalOptions = new Set(["youtubeCookie", "customFilters"]);
 
     for (const [key, value] of Object.entries(options)) {

@@ -171,12 +171,19 @@ export class QueueManager extends GuildIdManager<Queue> {
     const song = queue.songs[0];
     const { duration, source, streamURL } = song;
     const streamOptions = {
-      ffmpegArgs: queue.filters.ffmpegArgs,
+      ffmpeg: {
+        path: this.options.ffmpegPath,
+        args: {
+          ...this.options.ffmpegDefaultArgs,
+          ...queue.filters.ffmpegArgs,
+        },
+      },
       seek: duration ? queue.beginTime : undefined,
       type: this.options.streamType,
     };
+
     if (source === "youtube") return DisTubeStream.YouTube(song, streamOptions);
-    return DisTubeStream.DirectLink(streamURL as string, streamOptions);
+    return DisTubeStream.DirectLink(streamURL!, streamOptions);
   }
 
   /**

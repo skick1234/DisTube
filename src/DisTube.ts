@@ -280,13 +280,13 @@ export class DisTube extends TypedEmitter<TypedDisTubeEvents> {
       const promises = filteredSongs.map((song: string | Song | SearchResult) =>
         this.handler.resolve(song, { member, metadata }).catch(() => undefined),
       );
-      resolvedSongs = (await Promise.all(promises)).filter((s: any): s is Song => Boolean(s));
+      resolvedSongs = (await Promise.all(promises)).filter((s): s is Song => s instanceof Song);
     } else {
-      const resolved = [];
+      resolvedSongs = [];
       for (const song of filteredSongs) {
-        resolved.push(await this.handler.resolve(song, { member, metadata }).catch(() => undefined));
+        const resolved = await this.handler.resolve(song, { member, metadata }).catch(() => undefined);
+        if (resolved instanceof Song) resolvedSongs.push(resolved);
       }
-      resolvedSongs = resolved.filter((s: any): s is Song => Boolean(s));
     }
     return new Playlist(resolvedSongs, { member, properties, metadata });
   }
