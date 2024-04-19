@@ -198,7 +198,7 @@ export class QueueManager extends GuildIdManager<Queue> {
         return true;
       }
       const stream = this.createStream(queue);
-      stream.on("debug", data => this.emit(Events.FFMPEG_DEBUG, `[${queue.id}] - ${data}`));
+      stream.on("debug", data => this.emit(Events.FFMPEG_DEBUG, `[${queue.id}]: ${data}`));
       queue.voice.play(stream);
       song.streamURL = stream.url;
       return false;

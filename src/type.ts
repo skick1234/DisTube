@@ -14,24 +14,44 @@ import type { Cookie } from "@distube/ytdl-core";
 
 export type Awaitable<T = any> = T | PromiseLike<T>;
 
+// export type DisTubeEvents = {
+//   [Events.ADD_LIST]: [queue: Queue, playlist: Playlist];
+//   [Events.ADD_SONG]: [queue: Queue, song: Song];
+//   [Events.DELETE_QUEUE]: [queue: Queue];
+//   [Events.DISCONNECT]: [queue: Queue];
+//   [Events.EMPTY]: [queue: Queue];
+//   [Events.ERROR]: [channel: GuildTextBasedChannel | undefined, error: Error];
+//   [Events.FFMPEG_DEBUG]: [debug: string];
+//   [Events.FINISH]: [queue: Queue];
+//   [Events.FINISH_SONG]: [queue: Queue, song: Song];
+//   [Events.INIT_QUEUE]: [queue: Queue];
+//   [Events.NO_RELATED]: [queue: Queue];
+//   [Events.PLAY_SONG]: [queue: Queue, song: Song];
+//   [Events.SEARCH_CANCEL]: [message: Message<true>, query: string];
+//   [Events.SEARCH_DONE]: [message: Message<true>, answer: Message<true>, query: string];
+//   [Events.SEARCH_INVALID_ANSWER]: [message: Message<true>, answer: Message<true>, query: string];
+//   [Events.SEARCH_NO_RESULT]: [message: Message<true>, query: string];
+//   [Events.SEARCH_RESULT]: [message: Message<true>, results: SearchResult[], query: string];
+// };
+
 export type DisTubeEvents = {
-  [Events.ADD_LIST]: [queue: Queue, playlist: Playlist];
-  [Events.ADD_SONG]: [queue: Queue, song: Song];
-  [Events.DELETE_QUEUE]: [queue: Queue];
-  [Events.DISCONNECT]: [queue: Queue];
-  [Events.EMPTY]: [queue: Queue];
-  [Events.ERROR]: [channel: GuildTextBasedChannel | undefined, error: Error];
-  [Events.FFMPEG_DEBUG]: [debug: string];
-  [Events.FINISH]: [queue: Queue];
-  [Events.FINISH_SONG]: [queue: Queue, song: Song];
-  [Events.INIT_QUEUE]: [queue: Queue];
-  [Events.NO_RELATED]: [queue: Queue];
-  [Events.PLAY_SONG]: [queue: Queue, song: Song];
-  [Events.SEARCH_CANCEL]: [message: Message<true>, query: string];
-  [Events.SEARCH_DONE]: [message: Message<true>, answer: Message<true>, query: string];
-  [Events.SEARCH_INVALID_ANSWER]: [message: Message<true>, answer: Message<true>, query: string];
-  [Events.SEARCH_NO_RESULT]: [message: Message<true>, query: string];
-  [Events.SEARCH_RESULT]: [message: Message<true>, results: SearchResult[], query: string];
+  addList: [queue: Queue, playlist: Playlist];
+  addSong: [queue: Queue, song: Song];
+  deleteQueue: [queue: Queue];
+  disconnect: [queue: Queue];
+  empty: [queue: Queue];
+  error: [channel: GuildTextBasedChannel | undefined, error: Error];
+  ffmpegDebug: [debug: string];
+  finish: [queue: Queue];
+  finishSong: [queue: Queue, song: Song];
+  initQueue: [queue: Queue];
+  noRelated: [queue: Queue];
+  playSong: [queue: Queue, song: Song];
+  searchCancel: [message: Message<true>, query: string];
+  searchDone: [message: Message<true>, answer: Message<true>, query: string];
+  searchInvalidAnswer: [message: Message<true>, answer: Message<true>, query: string];
+  searchNoResult: [message: Message<true>, query: string];
+  searchResult: [message: Message<true>, results: SearchResult[], query: string];
 };
 
 export type TypedDisTubeEvents = {
