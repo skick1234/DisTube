@@ -1,7 +1,7 @@
 name: Publish distube
 on:
   release:
-    types: [created]
+    types: [published]
 jobs:
   publish:
     name: Build & Publish
@@ -25,11 +25,12 @@ jobs:
           registry-url: "https://registry.npmjs.org"
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --ignore-scripts --frozen-lockfile
 
       - name: Publish
         run: |
-          pnpm publish --provenance --access public
+          pnpm publish --access public --no-git-checks
           pnpm deprecate distube@"< ${{ github.event.release.tag_name }}" "This version is deprecated, please upgrade to the latest version."
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_PUBLISH_TOKEN }}
+          NPM_CONFIG_PROVENANCE: true
