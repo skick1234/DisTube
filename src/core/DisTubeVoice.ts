@@ -180,7 +180,7 @@ export class DisTubeVoice extends TypedEmitter<DisTubeVoiceEvents> {
    */
   play(dtStream: DisTubeStream) {
     this.emittedError = false;
-    dtStream.stream.on("error", (error: NodeJS.ErrnoException) => {
+    dtStream.on("error", (error: NodeJS.ErrnoException) => {
       if (this.emittedError || error.code === "ERR_STREAM_PREMATURE_CLOSE") return;
       this.emittedError = true;
       this.emit("error", error);

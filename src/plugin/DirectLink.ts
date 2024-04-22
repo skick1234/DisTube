@@ -16,14 +16,8 @@ export class DirectLinkPlugin extends ExtractorPlugin {
   }
 
   resolve(url: string, options: { member?: GuildMember; metadata?: any } = {}) {
-    url = url.replace(/\/+$/, "");
-    return new Song(
-      {
-        name: url.substring(url.lastIndexOf("/") + 1).replace(/((\?|#).*)?$/, "") || url,
-        url,
-        src: "direct_link",
-      },
-      options,
-    );
+    const u = new URL(url);
+    const name = u.pathname.split("/").pop() || u.href;
+    return new Song({ name, url, src: "direct_link" }, options);
   }
 }

@@ -26,6 +26,9 @@ const ERROR_MESSAGES = {
   VOICE_DIFFERENT_GUILD: "Cannot join a voice channel in a different guild",
   VOICE_DIFFERENT_CLIENT: "Cannot join a voice channel created by a different client",
 
+  FFMPEG_EXITED: (code: number) => `ffmpeg exited with code ${code}`,
+  FFMPEG_NOT_INSTALLED: (path: string) => `ffmpeg is not installed at '${path}' path`,
+
   NO_QUEUE: "There is no playing queue in this guild",
   QUEUE_EXIST: "This guild has a Queue already",
   PAUSED: "The queue has been paused already",

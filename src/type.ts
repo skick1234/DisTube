@@ -197,12 +197,31 @@ export type DisTubeOptions = {
   directLink?: boolean;
   /**
    * FFmpeg path
+   * @deprecated
    */
   ffmpegPath?: string;
   /**
    * FFmpeg default arguments
+   * @deprecated
    */
-  ffmpegDefaultArgs?: FFmpegOptions;
+  ffmpegDefaultArgs?: FFmpegArgs;
+  /**
+   * FFmpeg options
+   */
+  ffmpeg?: {
+    /**
+     * FFmpeg path
+     */
+    path?: string;
+    /**
+     * FFmpeg default arguments
+     */
+    args?: {
+      global?: FFmpegArgs;
+      input?: FFmpegArgs;
+      output?: FFmpegArgs;
+    };
+  };
 };
 
 /**
@@ -418,7 +437,16 @@ export enum Events {
   FFMPEG_DEBUG = "ffmpegDebug",
 }
 
-export type FFmpegOptions = Record<
+export type FFmpegArgs = Record<
   string,
   string | number | boolean | Array<string | null | undefined> | null | undefined
 >;
+
+export type FFmpegOptions = {
+  path: string;
+  args: {
+    global: FFmpegArgs;
+    input: FFmpegArgs;
+    output: FFmpegArgs;
+  };
+};
