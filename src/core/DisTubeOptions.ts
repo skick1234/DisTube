@@ -118,7 +118,7 @@ export class Options {
       args.global = opts.ffmpegDefaultArgs;
     }
     /* eslint-enable deprecation/deprecation,no-console */
-    path ??= opts.ffmpeg?.path ?? `ffmpeg${process.platform === "win32" ? ".exe" : ""}`;
+    path ??= opts.ffmpeg?.path ?? "ffmpeg";
     if (opts.ffmpeg?.args) {
       if (opts.ffmpeg.args.global) args.global = opts.ffmpeg.args.global;
       if (opts.ffmpeg.args.input) args.input = opts.ffmpeg.args.input;

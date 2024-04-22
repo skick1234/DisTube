@@ -91,8 +91,6 @@ export class DisTubeStream extends TypedEmitter<{
     }
     if (typeof seek === "number" && seek > 0) opts.ss = seek.toString();
 
-    if (typeof ffmpeg.args === "object") Object.assign(opts, ffmpeg.args);
-
     this.process = spawn(
       ffmpeg.path,
       [
