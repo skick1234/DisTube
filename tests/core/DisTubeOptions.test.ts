@@ -1,7 +1,32 @@
 import { Options, defaultOptions } from "@";
 
 test("Default DisTubeOptions", () => {
-  expect(new Options({})).toEqual(defaultOptions);
+  expect(new Options({})).toEqual({
+    directLink: true,
+    emitAddListWhenCreatingQueue: true,
+    emitAddSongWhenCreatingQueue: true,
+    emitNewSongOnly: false,
+    emptyCooldown: 60,
+    ffmpeg: {
+      args: {
+        global: {},
+        input: {},
+        output: {},
+      },
+      path: "ffmpeg",
+    },
+    joinNewVoiceChannel: true,
+    leaveOnEmpty: true,
+    leaveOnFinish: false,
+    leaveOnStop: true,
+    nsfw: false,
+    plugins: [],
+    savePreviousSongs: true,
+    searchCooldown: 60,
+    searchSongs: 0,
+    streamType: 0,
+    ytdlOptions: {},
+  });
 });
 
 const typeOfOption = (option: string) => {

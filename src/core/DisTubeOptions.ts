@@ -23,9 +23,9 @@ export class Options {
   streamType: StreamType;
   directLink: boolean;
   /** @deprecated */
-  ffmpegPath: null = null;
+  ffmpegPath: undefined = undefined;
   /** @deprecated */
-  ffmpegDefaultArgs: null = null;
+  ffmpegDefaultArgs: undefined = undefined;
   ffmpeg: FFmpegOptions;
   constructor(options: DisTubeOptions) {
     if (typeof options !== "object" || Array.isArray(options)) {

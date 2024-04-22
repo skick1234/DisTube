@@ -18,7 +18,7 @@ export const chooseBestVideoFormat = ({ duration, formats, isLive }: Song) =>
     .filter(f => f.hasAudio && (duration < 10 * 60 || f.hasVideo) && (!isLive || f.isHLS))
     .sort((a, b) => Number(b.audioBitrate) - Number(a.audioBitrate) || Number(a.bitrate) - Number(b.bitrate))[0];
 
-let checked = false;
+let checked = process.env.NODE_ENV === "test";
 export const checkFFmpeg = (distube: DisTube) => {
   if (checked) return;
   const path = distube.options.ffmpeg.path;

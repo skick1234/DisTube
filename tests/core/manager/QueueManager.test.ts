@@ -21,7 +21,7 @@ const DisTubeVoiceManager = _DTVM as unknown as jest.Mocked<typeof _DTVM>;
 
 function createFakeDisTube() {
   return {
-    options: { ...defaultOptions },
+    options: { ...defaultOptions, ffmpeg: { path: "ffmpeg", args: { global: {}, input: {}, output: {} } } },
     voices: new DisTubeVoiceManager(this),
     emit: jest.fn(),
     emitError: jest.fn(),
@@ -160,7 +160,7 @@ describe("QueueManager#createStream()", () => {
       expect.objectContaining({
         ffmpeg: expect.objectContaining({
           path: "ffmpeg",
-          args: { ...defaultOptions.ffmpegDefaultArgs },
+          args: { global: expect.any(Object), input: expect.any(Object), output: expect.any(Object) },
         }),
         seek: 1,
       }),
@@ -189,7 +189,11 @@ describe("QueueManager#createStream()", () => {
       expect.objectContaining({
         ffmpeg: expect.objectContaining({
           path: "ffmpeg",
-          args: { ...defaultOptions.ffmpegDefaultArgs, af: `${distube.filters["3d"]},${distube.filters.bassboost}` },
+          args: {
+            global: expect.any(Object),
+            input: expect.any(Object),
+            output: expect.objectContaining({ af: `${distube.filters["3d"]},${distube.filters.bassboost}` }),
+          },
         }),
         seek: undefined,
       }),

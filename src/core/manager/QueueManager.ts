@@ -1,5 +1,5 @@
 import { GuildIdManager } from ".";
-import { DisTubeError, DisTubeStream, Events, Queue, RepeatMode, objectKeys } from "../..";
+import { DisTubeError, DisTubeStream, Events, Queue, RepeatMode, checkFFmpeg, objectKeys } from "../..";
 import type { Song } from "../..";
 import type { GuildTextBasedChannel, VoiceBasedChannel } from "discord.js";
 
@@ -30,6 +30,7 @@ export class QueueManager extends GuildIdManager<Queue> {
     const queue = new Queue(this.distube, voice, song, textChannel);
     await queue._taskQueue.queuing();
     try {
+      checkFFmpeg(this.distube);
       await voice.join();
       this.#voiceEventHandler(queue);
       this.add(queue.id, queue);

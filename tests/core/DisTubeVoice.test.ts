@@ -374,22 +374,20 @@ describe("Methods", () => {
     voice.emittedError = true;
     DiscordVoice.createAudioResource.mockReturnValue(audioResource as any);
     const stream = {
-      stream: {
-        on: jest.fn(),
-      },
+      on: jest.fn(),
       type: {},
     };
     expect(voice.play(stream as any)).toBeUndefined();
     expect(voice.emittedError).toBe(false);
-    expect(stream.stream.on).toHaveBeenCalledWith("error", expect.any(Function));
+    expect(stream.on).toHaveBeenCalledWith("error", expect.any(Function));
     expect(voice.audioResource).toBe(audioResource);
     expect(audioPlayer.play).toHaveBeenCalledTimes(1);
     expect(audioPlayer.play).toHaveBeenNthCalledWith(1, audioResource);
     const error = {};
-    stream.stream.on.mock.calls[0][1](error);
+    stream.on.mock.calls[0][1](error);
     expect(voice.emittedError).toBe(true);
     expect(voice.emit).toHaveBeenCalledWith("error", error);
-    stream.stream.on.mock.calls[0][1](error);
+    stream.on.mock.calls[0][1](error);
     expect(voice.emit).toHaveBeenCalledTimes(1);
 
     audioPlayer.state.status = DiscordVoice.AudioPlayerStatus.Paused;
