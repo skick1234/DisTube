@@ -298,11 +298,11 @@ export class DisTube extends TypedEmitter<TypedDisTubeEvents> {
 
   /**
    * @deprecated Use `youtubeCookie: Cookie[]` instead. Guide: {@link
-   * https://distube.js.org/#/docs/DisTube/main/general/cookie | YouTube Cookies}
+   * https://github.com/skick1234/DisTube/wiki/YouTube-Cookies | YouTube Cookies}
    */
   constructor(
     client: Client,
-    otp: DisTubeOptions & {
+    opts: DisTubeOptions & {
       youtubeCookie: string;
     },
   );
@@ -323,10 +323,10 @@ export class DisTube extends TypedEmitter<TypedDisTubeEvents> {
    * @throws {@link DisTubeError}
    *
    * @param client - Discord.JS client
-   * @param otp    - Custom DisTube options
+   * @param opts   - Custom DisTube options
    */
-  constructor(client: Client, otp?: DisTubeOptions);
-  constructor(client: Client, otp: DisTubeOptions = {}) {
+  constructor(client: Client, opts?: DisTubeOptions);
+  constructor(client: Client, opts: DisTubeOptions = {}) {
     super();
     this.setMaxListeners(1);
     if (!isClientInstance(client)) throw new DisTubeError("INVALID_TYPE", "Discord.Client", client, "client");
@@ -338,7 +338,7 @@ export class DisTube extends TypedEmitter<TypedDisTubeEvents> {
     /**
      * DisTube options
      */
-    this.options = new Options(otp);
+    this.options = new Options(opts);
     /**
      * Voice connections manager
      */
@@ -887,7 +887,7 @@ export class DisTube extends TypedEmitter<TypedDisTubeEvents> {
       console.error(error);
       console.warn("Unhandled 'error' event.");
       console.warn(
-        "See: https://distube.js.org/#/docs/DisTube/stable/class/DisTube?scrollTo=e-error and https://nodejs.org/api/events.html#events_error_events",
+        "See: https://distube.js.org/classes/DisTube.html#error and https://nodejs.org/api/events.html#events_error_events",
       );
       /* eslint-enable no-console */
     }

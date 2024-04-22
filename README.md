@@ -19,7 +19,7 @@
 
 # DisTube
 
-A Discord.js module to simplify your music commands and play songs with audio filters on Discord without any API key.
+A powerful Discord.js module for simplifying music commands and effortless playback of various sources with integrated audio filters.
 
 [DisTube Support Server](https://discord.gg/feaDd9h) - [Frequently Asked Questions](https://discord.gg/feaDd9h)
 

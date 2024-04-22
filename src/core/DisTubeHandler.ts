@@ -74,7 +74,7 @@ export class DisTubeHandler extends DisTubeBase {
         // eslint-disable-next-line no-console
         console.warn(
           "\x1b[33mWARNING:\x1B[0m You are using the old YouTube cookie format, " +
-            "please use the new one instead. (https://distube.js.org/#/docs/DisTube/main/general/cookie)",
+            "please use the new one instead. (https://github.com/skick1234/DisTube/wiki/YouTube-Cookies)",
         );
         options.agent = ytdl.createAgent(
           cookies

@@ -157,7 +157,7 @@ export type DisTubeOptions = {
   searchCooldown?: number;
   /**
    * YouTube cookies. Guide: {@link
-   * https://distube.js.org/#/docs/DisTube/main/general/cookie | YouTube Cookies}
+   * https://github.com/skick1234/DisTube/wiki/YouTube-Cookies | YouTube Cookies}
    */
   youtubeCookie?: Cookie[] | string;
   /**
