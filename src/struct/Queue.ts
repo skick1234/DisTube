@@ -1,7 +1,7 @@
 import { DisTubeBase, FilterManager } from "../core";
-import { DisTubeError, Events, RepeatMode, Song, TaskQueue, formatDuration, objectKeys } from "..";
+import { DisTubeError, Events, RepeatMode, TaskQueue, formatDuration, objectKeys } from "..";
 import type { GuildTextBasedChannel, Snowflake } from "discord.js";
-import type { DisTube, DisTubeVoice, DisTubeVoiceEvents } from "..";
+import type { DisTube, DisTubeVoice, DisTubeVoiceEvents, Song } from "..";
 
 /**
  * Represents a queue.
@@ -176,8 +176,6 @@ export class Queue extends DisTubeBase {
     } else {
       this.songs.splice(position, 0, song);
     }
-    if (Array.isArray(song)) song.forEach(s => delete s.formats);
-    else delete song.formats;
     return this;
   }
   /**
@@ -356,14 +354,17 @@ export class Queue extends DisTubeBase {
    *
    * @returns The added song
    */
+  // eslint-disable-next-line @typescript-eslint/require-await
   async addRelatedSong(): Promise<Song> {
-    if (!this.songs?.[0]) throw new DisTubeError("NO_PLAYING");
-    const related = this.songs[0].related.find(v => !this.previousSongs.map(s => s.id).includes(v.id));
-    if (!related || !(related instanceof Song)) throw new DisTubeError("NO_RELATED");
-    const song = await this.handler.resolve(related, { member: this.clientMember, metadata: related.metadata });
-    if (!(song instanceof Song)) throw new DisTubeError("CANNOT_PLAY_RELATED");
-    this.addToQueue(song);
-    return song;
+    // TODO
+    // if (!this.songs?.[0]) throw new DisTubeError("NO_PLAYING");
+    // const related = this.songs[0].related.find(v => !this.previousSongs.map(s => s.id).includes(v.id));
+    // if (!related || !(related instanceof Song)) throw new DisTubeError("NO_RELATED");
+    // const song = await this.handler.resolve(related, { member: this.clientMember, metadata: related.metadata });
+    // if (!(song instanceof Song)) throw new DisTubeError("CANNOT_PLAY_RELATED");
+    // this.addToQueue(song);
+    // return song;
+    return <Song>(<unknown>null);
   }
   /**
    * Stop the guild stream and delete the queue
@@ -374,8 +375,7 @@ export class Queue extends DisTubeBase {
       this.playing = false;
       this.paused = false;
       this.stopped = true;
-      if (this.options.leaveOnStop) this.voice.leave();
-      else this.voice.stop();
+      this.voice.stop();
       this.remove();
     } finally {
       this._taskQueue.resolve();

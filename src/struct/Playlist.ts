@@ -1,4 +1,4 @@
-import { DisTubeError, formatDuration, isMemberInstance, isRecord } from "..";
+import { DisTubeError, formatDuration, isMemberInstance } from "..";
 import type { PlaylistInfo, Song } from "..";
 import type { GuildMember } from "discord.js";
 
@@ -6,82 +6,36 @@ import type { GuildMember } from "discord.js";
  * Class representing a playlist.
  */
 export class Playlist<T = unknown> implements PlaylistInfo {
-  source!: string;
-  songs!: Song[];
-  name!: string;
-  #metadata!: T;
-  #member?: GuildMember;
+  source: string;
+  songs: Song[];
+  name?: string;
   url?: string;
   thumbnail?: string;
-  [x: string]: any;
+  #metadata!: T;
+  #member?: GuildMember;
   /**
-   * Create a playlist
+   * Create a Playlist
    *
-   * @param playlist           - Playlist
-   * @param options            - Optional options
+   * @param playlist    - Raw playlist info
+   * @param options     - Optional data
    */
-  constructor(
-    playlist: Song[] | PlaylistInfo,
-    options: {
-      member?: GuildMember;
-      properties?: Record<string, any>;
-      metadata?: T;
-    } = {},
-  ) {
-    const { member, properties, metadata } = options;
+  constructor(playlist: PlaylistInfo, { member, metadata }: { member?: GuildMember; metadata?: T } = {}) {
+    if (!Array.isArray(playlist.songs) || !playlist.songs.length) throw new DisTubeError("EMPTY_PLAYLIST");
 
-    if (
-      typeof playlist !== "object" ||
-      (!Array.isArray(playlist) && ["source", "songs"].some(key => !(key in playlist)))
-    ) {
-      throw new DisTubeError("INVALID_TYPE", ["Array<Song>", "PlaylistInfo"], playlist, "playlist");
-    }
-    if (typeof properties !== "undefined" && !isRecord<any>(properties)) {
-      throw new DisTubeError("INVALID_TYPE", "object", properties, "properties");
-    }
+    this.source = playlist.source.toLowerCase();
+    this.songs = playlist.songs;
+    this.name = playlist.name;
+    /**
+     * Playlist URL.
+     */
+    this.url = playlist.url;
+    /**
+     * Playlist thumbnail.
+     */
+    this.thumbnail = playlist.thumbnail;
+    this.member = member;
 
-    if (Array.isArray(playlist)) {
-      /**
-       * The source of the playlist
-       */
-      this.source = "youtube";
-      if (!playlist.length) throw new DisTubeError("EMPTY_PLAYLIST");
-      /**
-       * Playlist songs.
-       */
-      this.songs = playlist;
-      /**
-       * Playlist name.
-       */
-      this.name = this.songs[0].name
-        ? `${this.songs[0].name} and ${this.songs.length - 1} more songs.`
-        : `${this.songs.length} songs playlist`;
-      this.thumbnail = this.songs[0].thumbnail;
-      this.member = member;
-    } else {
-      this.source = playlist.source.toLowerCase();
-      if (!Array.isArray(playlist.songs) || !playlist.songs.length) throw new DisTubeError("EMPTY_PLAYLIST");
-      this.songs = playlist.songs;
-      this.name =
-        playlist.name ||
-        // eslint-disable-next-line deprecation/deprecation
-        playlist.title ||
-        (this.songs[0].name
-          ? `${this.songs[0].name} and ${this.songs.length - 1} more songs.`
-          : `${this.songs.length} songs playlist`);
-      /**
-       * Playlist URL.
-       */
-      // eslint-disable-next-line deprecation/deprecation
-      this.url = playlist.url || playlist.webpage_url;
-      /**
-       * Playlist thumbnail.
-       */
-      this.thumbnail = playlist.thumbnail || this.songs[0].thumbnail;
-      this.member = member || playlist.member;
-    }
-    this.songs.forEach(s => s.constructor.name === "Song" && (s.playlist = this));
-    if (properties) for (const [key, value] of Object.entries(properties)) this[key] = value;
+    this.songs.forEach(s => (s.playlist = this));
     /**
      * Optional metadata that can be used to identify the playlist.
      */

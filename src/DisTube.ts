@@ -1,4 +1,3 @@
-import ytsr from "@distube/ytsr";
 import { TypedEmitter } from "tiny-typed-emitter";
 import {
   DirectLinkPlugin,
@@ -8,10 +7,8 @@ import {
   Events,
   Options,
   Playlist,
+  PluginType,
   QueueManager,
-  SearchResultPlaylist,
-  SearchResultType,
-  SearchResultVideo,
   Song,
   checkIntents,
   defaultFilters,
@@ -23,18 +20,16 @@ import {
   isTextChannelInstance,
   isURL,
 } from ".";
-import type { Client, GuildTextBasedChannel, Message, VoiceBasedChannel } from "discord.js";
+import type { Client, GuildTextBasedChannel, VoiceBasedChannel } from "discord.js";
 import type {
   Awaitable,
   CustomPlaylistOptions,
-  CustomPlugin,
   DisTubeOptions,
   ExtractorPlugin,
   Filters,
   GuildIdResolvable,
   PlayOptions,
   Queue,
-  SearchResult,
   TypedDisTubeEvents,
 } from ".";
 
@@ -200,86 +195,6 @@ export interface DisTube extends TypedEmitter<TypedDisTubeEvents> {
    * @param song  - Playing song
    */
   [Events.PLAY_SONG]: (queue: Queue, song: Song) => Awaitable;
-  /**
-   * @event
-   * Emitted when {@link DisTubeOptions | DisTubeOptions.searchSongs} bigger than 0,
-   * and the search canceled due to {@link DisTubeOptions |
-   * DisTubeOptions.searchTimeout}.
-   *
-   * @example
-   * ```ts
-   * // DisTubeOptions.searchSongs > 0
-   * distube.on("searchCancel", (message) => message.channel.send(`Searching canceled`));
-   * ```ts
-   *
-   * @param message - The user message called play method
-   * @param query   - The search query
-   */
-  [Events.SEARCH_CANCEL]: (message: Message, query: string) => Awaitable;
-  /**
-   * @event
-   * Emitted when {@link DisTubeOptions | DisTubeOptions.searchSongs} bigger than 0,
-   * and after the user chose a search result to play.
-   *
-   * @param message - The user message called play method
-   * @param answer  - The answered message of user
-   * @param query   - The search query
-   */
-  [Events.SEARCH_DONE]: (message: Message, answer: string, query: string) => Awaitable;
-  /**
-   * @event
-   * Emitted when {@link DisTubeOptions | DisTubeOptions.searchSongs} bigger than 0,
-   * and the search canceled due to user's next message is not a number or out of
-   * results range.
-   *
-   * @example
-   * ```ts
-   * // DisTubeOptions.searchSongs > 0
-   * distube.on("searchInvalidAnswer", (message) => message.channel.send(`You answered an invalid number!`));
-   * ```ts
-   *
-   * @param message - The user message called play method
-   * @param answer  - The answered message of user
-   * @param query   - The search query
-   */
-  [Events.SEARCH_INVALID_ANSWER]: (message: Message, answer: string, query: string) => Awaitable;
-  /**
-   * @event
-   * Emitted when DisTube cannot find any results for the query.
-   *
-   * @example
-   * ```ts
-   * distube.on("searchNoResult", (message, query) => message.channel.send(`No result found for ${query}!`));
-   * ```ts
-   *
-   * @param message - The user message called play method
-   * @param query   - The search query
-   */
-  [Events.SEARCH_NO_RESULT]: (message: Message, query: string) => Awaitable;
-  /**
-   * @event
-   * Emitted when {@link DisTubeOptions | DisTubeOptions.searchSongs} bigger than 0,
-   * and song param of {@link DisTube#play} is invalid url. DisTube will wait for
-   * user's next message to choose a song manually. <info>{@link
-   * https://support.google.com/youtube/answer/7354993 | Safe search} is enabled if
-   * {@link DisTubeOptions}.nsfw is disabled and the message's channel is not a nsfw
-   * channel.</info>
-   *
-   * @example
-   * ```ts
-   * // DisTubeOptions.searchSongs > 0
-   * distube.on("searchResult", (message, results) => {
-   *     message.channel.send(`**Choose an option from below**\n${
-   *         results.map((song, i) => `**${i + 1}**. ${song.name} - \`${song.formattedDuration}\``).join("\n")
-   *     }\n*Enter anything else or wait 60 seconds to cancel*`);
-   * });
-   * ```ts
-   *
-   * @param message - The user message called play method
-   * @param results - Searched results
-   * @param query   - The search query
-   */
-  [Events.SEARCH_RESULT]: (message: Message, results: SearchResult[], query: string) => Awaitable;
 }
 
 /**
@@ -293,19 +208,7 @@ export class DisTube extends TypedEmitter<TypedDisTubeEvents> {
   readonly queues: QueueManager;
   readonly voices: DisTubeVoiceManager;
   readonly extractorPlugins: ExtractorPlugin[];
-  readonly customPlugins: CustomPlugin[];
   readonly filters: Filters;
-
-  /**
-   * @deprecated Use `youtubeCookie: Cookie[]` instead. Guide: {@link
-   * https://github.com/skick1234/DisTube/wiki/YouTube-Cookies | YouTube Cookies}
-   */
-  constructor(
-    client: Client,
-    opts: DisTubeOptions & {
-      youtubeCookie: string;
-    },
-  );
   /**
    * Create a new DisTube class.
    *
@@ -325,7 +228,6 @@ export class DisTube extends TypedEmitter<TypedDisTubeEvents> {
    * @param client - Discord.JS client
    * @param opts   - Custom DisTube options
    */
-  constructor(client: Client, opts?: DisTubeOptions);
   constructor(client: Client, opts: DisTubeOptions = {}) {
     super();
     this.setMaxListeners(1);
@@ -361,11 +263,7 @@ export class DisTube extends TypedEmitter<TypedDisTubeEvents> {
     /**
      * Extractor Plugins
      */
-    this.extractorPlugins = this.options.plugins.filter((p): p is ExtractorPlugin => p.type === "extractor");
-    /**
-     * Custom Plugins
-     */
-    this.customPlugins = this.options.plugins.filter((p): p is CustomPlugin => p.type === "custom");
+    this.extractorPlugins = this.options.plugins.filter((p): p is ExtractorPlugin => p.type === PluginType.EXTRACTOR);
   }
 
   static get version() {
@@ -402,12 +300,12 @@ export class DisTube extends TypedEmitter<TypedDisTubeEvents> {
    *
    * @param voiceChannel - The channel will be joined if the bot isn't in any channels, the bot will be
    *                       moved to this channel if {@link DisTubeOptions}.joinNewVoiceChannel is `true`
-   * @param song         - URL | Search string | {@link Song} | {@link SearchResult} | {@link Playlist}
+   * @param song         - URL | Search string | {@link Song} | {@link Playlist}
    * @param options      - Optional options
    */
   async play(
     voiceChannel: VoiceBasedChannel,
-    song: string | Song | SearchResult | Playlist,
+    song: string | Song | Playlist,
     options: PlayOptions = {},
   ): Promise<void> {
     if (!isSupportedVoiceChannel(voiceChannel)) {
@@ -432,27 +330,12 @@ export class DisTube extends TypedEmitter<TypedDisTubeEvents> {
     if (member && !isMemberInstance(member)) {
       throw new DisTubeError("INVALID_TYPE", "Discord.GuildMember", member, "options.member");
     }
+
     const queue = this.getQueue(voiceChannel);
     const queuing = queue && !queue._taskQueue.hasResolveTask;
     if (queuing) await queue?._taskQueue.queuing(true);
     try {
-      if (typeof song === "string") {
-        for (const plugin of this.customPlugins) {
-          if (await plugin.validate(song)) {
-            await plugin.play(voiceChannel, song, options);
-            return;
-          }
-        }
-      }
-      if (typeof song === "string" && !isURL(song)) {
-        if (!message) {
-          song = (await this.search(song, { limit: 1 }))[0];
-        } else {
-          const result = await this.handler.searchSong(message, song);
-          if (!result) return;
-          song = result;
-        }
-      }
+      // TODO: new search plugin
       song = await this.handler.resolve(song, { member, metadata });
       if (song instanceof Playlist) {
         await this.handler.playPlaylist(voiceChannel, song, { textChannel, skip, position });
@@ -488,26 +371,23 @@ export class DisTube extends TypedEmitter<TypedDisTubeEvents> {
    * distube.play(voiceChannel, playlist, { ... });
    * ```ts
    *
-   * @param songs   - Array of url, Song or SearchResult
+   * @param songs   - Array of url or Song
    * @param options - Optional options
    */
   async createCustomPlaylist(
-    songs: (string | Song | SearchResult)[],
-    options: CustomPlaylistOptions = {},
+    songs: (string | Song)[],
+    { member, parallel, metadata, name, source, url, thumbnail }: CustomPlaylistOptions = {},
   ): Promise<Playlist> {
-    const { member, properties, parallel, metadata } = { parallel: true, ...options };
     if (!Array.isArray(songs)) throw new DisTubeError("INVALID_TYPE", "Array", songs, "songs");
     if (!songs.length) throw new DisTubeError("EMPTY_ARRAY", "songs");
-    const filteredSongs = songs.filter(
-      song => song instanceof Song || isURL(song) || (typeof song !== "string" && song.type === SearchResultType.VIDEO),
-    );
+    const filteredSongs = songs.filter(song => song instanceof Song || isURL(song));
     if (!filteredSongs.length) throw new DisTubeError("NO_VALID_SONG");
     if (member && !isMemberInstance(member)) {
       throw new DisTubeError("INVALID_TYPE", "Discord.Member", member, "options.member");
     }
     let resolvedSongs: Song[];
-    if (parallel) {
-      const promises = filteredSongs.map((song: string | Song | SearchResult) =>
+    if (parallel !== false) {
+      const promises = filteredSongs.map((song: string | Song) =>
         this.handler.resolve(song, { member, metadata }).catch(() => undefined),
       );
       resolvedSongs = (await Promise.all(promises)).filter((s): s is Song => s instanceof Song);
@@ -518,65 +398,16 @@ export class DisTube extends TypedEmitter<TypedDisTubeEvents> {
         if (resolved instanceof Song) resolvedSongs.push(resolved);
       }
     }
-    return new Playlist(resolvedSongs, { member, properties, metadata });
-  }
-
-  search(
-    string: string,
-    options?: { type?: SearchResultType.VIDEO; limit?: number; safeSearch?: boolean; retried?: boolean },
-  ): Promise<Array<SearchResultVideo>>;
-  search(
-    string: string,
-    options: { type: SearchResultType.PLAYLIST; limit?: number; safeSearch?: boolean; retried?: boolean },
-  ): Promise<Array<SearchResultPlaylist>>;
-  search(
-    string: string,
-    options?: { type?: SearchResultType; limit?: number; safeSearch?: boolean; retried?: boolean },
-  ): Promise<Array<SearchResult>>;
-  /**
-   * Search for a song. You can customize how user answers instead of send a number.
-   * Then use {@link DisTube#play} to play it.
-   *
-   * @param string             - The string search for
-   * @param options            - Search options
-   * @param options.limit      - Limit the results
-   * @param options.type       - Type of results (`video` or `playlist`).
-   * @param options.safeSearch - Whether or not use safe search (YouTube restricted mode)
-   *
-   * @returns Array of results
-   */
-  async search(
-    string: string,
-    options: {
-      type?: SearchResultType;
-      limit?: number;
-      safeSearch?: boolean;
-      retried?: boolean;
-    } = {},
-  ): Promise<Array<SearchResult>> {
-    const opts = { type: SearchResultType.VIDEO, limit: 10, safeSearch: false, ...options };
-    if (typeof opts.type !== "string" || !["video", "playlist"].includes(opts.type)) {
-      throw new DisTubeError("INVALID_TYPE", ["video", "playlist"], opts.type, "options.type");
-    }
-    if (typeof opts.limit !== "number") throw new DisTubeError("INVALID_TYPE", "number", opts.limit, "options.limit");
-    if (opts.limit < 1) throw new DisTubeError("NUMBER_COMPARE", "option.limit", "bigger or equal to", 1);
-    if (typeof opts.safeSearch !== "boolean") {
-      throw new DisTubeError("INVALID_TYPE", "boolean", opts.safeSearch, "options.safeSearch");
-    }
-
-    try {
-      const search = await ytsr(string, { ...opts, requestOptions: { headers: { cookie: this.handler.ytCookie } } });
-      const results = search.items.map(i => {
-        if (i.type === "video") return new SearchResultVideo(i);
-        return new SearchResultPlaylist(i as any);
-      });
-      if (results.length === 0) throw new DisTubeError("NO_RESULT");
-      return results;
-    } catch (e) {
-      if (options.retried) throw e;
-      options.retried = true;
-      return this.search(string, options);
-    }
+    return new Playlist(
+      {
+        source: source || "custom",
+        name,
+        url,
+        thumbnail,
+        songs: resolvedSongs,
+      },
+      { member, metadata },
+    );
   }
 
   /**

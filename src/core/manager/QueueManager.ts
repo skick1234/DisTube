@@ -105,7 +105,6 @@ export class QueueManager extends GuildIdManager<Queue> {
           }
         }
         if (queue.songs.length <= 1) {
-          if (this.options.leaveOnFinish) queue.voice.leave();
           if (!queue.autoplay) this.emit(Events.FINISH, queue);
           queue.remove();
           return;
@@ -114,8 +113,6 @@ export class QueueManager extends GuildIdManager<Queue> {
       const emitPlaySong = this.#emitPlaySong(queue);
       if (!queue._prev && (queue.repeatMode !== RepeatMode.SONG || queue._next)) {
         const prev = queue.songs.shift() as Song;
-        delete prev.formats;
-        delete prev.streamURL;
         if (this.options.savePreviousSongs) queue.previousSongs.push(prev);
         else queue.previousSongs.push({ id: prev.id } as Song);
       }
@@ -155,13 +152,13 @@ export class QueueManager extends GuildIdManager<Queue> {
   }
 
   /**
-   * Create a ytdl stream
+   * Create a DisTubeStream
    *
    * @param queue - Queue
    */
-  createStream(queue: Queue): DisTubeStream {
+  createStream(queue: Queue, streamURL: string): DisTubeStream {
     const song = queue.songs[0];
-    const { duration, source, streamURL } = song;
+    const { duration } = song;
     const streamOptions = {
       ffmpeg: {
         path: this.options.ffmpeg.path,
@@ -175,9 +172,8 @@ export class QueueManager extends GuildIdManager<Queue> {
       type: this.options.streamType,
     };
 
-    if (source === "youtube") return DisTubeStream.YouTube(song, streamOptions);
     if (!streamURL) throw new Error("No streamURL, something went wrong");
-    return DisTubeStream.DirectLink(streamURL, streamOptions);
+    return new DisTubeStream(streamURL, streamOptions);
   }
 
   /**
@@ -200,10 +196,9 @@ export class QueueManager extends GuildIdManager<Queue> {
         queue.stop();
         return true;
       }
-      const stream = this.createStream(queue);
+      const stream = this.createStream(queue, "TODO"); // TODO
       stream.on("debug", data => this.emit(Events.FFMPEG_DEBUG, `[${queue.id}]: ${data}`));
       queue.voice.play(stream);
-      song.streamURL = stream.url;
       return false;
     } catch (e: any) {
       this.#handlePlayingError(queue, e);

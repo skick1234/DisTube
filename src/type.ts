@@ -1,4 +1,3 @@
-import type ytdl from "@distube/ytdl-core";
 import type {
   Guild,
   GuildMember,
@@ -9,49 +8,23 @@ import type {
   VoiceBasedChannel,
   VoiceState,
 } from "discord.js";
-import type { CustomPlugin, DisTubeVoice, ExtractorPlugin, Playlist, Queue, SearchResult, Song } from ".";
-import type { Cookie } from "@distube/ytdl-core";
+import type { DisTubeVoice, ExtractorPlugin, Playlist, Queue, Song } from ".";
 
 export type Awaitable<T = any> = T | PromiseLike<T>;
 
-// export type DisTubeEvents = {
-//   [Events.ADD_LIST]: [queue: Queue, playlist: Playlist];
-//   [Events.ADD_SONG]: [queue: Queue, song: Song];
-//   [Events.DELETE_QUEUE]: [queue: Queue];
-//   [Events.DISCONNECT]: [queue: Queue];
-//   [Events.EMPTY]: [queue: Queue];
-//   [Events.ERROR]: [channel: GuildTextBasedChannel | undefined, error: Error];
-//   [Events.FFMPEG_DEBUG]: [debug: string];
-//   [Events.FINISH]: [queue: Queue];
-//   [Events.FINISH_SONG]: [queue: Queue, song: Song];
-//   [Events.INIT_QUEUE]: [queue: Queue];
-//   [Events.NO_RELATED]: [queue: Queue];
-//   [Events.PLAY_SONG]: [queue: Queue, song: Song];
-//   [Events.SEARCH_CANCEL]: [message: Message<true>, query: string];
-//   [Events.SEARCH_DONE]: [message: Message<true>, answer: Message<true>, query: string];
-//   [Events.SEARCH_INVALID_ANSWER]: [message: Message<true>, answer: Message<true>, query: string];
-//   [Events.SEARCH_NO_RESULT]: [message: Message<true>, query: string];
-//   [Events.SEARCH_RESULT]: [message: Message<true>, results: SearchResult[], query: string];
-// };
-
 export type DisTubeEvents = {
-  addList: [queue: Queue, playlist: Playlist];
-  addSong: [queue: Queue, song: Song];
-  deleteQueue: [queue: Queue];
-  disconnect: [queue: Queue];
-  empty: [queue: Queue];
-  error: [channel: GuildTextBasedChannel | undefined, error: Error];
-  ffmpegDebug: [debug: string];
-  finish: [queue: Queue];
-  finishSong: [queue: Queue, song: Song];
-  initQueue: [queue: Queue];
-  noRelated: [queue: Queue];
-  playSong: [queue: Queue, song: Song];
-  searchCancel: [message: Message<true>, query: string];
-  searchDone: [message: Message<true>, answer: Message<true>, query: string];
-  searchInvalidAnswer: [message: Message<true>, answer: Message<true>, query: string];
-  searchNoResult: [message: Message<true>, query: string];
-  searchResult: [message: Message<true>, results: SearchResult[], query: string];
+  [Events.ADD_LIST]: [queue: Queue, playlist: Playlist];
+  [Events.ADD_SONG]: [queue: Queue, song: Song];
+  [Events.DELETE_QUEUE]: [queue: Queue];
+  [Events.DISCONNECT]: [queue: Queue];
+  [Events.EMPTY]: [queue: Queue];
+  [Events.ERROR]: [channel: GuildTextBasedChannel | undefined, error: Error];
+  [Events.FFMPEG_DEBUG]: [debug: string];
+  [Events.FINISH]: [queue: Queue];
+  [Events.FINISH_SONG]: [queue: Queue, song: Song];
+  [Events.INIT_QUEUE]: [queue: Queue];
+  [Events.NO_RELATED]: [queue: Queue];
+  [Events.PLAY_SONG]: [queue: Queue, song: Song];
 };
 
 export type TypedDisTubeEvents = {
@@ -117,57 +90,21 @@ export type DisTubeOptions = {
   /**
    * DisTube plugins
    */
-  plugins?: (CustomPlugin | ExtractorPlugin)[];
+  plugins?: ExtractorPlugin[];
   /**
    * Whether or not emitting {@link DisTube#playSong} event when looping a song
    * or next song is the same as the previous one
    */
   emitNewSongOnly?: boolean;
   /**
-   * Whether or not leaving voice channel if the voice channel is empty after {@link
-   * DisTubeOptions}.emptyCooldown seconds
-   */
-  leaveOnEmpty?: boolean;
-  /**
-   * Whether or not leaving voice channel when the queue ends
-   */
-  leaveOnFinish?: boolean;
-  /**
-   * Whether or not leaving voice channel after using {@link DisTube#stop} function
-   */
-  leaveOnStop?: boolean;
-  /**
-   * Built-in leave on empty cooldown in seconds (When leaveOnEmpty is true)
-   */
-  emptyCooldown?: number;
-  /**
    * Whether or not saving the previous songs of the queue and enable {@link
-   * DisTube#previous} method
+   * DisTube#previous} method. Disable it may help to reduce the memory usage
    */
   savePreviousSongs?: boolean;
-  /**
-   * Limit of search results emits in {@link DisTube#searchResult} event when
-   * {@link DisTube#play} method executed. If `searchSongs <= 1`, play the first
-   * result
-   */
-  searchSongs?: number;
-  /**
-   * Built-in search cooldown in seconds (When searchSongs is bigger than 0)
-   */
-  searchCooldown?: number;
-  /**
-   * YouTube cookies. Guide: {@link
-   * https://github.com/skick1234/DisTube/wiki/YouTube-Cookies | YouTube Cookies}
-   */
-  youtubeCookie?: Cookie[] | string;
   /**
    * Override {@link defaultFilters} or add more ffmpeg filters
    */
   customFilters?: Filters;
-  /**
-   * `ytdl-core` get info options
-   */
-  ytdlOptions?: ytdl.downloadOptions;
   /**
    * Whether or not playing age-restricted content and disabling safe search in
    * non-NSFW channel
@@ -195,16 +132,6 @@ export type DisTubeOptions = {
    * Whether or not playing a song with direct link
    */
   directLink?: boolean;
-  /**
-   * FFmpeg path
-   * @deprecated
-   */
-  ffmpegPath?: string;
-  /**
-   * FFmpeg default arguments
-   * @deprecated
-   */
-  ffmpegDefaultArgs?: FFmpegArgs;
   /**
    * FFmpeg options
    */
@@ -256,54 +183,31 @@ export type GuildIdResolvable =
   | Interaction
   | string;
 
-export interface OtherSongInfo {
-  src: string;
+export interface SongInfo {
+  source: string;
   id?: string;
-  title?: string;
   name?: string;
-  is_live?: boolean;
   isLive?: boolean;
-  _duration_raw?: string | number;
-  duration?: string | number;
-  webpage_url?: string;
-  url: string;
+  duration?: number;
+  url?: string;
   thumbnail?: string;
-  related?: RelatedSong[];
-  view_count?: string | number;
-  views?: string | number;
-  like_count?: string | number;
-  likes?: string | number;
-  dislike_count?: string | number;
-  dislikes?: string | number;
-  repost_count?: string | number;
-  reposts?: string | number;
-  uploader?: string | { name: string; url: string };
-  uploader_url?: string;
-  age_limit?: string | number;
-  chapters?: Chapter[];
-  age_restricted?: boolean;
-}
-
-export interface Chapter {
-  title: string;
-  start_time: number;
+  views?: number;
+  likes?: number;
+  dislikes?: number;
+  reposts?: number;
+  uploader?: {
+    name?: string;
+    url?: string;
+  };
+  ageRestricted?: boolean;
 }
 
 export interface PlaylistInfo {
   source: string;
-  member?: GuildMember;
   songs: Song[];
   name?: string;
   url?: string;
   thumbnail?: string;
-  /**
-   * @deprecated Use {@link PlaylistInfo#name}
-   */
-  title?: string;
-  /**
-   * @deprecated Use {@link PlaylistInfo#url}
-   */
-  webpage_url?: string;
 }
 
 export type RelatedSong = Omit<Song, "related">;
@@ -358,10 +262,6 @@ export interface CustomPlaylistOptions {
    */
   member?: GuildMember;
   /**
-   * Additional properties such as `name`
-   */
-  properties?: Record<string, any>;
-  /**
    * Whether or not fetch the songs in parallel
    */
   parallel?: boolean;
@@ -369,6 +269,22 @@ export interface CustomPlaylistOptions {
    * Metadata
    */
   metadata?: any;
+  /**
+   * Playlist name
+   */
+  name?: string;
+  /**
+   * Playlist source
+   */
+  source?: string;
+  /**
+   * Playlist url
+   */
+  url?: string;
+  /**
+   * Playlist thumbnail
+   */
+  thumbnail?: string;
 }
 
 /**
@@ -396,17 +312,6 @@ export enum PluginType {
 }
 
 /**
- * Search result types:
- *
- * - `VIDEO` = `"video"`
- * - `PLAYLIST` = `"playlist"`
- */
-export enum SearchResultType {
-  VIDEO = "video",
-  PLAYLIST = "playlist",
-}
-
-/**
  * Stream types:
  *
  * - `OPUS` = `0` (Better quality, use more resources - **Recommended**)
@@ -429,11 +334,6 @@ export enum Events {
   NO_RELATED = "noRelated",
   DISCONNECT = "disconnect",
   DELETE_QUEUE = "deleteQueue",
-  SEARCH_CANCEL = "searchCancel",
-  SEARCH_NO_RESULT = "searchNoResult",
-  SEARCH_DONE = "searchDone",
-  SEARCH_INVALID_ANSWER = "searchInvalidAnswer",
-  SEARCH_RESULT = "searchResult",
   FFMPEG_DEBUG = "ffmpegDebug",
 }
 

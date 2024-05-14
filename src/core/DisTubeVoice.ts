@@ -193,6 +193,7 @@ export class DisTubeVoice extends TypedEmitter<DisTubeVoiceEvents> {
     if (this.audioPlayer.state.status !== AudioPlayerStatus.Paused) this.audioPlayer.play(this.audioResource);
     this.stream?.kill?.();
     this.stream = dtStream;
+    dtStream.spawn();
   }
   set volume(volume: number) {
     if (typeof volume !== "number" || isNaN(volume)) {

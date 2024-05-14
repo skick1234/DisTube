@@ -1,5 +1,11 @@
 name: Test
-on: [push, pull_request]
+on:
+  push:
+    branches:
+      - "main"
+  pull_request:
+    branches:
+      - "main"
 jobs:
   test:
     name: Test on node v${{ matrix.node-version }} (${{ matrix.os }})

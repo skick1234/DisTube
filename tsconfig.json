@@ -17,7 +17,6 @@
     "noUnusedParameters": true,
     "strict": true,
     "declaration": true,
-    "importHelpers": true,
     "inlineSources": true,
     "newLine": "lf",
     "noEmitHelpers": true,

@@ -18,6 +18,6 @@ export class DirectLinkPlugin extends ExtractorPlugin {
   resolve(url: string, options: { member?: GuildMember; metadata?: any } = {}) {
     const u = new URL(url);
     const name = u.pathname.split("/").pop() || u.href;
-    return new Song({ name, url, src: "direct_link" }, options);
+    return new Song({ name, url, source: "direct_link" }, options);
   }
 }
