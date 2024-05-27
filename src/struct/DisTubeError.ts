@@ -20,6 +20,7 @@ const ERROR_MESSAGES = {
 
   NOT_IN_VOICE: "User is not in any voice channel",
   VOICE_FULL: "The voice channel is full",
+  VOICE_ALREADY_CREATED: "This guild already has a voice connection which is not managed by DisTube",
   VOICE_CONNECT_FAILED: (s: number) => `Cannot connect to the voice channel after ${s} seconds`,
   VOICE_MISSING_PERMS: "I do not have permission to join this voice channel",
   VOICE_RECONNECT_FAILED: "Cannot reconnect to the voice channel",
@@ -38,7 +39,6 @@ const ERROR_MESSAGES = {
   NO_SONG_POSITION: "Does not have any song at this position",
   NO_PLAYING: "There is no playing song in the queue",
 
-  NO_RESULT: "No result found",
   NO_RELATED: "Cannot find any related songs",
   CANNOT_PLAY_RELATED: "Cannot play the related song",
   UNAVAILABLE_VIDEO: "This video is unavailable",
@@ -46,7 +46,12 @@ const ERROR_MESSAGES = {
   NON_NSFW: "Cannot play age-restricted content in non-NSFW channel",
   NOT_SUPPORTED_URL: "This url is not supported",
   CANNOT_RESOLVE_SONG: (t: any) => `Cannot resolve ${inspect(t)} to a Song`,
-  NO_VALID_SONG: "'songs' array does not have any valid Song, SearchResult or url",
+  NO_VALID_SONG: "'songs' array does not have any valid Song or url",
+  CANNOT_GET_STREAM_URL: (song: string) => `Cannot get stream url from this song (${song})`,
+  CANNOT_GET_SEARCH_QUERY: (song: string) => `Cannot get search query from this song (${song})`,
+  CANNOT_GET_SONG_FROM_SEARCH: (song: string) => `Cannot get song stream from search (${song})`,
+  NO_STREAM_URL: (song: string) => `No stream url attached (${song})`,
+
   EMPTY_FILTERED_PLAYLIST:
     "There is no valid video in the playlist\n" +
     "Maybe age-restricted contents is filtered because you are in non-NSFW channel",
@@ -62,7 +67,7 @@ const haveCode = (code: string): code is ErrorCode => Object.keys(ERROR_MESSAGES
 const parseMessage = (m: string | ((...x: any) => string), ...args: any) => (typeof m === "string" ? m : m(...args));
 const getErrorMessage = (code: string, ...args: any): string =>
   haveCode(code) ? parseMessage(ERROR_MESSAGES[code], ...args) : args[0];
-export class DisTubeError<T extends string> extends Error {
+export class DisTubeError<T extends string = ""> extends Error {
   errorCode: string;
   constructor(code: StaticErrorCode);
   constructor(code: T extends TemplateErrorCode ? T : never, ...args: Parameters<ErrorMessage[typeof code]>);

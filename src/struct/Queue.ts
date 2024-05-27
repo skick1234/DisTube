@@ -1,32 +1,81 @@
 import { DisTubeBase, FilterManager } from "../core";
 import { DisTubeError, Events, RepeatMode, TaskQueue, formatDuration, objectKeys } from "..";
 import type { GuildTextBasedChannel, Snowflake } from "discord.js";
-import type { DisTube, DisTubeVoice, DisTubeVoiceEvents, Song } from "..";
+import type { DisTube, DisTubeVoice, DisTubeVoiceEvents, FFmpegArgs, Song } from "..";
 
 /**
  * Represents a queue.
  */
 export class Queue extends DisTubeBase {
+  /**
+   * Queue id (Guild id)
+   */
   readonly id: Snowflake;
+  /**
+   * Voice connection of this queue.
+   */
   voice: DisTubeVoice;
+  /**
+   * List of songs in the queue (The first one is the playing song)
+   */
   songs: Song[];
+  /**
+   * List of the previous songs.
+   */
   previousSongs: Song[];
+  /**
+   * Whether stream is currently stopped.
+   */
   stopped: boolean;
-  _next: boolean;
-  _prev: boolean;
+  /**
+   * Whether or not the stream is currently playing.
+   */
   playing: boolean;
+  /**
+   * Whether or not the stream is currently paused.
+   */
   paused: boolean;
+  /**
+   * Type of repeat mode (`0` is disabled, `1` is repeating a song, `2` is repeating
+   * all the queue). Default value: `0` (disabled)
+   */
   repeatMode: RepeatMode;
+  /**
+   * Whether or not the autoplay mode is enabled. Default value: `false`
+   */
   autoplay: boolean;
-  #filters: FilterManager;
-  beginTime: number;
+  /**
+   * FFmpeg arguments for the current queue. Default value is defined with {@link DisTubeOptions}.ffmpeg.args.
+   * `af` output argument will be replaced with {@link Queue#filters} manager
+   */
+  ffmpegArgs: FFmpegArgs;
+  /**
+   * The text channel of the Queue. (Default: where the first command is called).
+   */
   textChannel?: GuildTextBasedChannel;
-  _emptyTimeout?: NodeJS.Timeout;
+  #filters: FilterManager;
+  /**
+   * What time in the song to begin (in seconds).
+   */
+  _beginTime: number;
+  /**
+   * Whether or not the last song was skipped to next song.
+   */
+  _next: boolean;
+  /**
+   * Whether or not the last song was skipped to previous song.
+   */
+  _prev: boolean;
+  /**
+   * Task queuing system
+   */
   _taskQueue: TaskQueue;
+  /**
+   * {@link DisTubeVoice} listener
+   */
   _listeners?: DisTubeVoiceEvents;
   /**
    * Create a queue for the guild
-   *
    * @param distube     - DisTube
    * @param voice       - Voice connection
    * @param song        - First song(s)
@@ -34,76 +83,28 @@ export class Queue extends DisTubeBase {
    */
   constructor(distube: DisTube, voice: DisTubeVoice, song: Song | Song[], textChannel?: GuildTextBasedChannel) {
     super(distube);
-    /**
-     * Voice connection of this queue.
-     */
     this.voice = voice;
-    /**
-     * Queue id (Guild id)
-     */
     this.id = voice.id;
-    /**
-     * Get or set the stream volume. Default value: `50`.
-     */
     this.volume = 50;
-    /**
-     * List of songs in the queue (The first one is the playing song)
-     */
     this.songs = Array.isArray(song) ? [...song] : [song];
-    /**
-     * List of the previous songs.
-     */
     this.previousSongs = [];
-    /**
-     * Whether stream is currently stopped.
-     */
     this.stopped = false;
-    /**
-     * Whether or not the last song was skipped to next song.
-     */
     this._next = false;
-    /**
-     * Whether or not the last song was skipped to previous song.
-     */
     this._prev = false;
-    /**
-     * Whether or not the stream is currently playing.
-     */
     this.playing = true;
-    /**
-     * Whether or not the stream is currently paused.
-     */
     this.paused = false;
-    /**
-     * Type of repeat mode (`0` is disabled, `1` is repeating a song, `2` is repeating
-     * all the queue). Default value: `0` (disabled)
-     */
     this.repeatMode = RepeatMode.DISABLED;
-    /**
-     * Whether or not the autoplay mode is enabled. Default value: `false`
-     */
     this.autoplay = false;
     this.#filters = new FilterManager(this);
-    /**
-     * What time in the song to begin (in seconds).
-     */
-    this.beginTime = 0;
-    /**
-     * The text channel of the Queue. (Default: where the first command is called).
-     */
+    this._beginTime = 0;
     this.textChannel = textChannel;
-    /**
-     * Timeout for checking empty channel
-     */
-    this._emptyTimeout = undefined;
-    /**
-     * Task queuing system
-     */
     this._taskQueue = new TaskQueue();
-    /**
-     * DisTubeVoice listener
-     */
     this._listeners = undefined;
+    this.ffmpegArgs = {
+      global: { ...this.options.ffmpeg.args.global },
+      input: { ...this.options.ffmpeg.args.input },
+      output: { ...this.options.ffmpeg.args.output },
+    };
   }
   /**
    * The client user as a `GuildMember` of this queue's guild
@@ -133,7 +134,7 @@ export class Queue extends DisTubeBase {
    * What time in the song is playing (in seconds).
    */
   get currentTime() {
-    return this.voice.playbackDuration + this.beginTime;
+    return this.voice.playbackDuration + this._beginTime;
   }
   /**
    * Formatted {@link Queue#currentTime} string.
@@ -147,6 +148,9 @@ export class Queue extends DisTubeBase {
   get voiceChannel() {
     return this.clientMember?.voice?.channel ?? null;
   }
+  /**
+   * Get or set the stream volume. Default value: `50`.
+   */
   get volume() {
     return this.voice.volume;
   }
@@ -155,10 +159,8 @@ export class Queue extends DisTubeBase {
   }
   /**
    * @throws {DisTubeError}
-   *
    * @param song     - Song to add
    * @param position - Position to add, \<= 0 to add to the end of the queue
-   *
    * @returns The guild queue
    */
   addToQueue(song: Song | Song[], position = 0): Queue {
@@ -180,7 +182,6 @@ export class Queue extends DisTubeBase {
   }
   /**
    * Pause the guild stream
-   *
    * @returns The guild queue
    */
   pause(): Queue {
@@ -192,7 +193,6 @@ export class Queue extends DisTubeBase {
   }
   /**
    * Resume the guild stream
-   *
    * @returns The guild queue
    */
   resume(): Queue {
@@ -204,9 +204,7 @@ export class Queue extends DisTubeBase {
   }
   /**
    * Set the guild stream's volume
-   *
    * @param percent - The percentage of volume you want to set
-   *
    * @returns The guild queue
    */
   setVolume(percent: number): Queue {
@@ -218,7 +216,6 @@ export class Queue extends DisTubeBase {
    * Skip the playing song if there is a next song in the queue. <info>If {@link
    * Queue#autoplay} is `true` and there is no up next song, DisTube will add and
    * play a related song.</info>
-   *
    * @returns The song will skip to
    */
   async skip(): Promise<Song> {
@@ -239,7 +236,6 @@ export class Queue extends DisTubeBase {
 
   /**
    * Play the previous song if exists
-   *
    * @returns The guild queue
    */
   async previous(): Promise<Song> {
@@ -260,7 +256,6 @@ export class Queue extends DisTubeBase {
   }
   /**
    * Shuffle the queue's songs
-   *
    * @returns The guild queue
    */
   async shuffle(): Promise<Queue> {
@@ -282,9 +277,7 @@ export class Queue extends DisTubeBase {
    * Jump to the song position in the queue. The next one is 1, 2,... The previous
    * one is -1, -2,...
    * if `num` is invalid number
-   *
    * @param position - The song position to play
-   *
    * @returns The new Song will be played
    */
   async jump(position: number): Promise<Song> {
@@ -321,9 +314,7 @@ export class Queue extends DisTubeBase {
   /**
    * Set the repeat mode of the guild queue.
    * Toggle mode `(Disabled -> Song -> Queue -> Disabled ->...)` if `mode` is `undefined`
-   *
    * @param mode - The repeat modes (toggle if `undefined`)
-   *
    * @returns The new repeat mode
    */
   setRepeatMode(mode?: RepeatMode): RepeatMode {
@@ -337,34 +328,46 @@ export class Queue extends DisTubeBase {
   }
   /**
    * Set the playing time to another position
-   *
    * @param time - Time in seconds
-   *
    * @returns The guild queue
    */
   seek(time: number): Queue {
     if (typeof time !== "number") throw new DisTubeError("INVALID_TYPE", "number", time, "time");
     if (isNaN(time) || time < 0) throw new DisTubeError("NUMBER_COMPARE", "time", "bigger or equal to", 0);
-    this.beginTime = time;
+    this._beginTime = time;
     this.queues.playSong(this);
     return this;
   }
+  async #getRelatedSong(current: Song): Promise<Song[]> {
+    if (current.plugin) return current.plugin.getRelatedSongs(current);
+    if (current.url) {
+      for (const plugin of this.plugins) {
+        if (await plugin.validate(current.url)) {
+          return plugin.getRelatedSongs(current);
+        }
+      }
+    }
+    return [];
+  }
   /**
    * Add a related song of the playing song to the queue
-   *
    * @returns The added song
    */
-  // eslint-disable-next-line @typescript-eslint/require-await
   async addRelatedSong(): Promise<Song> {
-    // TODO
-    // if (!this.songs?.[0]) throw new DisTubeError("NO_PLAYING");
-    // const related = this.songs[0].related.find(v => !this.previousSongs.map(s => s.id).includes(v.id));
-    // if (!related || !(related instanceof Song)) throw new DisTubeError("NO_RELATED");
-    // const song = await this.handler.resolve(related, { member: this.clientMember, metadata: related.metadata });
-    // if (!(song instanceof Song)) throw new DisTubeError("CANNOT_PLAY_RELATED");
-    // this.addToQueue(song);
-    // return song;
-    return <Song>(<unknown>null);
+    const current = this.songs?.[0];
+    if (!current) throw new DisTubeError("NO_PLAYING");
+    const prevIds = this.previousSongs.map(p => p.id);
+    const relatedSongs = (await this.#getRelatedSong(current)).filter(s => !prevIds.includes(s.id));
+    if (!relatedSongs.length && !current.stream.playFromSource) {
+      const altSong = current.stream.song;
+      if (altSong) relatedSongs.push(...(await this.#getRelatedSong(altSong)).filter(s => !prevIds.includes(s.id)));
+    }
+    const song = relatedSongs[0];
+    if (!song) throw new DisTubeError("NO_RELATED");
+    song.metadata = current.metadata;
+    song.member = this.clientMember;
+    this.addToQueue(song);
+    return song;
   }
   /**
    * Stop the guild stream and delete the queue
@@ -391,7 +394,7 @@ export class Queue extends DisTubeBase {
     this.previousSongs = [];
     if (this._listeners) {
       for (const event of objectKeys(this._listeners)) {
-        this.voice.removeListener(event, this._listeners[event]);
+        this.voice.off(event, this._listeners[event]);
       }
     }
     this.queues.remove(this.id);
@@ -399,7 +402,6 @@ export class Queue extends DisTubeBase {
   }
   /**
    * Toggle autoplay mode
-   *
    * @returns Autoplay mode state
    */
   toggleAutoplay(): boolean {

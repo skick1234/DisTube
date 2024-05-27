@@ -1,13 +1,11 @@
 import { TypedEmitter } from "tiny-typed-emitter";
 import {
-  DirectLinkPlugin,
   DisTubeError,
   DisTubeHandler,
   DisTubeVoiceManager,
   Events,
   Options,
   Playlist,
-  PluginType,
   QueueManager,
   Song,
   checkIntents,
@@ -25,11 +23,12 @@ import type {
   Awaitable,
   CustomPlaylistOptions,
   DisTubeOptions,
-  ExtractorPlugin,
+  DisTubePlugin,
   Filters,
   GuildIdResolvable,
   PlayOptions,
   Queue,
+  RepeatMode,
   TypedDisTubeEvents,
 } from ".";
 
@@ -42,14 +41,6 @@ export interface DisTube extends TypedEmitter<TypedDisTubeEvents> {
   /**
    * @event
    * Emitted after DisTube add a new playlist to the playing {@link Queue}.
-   *
-   * @example
-   * ```ts
-   * distube.on("addList", (queue, playlist) => queue.textChannel.send(
-   *     `Added \`${playlist.name}\` playlist (${playlist.songs.length} songs) to the queue!`
-   * ));
-   * ```
-   *
    * @param queue    - The guild queue
    * @param playlist - Playlist info
    */
@@ -57,14 +48,6 @@ export interface DisTube extends TypedEmitter<TypedDisTubeEvents> {
   /**
    * @event
    * Emitted after DisTube add a new song to the playing {@link Queue}.
-   *
-   * @example
-   * ```ts
-   * distube.on("addSong", (queue, song) => queue.textChannel.send(
-   *     `Added ${song.name} - \`${song.formattedDuration}\` to the queue by ${song.user}.`
-   * ));
-   * ```
-   *
    * @param queue - The guild queue
    * @param song  - Added song
    */
@@ -72,14 +55,12 @@ export interface DisTube extends TypedEmitter<TypedDisTubeEvents> {
   /**
    * @event
    * Emitted when a {@link Queue} is deleted with any reasons.
-   *
    * @param queue - The guild queue
    */
   [Events.DELETE_QUEUE]: (queue: Queue) => Awaitable;
   /**
    * @event
    * Emitted when the bot is disconnected to a voice channel.
-   *
    * @param queue - The guild queue
    */
   [Events.DISCONNECT]: (queue: Queue) => Awaitable;
@@ -87,30 +68,14 @@ export interface DisTube extends TypedEmitter<TypedDisTubeEvents> {
    * @event
    * Emitted when there is no user in the voice channel, {@link DisTubeOptions}.leaveOnEmpty
    * is `true` and there is a playing queue.
-   *
    * If there is no playing queue (stopped and {@link DisTubeOptions}.leaveOnStop is
    * `false`), it will leave the channel without emitting this event.
-   *
-   * @example
-   * ```ts
-   * distube.on("empty", queue => queue.textChannel.send("Channel is empty. Leaving the channel"))
-   * ```
-   *
    * @param queue - The guild queue
    */
   [Events.EMPTY]: (queue: Queue) => Awaitable;
   /**
    * @event
    * Emitted when DisTube encounters an error while playing songs.
-   *
-   * @example
-   * ```ts
-   * distube.on('error', (channel, e) => {
-   *     if (channel) channel.send(`An error encountered: ${e}`)
-   *     else console.error(e)
-   * })
-   * ```
-   *
    * @param channel - Text channel where the error is encountered.
    * @param error   - The error encountered
    */
@@ -118,7 +83,6 @@ export interface DisTube extends TypedEmitter<TypedDisTubeEvents> {
   /**
    * @event
    * Emitted for FFmpeg debugging information.
-   *
    * @param debug - The debug information
    */
   [Events.FFMPEG_DEBUG]: (debug: string) => Awaitable;
@@ -127,24 +91,12 @@ export interface DisTube extends TypedEmitter<TypedDisTubeEvents> {
    * Emitted when there is no more song in the queue and {@link Queue#autoplay} is
    * `false`. DisTube will leave voice channel if {@link
    * DisTubeOptions}.leaveOnFinish is `true`.
-   *
-   * @example
-   * ```ts
-   * distube.on("finish", queue => queue.textChannel.send("No more song in queue"));
-   * ```
-   *
    * @param queue - The guild queue
    */
   [Events.FINISH]: (queue: Queue) => Awaitable;
   /**
    * @event
    * Emitted when DisTube finished a song.
-   *
-   * @example
-   * ```ts
-   * distube.on("finishSong", (queue, song) => queue.textChannel.send(`${song.name} has finished!`));
-   * ```
-   *
    * @param queue - The guild queue
    * @param song  - Finished song
    */
@@ -152,15 +104,6 @@ export interface DisTube extends TypedEmitter<TypedDisTubeEvents> {
   /**
    * @event
    * Emitted when DisTube initialize a queue to change queue default properties.
-   *
-   * @example
-   * ```ts
-   * distube.on("initQueue", queue => {
-   *     queue.autoplay = false;
-   *     queue.volume = 100;
-   * });
-   * ```ts
-   *
    * @param queue - The guild queue
    */
   [Events.INIT_QUEUE]: (queue: Queue) => Awaitable;
@@ -168,29 +111,14 @@ export interface DisTube extends TypedEmitter<TypedDisTubeEvents> {
    * @event
    * Emitted when {@link Queue#autoplay} is `true`, {@link Queue#songs} is empty, and
    * DisTube cannot find related songs to play.
-   *
-   * @example
-   * ```ts
-   * distube.on("noRelated", queue => queue.textChannel.send("Can't find related video to play."));
-   * ```ts
-   *
    * @param queue - The guild queue
    */
   [Events.NO_RELATED]: (queue: Queue) => Awaitable;
   /**
    * @event
    * Emitted when DisTube play a song.
-   *
    * If {@link DisTubeOptions}.emitNewSongOnly is `true`, this event is not emitted
    * when looping a song or next song is the previous one.
-   *
-   * @example
-   * ```ts
-   * distube.on("playSong", (queue, song) => queue.textChannel.send(
-   *     `Playing \`${song.name}\` - \`${song.formattedDuration}\`\nRequested by: ${song.user}`
-   * ));
-   * ```ts
-   *
    * @param queue - The guild queue
    * @param song  - Playing song
    */
@@ -202,29 +130,37 @@ export interface DisTube extends TypedEmitter<TypedDisTubeEvents> {
  */
 // eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
 export class DisTube extends TypedEmitter<TypedDisTubeEvents> {
+  /**
+   * DisTube internal handler
+   */
   readonly handler: DisTubeHandler;
+  /**
+   * DisTube options
+   */
   readonly options: Options;
+  /**
+   * Discord.js v14 client
+   */
   readonly client: Client;
+  /**
+   * Queues manager
+   */
   readonly queues: QueueManager;
+  /**
+   * DisTube voice connections manager
+   */
   readonly voices: DisTubeVoiceManager;
-  readonly extractorPlugins: ExtractorPlugin[];
+  /**
+   * DisTube plugins
+   */
+  readonly plugins: DisTubePlugin[];
+  /**
+   * DisTube ffmpeg audio filters
+   */
   readonly filters: Filters;
   /**
    * Create a new DisTube class.
-   *
-   * @example
-   * ```ts
-   * const Discord = require('discord.js'),
-   *     DisTube = require('distube'),
-   *     client = new Discord.Client();
-   * // Create a new DisTube
-   * const distube = new DisTube.default(client, { searchSongs: 10 });
-   * // client.DisTube = distube // make it access easily
-   * client.login("Your Discord Bot Token")
-   * ```ts
-   *
    * @throws {@link DisTubeError}
-   *
    * @param client - Discord.JS client
    * @param opts   - Custom DisTube options
    */
@@ -232,38 +168,15 @@ export class DisTube extends TypedEmitter<TypedDisTubeEvents> {
     super();
     this.setMaxListeners(1);
     if (!isClientInstance(client)) throw new DisTubeError("INVALID_TYPE", "Discord.Client", client, "client");
-    /**
-     * Discord.JS client
-     */
     this.client = client;
     checkIntents(client.options);
-    /**
-     * DisTube options
-     */
     this.options = new Options(opts);
-    /**
-     * Voice connections manager
-     */
     this.voices = new DisTubeVoiceManager(this);
-    /**
-     * DisTube's Handler
-     */
     this.handler = new DisTubeHandler(this);
-    /**
-     * Queues manager
-     */
     this.queues = new QueueManager(this);
-    /**
-     * DisTube filters
-     */
     this.filters = { ...defaultFilters, ...this.options.customFilters };
-    // Default plugin
-    if (this.options.directLink) this.options.plugins.push(new DirectLinkPlugin());
-    this.options.plugins.forEach(p => p.init(this));
-    /**
-     * Extractor Plugins
-     */
-    this.extractorPlugins = this.options.plugins.filter((p): p is ExtractorPlugin => p.type === PluginType.EXTRACTOR);
+    this.plugins = [...this.options.plugins];
+    this.plugins.forEach(p => p.init(this));
   }
 
   static get version() {
@@ -278,26 +191,9 @@ export class DisTube extends TypedEmitter<TypedDisTubeEvents> {
   }
 
   /**
-   * Play / add a song or playlist from url. Search and play a song if it is not a
-   * valid url.
-   *
-   * @example
-   * ```ts
-   * client.on('message', (message) => {
-   *     if (!message.content.startsWith(config.prefix)) return;
-   *     const args = message.content.slice(config.prefix.length).trim().split(/ +/g);
-   *     const command = args.shift();
-   *     if (command == "play")
-   *         distube.play(message.member.voice.channel, args.join(" "), {
-   *             member: message.member,
-   *             textChannel: message.channel,
-   *             message
-   *         });
-   * });
-   * ```ts
-   *
+   * Play / add a song or playlist from url.
+   * Search and play a song (with {@link ExtractorPlugin}) if it is not a valid url.
    * @throws {@link DisTubeError}
-   *
    * @param voiceChannel - The channel will be joined if the bot isn't in any channels, the bot will be
    *                       moved to this channel if {@link DisTubeOptions}.joinNewVoiceChannel is `true`
    * @param song         - URL | Search string | {@link Song} | {@link Playlist}
@@ -332,10 +228,8 @@ export class DisTube extends TypedEmitter<TypedDisTubeEvents> {
     }
 
     const queue = this.getQueue(voiceChannel);
-    const queuing = queue && !queue._taskQueue.hasResolveTask;
-    if (queuing) await queue?._taskQueue.queuing(true);
+    await queue?._taskQueue.queuing();
     try {
-      // TODO: new search plugin
       song = await this.handler.resolve(song, { member, metadata });
       if (song instanceof Playlist) {
         await this.handler.playPlaylist(voiceChannel, song, { textChannel, skip, position });
@@ -353,24 +247,12 @@ export class DisTube extends TypedEmitter<TypedDisTubeEvents> {
       }
       throw e;
     } finally {
-      if (queuing) queue?._taskQueue.resolve();
+      queue?._taskQueue.resolve();
     }
   }
 
   /**
    * Create a custom playlist
-   *
-   * @example
-   * ```ts
-   * const songs = ["https://www.youtube.com/watch?v=xxx", "https://www.youtube.com/watch?v=yyy"];
-   * const playlist = await distube.createCustomPlaylist(songs, {
-   *     member: message.member,
-   *     properties: { name: "My playlist name", source: "custom" },
-   *     parallel: true
-   * });
-   * distube.play(voiceChannel, playlist, { ... });
-   * ```ts
-   *
    * @param songs   - Array of url or Song
    * @param options - Optional options
    */
@@ -412,22 +294,6 @@ export class DisTube extends TypedEmitter<TypedDisTubeEvents> {
 
   /**
    * Get the guild queue
-   *
-   * @example
-   * ```ts
-   * client.on('message', (message) => {
-   *     if (!message.content.startsWith(config.prefix)) return;
-   *     const args = message.content.slice(config.prefix.length).trim().split(/ +/g);
-   *     const command = args.shift();
-   *     if (command == "queue") {
-   *         const queue = distube.getQueue(message);
-   *         message.channel.send('Current queue:\n' + queue.songs.map((song, id) =>
-   *             `**${id+1}**. [${song.name}](${song.url}) - \`${song.formattedDuration}\``
-   *         ).join("\n"));
-   *     }
-   * });
-   * ```ts
-   *
    * @param guild - The type can be resolved to give a {@link Queue}
    */
   getQueue(guild: GuildIdResolvable): Queue | undefined {
@@ -442,9 +308,7 @@ export class DisTube extends TypedEmitter<TypedDisTubeEvents> {
 
   /**
    * Pause the guild stream
-   *
    * @param guild - The type can be resolved to give a {@link Queue}
-   *
    * @returns The guild queue
    */
   pause(guild: GuildIdResolvable): Queue {
@@ -453,9 +317,7 @@ export class DisTube extends TypedEmitter<TypedDisTubeEvents> {
 
   /**
    * Resume the guild stream
-   *
    * @param guild - The type can be resolved to give a {@link Queue}
-   *
    * @returns The guild queue
    */
   resume(guild: GuildIdResolvable): Queue {
@@ -464,20 +326,6 @@ export class DisTube extends TypedEmitter<TypedDisTubeEvents> {
 
   /**
    * Stop the guild stream
-   *
-   * @example
-   * ```ts
-   * client.on('message', (message) => {
-   *     if (!message.content.startsWith(config.prefix)) return;
-   *     const args = message.content.slice(config.prefix.length).trim().split(/ +/g);
-   *     const command = args.shift();
-   *     if (command == "stop") {
-   *         distube.stop(message);
-   *         message.channel.send("Stopped the queue!");
-   *     }
-   * });
-   * ```ts
-   *
    * @param guild - The type can be resolved to give a {@link Queue}
    */
   stop(guild: GuildIdResolvable): Promise<void> {
@@ -486,21 +334,8 @@ export class DisTube extends TypedEmitter<TypedDisTubeEvents> {
 
   /**
    * Set the guild stream's volume
-   *
-   * @example
-   * ```ts
-   * client.on('message', (message) => {
-   *     if (!message.content.startsWith(config.prefix)) return;
-   *     const args = message.content.slice(config.prefix.length).trim().split(/ +/g);
-   *     const command = args.shift();
-   *     if (command == "volume")
-   *         distube.setVolume(message, Number(args[0]));
-   * });
-   * ```ts
-   *
    * @param guild   - The type can be resolved to give a {@link Queue}
    * @param percent - The percentage of volume you want to set
-   *
    * @returns The guild queue
    */
   setVolume(guild: GuildIdResolvable, percent: number): Queue {
@@ -511,20 +346,7 @@ export class DisTube extends TypedEmitter<TypedDisTubeEvents> {
    * Skip the playing song if there is a next song in the queue. <info>If {@link
    * Queue#autoplay} is `true` and there is no up next song, DisTube will add and
    * play a related song.</info>
-   *
-   * @example
-   * ```ts
-   * client.on('message', (message) => {
-   *     if (!message.content.startsWith(config.prefix)) return;
-   *     const args = message.content.slice(config.prefix.length).trim().split(/ +/g);
-   *     const command = args.shift();
-   *     if (command == "skip")
-   *         distube.skip(message);
-   * });
-   * ```ts
-   *
    * @param guild - The type can be resolved to give a {@link Queue}
-   *
    * @returns The new Song will be played
    */
   skip(guild: GuildIdResolvable): Promise<Song> {
@@ -533,20 +355,7 @@ export class DisTube extends TypedEmitter<TypedDisTubeEvents> {
 
   /**
    * Play the previous song
-   *
-   * @example
-   * ```ts
-   * client.on('message', (message) => {
-   *     if (!message.content.startsWith(config.prefix)) return;
-   *     const args = message.content.slice(config.prefix.length).trim().split(/ +/g);
-   *     const command = args.shift();
-   *     if (command == "previous")
-   *         distube.previous(message);
-   * });
-   * ```ts
-   *
    * @param guild - The type can be resolved to give a {@link Queue}
-   *
    * @returns The new Song will be played
    */
   previous(guild: GuildIdResolvable): Promise<Song> {
@@ -555,20 +364,7 @@ export class DisTube extends TypedEmitter<TypedDisTubeEvents> {
 
   /**
    * Shuffle the guild queue songs
-   *
-   * @example
-   * ```ts
-   * client.on('message', (message) => {
-   *     if (!message.content.startsWith(config.prefix)) return;
-   *     const args = message.content.slice(config.prefix.length).trim().split(/ +/g);
-   *     const command = args.shift();
-   *     if (command == "shuffle")
-   *         distube.shuffle(message);
-   * });
-   * ```ts
-   *
    * @param guild - The type can be resolved to give a {@link Queue}
-   *
    * @returns The guild queue
    */
   shuffle(guild: GuildIdResolvable): Promise<Queue> {
@@ -578,22 +374,8 @@ export class DisTube extends TypedEmitter<TypedDisTubeEvents> {
   /**
    * Jump to the song number in the queue. The next one is 1, 2,... The previous one
    * is -1, -2,...
-   *
-   * @example
-   * ```ts
-   * client.on('message', (message) => {
-   *     if (!message.content.startsWith(config.prefix)) return;
-   *     const args = message.content.slice(config.prefix.length).trim().split(/ +/g);
-   *     const command = args.shift();
-   *     if (command == "jump")
-   *         distube.jump(message, parseInt(args[0]))
-   *             .catch(err => message.channel.send("Invalid song number."));
-   * });
-   * ```ts
-   *
    * @param guild - The type can be resolved to give a {@link Queue}
    * @param num   - The song number to play
-   *
    * @returns The new Song will be played
    */
   jump(guild: GuildIdResolvable, num: number): Promise<Song> {
@@ -603,65 +385,17 @@ export class DisTube extends TypedEmitter<TypedDisTubeEvents> {
   /**
    * Set the repeat mode of the guild queue.
    * Toggle mode `(Disabled -> Song -> Queue -> Disabled ->...)` if `mode` is `undefined`
-   *
-   * @example
-   * ```ts
-   * client.on('message', (message) => {
-   *     if (!message.content.startsWith(config.prefix)) return;
-   *     const args = message.content.slice(config.prefix.length).trim().split(/ +/g);
-   *     const command = args.shift();
-   *     if (command == "repeat") {
-   *         let mode = distube.setRepeatMode(message, parseInt(args[0]));
-   *         mode = mode ? mode == 2 ? "Repeat queue" : "Repeat song" : "Off";
-   *         message.channel.send("Set repeat mode to `" + mode + "`");
-   *     }
-   * });
-   * ```ts
-   * @example
-   * ```ts
-   * const { RepeatMode } = require("distube");
-   * let mode;
-   * switch(distube.setRepeatMode(message, parseInt(args[0]))) {
-   *     case RepeatMode.DISABLED:
-   *         mode = "Off";
-   *         break;
-   *     case RepeatMode.SONG:
-   *         mode = "Repeat a song";
-   *         break;
-   *     case RepeatMode.QUEUE:
-   *         mode = "Repeat all queue";
-   *         break;
-   * }
-   * message.channel.send("Set repeat mode to `" + mode + "`");
-   * ```ts
-   *
    * @param guild - The type can be resolved to give a {@link Queue}
    * @param mode  - The repeat modes (toggle if `undefined`)
-   *
    * @returns The new repeat mode
    */
-  setRepeatMode(guild: GuildIdResolvable, mode?: number): number {
+  setRepeatMode(guild: GuildIdResolvable, mode?: RepeatMode): RepeatMode {
     return this.#getQueue(guild).setRepeatMode(mode);
   }
 
   /**
    * Toggle autoplay mode
-   *
-   * @example
-   * ```ts
-   * client.on('message', (message) => {
-   *     if (!message.content.startsWith(config.prefix)) return;
-   *     const args = message.content.slice(config.prefix.length).trim().split(/ +/g);
-   *     const command = args.shift();
-   *     if (command == "autoplay") {
-   *         const mode = distube.toggleAutoplay(message);
-   *         message.channel.send("Set autoplay mode to `" + (mode ? "On" : "Off") + "`");
-   *     }
-   * });
-   * ```ts
-   *
    * @param guild - The type can be resolved to give a {@link Queue}
-   *
    * @returns Autoplay mode state
    */
   toggleAutoplay(guild: GuildIdResolvable): boolean {
@@ -672,9 +406,7 @@ export class DisTube extends TypedEmitter<TypedDisTubeEvents> {
 
   /**
    * Add related song to the queue
-   *
    * @param guild - The type can be resolved to give a {@link Queue}
-   *
    * @returns The guild queue
    */
   addRelatedSong(guild: GuildIdResolvable): Promise<Song> {
@@ -683,21 +415,8 @@ export class DisTube extends TypedEmitter<TypedDisTubeEvents> {
 
   /**
    * Set the playing time to another position
-   *
-   * @example
-   * ```ts
-   * client.on('message', message => {
-   *     if (!message.content.startsWith(config.prefix)) return;
-   *     const args = message.content.slice(config.prefix.length).trim().split(/ +/g);
-   *     const command = args.shift();
-   *     if (command = 'seek')
-   *         distube.seek(message, Number(args[0]));
-   * });
-   * ```ts
-   *
    * @param guild - The type can be resolved to give a {@link Queue}
    * @param time  - Time in seconds
-   *
    * @returns Seeked queue
    */
   seek(guild: GuildIdResolvable, time: number): Queue {
@@ -706,12 +425,11 @@ export class DisTube extends TypedEmitter<TypedDisTubeEvents> {
 
   /**
    * Emit error event
-   *
    * @param error   - error
    * @param channel - Text channel where the error is encountered.
    */
   emitError(error: Error, channel?: GuildTextBasedChannel): void {
-    if (this.listeners(Events.ERROR).length) {
+    if (this.listenerCount(Events.ERROR)) {
       this.emit(Events.ERROR, channel, error);
     } else {
       /* eslint-disable no-console */

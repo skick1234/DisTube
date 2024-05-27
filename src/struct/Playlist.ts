@@ -6,18 +6,36 @@ import type { GuildMember } from "discord.js";
  * Class representing a playlist.
  */
 export class Playlist<T = unknown> implements PlaylistInfo {
+  /**
+   * Playlist source.
+   */
   source: string;
+  /**
+   * Songs in the playlist.
+   */
   songs: Song[];
+  /**
+   * Playlist ID.
+   */
+  id?: string;
+  /**
+   * Playlist name.
+   */
   name?: string;
+  /**
+   * Playlist URL.
+   */
   url?: string;
+  /**
+   * Playlist thumbnail.
+   */
   thumbnail?: string;
   #metadata!: T;
   #member?: GuildMember;
   /**
    * Create a Playlist
-   *
-   * @param playlist    - Raw playlist info
-   * @param options     - Optional data
+   * @param playlist  - Raw playlist info
+   * @param options   - Optional data
    */
   constructor(playlist: PlaylistInfo, { member, metadata }: { member?: GuildMember; metadata?: T } = {}) {
     if (!Array.isArray(playlist.songs) || !playlist.songs.length) throw new DisTubeError("EMPTY_PLAYLIST");
@@ -25,20 +43,11 @@ export class Playlist<T = unknown> implements PlaylistInfo {
     this.source = playlist.source.toLowerCase();
     this.songs = playlist.songs;
     this.name = playlist.name;
-    /**
-     * Playlist URL.
-     */
+    this.id = playlist.id;
     this.url = playlist.url;
-    /**
-     * Playlist thumbnail.
-     */
     this.thumbnail = playlist.thumbnail;
     this.member = member;
-
     this.songs.forEach(s => (s.playlist = this));
-    /**
-     * Optional metadata that can be used to identify the playlist.
-     */
     this.metadata = metadata as T;
   }
 
@@ -76,6 +85,9 @@ export class Playlist<T = unknown> implements PlaylistInfo {
     return this.member?.user;
   }
 
+  /**
+   * Optional metadata that can be used to identify the playlist.
+   */
   get metadata() {
     return this.#metadata;
   }

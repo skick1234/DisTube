@@ -6,13 +6,12 @@ import {
   VoiceConnectionDisconnectReason,
   VoiceConnectionStatus,
   createAudioPlayer,
-  createAudioResource,
   entersState,
   joinVoiceChannel,
 } from "@discordjs/voice";
+import type { AudioPlayer, VoiceConnection } from "@discordjs/voice";
 import type { Snowflake, VoiceBasedChannel, VoiceState } from "discord.js";
 import type { DisTubeStream, DisTubeVoiceEvents, DisTubeVoiceManager } from "..";
-import type { AudioPlayer, AudioResource, VoiceConnection } from "@discordjs/voice";
 
 /**
  * Create a voice connection to the voice channel
@@ -22,7 +21,6 @@ export class DisTubeVoice extends TypedEmitter<DisTubeVoiceEvents> {
   readonly voices: DisTubeVoiceManager;
   readonly audioPlayer: AudioPlayer;
   connection!: VoiceConnection;
-  audioResource?: AudioResource;
   emittedError!: boolean;
   isDisconnected = false;
   stream?: DisTubeStream;
@@ -39,12 +37,8 @@ export class DisTubeVoice extends TypedEmitter<DisTubeVoiceEvents> {
     this.voices.add(this.id, this);
     this.audioPlayer = createAudioPlayer()
       .on(AudioPlayerStatus.Idle, oldState => {
-        if (oldState.status !== AudioPlayerStatus.Idle) {
-          delete this.audioResource;
-          this.emit("finish");
-        }
+        if (oldState.status !== AudioPlayerStatus.Idle) this.emit("finish");
       })
-      .on(AudioPlayerStatus.Playing, () => this.#br())
       .on("error", (error: NodeJS.ErrnoException) => {
         if (this.emittedError) return;
         this.emittedError = true;
@@ -82,12 +76,6 @@ export class DisTubeVoice extends TypedEmitter<DisTubeVoiceEvents> {
       })
       .on("error", () => undefined);
     this.connection.subscribe(this.audioPlayer);
-    /**
-     * Get or set the volume percentage
-     */
-  }
-  #br() {
-    if (this.audioResource?.encoder?.encoder) this.audioResource.encoder.setBitrate(this.channel.bitrate);
   }
   /**
    * The voice channel id the bot is in
@@ -121,7 +109,6 @@ export class DisTubeVoice extends TypedEmitter<DisTubeVoiceEvents> {
     }
     this.connection = this.#join(channel);
     this.#channel = channel;
-    this.#br();
   }
   #join(channel: VoiceBasedChannel) {
     return joinVoiceChannel({
@@ -133,7 +120,6 @@ export class DisTubeVoice extends TypedEmitter<DisTubeVoiceEvents> {
   }
   /**
    * Join a voice channel with this connection
-   *
    * @param channel - A voice channel
    */
   async join(channel?: VoiceBasedChannel): Promise<DisTubeVoice> {
@@ -151,7 +137,6 @@ export class DisTubeVoice extends TypedEmitter<DisTubeVoiceEvents> {
   }
   /**
    * Leave the voice channel of this connection
-   *
    * @param error - Optional, an error to emit with 'error' event.
    */
   leave(error?: Error) {
@@ -165,17 +150,15 @@ export class DisTubeVoice extends TypedEmitter<DisTubeVoiceEvents> {
   }
   /**
    * Stop the playing stream
-   *
    * @param force - If true, will force the {@link DisTubeVoice#audioPlayer} to enter the Idle state even
-   *                if the {@link DisTubeVoice#audioResource} has silence padding frames.
+   *                if the {@link DisTubeStream#audioResource} has silence padding frames.
    */
   stop(force = false) {
     this.audioPlayer.stop(force);
-    this.stream?.kill?.();
+    this.stream?.kill();
   }
   /**
    * Play a {@link DisTubeStream}
-   *
    * @param dtStream - DisTubeStream
    */
   play(dtStream: DisTubeStream) {
@@ -185,14 +168,10 @@ export class DisTubeVoice extends TypedEmitter<DisTubeVoiceEvents> {
       this.emittedError = true;
       this.emit("error", error);
     });
-    this.audioResource = createAudioResource(dtStream.stream, {
-      inputType: dtStream.type,
-      inlineVolume: true,
-    });
-    this.volume = this.#volume;
-    if (this.audioPlayer.state.status !== AudioPlayerStatus.Paused) this.audioPlayer.play(this.audioResource);
-    this.stream?.kill?.();
+    if (this.audioPlayer.state.status !== AudioPlayerStatus.Paused) this.audioPlayer.play(dtStream.audioResource);
+    this.stream?.kill();
     this.stream = dtStream;
+    this.volume = this.#volume;
     dtStream.spawn();
   }
   set volume(volume: number) {
@@ -203,8 +182,11 @@ export class DisTubeVoice extends TypedEmitter<DisTubeVoiceEvents> {
       throw new DisTubeError("NUMBER_COMPARE", "Volume", "bigger or equal to", 0);
     }
     this.#volume = volume;
-    this.audioResource?.volume?.setVolume(Math.pow(this.#volume / 100, 0.5 / Math.log10(2)));
+    this.stream?.audioResource?.volume?.setVolume(Math.pow(this.#volume / 100, 0.5 / Math.log10(2)));
   }
+  /**
+   * Get or set the volume percentage
+   */
   get volume() {
     return this.#volume;
   }
@@ -212,7 +194,7 @@ export class DisTubeVoice extends TypedEmitter<DisTubeVoiceEvents> {
    * Playback duration of the audio resource in seconds
    */
   get playbackDuration() {
-    return (this.audioResource?.playbackDuration ?? 0) / 1000;
+    return (this.stream?.audioResource?.playbackDuration ?? 0) / 1000;
   }
   pause() {
     this.audioPlayer.pause();
@@ -220,8 +202,11 @@ export class DisTubeVoice extends TypedEmitter<DisTubeVoiceEvents> {
   unpause() {
     const state = this.audioPlayer.state;
     if (state.status !== AudioPlayerStatus.Paused) return;
-    if (this.audioResource && state.resource !== this.audioResource) this.audioPlayer.play(this.audioResource);
-    else this.audioPlayer.unpause();
+    if (this.stream?.audioResource && state.resource !== this.stream.audioResource) {
+      this.audioPlayer.play(this.stream.audioResource);
+    } else {
+      this.audioPlayer.unpause();
+    }
   }
   /**
    * Whether the bot is self-deafened
@@ -237,9 +222,7 @@ export class DisTubeVoice extends TypedEmitter<DisTubeVoiceEvents> {
   }
   /**
    * Self-deafens/undeafens the bot.
-   *
    * @param selfDeaf - Whether or not the bot should be self-deafened
-   *
    * @returns true if the voice state was successfully updated, otherwise false
    */
   setSelfDeaf(selfDeaf: boolean): boolean {
@@ -253,9 +236,7 @@ export class DisTubeVoice extends TypedEmitter<DisTubeVoiceEvents> {
   }
   /**
    * Self-mutes/unmutes the bot.
-   *
    * @param selfMute - Whether or not the bot should be self-muted
-   *
    * @returns true if the voice state was successfully updated, otherwise false
    */
   setSelfMute(selfMute: boolean): boolean {

@@ -1,13 +1,13 @@
 import { BaseManager } from ".";
 import { DisTubeError } from "../..";
-import type { FFmpegArgs, Filter, FilterResolvable, Queue } from "../..";
+import type { FFmpegArg as FFmpegArgsValue, Filter, FilterResolvable, Queue } from "../..";
 
 /**
  * Manage filters of a playing {@link Queue}
  */
 export class FilterManager extends BaseManager<Filter> {
   /**
-   * Collection of {@link Filter}.
+   * The queue to manage
    */
   queue: Queue;
   constructor(queue: Queue) {
@@ -29,13 +29,12 @@ export class FilterManager extends BaseManager<Filter> {
   }
 
   #apply() {
-    this.queue.beginTime = this.queue.currentTime;
+    this.queue._beginTime = this.queue.currentTime;
     this.queues.playSong(this.queue);
   }
 
   /**
    * Enable a filter or multiple filters to the manager
-   *
    * @param filterOrFilters - The filter or filters to enable
    * @param override        - Wether or not override the applied filter with new filter value
    */
@@ -62,7 +61,6 @@ export class FilterManager extends BaseManager<Filter> {
 
   /**
    * Set the filters applied to the manager
-   *
    * @param filters - The filters to apply
    */
   set(filters: FilterResolvable[]) {
@@ -82,7 +80,6 @@ export class FilterManager extends BaseManager<Filter> {
 
   /**
    * Disable a filter or multiple filters
-   *
    * @param filterOrFilters - The filter or filters to disable
    */
   remove(filterOrFilters: FilterResolvable | FilterResolvable[]) {
@@ -94,7 +91,6 @@ export class FilterManager extends BaseManager<Filter> {
 
   /**
    * Check whether a filter enabled or not
-   *
    * @param filter - The filter to check
    */
   has(filter: FilterResolvable) {
@@ -115,7 +111,7 @@ export class FilterManager extends BaseManager<Filter> {
     return [...this.collection.values()];
   }
 
-  get ffmpegArgs(): FFmpegArgs {
+  get ffmpegArgs(): FFmpegArgsValue {
     return this.size ? { af: this.values.map(f => f.value).join(",") } : {};
   }
 

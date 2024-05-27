@@ -31,5 +31,4 @@ export const defaultOptions = {
   emitAddListWhenCreatingQueue: true,
   joinNewVoiceChannel: true,
   streamType: StreamType.OPUS,
-  directLink: true,
 } satisfies DisTubeOptions;

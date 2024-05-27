@@ -1,9 +1,14 @@
 import type { Client, GuildTextBasedChannel } from "discord.js";
-import type { DisTube, DisTubeEvents, DisTubeHandler, DisTubeVoiceManager, Options, QueueManager } from "..";
+import type {
+  DisTube,
+  DisTubeEvents,
+  DisTubeHandler,
+  DisTubePlugin,
+  DisTubeVoiceManager,
+  Options,
+  QueueManager,
+} from "..";
 
-/**
- * @virtual
- */
 export abstract class DisTubeBase {
   distube: DisTube;
   constructor(distube: DisTube) {
@@ -14,7 +19,6 @@ export abstract class DisTubeBase {
   }
   /**
    * Emit the {@link DisTube} of this base
-   *
    * @param eventName - Event name
    * @param args      - arguments
    */
@@ -23,7 +27,6 @@ export abstract class DisTubeBase {
   }
   /**
    * Emit error event
-   *
    * @param error   - error
    * @param channel - Text channel where the error is encountered.
    */
@@ -59,5 +62,11 @@ export abstract class DisTubeBase {
    */
   get handler(): DisTubeHandler {
     return this.distube.handler;
+  }
+  /**
+   * DisTube plugins
+   */
+  get plugins(): DisTubePlugin[] {
+    return this.distube.plugins;
   }
 }

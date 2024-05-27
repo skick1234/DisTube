@@ -1,25 +1,16 @@
-import { DisTubeVoice } from "../DisTubeVoice";
-import { resolveGuildId } from "../..";
 import { GuildIdManager } from ".";
+import { DisTubeVoice } from "../DisTubeVoice";
+import { DisTubeError, resolveGuildId } from "../..";
 import { VoiceConnectionStatus, getVoiceConnection } from "@discordjs/voice";
 import type { GuildIdResolvable } from "../..";
 import type { VoiceBasedChannel } from "discord.js";
 
 /**
- * Manages voice connections for {@link DisTube}
+ * Manages voice connections
  */
 export class DisTubeVoiceManager extends GuildIdManager<DisTubeVoice> {
   /**
-   * Get a {@link DisTubeVoice}.
-   *
-   * @param guild - The queue resolvable to resolve
-   */
-  /**
-   * Collection of {@link DisTubeVoice}.
-   */
-  /**
    * Create a {@link DisTubeVoice}
-   *
    * @param channel - A voice channel to join
    */
   create(channel: VoiceBasedChannel): DisTubeVoice {
@@ -28,11 +19,16 @@ export class DisTubeVoiceManager extends GuildIdManager<DisTubeVoice> {
       existing.channel = channel;
       return existing;
     }
+    if (
+      getVoiceConnection(resolveGuildId(channel), this.client.user?.id) ||
+      getVoiceConnection(resolveGuildId(channel))
+    ) {
+      throw new DisTubeError("VOICE_ALREADY_CREATED");
+    }
     return new DisTubeVoice(this, channel);
   }
   /**
    * Join a voice channel
-   *
    * @param channel - A voice channel to join
    */
   join(channel: VoiceBasedChannel): Promise<DisTubeVoice> {
@@ -42,7 +38,6 @@ export class DisTubeVoiceManager extends GuildIdManager<DisTubeVoice> {
   }
   /**
    * Leave the connected voice channel in a guild
-   *
    * @param guild - Queue Resolvable
    */
   leave(guild: GuildIdResolvable) {

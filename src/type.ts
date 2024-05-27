@@ -1,4 +1,14 @@
 import type {
+  DisTubeError,
+  DisTubeVoice,
+  ExtractorPlugin,
+  InfoExtractorPlugin,
+  PlayableExtractorPlugin,
+  Playlist,
+  Queue,
+  Song,
+} from ".";
+import type {
   Guild,
   GuildMember,
   GuildTextBasedChannel,
@@ -8,7 +18,6 @@ import type {
   VoiceBasedChannel,
   VoiceState,
 } from "discord.js";
-import type { DisTubeVoice, ExtractorPlugin, Playlist, Queue, Song } from ".";
 
 export type Awaitable<T = any> = T | PromiseLike<T>;
 
@@ -23,7 +32,7 @@ export type DisTubeEvents = {
   [Events.FINISH]: [queue: Queue];
   [Events.FINISH_SONG]: [queue: Queue, song: Song];
   [Events.INIT_QUEUE]: [queue: Queue];
-  [Events.NO_RELATED]: [queue: Queue];
+  [Events.NO_RELATED]: [queue: Queue, error: DisTubeError];
   [Events.PLAY_SONG]: [queue: Queue, song: Song];
 };
 
@@ -39,7 +48,6 @@ export type DisTubeVoiceEvents = {
 
 /**
  * An FFmpeg audio filter object
- *
  * ```ts
  * {
  *   name:  "bassboost",
@@ -60,10 +68,8 @@ export interface Filter {
 
 /**
  * Data that resolves to give an FFmpeg audio filter. This can be:
- *
  * - A name of a default filters or custom filters (`string`)
  * - A {@link Filter} object
- *
  * @see {@link defaultFilters}
  * @see {@link DisTubeOptions|DisTubeOptions.customFilters}
  */
@@ -71,14 +77,12 @@ export type FilterResolvable = string | Filter;
 
 /**
  * FFmpeg Filters
- *
  * ```ts
  * {
  *   "Filter Name": "Filter Value",
  *   "bassboost":   "bass=g=10"
  * }
- * ```ts
- *
+ * ```
  * @see {@link defaultFilters}
  */
 export type Filters = Record<string, string>;
@@ -88,9 +92,10 @@ export type Filters = Record<string, string>;
  */
 export type DisTubeOptions = {
   /**
-   * DisTube plugins
+   * DisTube plugins.
+   * The order of this effects the priority of the plugins when verifying the input.
    */
-  plugins?: ExtractorPlugin[];
+  plugins?: DisTubePlugin[];
   /**
    * Whether or not emitting {@link DisTube#playSong} event when looping a song
    * or next song is the same as the previous one
@@ -129,10 +134,6 @@ export type DisTubeOptions = {
    */
   streamType?: StreamType;
   /**
-   * Whether or not playing a song with direct link
-   */
-  directLink?: boolean;
-  /**
    * FFmpeg options
    */
   ffmpeg?: {
@@ -143,17 +144,12 @@ export type DisTubeOptions = {
     /**
      * FFmpeg default arguments
      */
-    args?: {
-      global?: FFmpegArgs;
-      input?: FFmpegArgs;
-      output?: FFmpegArgs;
-    };
+    args?: Partial<FFmpegArgs>;
   };
 };
 
 /**
  * Data that can be resolved to give a guild id string. This can be:
- *
  * - A guild id string | a guild {@link https://discord.js.org/#/docs/main/stable/class/Snowflake|Snowflake}
  * - A {@link https://discord.js.org/#/docs/main/stable/class/Guild | Guild}
  * - A {@link https://discord.js.org/#/docs/main/stable/class/Message | Message}
@@ -184,7 +180,10 @@ export type GuildIdResolvable =
   | string;
 
 export interface SongInfo {
+  plugin: DisTubePlugin | null;
   source: string;
+  playFromSource: boolean;
+  streamURL?: string;
   id?: string;
   name?: string;
   isLive?: boolean;
@@ -205,6 +204,7 @@ export interface SongInfo {
 export interface PlaylistInfo {
   source: string;
   songs: Song[];
+  id?: string;
   name?: string;
   url?: string;
   thumbnail?: string;
@@ -289,7 +289,6 @@ export interface CustomPlaylistOptions {
 
 /**
  * The repeat mode of a {@link Queue}
- *
  * - `DISABLED` = 0
  * - `SONG` = 1
  * - `QUEUE` = 2
@@ -302,18 +301,20 @@ export enum RepeatMode {
 
 /**
  * All available plugin types:
- *
- * - `CUSTOM` = `"custom"`: {@link CustomPlugin}
  * - `EXTRACTOR` = `"extractor"`: {@link ExtractorPlugin}
+ * - `INFO_EXTRACTOR` = `"info-extractor"`: {@link InfoExtractorPlugin}
+ * - `PLAYABLE_EXTRACTOR` = `"playable-extractor"`: {@link PlayableExtractorPlugin}
  */
 export enum PluginType {
-  CUSTOM = "custom",
   EXTRACTOR = "extractor",
+  INFO_EXTRACTOR = "info-extractor",
+  PLAYABLE_EXTRACTOR = "playable-extractor",
 }
+
+export type DisTubePlugin = ExtractorPlugin | InfoExtractorPlugin | PlayableExtractorPlugin;
 
 /**
  * Stream types:
- *
  * - `OPUS` = `0` (Better quality, use more resources - **Recommended**)
  * - `RAW` = `1` (Better performance, use less resources)
  */
@@ -337,16 +338,15 @@ export enum Events {
   FFMPEG_DEBUG = "ffmpegDebug",
 }
 
-export type FFmpegArgs = Record<
-  string,
-  string | number | boolean | Array<string | null | undefined> | null | undefined
->;
+export type FFmpegArg = Record<string, string | number | boolean | Array<string | null | undefined> | null | undefined>;
+
+export type FFmpegArgs = {
+  global: FFmpegArg;
+  input: FFmpegArg;
+  output: FFmpegArg;
+};
 
 export type FFmpegOptions = {
   path: string;
-  args: {
-    global: FFmpegArgs;
-    input: FFmpegArgs;
-    output: FFmpegArgs;
-  };
+  args: FFmpegArgs;
 };

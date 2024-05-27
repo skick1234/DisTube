@@ -1,29 +1,87 @@
-import { Playlist } from "./Playlist";
+import { Playlist } from ".";
 import { DisTubeError, formatDuration, isMemberInstance } from "..";
-import type { SongInfo } from "..";
 import type { GuildMember } from "discord.js";
+import type { DisTubePlugin, SongInfo } from "..";
 
 /**
  * Class representing a song.
  */
 export class Song<T = unknown> {
+  /**
+   * The source of this song info
+   */
   source: string;
+  /**
+   * Song ID.
+   */
   id?: string;
+  /**
+   * Song name.
+   */
   name?: string;
+  /**
+   * Indicates if the song is an active live.
+   */
   isLive?: boolean;
+  /**
+   * Song duration.
+   */
   duration: number;
+  /**
+   * Formatted duration string (`hh:mm:ss`, `mm:ss` or `Live`).
+   */
   formattedDuration: string;
+  /**
+   * Song URL.
+   */
   url?: string;
+  /**
+   * Song thumbnail.
+   */
   thumbnail?: string;
+  /**
+   * Song view count
+   */
   views?: number;
+  /**
+   * Song like count
+   */
   likes?: number;
+  /**
+   * Song dislike count
+   */
   dislikes?: number;
+  /**
+   * Song repost (share) count
+   */
   reposts?: number;
+  /**
+   * Song uploader
+   */
   uploader: {
     name?: string;
     url?: string;
   };
+  /**
+   * Whether or not an age-restricted content
+   */
   ageRestricted?: boolean;
+  /**
+   * Stream info
+   */
+  stream:
+    | {
+        playFromSource: true;
+        url?: string;
+      }
+    | {
+        playFromSource: false;
+        song?: Song;
+      };
+  /**
+   * The plugin that created this song
+   */
+  plugin: DisTubePlugin | null;
   #metadata!: T;
   #member?: GuildMember;
   #playlist?: Playlist;
@@ -34,76 +92,31 @@ export class Song<T = unknown> {
    * @param options   - Optional data
    */
   constructor(info: SongInfo, { member, metadata }: { member?: GuildMember; metadata?: T } = {}) {
-    /**
-     * The source of this song info
-     */
     this.source = info.source.toLowerCase();
-    /**
-     * Optional metadata that can be used to identify the song. This is attached by the
-     * {@link DisTube#play} method.
-     */
     this.metadata = <T>metadata;
     this.member = member;
-
-    /**
-     * Song ID.
-     */
     this.id = info.id;
-    /**
-     * Song name.
-     */
     this.name = info.name;
-    /**
-     * Indicates if the song is an active live.
-     */
     this.isLive = info.isLive;
-    /**
-     * Song duration.
-     */
     this.duration = this.isLive || !info.duration ? 0 : info.duration;
-    /**
-     * Formatted duration string (`hh:mm:ss`, `mm:ss` or `Live`).
-     */
     this.formattedDuration = this.isLive ? "Live" : formatDuration(this.duration);
-    /**
-     * Song URL.
-     */
     this.url = info.url;
-    /**
-     * Song thumbnail.
-     */
     this.thumbnail = info.thumbnail;
-    /**
-     * Song views count
-     */
     this.views = info.views;
-    /**
-     * Song like count
-     */
     this.likes = info.likes;
-    /**
-     * Song dislike count
-     */
     this.dislikes = info.dislikes;
-    /**
-     * Song repost (share) count
-     */
     this.reposts = info.reposts;
-    /**
-     * Song uploader
-     */
     this.uploader = {
       name: info.uploader?.name,
       url: info.uploader?.url,
     };
-    /**
-     * Whether or not an age-restricted content
-     */
     this.ageRestricted = info.ageRestricted;
+    this.stream = { playFromSource: info.playFromSource };
+    this.plugin = info.plugin;
   }
 
   /**
-   * The playlist added this song
+   * The playlist this song belongs to
    */
   get playlist() {
     return this.#playlist;
@@ -133,6 +146,10 @@ export class Song<T = unknown> {
     return this.member?.user;
   }
 
+  /**
+   * Optional metadata that can be used to identify the song. This is attached by the
+   * {@link DisTube#play} method.
+   */
   get metadata() {
     return this.#metadata;
   }

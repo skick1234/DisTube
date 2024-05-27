@@ -1,8 +1,8 @@
 import { DisTubeError, StreamType, checkInvalidKey, defaultOptions } from "..";
-import type { DisTubeOptions, ExtractorPlugin, FFmpegArgs, FFmpegOptions, Filters } from "..";
+import type { DisTubeOptions, DisTubePlugin, FFmpegArgs, FFmpegOptions, Filters } from "..";
 
 export class Options {
-  plugins: ExtractorPlugin[];
+  plugins: DisTubePlugin[];
   emitNewSongOnly: boolean;
   savePreviousSongs: boolean;
   customFilters?: Filters;
@@ -11,7 +11,6 @@ export class Options {
   emitAddListWhenCreatingQueue: boolean;
   joinNewVoiceChannel: boolean;
   streamType: StreamType;
-  directLink: boolean;
   ffmpeg: FFmpegOptions;
   constructor(options: DisTubeOptions) {
     if (typeof options !== "object" || Array.isArray(options)) {
@@ -27,7 +26,6 @@ export class Options {
     this.emitAddListWhenCreatingQueue = opts.emitAddListWhenCreatingQueue;
     this.joinNewVoiceChannel = opts.joinNewVoiceChannel;
     this.streamType = opts.streamType;
-    this.directLink = opts.directLink;
     this.ffmpeg = this.#ffmpegOption(options);
     checkInvalidKey(opts, this, "DisTubeOptions");
     this.#validateOptions();
@@ -41,7 +39,6 @@ export class Options {
       "nsfw",
       "emitAddSongWhenCreatingQueue",
       "emitAddListWhenCreatingQueue",
-      "directLink",
     ]);
     const numberOptions = new Set();
     const stringOptions = new Set();
@@ -75,16 +72,38 @@ export class Options {
   }
 
   #ffmpegOption(opts: DisTubeOptions) {
-    const args: {
-      global: FFmpegArgs;
-      input: FFmpegArgs;
-      output: FFmpegArgs;
-    } = { global: {}, input: {}, output: {} };
+    const args: FFmpegArgs = { global: {}, input: {}, output: {} };
     if (opts.ffmpeg?.args) {
       if (opts.ffmpeg.args.global) args.global = opts.ffmpeg.args.global;
       if (opts.ffmpeg.args.input) args.input = opts.ffmpeg.args.input;
       if (opts.ffmpeg.args.output) args.output = opts.ffmpeg.args.output;
     }
-    return { path: opts.ffmpeg?.path ?? "ffmpeg", args };
+    const path = opts.ffmpeg?.path ?? "ffmpeg";
+    if (typeof path !== "string") {
+      throw new DisTubeError("INVALID_TYPE", "string", path, "DisTubeOptions.ffmpeg.path");
+    }
+    for (const [key, value] of Object.entries(args)) {
+      if (typeof value !== "object" || Array.isArray(value)) {
+        throw new DisTubeError("INVALID_TYPE", "object", value, `DisTubeOptions.ffmpeg.${key}`);
+      }
+      for (const [k, v] of Object.entries(value)) {
+        if (
+          typeof v !== "string" &&
+          typeof v !== "number" &&
+          typeof v !== "boolean" &&
+          !Array.isArray(v) &&
+          v !== null &&
+          v !== undefined
+        ) {
+          throw new DisTubeError(
+            "INVALID_TYPE",
+            ["string", "number", "boolean", "Array<string | null | undefined>", "null", "undefined"],
+            v,
+            `DisTubeOptions.ffmpeg.${key}.${k}`,
+          );
+        }
+      }
+    }
+    return { path, args };
   }
 }

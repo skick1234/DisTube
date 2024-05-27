@@ -5,3 +5,5 @@ export * from "./Song";
 export * from "./Queue";
 export * from "./Plugin";
 export * from "./ExtractorPlugin";
+export * from "./InfoExtratorPlugin";
+export * from "./PlayableExtratorPlugin";

@@ -2,9 +2,10 @@ import { PassThrough } from "node:stream";
 import { spawn, spawnSync } from "child_process";
 import { TypedEmitter } from "tiny-typed-emitter";
 import { DisTubeError, Events, StreamType, isURL } from "..";
-import { StreamType as DiscordVoiceStreamType } from "@discordjs/voice";
+import { StreamType as DiscordVoiceStreamType, createAudioResource } from "@discordjs/voice";
 import type { ChildProcess } from "child_process";
-import type { Awaitable, DisTube, FFmpegArgs, FFmpegOptions } from "..";
+import type { AudioResource } from "@discordjs/voice";
+import type { Awaitable, DisTube, FFmpegArg, FFmpegOptions } from "..";
 
 interface StreamOptions {
   ffmpeg: FFmpegOptions;
@@ -48,16 +49,13 @@ export class DisTubeStream extends TypedEmitter<{
   debug: (debug: string) => Awaitable;
   error: (error: Error) => Awaitable;
 }> {
-  private killed = false;
   process?: ChildProcess;
   stream: PassThrough;
-  type: DiscordVoiceStreamType;
-  url: string;
+  audioResource: AudioResource;
   #ffmpegPath: string;
   #opts: string[];
   /**
    * Create a DisTubeStream to play with {@link DisTubeVoice}
-   *
    * @param url     - Stream URL
    * @param options - Stream options
    */
@@ -70,9 +68,7 @@ export class DisTubeStream extends TypedEmitter<{
     }
     super();
     const { ffmpeg, seek, type } = options;
-    this.url = url;
-    this.type = !type ? DiscordVoiceStreamType.OggOpus : DiscordVoiceStreamType.Raw;
-    const opts: FFmpegArgs = {
+    const opts: FFmpegArg = {
       reconnect: 1,
       reconnect_streamed: 1,
       reconnect_delay_max: 5,
@@ -116,6 +112,11 @@ export class DisTubeStream extends TypedEmitter<{
         this.emit("error", err);
       })
       .on("finish", () => this.debug("[stream] log: stream finished"));
+
+    this.audioResource = createAudioResource(this.stream, {
+      inputType: !type ? DiscordVoiceStreamType.OggOpus : DiscordVoiceStreamType.Raw,
+      inlineVolume: true,
+    });
   }
 
   spawn() {
@@ -155,8 +156,7 @@ export class DisTubeStream extends TypedEmitter<{
   }
 
   kill() {
-    if (this.killed) return;
-    this.process?.kill("SIGKILL");
-    this.killed = true;
+    if (!this.stream.destroyed) this.stream.destroy();
+    if (this.process && !this.process.killed) this.process.kill("SIGKILL");
   }
 }

@@ -3,8 +3,6 @@ import { Collection } from "discord.js";
 
 /**
  * Manages the collection of a data model.
- *
- * @virtual
  */
 export abstract class BaseManager<V> extends DisTubeBase {
   /**

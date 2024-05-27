@@ -25,11 +25,12 @@ A powerful Discord.js module for simplifying music commands and effortless playb
 
 ## Features
 
+- Built on top of [discord.js](https://discord.js.org) v14 and [@discordjs/voice](https://discord.js.org)
 - Easy to use and customize
-- Support YouTube and audio link
-- Audio filters (bassboost, nightcore, vaporwave,...)
+- Queue management
+- Audio filters
 - Auto-play related songs
-- Plugin system to support more sites ([Plugin List](https://github.com/skick1234/DisTube/wiki/Projects-Hub#plugins))
+- Plugin system for supporting numerous music sources
 
 ## Requirement
 
@@ -45,3 +46,5 @@ A powerful Discord.js module for simplifying music commands and effortless playb
 Read DisTube's definitions, properties and events details in the [API Documentation page](https://distube.js.org/).
 
 Learn how to build a music bot from scratch with [DisTube Guide](https://github.com/skick1234/DisTube/wiki)
+
+[List of plugins](https://github.com/skick1234/DisTube/wiki/Projects-Hub#plugins) for supporting various sites
