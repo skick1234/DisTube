@@ -1,4 +1,4 @@
-import type { Client, GuildTextBasedChannel } from "discord.js";
+import type { Client } from "discord.js";
 import type {
   DisTube,
   DisTubeEvents,
@@ -6,7 +6,9 @@ import type {
   DisTubePlugin,
   DisTubeVoiceManager,
   Options,
+  Queue,
   QueueManager,
+  Song,
 } from "..";
 
 export abstract class DisTubeBase {
@@ -28,10 +30,11 @@ export abstract class DisTubeBase {
   /**
    * Emit error event
    * @param error   - error
-   * @param channel - Text channel where the error is encountered.
+   * @param queue   - The queue encountered the error
+   * @param song    - The playing song when encountered the error
    */
-  emitError(error: Error, channel?: GuildTextBasedChannel) {
-    this.distube.emitError(error, channel);
+  emitError(error: Error, queue: Queue, song?: Song) {
+    this.distube.emitError(error, queue, song);
   }
   /**
    * The queue manager

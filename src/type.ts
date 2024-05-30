@@ -27,7 +27,7 @@ export type DisTubeEvents = {
   [Events.DELETE_QUEUE]: [queue: Queue];
   [Events.DISCONNECT]: [queue: Queue];
   [Events.EMPTY]: [queue: Queue];
-  [Events.ERROR]: [channel: GuildTextBasedChannel | undefined, error: Error];
+  [Events.ERROR]: [error: Error, queue: Queue, song: Song | undefined];
   [Events.FFMPEG_DEBUG]: [debug: string];
   [Events.FINISH]: [queue: Queue];
   [Events.FINISH_SONG]: [queue: Queue, song: Song];
@@ -229,7 +229,7 @@ export type PlayHandlerOptions = {
   textChannel?: GuildTextBasedChannel;
 };
 
-export interface PlayOptions extends PlayHandlerOptions, ResolveOptions<any> {
+export interface PlayOptions<T = unknown> extends PlayHandlerOptions, ResolveOptions<T> {
   /**
    * Called message (For built-in search events. If this is a {@link
    * https://developer.mozilla.org/en-US/docs/Glossary/Falsy | falsy value}, it will

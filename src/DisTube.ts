@@ -18,7 +18,7 @@ import {
   isTextChannelInstance,
   isURL,
 } from ".";
-import type { Client, GuildTextBasedChannel, VoiceBasedChannel } from "discord.js";
+import type { Client, VoiceBasedChannel } from "discord.js";
 import type {
   Awaitable,
   CustomPlaylistOptions,
@@ -76,10 +76,11 @@ export interface DisTube extends TypedEmitter<TypedDisTubeEvents> {
   /**
    * @event
    * Emitted when DisTube encounters an error while playing songs.
-   * @param channel - Text channel where the error is encountered.
-   * @param error   - The error encountered
+   * @param error   - error
+   * @param queue   - The queue encountered the error
+   * @param song    - The playing song when encountered the error
    */
-  [Events.ERROR]: (channel: GuildTextBasedChannel | undefined, error: Error) => Awaitable;
+  [Events.ERROR]: (error: Error, queue: Queue, song?: Song) => Awaitable;
   /**
    * @event
    * Emitted for FFmpeg debugging information.
@@ -199,10 +200,10 @@ export class DisTube extends TypedEmitter<TypedDisTubeEvents> {
    * @param song         - URL | Search string | {@link Song} | {@link Playlist}
    * @param options      - Optional options
    */
-  async play(
+  async play<T = unknown>(
     voiceChannel: VoiceBasedChannel,
     song: string | Song | Playlist,
-    options: PlayOptions = {},
+    options: PlayOptions<T> = {},
   ): Promise<void> {
     if (!isSupportedVoiceChannel(voiceChannel)) {
       throw new DisTubeError("INVALID_TYPE", "BaseGuildVoiceChannel", voiceChannel, "voiceChannel");
@@ -426,20 +427,11 @@ export class DisTube extends TypedEmitter<TypedDisTubeEvents> {
   /**
    * Emit error event
    * @param error   - error
-   * @param channel - Text channel where the error is encountered.
+   * @param queue   - The queue encountered the error
+   * @param song    - The playing song when encountered the error
    */
-  emitError(error: Error, channel?: GuildTextBasedChannel): void {
-    if (this.listenerCount(Events.ERROR)) {
-      this.emit(Events.ERROR, channel, error);
-    } else {
-      /* eslint-disable no-console */
-      console.error(error);
-      console.warn("Unhandled 'error' event.");
-      console.warn(
-        "See: https://distube.js.org/classes/DisTube.html#error and https://nodejs.org/api/events.html#events_error_events",
-      );
-      /* eslint-enable no-console */
-    }
+  emitError(error: Error, queue: Queue, song?: Song): void {
+    this.emit(Events.ERROR, error, queue, song);
   }
 }
 

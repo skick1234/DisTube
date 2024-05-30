@@ -45,7 +45,7 @@ export class QueueManager extends GuildIdManager<Queue> {
       disconnect: error => {
         queue.remove();
         this.emit(Events.DISCONNECT, queue);
-        if (error) this.emitError(error, queue.textChannel);
+        if (error) this.emitError(error, queue, queue.songs?.[0]);
       },
       error: error => this.#handlePlayingError(queue, error),
       finish: () => this.#handleSongFinish(queue),
@@ -119,11 +119,10 @@ export class QueueManager extends GuildIdManager<Queue> {
     const song = queue.songs.shift() as Song;
     try {
       error.name = "PlayingError";
-      error.message = `${error.message}\nId: ${song.id}\nName: ${song.name}`;
     } catch {
       // Emit original error
     }
-    this.emitError(error, queue.textChannel);
+    this.emitError(error, queue, song);
     if (queue.songs.length > 0) {
       queue._next = queue._prev = false;
       queue._beginTime = 0;
