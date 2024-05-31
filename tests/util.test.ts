@@ -14,9 +14,7 @@ import {
   isTextChannelInstance,
   isURL,
   isVoiceChannelEmpty,
-  parseNumber,
   resolveGuildId,
-  toSecond,
 } from "@";
 
 jest.mock("@/core/DisTubeVoice");
@@ -194,25 +192,6 @@ test("isURL()", () => {
   expect(isURL("http://localhost:1234")).toBe(true);
   expect(isURL("https://distube.js.org/")).toBe(true);
   expect(isURL("http://distube.js.org:433")).toBe(true);
-});
-
-test("parseNumber()", () => {
-  expect(parseNumber({})).toBe(0);
-  expect(parseNumber(".")).toBe(0);
-  expect(parseNumber(123)).toBe(123);
-  expect(parseNumber("12,300")).toBe(12300);
-});
-
-test("toSecond()", () => {
-  expect(toSecond(undefined)).toBe(0);
-  expect(toSecond(123)).toBe(123);
-  expect(toSecond({})).toBe(0);
-  expect(toSecond(".")).toBe(0);
-  expect(toSecond("10")).toBe(10);
-  expect(toSecond("10,234.5")).toBe(10234.5);
-  expect(toSecond("1:10.6")).toBe(70.6);
-  expect(toSecond("1:23:45")).toBe(5025);
-  expect(toSecond("1:1:23:45")).toBe(91425);
 });
 
 test("formatDuration()", () => {

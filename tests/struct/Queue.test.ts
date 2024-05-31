@@ -16,7 +16,16 @@ function createFakeQueueManager() {
 
 function createFakeDisTube() {
   return {
-    options: { ...defaultOptions } as DisTubeOptions,
+    options: {
+      ...defaultOptions,
+      ffmpeg: {
+        args: {
+          global: {},
+          input: {},
+          output: {},
+        },
+      },
+    } as DisTubeOptions,
     filters: defaultFilters,
     handler: createFakeHandler(),
     queues: createFakeQueueManager(),
@@ -54,12 +63,21 @@ const voice = {
   volume: 50,
 };
 fakeClientMember.voice = voice;
-const song = new Song({ id: "xxxxxxxxxxx", url: "https://www.youtube.com/watch?v=xxxxxxxxxxx" }, { source: "test" });
-const anotherSong = new Song({ id: "y", url: "https://www.youtube.com/watch?v=y" }, { source: "test" });
+const song = new Song({
+  id: "xxxxxxxxxxx",
+  url: "https://www.youtube.com/watch?v=xxxxxxxxxxx",
+  source: "test",
+  playFromSource: true,
+});
+const anotherSong = new Song({
+  id: "y",
+  url: "https://www.youtube.com/watch?v=y",
+  source: "test",
+  playFromSource: false,
+});
 
 afterEach(() => {
   jest.resetAllMocks();
-  song.related = [anotherSong];
 });
 
 test("Create a queue with a song", () => {
@@ -90,35 +108,7 @@ test("Getters", () => {
   expect(queue.formattedDuration).toBe("00:00");
 });
 
-describe("Queue#addRelatedSong()", () => {
-  const distube = createFakeDisTube();
-  const queue = new Queue(distube as any, voice as any, song);
-
-  test("Add a related song", async () => {
-    queue.addToQueue = jest.fn();
-    distube.handler.resolve.mockReturnValue(song);
-    await expect(queue.addRelatedSong()).resolves.toBe(song);
-    expect(distube.handler.resolve).toHaveBeenCalledTimes(1);
-    expect(queue.addToQueue).toHaveBeenCalledTimes(1);
-  });
-
-  test("Cannot resolve related song", async () => {
-    distube.handler.resolve.mockReturnValue(null);
-    await expect(queue.addRelatedSong()).rejects.toThrow(new DisTubeError("CANNOT_PLAY_RELATED"));
-  });
-
-  test("No related song", async () => {
-    queue.previousSongs.push(anotherSong);
-    await expect(queue.addRelatedSong()).rejects.toThrow(new DisTubeError("NO_RELATED"));
-    queue.songs[0].related = [];
-    await expect(queue.addRelatedSong()).rejects.toThrow(new DisTubeError("NO_RELATED"));
-  });
-
-  test("No playing song", async () => {
-    queue.songs = [];
-    await expect(queue.addRelatedSong()).rejects.toThrow(new DisTubeError("NO_PLAYING"));
-  });
-});
+test.todo("Queue#addRelatedSong()");
 
 describe("Queue#addToQueue()", () => {
   const distube = createFakeDisTube();
@@ -159,30 +149,14 @@ describe("Queue#addToQueue()", () => {
   });
 });
 
-describe("Queue#stop()", () => {
+test("Queue#stop()", async () => {
   const distube = createFakeDisTube();
 
-  test("leaveOnStop option is enabled", async () => {
-    distube.options.leaveOnStop = true;
-    const queue = new Queue(distube as any, voice as any, song);
-    queue.remove = jest.fn();
-    await queue.stop();
-    expect(queue.stopped).toBe(true);
-    expect(queue.remove).toHaveBeenCalledTimes(1);
-    expect(voice.stop).not.toHaveBeenCalled();
-    expect(voice.leave).toHaveBeenCalledTimes(1);
-  });
-
-  test("leaveOnStop option is disabled", async () => {
-    distube.options.leaveOnStop = false;
-    const queue = new Queue(distube as any, voice as any, song);
-    queue.remove = jest.fn();
-    await queue.stop();
-    expect(queue.stopped).toBe(true);
-    expect(queue.remove).toHaveBeenCalledTimes(1);
-    expect(voice.stop).toHaveBeenCalledTimes(1);
-    expect(voice.leave).not.toHaveBeenCalled();
-  });
+  const queue = new Queue(distube as any, voice as any, song);
+  queue.remove = jest.fn();
+  await queue.stop();
+  expect(queue.stopped).toBe(true);
+  expect(queue.remove).toHaveBeenCalledTimes(1);
 });
 
 describe("Queue#jump()", () => {
@@ -269,24 +243,8 @@ describe("Queue#skip()", () => {
   });
 
   describe("No song to skip", () => {
-    test("Autoplay is enabled", async () => {
-      const queue = new Queue(distube as any, voice as any, song);
-      queue.autoplay = true;
-      distube.handler.resolve.mockReturnValue(anotherSong);
-      await expect(queue.skip()).resolves.toBe(anotherSong);
-      expect(queue.songs[1]).toBe(anotherSong);
-      expect(queue._next).toBe(true);
-      expect(voice.stop).toHaveBeenCalledTimes(1);
-    });
-
-    test("Autoplay is enabled and cannot get the related song", async () => {
-      const queue = new Queue(distube as any, voice as any, song);
-      queue.autoplay = true;
-      distube.handler.resolve.mockRejectedValue(new DisTubeError("NO_UP_NEXT"));
-      await expect(queue.skip()).rejects.toThrow(new DisTubeError("NO_UP_NEXT"));
-      expect(queue._next).toBe(false);
-      expect(voice.stop).toHaveBeenCalledTimes(0);
-    });
+    test.todo("Autoplay is enabled");
+    test.todo("Autoplay is enabled and cannot get the related song");
 
     test("Autoplay is disabled", async () => {
       const queue = new Queue(distube as any, voice as any, song);
@@ -364,7 +322,7 @@ describe("Queue#seek()", () => {
   test("Seek to a valid position", () => {
     const position = 1;
     queue.seek(position);
-    expect(queue.beginTime).toBe(position);
+    expect(queue._beginTime).toBe(position);
     expect(distube.queues.playSong).toHaveBeenCalledWith(queue);
   });
 

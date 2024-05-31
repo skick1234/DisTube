@@ -8,6 +8,10 @@ jest.mock("@discordjs/voice");
 const DisTubeVoice = _DTV as unknown as jest.Mocked<typeof _DTV>;
 const DiscordVoice = _DiscordVoice as unknown as jest.Mocked<typeof _DiscordVoice>;
 
+beforeEach(() => {
+  jest.clearAllMocks();
+});
+
 function createFakeDisTube() {
   return {
     client: { user: { id: "123" } },
