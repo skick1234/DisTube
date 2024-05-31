@@ -182,7 +182,7 @@ export class DisTubeVoice extends TypedEmitter<DisTubeVoiceEvents> {
       throw new DisTubeError("NUMBER_COMPARE", "Volume", "bigger or equal to", 0);
     }
     this.#volume = volume;
-    this.stream?.audioResource?.volume?.setVolume(Math.pow(this.#volume / 100, 0.5 / Math.log10(2)));
+    this.stream?.setVolume(Math.pow(this.#volume / 100, 0.5 / Math.log10(2)));
   }
   /**
    * Get or set the volume percentage

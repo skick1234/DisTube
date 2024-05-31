@@ -1,8 +1,9 @@
-import { PassThrough } from "node:stream";
+import { Transform } from "stream";
 import { spawn, spawnSync } from "child_process";
+import { DisTubeError, Events, isURL } from "..";
 import { TypedEmitter } from "tiny-typed-emitter";
-import { DisTubeError, Events, StreamType, isURL } from "..";
-import { StreamType as DiscordVoiceStreamType, createAudioResource } from "@discordjs/voice";
+import { StreamType, createAudioResource } from "@discordjs/voice";
+import type { TransformCallback } from "stream";
 import type { ChildProcess } from "child_process";
 import type { AudioResource } from "@discordjs/voice";
 import type { Awaitable, DisTube, FFmpegArg, FFmpegOptions } from "..";
@@ -10,7 +11,6 @@ import type { Awaitable, DisTube, FFmpegArg, FFmpegOptions } from "..";
 interface StreamOptions {
   ffmpeg: FFmpegOptions;
   seek?: number;
-  type?: StreamType;
 }
 
 let checked = process.env.NODE_ENV === "test";
@@ -28,13 +28,6 @@ export const checkFFmpeg = (distube: DisTube) => {
     const version = /ffmpeg version (\S+)/iu.exec(result)?.[1];
     if (!version) throw new Error("Invalid FFmpeg version");
     debug(`[test] ffmpeg version: ${version}`);
-
-    if (result.includes("--enable-libopus")) {
-      debug("[test] ffmpeg supports libopus");
-    } else {
-      debug("[test] ffmpeg does not support libopus");
-      distube.options.streamType = StreamType.RAW;
-    }
   } catch (e: any) {
     debug(`[test] failed to spawn ffmpeg at '${path}': ${e?.stack ?? e}`);
     throw new DisTubeError("FFMPEG_NOT_INSTALLED", path);
@@ -49,11 +42,11 @@ export class DisTubeStream extends TypedEmitter<{
   debug: (debug: string) => Awaitable;
   error: (error: Error) => Awaitable;
 }> {
-  process?: ChildProcess;
-  stream: PassThrough;
-  audioResource: AudioResource;
   #ffmpegPath: string;
   #opts: string[];
+  process?: ChildProcess;
+  stream: VolumeTransformer;
+  audioResource: AudioResource;
   /**
    * Create a DisTubeStream to play with {@link DisTubeVoice}
    * @param url     - Stream URL
@@ -67,7 +60,7 @@ export class DisTubeStream extends TypedEmitter<{
       throw new DisTubeError("INVALID_TYPE", "object", options, "options");
     }
     super();
-    const { ffmpeg, seek, type } = options;
+    const { ffmpeg, seek } = options;
     const opts: FFmpegArg = {
       reconnect: 1,
       reconnect_streamed: 1,
@@ -80,14 +73,9 @@ export class DisTubeStream extends TypedEmitter<{
       ar: 48000,
       ac: 2,
       ...ffmpeg.args.output,
+      f: "s16le",
     };
 
-    if (!type) {
-      opts.f = "opus";
-      opts.acodec = "libopus";
-    } else {
-      opts.f = "s16le";
-    }
     if (typeof seek === "number" && seek > 0) opts.ss = seek.toString();
 
     this.#ffmpegPath = ffmpeg.path;
@@ -104,7 +92,7 @@ export class DisTubeStream extends TypedEmitter<{
       "pipe:1",
     ];
 
-    this.stream = new PassThrough();
+    this.stream = new VolumeTransformer();
     this.stream
       .on("close", () => this.kill())
       .on("error", err => {
@@ -113,10 +101,7 @@ export class DisTubeStream extends TypedEmitter<{
       })
       .on("finish", () => this.debug("[stream] log: stream finished"));
 
-    this.audioResource = createAudioResource(this.stream, {
-      inputType: !type ? DiscordVoiceStreamType.OggOpus : DiscordVoiceStreamType.Raw,
-      inlineVolume: true,
-    });
+    this.audioResource = createAudioResource(this.stream, { inputType: StreamType.Raw, inlineVolume: false });
   }
 
   spawn() {
@@ -155,8 +140,42 @@ export class DisTubeStream extends TypedEmitter<{
     this.emit("debug", debug);
   }
 
+  setVolume(volume: number) {
+    this.stream.vol = volume;
+  }
+
   kill() {
     if (!this.stream.destroyed) this.stream.destroy();
     if (this.process && !this.process.killed) this.process.kill("SIGKILL");
+  }
+}
+
+// Based on prism-media
+export class VolumeTransformer extends Transform {
+  private buffer = Buffer.allocUnsafe(0);
+  private readonly extrema = [-Math.pow(2, 16 - 1), Math.pow(2, 16 - 1) - 1];
+  vol: number = 1;
+
+  override _transform(newChunk: Buffer, _encoding: BufferEncoding, done: TransformCallback): void {
+    const { vol } = this;
+    if (vol === 1) {
+      this.push(newChunk);
+      done();
+      return;
+    }
+
+    const bytes = 2;
+    const chunk = Buffer.concat([this.buffer, newChunk]);
+    const readableLength = Math.floor(chunk.length / bytes) * bytes;
+
+    for (let i = 0; i < readableLength; i += bytes) {
+      const value = chunk.readInt16LE(i);
+      const clampedValue = Math.min(this.extrema[1], Math.max(this.extrema[0], value * vol));
+      chunk.writeInt16LE(clampedValue, i);
+    }
+
+    this.buffer = chunk.subarray(readableLength);
+    this.push(chunk.subarray(0, readableLength));
+    done();
   }
 }

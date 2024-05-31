@@ -1,4 +1,4 @@
-import { DisTubeError, StreamType, checkInvalidKey, defaultOptions } from "..";
+import { DisTubeError, checkInvalidKey, defaultOptions } from "..";
 import type { DisTubeOptions, DisTubePlugin, FFmpegArgs, FFmpegOptions, Filters } from "..";
 
 export class Options {
@@ -10,7 +10,6 @@ export class Options {
   emitAddSongWhenCreatingQueue: boolean;
   emitAddListWhenCreatingQueue: boolean;
   joinNewVoiceChannel: boolean;
-  streamType: StreamType;
   ffmpeg: FFmpegOptions;
   constructor(options: DisTubeOptions) {
     if (typeof options !== "object" || Array.isArray(options)) {
@@ -25,7 +24,6 @@ export class Options {
     this.emitAddSongWhenCreatingQueue = opts.emitAddSongWhenCreatingQueue;
     this.emitAddListWhenCreatingQueue = opts.emitAddListWhenCreatingQueue;
     this.joinNewVoiceChannel = opts.joinNewVoiceChannel;
-    this.streamType = opts.streamType;
     this.ffmpeg = this.#ffmpegOption(options);
     checkInvalidKey(opts, this, "DisTubeOptions");
     this.#validateOptions();
@@ -47,9 +45,7 @@ export class Options {
 
     for (const [key, value] of Object.entries(options)) {
       if (value === undefined && optionalOptions.has(key)) continue;
-      if (key === "streamType" && (typeof value !== "number" || isNaN(value) || !StreamType[value])) {
-        throw new DisTubeError("INVALID_TYPE", "StreamType", value, `DisTubeOptions.${key}`);
-      } else if (key === "plugins" && !Array.isArray(value)) {
+      if (key === "plugins" && !Array.isArray(value)) {
         throw new DisTubeError("INVALID_TYPE", "Array<Plugin>", value, `DisTubeOptions.${key}`);
       } else if (booleanOptions.has(key)) {
         if (typeof value !== "boolean") {

@@ -20,7 +20,7 @@ export class TaskQueue {
   /**
    * Waits for last task finished and queues a new task
    */
-  public queuing(): Promise<void> {
+  queuing(): Promise<void> {
     const next = this.remaining ? this.#tasks[this.#tasks.length - 1].promise : Promise.resolve();
     this.#tasks.push(new Task());
     return next;
@@ -29,14 +29,14 @@ export class TaskQueue {
   /**
    * Removes the finished task and processes the next task
    */
-  public resolve(): void {
+  resolve(): void {
     this.#tasks.shift()?.resolve();
   }
 
   /**
    * The remaining number of tasks
    */
-  public get remaining(): number {
+  get remaining(): number {
     return this.#tasks.length;
   }
 }

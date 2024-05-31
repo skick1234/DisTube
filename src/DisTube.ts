@@ -286,7 +286,7 @@ export class DisTube extends TypedEmitter<TypedDisTubeEvents> {
         source: source || "custom",
         name,
         url,
-        thumbnail,
+        thumbnail: thumbnail || resolvedSongs.find(s => s.thumbnail)?.thumbnail,
         songs: resolvedSongs,
       },
       { member, metadata },

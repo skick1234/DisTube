@@ -129,11 +129,6 @@ export type DisTubeOptions = {
    */
   joinNewVoiceChannel?: boolean;
   /**
-   * Decide the {@link DisTubeStream#type} will be used (Not the same as {@link
-   * DisTubeStream#type})
-   */
-  streamType?: StreamType;
-  /**
    * FFmpeg options
    */
   ffmpeg?: {
@@ -312,16 +307,6 @@ export enum PluginType {
 }
 
 export type DisTubePlugin = ExtractorPlugin | InfoExtractorPlugin | PlayableExtractorPlugin;
-
-/**
- * Stream types:
- * - `OPUS` = `0` (Better quality, use more resources - **Recommended**)
- * - `RAW` = `1` (Better performance, use less resources)
- */
-export enum StreamType {
-  OPUS,
-  RAW,
-}
 
 export enum Events {
   ERROR = "error",

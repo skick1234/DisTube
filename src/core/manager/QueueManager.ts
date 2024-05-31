@@ -163,7 +163,6 @@ export class QueueManager extends GuildIdManager<Queue> {
           },
         },
         seek: duration ? queue._beginTime : undefined,
-        type: this.options.streamType,
       };
       const dtStream = new DisTubeStream(streamURL, streamOptions);
       dtStream.on("debug", data => this.emit(Events.FFMPEG_DEBUG, `[${queue.id}]: ${data}`));
