@@ -1,6 +1,6 @@
 # Contributing
 
-**The issue tracker is only for bug reports. If you have a question or an enhancement suggestion, please post it in [GitHub Discussions (preferred)](https://github.com/skick1234/DisTube/discussions) or the [DisTube Support Server](https://discord.gg/feaDd9h) instead of opening an issue.**
+**The issue tracker is only for bug reports. If you have a question or an enhancement suggestion, please post it in the [DisTube Support Server](https://discord.gg/feaDd9h) instead of opening an issue.**
 
 If you wish to contribute to DisTube, feel free to fork the repository and submit a pull request.
 

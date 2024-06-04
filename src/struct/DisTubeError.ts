@@ -32,12 +32,13 @@ const ERROR_MESSAGES = {
 
   NO_QUEUE: "There is no playing queue in this guild",
   QUEUE_EXIST: "This guild has a Queue already",
+  QUEUE_STOPPED: "The queue has been stopped already",
   PAUSED: "The queue has been paused already",
   RESUMED: "The queue has been playing already",
   NO_PREVIOUS: "There is no previous song in this queue",
   NO_UP_NEXT: "There is no up next song",
   NO_SONG_POSITION: "Does not have any song at this position",
-  NO_PLAYING: "There is no playing song in the queue",
+  NO_PLAYING_SONG: "There is no playing song in the queue",
 
   NO_RELATED: "Cannot find any related songs",
   CANNOT_PLAY_RELATED: "Cannot play the related song",
@@ -45,11 +46,12 @@ const ERROR_MESSAGES = {
   UNPLAYABLE_FORMATS: "No playable format found",
   NON_NSFW: "Cannot play age-restricted content in non-NSFW channel",
   NOT_SUPPORTED_URL: "This url is not supported",
-  CANNOT_RESOLVE_SONG: (t: any) => `Cannot resolve ${inspect(t)} to a Song`,
+  NOT_SUPPORTED_SONG: (song: string) => `There is no plugin supporting this song (${song})`,
   NO_VALID_SONG: "'songs' array does not have any valid Song or url",
+  CANNOT_RESOLVE_SONG: (t: any) => `Cannot resolve ${inspect(t)} to a Song`,
   CANNOT_GET_STREAM_URL: (song: string) => `Cannot get stream url from this song (${song})`,
   CANNOT_GET_SEARCH_QUERY: (song: string) => `Cannot get search query from this song (${song})`,
-  CANNOT_GET_SONG_FROM_SEARCH: (song: string) => `Cannot get song stream from search (${song})`,
+  NO_RESULT: (query: string) => `Cannot get song stream from this query (${query})`,
   NO_STREAM_URL: (song: string) => `No stream url attached (${song})`,
 
   EMPTY_FILTERED_PLAYLIST:
@@ -67,12 +69,12 @@ const haveCode = (code: string): code is ErrorCode => Object.keys(ERROR_MESSAGES
 const parseMessage = (m: string | ((...x: any) => string), ...args: any) => (typeof m === "string" ? m : m(...args));
 const getErrorMessage = (code: string, ...args: any): string =>
   haveCode(code) ? parseMessage(ERROR_MESSAGES[code], ...args) : args[0];
-export class DisTubeError<T extends string = ""> extends Error {
+export class DisTubeError<T extends string = any> extends Error {
   errorCode: string;
-  constructor(code: StaticErrorCode);
+  constructor(code: T extends StaticErrorCode ? T : never);
   constructor(code: T extends TemplateErrorCode ? T : never, ...args: Parameters<ErrorMessage[typeof code]>);
   constructor(code: TemplateErrorCode, _: never);
-  constructor(code: T extends ErrorCode ? "This is built-in error code" : T, message: string);
+  constructor(code: T extends ErrorCode ? never : T, message: string);
   constructor(code: string, ...args: any) {
     super(getErrorMessage(code, ...args));
 

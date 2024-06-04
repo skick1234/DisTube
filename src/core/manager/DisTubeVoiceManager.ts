@@ -10,7 +10,7 @@ import type { VoiceBasedChannel } from "discord.js";
  */
 export class DisTubeVoiceManager extends GuildIdManager<DisTubeVoice> {
   /**
-   * Create a {@link DisTubeVoice}
+   * Create a {@link DisTubeVoice} instance
    * @param channel - A voice channel to join
    */
   create(channel: VoiceBasedChannel): DisTubeVoice {
@@ -28,7 +28,7 @@ export class DisTubeVoiceManager extends GuildIdManager<DisTubeVoice> {
     return new DisTubeVoice(this, channel);
   }
   /**
-   * Join a voice channel
+   * Join a voice channel and wait until the connection is ready
    * @param channel - A voice channel to join
    */
   join(channel: VoiceBasedChannel): Promise<DisTubeVoice> {

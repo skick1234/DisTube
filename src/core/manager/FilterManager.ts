@@ -30,7 +30,7 @@ export class FilterManager extends BaseManager<Filter> {
 
   #apply() {
     this.queue._beginTime = this.queue.currentTime;
-    this.queues.playSong(this.queue);
+    this.queue.play(false);
   }
 
   /**

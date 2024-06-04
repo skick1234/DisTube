@@ -1,8 +1,7 @@
 import { DisTubeBase } from ".";
-import { DisTubeError, Events, Playlist, PluginType, Queue, Song, isNsfwChannel, isURL } from "..";
-import type { VoiceBasedChannel } from "discord.js";
-import type { PlayHandlerOptions, ResolveOptions } from "..";
 import { request } from "undici";
+import { DisTubeError, Playlist, PluginType, Song, isURL } from "..";
+import type { DisTubePlugin, ResolveOptions } from "..";
 
 const REDIRECT_CODES = new Set([301, 302, 303, 307, 308]);
 
@@ -19,7 +18,7 @@ export class DisTubeHandler extends DisTubeBase {
   /**
    * Resolve a url or a supported object to a {@link Song} or {@link Playlist}
    * @throws {@link DisTubeError}
-   * @param input    - Resolvable input
+   * @param input   - Resolvable input
    * @param options - Optional options
    * @returns Resolved
    */
@@ -29,94 +28,62 @@ export class DisTubeHandler extends DisTubeBase {
       if ("member" in options) input.member = options.member;
       return input;
     }
-    if (isURL(input)) {
-      for (const plugin of this.plugins) {
-        if (await plugin.validate(input)) return plugin.resolve(input, options);
-      }
-      input = await this.followRedirectLink(input);
-      for (const plugin of this.plugins) {
-        if (await plugin.validate(input)) return plugin.resolve(input, options);
-      }
-      throw new DisTubeError("NOT_SUPPORTED_URL");
-    }
     if (typeof input === "string") {
-      for (const plugin of this.plugins) {
-        if (plugin.type === PluginType.EXTRACTOR) {
-          const result = await plugin.searchSong(input, options);
-          if (result) return result;
-        }
+      if (isURL(input)) {
+        const plugin =
+          (await this._getPluginFromURL(input)) || (await this._getPluginFromURL(await this.followRedirectLink(input)));
+        if (!plugin) throw new DisTubeError("NOT_SUPPORTED_URL");
+        this.debug(`[${plugin.constructor.name}] Resolving song from url: ${input}`);
+        return plugin.resolve(input, options);
+      }
+      try {
+        const song = await this.#searchSong(input, options);
+        if (song) return song;
+      } catch {
+        // ignore
       }
     }
     throw new DisTubeError("CANNOT_RESOLVE_SONG", input);
   }
 
-  /**
-   * Play or add a {@link Playlist} to the queue.
-   * @throws {@link DisTubeError}
-   * @param voiceChannel - A voice channel
-   * @param playlist     - A YouTube playlist url | a Playlist
-   * @param options      - Optional options
-   */
-  async playPlaylist(
-    voiceChannel: VoiceBasedChannel,
-    playlist: Playlist,
-    options: PlayHandlerOptions = {},
-  ): Promise<void> {
-    const { textChannel, skip } = { skip: false, ...options };
-    const position = Number(options.position) || (skip ? 1 : 0);
-    if (!(playlist instanceof Playlist)) throw new DisTubeError("INVALID_TYPE", "Playlist", playlist, "playlist");
-
-    const queue = this.queues.get(voiceChannel);
-
-    const isNsfw = isNsfwChannel(queue?.textChannel || textChannel);
-    if (!this.options.nsfw && !isNsfw) playlist.songs = playlist.songs.filter(s => !s.ageRestricted);
-
-    if (!playlist.songs.length) {
-      if (!this.options.nsfw && !isNsfw) throw new DisTubeError("EMPTY_FILTERED_PLAYLIST");
-      throw new DisTubeError("EMPTY_PLAYLIST");
-    }
-    if (queue) {
-      if (this.options.joinNewVoiceChannel) queue.voice.channel = voiceChannel;
-      queue.addToQueue(playlist.songs, position);
-      if (skip) queue.skip();
-      else this.emit(Events.ADD_LIST, queue, playlist);
-    } else {
-      const newQueue = await this.queues.create(voiceChannel, playlist.songs, textChannel);
-      if (newQueue instanceof Queue) {
-        if (this.options.emitAddListWhenCreatingQueue) this.emit(Events.ADD_LIST, newQueue, playlist);
-        this.emit(Events.PLAY_SONG, newQueue, newQueue.songs[0]);
-      }
-    }
+  async _getPluginFromURL(url: string): Promise<DisTubePlugin | null> {
+    for (const plugin of this.plugins) if (await plugin.validate(url)) return plugin;
+    return null;
   }
 
-  /**
-   * Play or add a {@link Song} to the queue.
-   * @throws {@link DisTubeError}
-   * @param voiceChannel - A voice channel
-   * @param song         - A YouTube playlist url | a Playlist
-   * @param options      - Optional options
-   */
-  async playSong(voiceChannel: VoiceBasedChannel, song: Song, options: PlayHandlerOptions = {}): Promise<void> {
-    if (!(song instanceof Song)) throw new DisTubeError("INVALID_TYPE", "Song", song, "song");
-    const { textChannel, skip } = { skip: false, ...options };
-    const position = Number(options.position) || (skip ? 1 : 0);
-
-    const queue = this.queues.get(voiceChannel);
-    if (!this.options.nsfw && song.ageRestricted && !isNsfwChannel(queue?.textChannel || textChannel)) {
-      throw new DisTubeError("NON_NSFW");
-    }
-    if (queue) {
-      if (this.options.joinNewVoiceChannel) queue.voice.channel = voiceChannel;
-      queue.addToQueue(song, position);
-      if (skip) queue.skip();
-      else this.emit(Events.ADD_SONG, queue, song);
-    } else {
-      const newQueue = await this.queues.create(voiceChannel, song, textChannel);
-      if (newQueue instanceof Queue) {
-        if (this.options.emitAddSongWhenCreatingQueue) this.emit(Events.ADD_SONG, newQueue, song);
-        this.emit(Events.PLAY_SONG, newQueue, song);
+  _getPluginFromSong(song: Song): Promise<DisTubePlugin | null>;
+  _getPluginFromSong<T extends PluginType>(
+    song: Song,
+    types: T[],
+    validate?: boolean,
+  ): Promise<(DisTubePlugin & { type: T }) | null>;
+  async _getPluginFromSong<T extends PluginType>(
+    song: Song,
+    types?: T[],
+    validate = true,
+  ): Promise<(DisTubePlugin & { type: T }) | null> {
+    if (!types || types.includes(<T>song.plugin?.type)) return song.plugin as DisTubePlugin & { type: T };
+    if (!song.url) return null;
+    for (const plugin of this.plugins) {
+      if ((!types || types.includes(<T>plugin?.type)) && (!validate || (await plugin.validate(song.url)))) {
+        return plugin as DisTubePlugin & { type: T };
       }
     }
+    return null;
+  }
+
+  async #searchSong(query: string, options: ResolveOptions = {}, getStreamURL = false): Promise<Song | null> {
+    for (const plugin of this.plugins) {
+      if (plugin.type === PluginType.EXTRACTOR) {
+        this.debug(`[${plugin.constructor.name}] Searching for song: ${query}`);
+        const result = await plugin.searchSong(query, options);
+        if (result) {
+          if (getStreamURL && result.stream.playFromSource) result.stream.url = await plugin.getStreamURL(result);
+          return result;
+        }
+      }
+    }
+    return null;
   }
 
   /**
@@ -126,50 +93,23 @@ export class DisTubeHandler extends DisTubeBase {
   async attachStreamInfo(song: Song) {
     if (song.stream.playFromSource) {
       if (song.stream.url) return;
-      if (song.plugin?.type === PluginType.EXTRACTOR || song.plugin?.type === PluginType.PLAYABLE_EXTRACTOR) {
-        song.stream.url = await song.plugin.getStreamURL(song);
-      }
-      if (song.url && !song.stream.url) {
-        for (const plugin of this.plugins) {
-          if (
-            (plugin.type === PluginType.EXTRACTOR || plugin.type === PluginType.PLAYABLE_EXTRACTOR) &&
-            (await plugin.validate(song.url))
-          ) {
-            song.stream.url = await plugin.getStreamURL(song);
-            break;
-          }
-        }
-      }
-      if (!song.stream.url) throw new DisTubeError("CANNOT_GET_STREAM_URL", `${song.name || song.url || song.id}`);
+      this.debug(`[DisTubeHandler] Getting stream info: ${song}`);
+      const plugin = await this._getPluginFromSong(song, [PluginType.EXTRACTOR, PluginType.PLAYABLE_EXTRACTOR]);
+      if (!plugin) throw new DisTubeError("NOT_SUPPORTED_SONG", song.toString());
+      this.debug(`[${plugin.constructor.name}] Getting stream URL: ${song}`);
+      song.stream.url = await plugin.getStreamURL(song);
+      if (!song.stream.url) throw new DisTubeError("CANNOT_GET_STREAM_URL", song.toString());
     } else {
       if (song.stream.song?.stream?.playFromSource && song.stream.song.stream.url) return;
-      let query: string | undefined;
-      if (song.plugin?.type === PluginType.INFO_EXTRACTOR) {
-        query = await song.plugin.createSearchQuery(song);
-      } else if (song.url) {
-        for (const plugin of this.plugins) {
-          if (plugin.type === PluginType.INFO_EXTRACTOR && (await plugin.validate(song.url))) {
-            query = await plugin.createSearchQuery(song);
-            break;
-          }
-        }
-      }
-      if (!query) throw new DisTubeError("CANNOT_GET_SEARCH_QUERY", `${song.name || song.url || song.id}`);
-      for (const plugin of this.plugins) {
-        if (plugin.type === PluginType.EXTRACTOR) {
-          try {
-            const s = await plugin.searchSong(query, { metadata: song.metadata, member: song.member });
-            if (s && s.stream.playFromSource === true) {
-              s.stream.url = await plugin.getStreamURL(s);
-              song.stream.song = s;
-              break;
-            }
-          } catch {}
-        }
-      }
-      if (!song.stream.song) {
-        throw new DisTubeError("CANNOT_GET_SONG_FROM_SEARCH", `${query || song.name || song.url || song.id}`);
-      }
+      this.debug(`[DisTubeHandler] Getting stream info: ${song}`);
+      const plugin = await this._getPluginFromSong(song, [PluginType.INFO_EXTRACTOR]);
+      if (!plugin) throw new DisTubeError("NOT_SUPPORTED_SONG", song.toString());
+      this.debug(`[${plugin.constructor.name}] Creating search query for: ${song}`);
+      const query = await plugin.createSearchQuery(song);
+      if (!query) throw new DisTubeError("CANNOT_GET_SEARCH_QUERY", song.toString());
+      const altSong = await this.#searchSong(query, { metadata: song.metadata, member: song.member }, true);
+      if (!altSong || !altSong.stream.playFromSource) throw new DisTubeError("NO_RESULT", query || song.toString());
+      song.stream.song = altSong;
     }
   }
 

@@ -155,7 +155,6 @@ export class DisTubeVoice extends TypedEmitter<DisTubeVoiceEvents> {
    */
   stop(force = false) {
     this.audioPlayer.stop(force);
-    this.stream?.kill();
   }
   /**
    * Play a {@link DisTubeStream}

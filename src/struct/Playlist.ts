@@ -1,6 +1,6 @@
 import { DisTubeError, formatDuration, isMemberInstance } from "..";
-import type { PlaylistInfo, Song } from "..";
 import type { GuildMember } from "discord.js";
+import type { PlaylistInfo, ResolveOptions, Song } from "..";
 
 /**
  * Class representing a playlist.
@@ -37,7 +37,7 @@ export class Playlist<T = unknown> implements PlaylistInfo {
    * @param playlist  - Raw playlist info
    * @param options   - Optional data
    */
-  constructor(playlist: PlaylistInfo, { member, metadata }: { member?: GuildMember; metadata?: T } = {}) {
+  constructor(playlist: PlaylistInfo, { member, metadata }: ResolveOptions<T> = {}) {
     if (!Array.isArray(playlist.songs) || !playlist.songs.length) throw new DisTubeError("EMPTY_PLAYLIST");
 
     this.source = playlist.source.toLowerCase();
@@ -75,7 +75,7 @@ export class Playlist<T = unknown> implements PlaylistInfo {
   set member(member: GuildMember | undefined) {
     if (!isMemberInstance(member)) return;
     this.#member = member;
-    this.songs.forEach(s => s.constructor.name === "Song" && (s.member = this.member));
+    this.songs.forEach(s => (s.member = this.member));
   }
 
   /**
@@ -94,6 +94,6 @@ export class Playlist<T = unknown> implements PlaylistInfo {
 
   set metadata(metadata: T) {
     this.#metadata = metadata;
-    this.songs.forEach(s => s.constructor.name === "Song" && (s.metadata = metadata));
+    this.songs.forEach(s => (s.metadata = metadata));
   }
 }

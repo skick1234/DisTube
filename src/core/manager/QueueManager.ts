@@ -10,27 +10,23 @@ export class QueueManager extends GuildIdManager<Queue> {
   /**
    * Create a {@link Queue}
    * @param channel     - A voice channel
-   * @param song        - First song
    * @param textChannel - Default text channel
    * @returns Returns `true` if encounter an error
    */
-  async create(
-    channel: VoiceBasedChannel,
-    song: Song[] | Song,
-    textChannel?: GuildTextBasedChannel,
-  ): Promise<Queue | true> {
+  async create(channel: VoiceBasedChannel, textChannel?: GuildTextBasedChannel): Promise<Queue> {
     if (this.has(channel.guildId)) throw new DisTubeError("QUEUE_EXIST");
+    this.debug(`[QueueManager] Creating queue for guild: ${channel.guildId}`);
     const voice = this.voices.create(channel);
-    const queue = new Queue(this.distube, voice, song, textChannel);
+    const queue = new Queue(this.distube, voice, textChannel);
     await queue._taskQueue.queuing();
     try {
       checkFFmpeg(this.distube);
+      this.debug(`[QueueManager] Joining voice channel: ${channel.id}`);
       await voice.join();
       this.#voiceEventHandler(queue);
       this.add(queue.id, queue);
       this.emit(Events.INIT_QUEUE, queue);
-      const err = await this.playSong(queue);
-      return err || queue;
+      return queue;
     } finally {
       queue._taskQueue.resolve();
     }
@@ -72,11 +68,13 @@ export class QueueManager extends GuildIdManager<Queue> {
    * @param queue - queue
    */
   async #handleSongFinish(queue: Queue): Promise<void> {
+    this.debug(`[QueueManager] Handling song finish: ${queue.id}`);
+    const song = queue.songs[0];
     this.emit(Events.FINISH_SONG, queue, queue.songs[0]);
     await queue._taskQueue.queuing();
     try {
       if (queue.stopped) return;
-      if (queue.repeatMode === RepeatMode.QUEUE && !queue._prev) queue.songs.push(queue.songs[0]);
+      if (queue.repeatMode === RepeatMode.QUEUE && !queue._prev) queue.songs.push(song);
       if (queue._prev) {
         if (queue.repeatMode === RepeatMode.QUEUE) queue.songs.unshift(queue.songs.pop() as Song);
         else queue.songs.unshift(queue.previousSongs.pop() as Song);
@@ -84,12 +82,15 @@ export class QueueManager extends GuildIdManager<Queue> {
       if (queue.songs.length <= 1 && (queue._next || queue.repeatMode === RepeatMode.DISABLED)) {
         if (queue.autoplay) {
           try {
+            this.debug(`[QueueManager] Adding related song: ${queue.id}`);
             await queue.addRelatedSong();
           } catch (e: any) {
+            this.debug(`[${queue.id}] Add related song error: ${e.message}`);
             this.emit(Events.NO_RELATED, queue, e);
           }
         }
         if (queue.songs.length <= 1) {
+          this.debug(`[${queue.id}] Queue is empty, stopping...`);
           if (!queue.autoplay) this.emit(Events.FINISH, queue);
           queue.remove();
           return;
@@ -103,8 +104,11 @@ export class QueueManager extends GuildIdManager<Queue> {
       }
       queue._next = queue._prev = false;
       queue._beginTime = 0;
-      const err = await this.playSong(queue);
-      if (!err && emitPlaySong) this.emit(Events.PLAY_SONG, queue, queue.songs[0]);
+      if (song !== queue.songs[0]) {
+        const playedSong = song.stream.playFromSource ? song : song.stream.song;
+        if (playedSong?.stream.playFromSource) delete playedSong.stream.url;
+      }
+      await this.playSong(queue, emitPlaySong);
     } finally {
       queue._taskQueue.resolve();
     }
@@ -116,43 +120,44 @@ export class QueueManager extends GuildIdManager<Queue> {
    * @param error - error
    */
   #handlePlayingError(queue: Queue, error: Error) {
-    const song = queue.songs.shift() as Song;
+    const song = queue.songs.shift()!;
     try {
       error.name = "PlayingError";
     } catch {
       // Emit original error
     }
+    this.debug(`[${queue.id}] Error while playing: ${error.stack || error.message}`);
     this.emitError(error, queue, song);
     if (queue.songs.length > 0) {
+      this.debug(`[${queue.id}] Playing next song: ${queue.songs[0]}`);
       queue._next = queue._prev = false;
       queue._beginTime = 0;
-      this.playSong(queue).then(e => {
-        if (!e) this.emit(Events.PLAY_SONG, queue, queue.songs[0]);
-      });
+      this.playSong(queue);
     } else {
+      this.debug(`[${queue.id}] Queue is empty, stopping...`);
       queue.stop();
     }
   }
 
   /**
-   * Play a song on voice connection
-   * @param queue - The guild queue
-   * @returns error?
+   * Play a song on voice connection with queue properties
+   * @param queue         - The guild queue to play
+   * @param emitPlaySong  - Whether or not emit {@link Events.PLAY_SONG} event
    */
-  async playSong(queue: Queue): Promise<boolean> {
-    if (!queue) return true;
+  async playSong(queue: Queue, emitPlaySong = true) {
+    if (!queue) return;
     if (queue.stopped || !queue.songs.length) {
       queue.stop();
-      return true;
+      return;
     }
     try {
       const song = queue.songs[0];
+      this.debug(`[${queue.id}] Getting stream from: ${song}`);
       await this.handler.attachStreamInfo(song);
-      const { duration, stream } = song;
-      let streamURL: string | undefined;
-      if (stream.playFromSource) streamURL = stream.url;
-      else if (stream.song?.stream.playFromSource) streamURL = stream.song.stream.url;
-      if (!streamURL) throw new DisTubeError("NO_STREAM_URL", `${song.name || song.url || song.id}`);
+      const willPlaySong = song.stream.playFromSource ? song : song.stream.song;
+      const stream = willPlaySong?.stream;
+      if (!willPlaySong || !stream?.playFromSource || !stream.url) throw new DisTubeError("NO_STREAM_URL", `${song}`);
+      this.debug(`[${queue.id}] Creating DisTubeStream for: ${willPlaySong}`);
       const streamOptions = {
         ffmpeg: {
           path: this.options.ffmpeg.path,
@@ -162,15 +167,15 @@ export class QueueManager extends GuildIdManager<Queue> {
             output: { ...queue.ffmpegArgs.output, ...queue.filters.ffmpegArgs },
           },
         },
-        seek: duration ? queue._beginTime : undefined,
+        seek: willPlaySong.duration ? queue._beginTime : undefined,
       };
-      const dtStream = new DisTubeStream(streamURL, streamOptions);
-      dtStream.on("debug", data => this.emit(Events.FFMPEG_DEBUG, `[${queue.id}]: ${data}`));
+      const dtStream = new DisTubeStream(stream.url, streamOptions);
+      dtStream.on("debug", data => this.emit(Events.FFMPEG_DEBUG, `[${queue.id}] ${data}`));
+      this.debug(`[${queue.id}] Started playing: ${willPlaySong}`);
       queue.voice.play(dtStream);
-      return false;
+      if (emitPlaySong) this.emit(Events.PLAY_SONG, queue, song);
     } catch (e: any) {
       this.#handlePlayingError(queue, e);
-      return true;
     }
   }
 }

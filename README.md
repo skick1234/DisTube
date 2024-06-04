@@ -25,20 +25,19 @@ A powerful Discord.js module for simplifying music commands and effortless playb
 
 ## Features
 
-- Built on top of [discord.js](https://discord.js.org) v14 and [@discordjs/voice](https://discord.js.org)
-- Easy to use and customize
-- Queue management
-- Audio filters
-- Auto-play related songs
-- Plugin system for supporting numerous music sources
+- Easy Integration: Built on top of [discord.js](https://discord.js.org) v14 and [@discordjs/voice](https://discord.js.org).
+- Voice and Queue Management: Handles voice channel connections, disconnections, and manages music queues efficiently.
+- Audio Filters: Offers built-in audio filters (bassboost, echo, karaoke, etc.) and allows for custom filter implementations.
+- Plugin System: Supports extensibility through plugins
+  > DisTube by default doesn't support any music sources. You have to use plugins to support them.
 
 ## Requirement
 
 - Node.js 18.17.0 or higher
 - [discord.js](https://discord.js.org) v14
 - [@discordjs/voice](https://github.com/discordjs/voice)
-- [FFmpeg](https://www.ffmpeg.org/download.html)
 - [@discordjs/opus](https://github.com/discordjs/opus)
+- [FFmpeg](https://www.ffmpeg.org/download.html)
 - [sodium-native](https://www.npmjs.com/package/sodium-native)
 
 ## Documentation

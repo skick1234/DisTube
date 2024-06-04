@@ -8,8 +8,18 @@ import type { ChildProcess } from "child_process";
 import type { AudioResource } from "@discordjs/voice";
 import type { Awaitable, DisTube, FFmpegArg, FFmpegOptions } from "..";
 
-interface StreamOptions {
+/**
+ * Options for {@link DisTubeStream}
+ */
+export interface StreamOptions {
+  /**
+   * FFmpeg options
+   */
   ffmpeg: FFmpegOptions;
+  /**
+   * Seek time (in seconds).
+   * @default 0
+   */
   seek?: number;
 }
 
@@ -105,6 +115,7 @@ export class DisTubeStream extends TypedEmitter<{
   }
 
   spawn() {
+    this.debug(`[process] spawn: ${this.#ffmpegPath} ${this.#opts.join(" ")}`);
     this.process = spawn(this.#ffmpegPath, this.#opts, {
       stdio: ["ignore", "pipe", "pipe"],
       shell: false,
@@ -151,10 +162,10 @@ export class DisTubeStream extends TypedEmitter<{
 }
 
 // Based on prism-media
-export class VolumeTransformer extends Transform {
+class VolumeTransformer extends Transform {
   private buffer = Buffer.allocUnsafe(0);
   private readonly extrema = [-Math.pow(2, 16 - 1), Math.pow(2, 16 - 1) - 1];
-  vol: number = 1;
+  vol = 1;
 
   override _transform(newChunk: Buffer, _encoding: BufferEncoding, done: TransformCallback): void {
     const { vol } = this;

@@ -1,8 +1,8 @@
 import { DisTubeError, FilterManager, defaultFilters } from "@";
 import type { FilterResolvable, Queue } from "@";
 
-const playSong = jest.fn();
-const queue = <Queue>(<unknown>{ distube: { queues: { playSong }, filters: defaultFilters } });
+const play = jest.fn();
+const queue = <Queue>(<unknown>{ distube: { filters: defaultFilters }, play });
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -21,7 +21,7 @@ describe("FilterManager#add()", () => {
     expect(filters.names).toEqual(["3d"]);
     expect(filters.values).toEqual([{ name: "3d", value: defaultFilters["3d"] }]);
     expect(filters.ffmpegArgs).toEqual({ af: defaultFilters["3d"] });
-    expect(playSong).toHaveBeenCalledTimes(1);
+    expect(play).toHaveBeenCalledTimes(1);
   });
   test("Add a filter without override", () => {
     const oldFilter = filters.collection.get("3d");
@@ -32,7 +32,7 @@ describe("FilterManager#add()", () => {
     expect(filters.names).toEqual(["3d"]);
     expect(filters.values).toEqual([oldFilter]);
     expect(filters.ffmpegArgs).toEqual({ af: oldFilter.value });
-    expect(playSong).toHaveBeenCalledTimes(1);
+    expect(play).toHaveBeenCalledTimes(1);
   });
   test("Add a filter with override", () => {
     const oldFilter = filters.collection.get("3d");
@@ -44,7 +44,7 @@ describe("FilterManager#add()", () => {
     expect(filters.names).toEqual(["3d"]);
     expect(filters.values).toEqual([oldFilter]);
     expect(filters.ffmpegArgs).toEqual({ af: oldFilter.value });
-    expect(playSong).toHaveBeenCalledTimes(1);
+    expect(play).toHaveBeenCalledTimes(1);
   });
   test("Add multiple filters without override", () => {
     const oldFilter = filters.collection.get("3d");
@@ -58,7 +58,7 @@ describe("FilterManager#add()", () => {
     expect(filters.names).toEqual(fNames);
     expect(filters.values).toEqual(fNames.map(f => ({ name: f, value: defaultFilters[f] })));
     expect(filters.ffmpegArgs).toEqual({ af: fValues.join(",") });
-    expect(playSong).toHaveBeenCalledTimes(1);
+    expect(play).toHaveBeenCalledTimes(1);
   });
   test("Add multiple filters with override", () => {
     const oldFilters = filters.collection.clone();
@@ -72,7 +72,7 @@ describe("FilterManager#add()", () => {
     expect(filters.names).toEqual(fNames);
     expect(filters.values).toEqual(fNames.map(f => ({ name: f, value: defaultFilters[f] })));
     expect(filters.ffmpegArgs).toEqual({ af: fValues.join(",") });
-    expect(playSong).toHaveBeenCalledTimes(1);
+    expect(play).toHaveBeenCalledTimes(1);
   });
   test("Add a custom filter", () => {
     const customFilter = { name: "custom", value: "customValue" };
@@ -88,7 +88,7 @@ describe("FilterManager#add()", () => {
     expect(filters.names).toEqual([...fNames, customFilter.name]);
     expect(filters.values).toEqual([...fNames.map(f => ({ name: f, value: defaultFilters[f] })), customFilter]);
     expect(filters.ffmpegArgs).toEqual({ af: [...fValues, customFilter.value].join(",") });
-    expect(playSong).toHaveBeenCalledTimes(1);
+    expect(play).toHaveBeenCalledTimes(1);
   });
   test("Add an invalid filter", () => {
     expect(() => filters.add(["invalid"])).toThrow(
@@ -97,7 +97,7 @@ describe("FilterManager#add()", () => {
     expect(() => filters.add({ name: "invalid", value: 1 } as any)).toThrow(
       new DisTubeError("INVALID_TYPE", "FilterResolvable", { name: "invalid", value: 1 }, "filter"),
     );
-    expect(playSong).toHaveBeenCalledTimes(0);
+    expect(play).toHaveBeenCalledTimes(0);
   });
 });
 
@@ -115,7 +115,7 @@ describe("FilterManager#remove()", () => {
     expect(filters.names).toEqual(fNames.filter(f => f !== "3d"));
     expect(filters.values).toEqual(fNames.filter(f => f !== "3d").map(f => ({ name: f, value: defaultFilters[f] })));
     expect(filters.ffmpegArgs).toEqual({ af: fValues.filter(f => f !== defaultFilters["3d"]).join(",") });
-    expect(playSong).toHaveBeenCalledTimes(1);
+    expect(play).toHaveBeenCalledTimes(1);
   });
   test("Remove multiple filters", () => {
     // Remove some filters, "3d" filter is already removed
@@ -129,7 +129,7 @@ describe("FilterManager#remove()", () => {
     expect(filters.names).toEqual(restFilters);
     expect(filters.values).toEqual(restFilters.map(f => ({ name: f, value: defaultFilters[f] })));
     expect(filters.ffmpegArgs).toEqual({ af: restFilters.map(f => defaultFilters[f]).join(",") });
-    expect(playSong).toHaveBeenCalledTimes(1);
+    expect(play).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -143,7 +143,7 @@ describe("FilterManager#set()", () => {
     expect(filters.names).toEqual(["3d"]);
     expect(filters.values).toEqual([{ name: "3d", value: defaultFilters["3d"] }]);
     expect(filters.ffmpegArgs).toEqual({ af: defaultFilters["3d"] });
-    expect(playSong).toHaveBeenCalledTimes(1);
+    expect(play).toHaveBeenCalledTimes(1);
   });
   test("Set multiple filters", () => {
     const oldFilter = filters.collection.get("3d");
@@ -169,7 +169,7 @@ describe("FilterManager#set()", () => {
     expect(filters.ffmpegArgs).toEqual({
       af: newFilters.map(f => (typeof f === "string" ? defaultFilters[f] : f.value)).join(","),
     });
-    expect(playSong).toHaveBeenCalledTimes(1);
+    expect(play).toHaveBeenCalledTimes(1);
   });
   test("Set with invalid arguments", () => {
     expect(() => filters.set(<any>{ name: "invalid", value: 1 })).toThrow(
@@ -178,7 +178,7 @@ describe("FilterManager#set()", () => {
     expect(() => filters.set(<any>0)).toThrow(
       new DisTubeError("INVALID_TYPE", "Array<FilterResolvable>", 0, "filters"),
     );
-    expect(playSong).toHaveBeenCalledTimes(0);
+    expect(play).toHaveBeenCalledTimes(0);
   });
   test("FilterManager#clear()", () => {
     filters.clear();
@@ -186,6 +186,6 @@ describe("FilterManager#set()", () => {
     expect(filters.names).toEqual([]);
     expect(filters.values).toEqual([]);
     expect(filters.ffmpegArgs).toEqual({});
-    expect(playSong).toHaveBeenCalledTimes(1);
+    expect(play).toHaveBeenCalledTimes(1);
   });
 });

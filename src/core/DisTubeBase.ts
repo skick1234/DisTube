@@ -37,6 +37,13 @@ export abstract class DisTubeBase {
     this.distube.emitError(error, queue, song);
   }
   /**
+   * Emit debug event
+   * @param message - debug message
+   */
+  debug(message: string) {
+    this.distube.debug(message);
+  }
+  /**
    * The queue manager
    */
   get queues(): QueueManager {

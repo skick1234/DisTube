@@ -158,11 +158,7 @@ export function isObject(obj: any): obj is object {
   return typeof obj === "object" && obj !== null && !Array.isArray(obj);
 }
 
-export function isRecord<T = unknown>(obj: any): obj is Record<string, T> {
-  return isObject(obj);
-}
-
-type KeyOf<T> = T extends object ? (keyof T)[] : [];
+export type KeyOf<T> = T extends object ? (keyof T)[] : [];
 export function objectKeys<T>(obj: T): KeyOf<T> {
   if (!isObject(obj)) return [] as KeyOf<T>;
   return Object.keys(obj) as KeyOf<T>;
@@ -174,5 +170,5 @@ export function isNsfwChannel(channel?: GuildTextBasedChannel): boolean {
   return channel.nsfw;
 }
 
-type Falsy = undefined | null | false | 0 | "";
+export type Falsy = undefined | null | false | 0 | "";
 export const isTruthy = <T>(x: T | Falsy): x is T => Boolean(x);

@@ -78,20 +78,19 @@ export class Queue extends DisTubeBase {
    * Create a queue for the guild
    * @param distube     - DisTube
    * @param voice       - Voice connection
-   * @param song        - First song(s)
    * @param textChannel - Default text channel
    */
-  constructor(distube: DisTube, voice: DisTubeVoice, song: Song | Song[], textChannel?: GuildTextBasedChannel) {
+  constructor(distube: DisTube, voice: DisTubeVoice, textChannel?: GuildTextBasedChannel) {
     super(distube);
     this.voice = voice;
     this.id = voice.id;
     this.volume = 50;
-    this.songs = Array.isArray(song) ? [...song] : [song];
+    this.songs = [];
     this.previousSongs = [];
     this.stopped = false;
     this._next = false;
     this._prev = false;
-    this.playing = true;
+    this.playing = false;
     this.paused = false;
     this.repeatMode = RepeatMode.DISABLED;
     this.autoplay = false;
@@ -164,6 +163,7 @@ export class Queue extends DisTubeBase {
    * @returns The guild queue
    */
   addToQueue(song: Song | Song[], position = 0): Queue {
+    if (this.stopped) throw new DisTubeError("QUEUE_STOPPED");
     if (!song || (Array.isArray(song) && !song.length)) {
       throw new DisTubeError("INVALID_TYPE", ["Song", "Array<Song>"], song, "song");
     }
@@ -186,7 +186,6 @@ export class Queue extends DisTubeBase {
    */
   pause(): Queue {
     if (this.paused) throw new DisTubeError("PAUSED");
-    this.playing = false;
     this.paused = true;
     this.voice.pause();
     return this;
@@ -196,8 +195,7 @@ export class Queue extends DisTubeBase {
    * @returns The guild queue
    */
   resume(): Queue {
-    if (this.playing) throw new DisTubeError("RESUMED");
-    this.playing = true;
+    if (!this.paused) throw new DisTubeError("RESUMED");
     this.paused = false;
     this.voice.unpause();
     return this;
@@ -335,18 +333,12 @@ export class Queue extends DisTubeBase {
     if (typeof time !== "number") throw new DisTubeError("INVALID_TYPE", "number", time, "time");
     if (isNaN(time) || time < 0) throw new DisTubeError("NUMBER_COMPARE", "time", "bigger or equal to", 0);
     this._beginTime = time;
-    this.queues.playSong(this);
+    this.play(false);
     return this;
   }
   async #getRelatedSong(current: Song): Promise<Song[]> {
-    if (current.plugin) return current.plugin.getRelatedSongs(current);
-    if (current.url) {
-      for (const plugin of this.plugins) {
-        if (await plugin.validate(current.url)) {
-          return plugin.getRelatedSongs(current);
-        }
-      }
-    }
+    const plugin = await this.handler._getPluginFromSong(current);
+    if (plugin) return plugin.getRelatedSongs(current);
     return [];
   }
   /**
@@ -355,12 +347,14 @@ export class Queue extends DisTubeBase {
    */
   async addRelatedSong(): Promise<Song> {
     const current = this.songs?.[0];
-    if (!current) throw new DisTubeError("NO_PLAYING");
+    if (!current) throw new DisTubeError("NO_PLAYING_SONG");
     const prevIds = this.previousSongs.map(p => p.id);
     const relatedSongs = (await this.#getRelatedSong(current)).filter(s => !prevIds.includes(s.id));
+    this.debug(`[${this.id}] Getting related songs from: ${current}`);
     if (!relatedSongs.length && !current.stream.playFromSource) {
       const altSong = current.stream.song;
       if (altSong) relatedSongs.push(...(await this.#getRelatedSong(altSong)).filter(s => !prevIds.includes(s.id)));
+      this.debug(`[${this.id}] Getting related songs from streamed song: ${altSong}`);
     }
     const song = relatedSongs[0];
     if (!song) throw new DisTubeError("NO_RELATED");
@@ -385,8 +379,7 @@ export class Queue extends DisTubeBase {
     }
   }
   /**
-   * Remove the queue from the manager (This does not leave the voice channel even if
-   * {@link DisTubeOptions | DisTubeOptions.leaveOnStop} is enabled)
+   * Remove the queue from the manager
    */
   remove() {
     this.stopped = true;
@@ -407,5 +400,14 @@ export class Queue extends DisTubeBase {
   toggleAutoplay(): boolean {
     this.autoplay = !this.autoplay;
     return this.autoplay;
+  }
+  /**
+   * Play the queue
+   * @param emitPlaySong - Whether or not emit {@link Events.PLAY_SONG} event
+   */
+  play(emitPlaySong = true) {
+    if (this.stopped) throw new DisTubeError("QUEUE_STOPPED");
+    this.playing = true;
+    return this.queues.playSong(this, emitPlaySong);
   }
 }

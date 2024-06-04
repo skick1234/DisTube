@@ -1,7 +1,6 @@
 import { Plugin } from ".";
 import { PluginType } from "..";
-import type { GuildMember } from "discord.js";
-import type { Awaitable, Playlist, Song } from "..";
+import type { Awaitable, Playlist, ResolveOptions, Song } from "..";
 
 /**
  * This plugin can extract the info, search, and play a song directly from its source
@@ -18,13 +17,13 @@ export abstract class ExtractorPlugin extends Plugin {
    * @param url     - URL
    * @param options - Optional options
    */
-  abstract resolve<T>(url: string, options: { member?: GuildMember; metadata?: T }): Awaitable<Song<T> | Playlist<T>>;
+  abstract resolve<T>(url: string, options: ResolveOptions<T>): Awaitable<Song<T> | Playlist<T>>;
   /**
    * Search for a Song which playable from this plugin's source
    * @param query   - Search query
    * @param options - Optional options
    */
-  abstract searchSong<T>(query: string, options: { member?: GuildMember; metadata?: T }): Awaitable<Song<T> | null>;
+  abstract searchSong<T>(query: string, options: ResolveOptions<T>): Awaitable<Song<T> | null>;
   /**
    * Get the stream url from {@link Song#url}. Returns {@link Song#url} by default.
    * Not needed if the plugin plays song from YouTube.

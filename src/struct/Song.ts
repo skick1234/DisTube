@@ -1,7 +1,7 @@
 import { Playlist } from ".";
 import { DisTubeError, formatDuration, isMemberInstance } from "..";
 import type { GuildMember } from "discord.js";
-import type { DisTubePlugin, SongInfo } from "..";
+import type { DisTubePlugin, ResolveOptions, SongInfo } from "..";
 
 /**
  * Class representing a song.
@@ -71,12 +71,24 @@ export class Song<T = unknown> {
    */
   stream:
     | {
+        /**
+         * The stream of this song will be played from source
+         */
         playFromSource: true;
+        /**
+         * Stream URL of this song
+         */
         url?: string;
       }
     | {
+        /**
+         * The stream of this song will be played from another song
+         */
         playFromSource: false;
-        song?: Song;
+        /**
+         * The song that this song will be played from
+         */
+        song?: Song<T>;
       };
   /**
    * The plugin that created this song
@@ -91,7 +103,7 @@ export class Song<T = unknown> {
    * @param info      - Raw song info
    * @param options   - Optional data
    */
-  constructor(info: SongInfo, { member, metadata }: { member?: GuildMember; metadata?: T } = {}) {
+  constructor(info: SongInfo, { member, metadata }: ResolveOptions<T> = {}) {
     this.source = info.source.toLowerCase();
     this.metadata = <T>metadata;
     this.member = member;
@@ -156,5 +168,9 @@ export class Song<T = unknown> {
 
   set metadata(metadata: T) {
     this.#metadata = metadata;
+  }
+
+  toString() {
+    return this.name || this.url || this.id || "Unknown";
   }
 }

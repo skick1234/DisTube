@@ -21,14 +21,30 @@ import type {
 
 export type Awaitable<T = any> = T | PromiseLike<T>;
 
+export enum Events {
+  ERROR = "error",
+  ADD_LIST = "addList",
+  ADD_SONG = "addSong",
+  PLAY_SONG = "playSong",
+  FINISH_SONG = "finishSong",
+  EMPTY = "empty",
+  FINISH = "finish",
+  INIT_QUEUE = "initQueue",
+  NO_RELATED = "noRelated",
+  DISCONNECT = "disconnect",
+  DELETE_QUEUE = "deleteQueue",
+  FFMPEG_DEBUG = "ffmpegDebug",
+  DEBUG = "debug",
+}
+
 export type DisTubeEvents = {
   [Events.ADD_LIST]: [queue: Queue, playlist: Playlist];
   [Events.ADD_SONG]: [queue: Queue, song: Song];
   [Events.DELETE_QUEUE]: [queue: Queue];
   [Events.DISCONNECT]: [queue: Queue];
-  [Events.EMPTY]: [queue: Queue];
   [Events.ERROR]: [error: Error, queue: Queue, song: Song | undefined];
   [Events.FFMPEG_DEBUG]: [debug: string];
+  [Events.DEBUG]: [debug: string];
   [Events.FINISH]: [queue: Queue];
   [Events.FINISH_SONG]: [queue: Queue, song: Song];
   [Events.INIT_QUEUE]: [queue: Queue];
@@ -97,7 +113,7 @@ export type DisTubeOptions = {
    */
   plugins?: DisTubePlugin[];
   /**
-   * Whether or not emitting {@link DisTube#playSong} event when looping a song
+   * Whether or not emitting {@link Events.PLAY_SONG} event when looping a song
    * or next song is the same as the previous one
    */
   emitNewSongOnly?: boolean;
@@ -308,30 +324,27 @@ export enum PluginType {
 
 export type DisTubePlugin = ExtractorPlugin | InfoExtractorPlugin | PlayableExtractorPlugin;
 
-export enum Events {
-  ERROR = "error",
-  ADD_LIST = "addList",
-  ADD_SONG = "addSong",
-  PLAY_SONG = "playSong",
-  FINISH_SONG = "finishSong",
-  EMPTY = "empty",
-  FINISH = "finish",
-  INIT_QUEUE = "initQueue",
-  NO_RELATED = "noRelated",
-  DISCONNECT = "disconnect",
-  DELETE_QUEUE = "deleteQueue",
-  FFMPEG_DEBUG = "ffmpegDebug",
-}
-
 export type FFmpegArg = Record<string, string | number | boolean | Array<string | null | undefined> | null | undefined>;
 
+/**
+ * FFmpeg arguments for different use cases
+ */
 export type FFmpegArgs = {
   global: FFmpegArg;
   input: FFmpegArg;
   output: FFmpegArg;
 };
 
+/**
+ * FFmpeg options
+ */
 export type FFmpegOptions = {
+  /**
+   * Path to the ffmpeg executable
+   */
   path: string;
+  /**
+   * Arguments
+   */
   args: FFmpegArgs;
 };

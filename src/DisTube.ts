@@ -13,6 +13,7 @@ import {
   isClientInstance,
   isMemberInstance,
   isMessageInstance,
+  isNsfwChannel,
   isObject,
   isSupportedVoiceChannel,
   isTextChannelInstance,
@@ -36,43 +37,36 @@ import type {
 // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
 export const { version }: { version: string } = require("../package.json");
 
-// eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
-export interface DisTube extends TypedEmitter<TypedDisTubeEvents> {
+/**
+ * DisTube class
+ */
+export class DisTube extends TypedEmitter<TypedDisTubeEvents> {
   /**
    * @event
    * Emitted after DisTube add a new playlist to the playing {@link Queue}.
    * @param queue    - The guild queue
    * @param playlist - Playlist info
    */
-  [Events.ADD_LIST]: (queue: Queue, playlist: Playlist) => Awaitable;
+  static readonly [Events.ADD_LIST]: (queue: Queue, playlist: Playlist) => Awaitable;
   /**
    * @event
    * Emitted after DisTube add a new song to the playing {@link Queue}.
    * @param queue - The guild queue
    * @param song  - Added song
    */
-  [Events.ADD_SONG]: (queue: Queue, song: Song) => Awaitable;
+  static readonly [Events.ADD_SONG]: (queue: Queue, song: Song) => Awaitable;
   /**
    * @event
    * Emitted when a {@link Queue} is deleted with any reasons.
    * @param queue - The guild queue
    */
-  [Events.DELETE_QUEUE]: (queue: Queue) => Awaitable;
+  static readonly [Events.DELETE_QUEUE]: (queue: Queue) => Awaitable;
   /**
    * @event
    * Emitted when the bot is disconnected to a voice channel.
    * @param queue - The guild queue
    */
-  [Events.DISCONNECT]: (queue: Queue) => Awaitable;
-  /**
-   * @event
-   * Emitted when there is no user in the voice channel, {@link DisTubeOptions}.leaveOnEmpty
-   * is `true` and there is a playing queue.
-   * If there is no playing queue (stopped and {@link DisTubeOptions}.leaveOnStop is
-   * `false`), it will leave the channel without emitting this event.
-   * @param queue - The guild queue
-   */
-  [Events.EMPTY]: (queue: Queue) => Awaitable;
+  static readonly [Events.DISCONNECT]: (queue: Queue) => Awaitable;
   /**
    * @event
    * Emitted when DisTube encounters an error while playing songs.
@@ -80,41 +74,47 @@ export interface DisTube extends TypedEmitter<TypedDisTubeEvents> {
    * @param queue   - The queue encountered the error
    * @param song    - The playing song when encountered the error
    */
-  [Events.ERROR]: (error: Error, queue: Queue, song?: Song) => Awaitable;
+  static readonly [Events.ERROR]: (error: Error, queue: Queue, song?: Song) => Awaitable;
   /**
    * @event
-   * Emitted for FFmpeg debugging information.
-   * @param debug - The debug information
+   * Emitted for logging FFmpeg debug information.
+   * @param debug - Debug message string.
    */
-  [Events.FFMPEG_DEBUG]: (debug: string) => Awaitable;
+  static readonly [Events.FFMPEG_DEBUG]: (debug: string) => Awaitable;
   /**
    * @event
-   * Emitted when there is no more song in the queue and {@link Queue#autoplay} is
-   * `false`. DisTube will leave voice channel if {@link
-   * DisTubeOptions}.leaveOnFinish is `true`.
+   * Emitted to provide debug information from DisTube's operation.
+   * Useful for troubleshooting or logging purposes.
+   *
+   * @param debug - Debug message string.
+   */
+  static readonly [Events.DEBUG]: (debug: string) => Awaitable;
+  /**
+   * @event
+   * Emitted when there is no more song in the queue and {@link Queue#autoplay} is `false`.
    * @param queue - The guild queue
    */
-  [Events.FINISH]: (queue: Queue) => Awaitable;
+  static readonly [Events.FINISH]: (queue: Queue) => Awaitable;
   /**
    * @event
    * Emitted when DisTube finished a song.
    * @param queue - The guild queue
    * @param song  - Finished song
    */
-  [Events.FINISH_SONG]: (queue: Queue, song: Song) => Awaitable;
+  static readonly [Events.FINISH_SONG]: (queue: Queue, song: Song) => Awaitable;
   /**
    * @event
    * Emitted when DisTube initialize a queue to change queue default properties.
    * @param queue - The guild queue
    */
-  [Events.INIT_QUEUE]: (queue: Queue) => Awaitable;
+  static readonly [Events.INIT_QUEUE]: (queue: Queue) => Awaitable;
   /**
    * @event
    * Emitted when {@link Queue#autoplay} is `true`, {@link Queue#songs} is empty, and
    * DisTube cannot find related songs to play.
    * @param queue - The guild queue
    */
-  [Events.NO_RELATED]: (queue: Queue) => Awaitable;
+  static readonly [Events.NO_RELATED]: (queue: Queue) => Awaitable;
   /**
    * @event
    * Emitted when DisTube play a song.
@@ -123,14 +123,7 @@ export interface DisTube extends TypedEmitter<TypedDisTubeEvents> {
    * @param queue - The guild queue
    * @param song  - Playing song
    */
-  [Events.PLAY_SONG]: (queue: Queue, song: Song) => Awaitable;
-}
-
-/**
- * DisTube class
- */
-// eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
-export class DisTube extends TypedEmitter<TypedDisTubeEvents> {
+  static readonly [Events.PLAY_SONG]: (queue: Queue, song: Song) => Awaitable;
   /**
    * DisTube internal handler
    */
@@ -228,17 +221,34 @@ export class DisTube extends TypedEmitter<TypedDisTubeEvents> {
       throw new DisTubeError("INVALID_TYPE", "Discord.GuildMember", member, "options.member");
     }
 
-    const queue = this.getQueue(voiceChannel);
-    await queue?._taskQueue.queuing();
+    const queue = this.getQueue(voiceChannel) || (await this.queues.create(voiceChannel, textChannel));
+    await queue._taskQueue.queuing();
     try {
-      song = await this.handler.resolve(song, { member, metadata });
-      if (song instanceof Playlist) {
-        await this.handler.playPlaylist(voiceChannel, song, { textChannel, skip, position });
+      this.debug(`[${queue.id}] Resolving song: ${typeof song === "string" ? song : JSON.stringify(song)}`);
+      const resolved = await this.handler.resolve(song, { member, metadata });
+      const isNsfw = isNsfwChannel(queue?.textChannel || textChannel);
+      if (resolved instanceof Playlist) {
+        if (!this.options.nsfw && !isNsfw) {
+          resolved.songs = resolved.songs.filter(s => !s.ageRestricted);
+          if (!resolved.songs.length) throw new DisTubeError("EMPTY_FILTERED_PLAYLIST");
+        }
+        if (!resolved.songs.length) throw new DisTubeError("EMPTY_PLAYLIST");
+        this.debug(`[${queue.id}] Adding playlist to queue: ${resolved.songs.length} songs`);
+        queue.addToQueue(resolved.songs, position);
+        if (queue.playing || this.options.emitAddListWhenCreatingQueue) this.emit(Events.ADD_LIST, queue, resolved);
       } else {
-        await this.handler.playSong(voiceChannel, song, { textChannel, skip, position });
+        if (!this.options.nsfw && resolved.ageRestricted && !isNsfwChannel(queue?.textChannel || textChannel)) {
+          throw new DisTubeError("NON_NSFW");
+        }
+        this.debug(`[${queue.id}] Adding song to queue: ${resolved.name || resolved.url || resolved.id || resolved}`);
+        queue.addToQueue(resolved, position);
+        if (queue.playing || this.options.emitAddSongWhenCreatingQueue) this.emit(Events.ADD_SONG, queue, resolved);
       }
+
+      if (!queue.playing) await queue.play();
     } catch (e: any) {
       if (!(e instanceof DisTubeError)) {
+        this.debug(`[${queue.id}] Unexpected error while playing song: ${e.stack || e.message}`);
         try {
           e.name = "PlayError";
           e.message = `${typeof song === "string" ? song : song.url}\n${e.message}`;
@@ -248,7 +258,7 @@ export class DisTube extends TypedEmitter<TypedDisTubeEvents> {
       }
       throw e;
     } finally {
-      queue?._taskQueue.resolve();
+      queue._taskQueue.resolve();
     }
   }
 
@@ -432,6 +442,14 @@ export class DisTube extends TypedEmitter<TypedDisTubeEvents> {
    */
   emitError(error: Error, queue: Queue, song?: Song): void {
     this.emit(Events.ERROR, error, queue, song);
+  }
+
+  /**
+   * Emit debug event
+   * @param message - debug message
+   */
+  debug(message: string) {
+    this.emit(Events.DEBUG, message);
   }
 }
 
