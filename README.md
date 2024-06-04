@@ -29,7 +29,7 @@ A powerful Discord.js module for simplifying music commands and effortless playb
 - Voice and Queue Management: Handles voice channel connections, disconnections, and manages music queues efficiently.
 - Audio Filters: Offers built-in audio filters (bassboost, echo, karaoke, etc.) and allows for custom filter implementations.
 - Plugin System: Supports extensibility through plugins
-  > DisTube by default doesn't support any music sources. You have to use plugins to support them.
+  > DisTube does not have built-in support for music sources. You need to use plugins to add support for them.
 
 ## Requirement
 
