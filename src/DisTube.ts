@@ -224,7 +224,7 @@ export class DisTube extends TypedEmitter<TypedDisTubeEvents> {
     const queue = this.getQueue(voiceChannel) || (await this.queues.create(voiceChannel, textChannel));
     await queue._taskQueue.queuing();
     try {
-      this.debug(`[${queue.id}] Resolving song: ${typeof song === "string" ? song : JSON.stringify(song)}`);
+      this.debug(`[${queue.id}] Playing input: ${song}`);
       const resolved = await this.handler.resolve(song, { member, metadata });
       const isNsfw = isNsfwChannel(queue?.textChannel || textChannel);
       if (resolved instanceof Playlist) {

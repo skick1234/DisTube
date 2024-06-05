@@ -96,4 +96,8 @@ export class Playlist<T = unknown> implements PlaylistInfo {
     this.#metadata = metadata;
     this.songs.forEach(s => (s.metadata = metadata));
   }
+
+  toString() {
+    return `${this.name} (${this.songs.length} songs)`;
+  }
 }

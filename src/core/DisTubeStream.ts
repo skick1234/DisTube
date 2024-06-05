@@ -1,6 +1,6 @@
 import { Transform } from "stream";
+import { DisTubeError, Events } from "..";
 import { spawn, spawnSync } from "child_process";
-import { DisTubeError, Events, isURL } from "..";
 import { TypedEmitter } from "tiny-typed-emitter";
 import { StreamType, createAudioResource } from "@discordjs/voice";
 import type { TransformCallback } from "stream";
@@ -63,12 +63,6 @@ export class DisTubeStream extends TypedEmitter<{
    * @param options - Stream options
    */
   constructor(url: string, options: StreamOptions) {
-    if (typeof url !== "string" || !isURL(url)) {
-      throw new DisTubeError("INVALID_TYPE", "an URL", url);
-    }
-    if (!options || typeof options !== "object" || Array.isArray(options)) {
-      throw new DisTubeError("INVALID_TYPE", "object", options, "options");
-    }
     super();
     const { ffmpeg, seek } = options;
     const opts: FFmpegArg = {
@@ -87,6 +81,14 @@ export class DisTubeStream extends TypedEmitter<{
     };
 
     if (typeof seek === "number" && seek > 0) opts.ss = seek.toString();
+
+    const fileUrl = new URL(url);
+    if (fileUrl.protocol === "file:") {
+      opts.reconnect = null;
+      opts.reconnect_streamed = null;
+      opts.reconnect_delay_max = null;
+      opts.i = fileUrl.hostname + fileUrl.pathname;
+    }
 
     this.#ffmpegPath = ffmpeg.path;
     this.#opts = [
