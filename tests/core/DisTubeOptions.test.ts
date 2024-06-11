@@ -1,3 +1,4 @@
+import { expect, test } from "vitest";
 import { Options, defaultOptions } from "@";
 
 test("Default DisTubeOptions", () => {

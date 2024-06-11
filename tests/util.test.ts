@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/ban-ts-comment */
+import { expect, test, vi } from "vitest";
 import { Client, ClientUser, Guild, Message, VoiceState } from "discord.js";
 import { rawBotVoiceState, rawClientUser, rawGuild, rawMessage, rawUserVoiceState } from "./raw";
 import {
@@ -16,13 +18,16 @@ import {
   isVoiceChannelEmpty,
   resolveGuildId,
 } from "@";
+import type { Mocked } from "vitest";
 
-jest.mock("@/core/DisTubeVoice");
+vi.mock("@/core/DisTubeVoice");
 
-const Voice = _Voice as unknown as jest.Mocked<typeof _Voice>;
+const Voice: Mocked<typeof _Voice> = _Voice;
 
 const client = new Client({ intents: [] });
+// @ts-expect-error
 client.user = new ClientUser(client, rawClientUser);
+// @ts-expect-error
 const guild = new Guild(client, rawGuild);
 const textChannel = guild.channels.cache.get("737499503384461325");
 const voiceChannel = guild.channels.cache.get("853225781604646933");
@@ -31,8 +36,11 @@ const threadChannel = guild.channels.cache.get("1098543313134563338");
 const forumChannel = guild.channels.cache.get("737499503384461324");
 Object.defineProperty(voiceChannel, "joinable", { value: true, writable: false });
 Object.defineProperty(stageChannel, "joinable", { value: false, writable: false });
+// @ts-expect-error
 const botVoiceState = new VoiceState(guild, rawBotVoiceState);
+// @ts-expect-error
 const userVoiceState = new VoiceState(guild, rawUserVoiceState);
+// @ts-expect-error
 const message = new Message(client, rawMessage);
 const clientMember = guild.members.resolve(guild.client.user.id);
 
@@ -103,6 +111,7 @@ test("isMemberInstance()", () => {
 test("resolveGuildID()", () => {
   const voice = new Voice({} as any, voiceChannel);
   const gId = "737499502763704370";
+  // @ts-expect-error
   voice.id = gId;
   const testFn = resolveGuildId;
   expect(testFn(voice)).toBe(gId);

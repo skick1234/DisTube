@@ -35,8 +35,8 @@ jobs:
       - name: Linting
         run: pnpm run lint
 
-      - name: Run TypeScript compiler
-        run: pnpm run build:check
+      - name: Run type check
+        run: pnpm run type
 
       - name: Run tests
         run: pnpm run test

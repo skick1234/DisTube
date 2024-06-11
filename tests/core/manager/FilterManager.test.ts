@@ -1,11 +1,12 @@
+import { beforeEach, describe, expect, test, vi } from "vitest";
 import { DisTubeError, FilterManager, defaultFilters } from "@";
 import type { FilterResolvable, Queue } from "@";
 
-const play = jest.fn();
+const play = vi.fn();
 const queue = <Queue>(<unknown>{ distube: { filters: defaultFilters }, play });
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
 });
 
 const fNames = Object.keys(defaultFilters);
