@@ -56,11 +56,9 @@ export class QueueManager extends GuildIdManager<Queue> {
    * @param queue - Queue
    */
   #emitPlaySong(queue: Queue): boolean {
-    return (
-      !this.options.emitNewSongOnly ||
-      (queue.repeatMode === RepeatMode.SONG && queue._next) ||
-      (queue.repeatMode !== RepeatMode.SONG && queue.songs[0]?.id !== queue.songs[1]?.id)
-    );
+    if (!this.options.emitNewSongOnly) return true;
+    if (queue.repeatMode === RepeatMode.SONG) return queue._next || queue._prev;
+    return queue.songs[0].id !== queue.songs[1].id;
   }
 
   /**

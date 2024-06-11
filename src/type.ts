@@ -194,8 +194,7 @@ export interface SongInfo {
   plugin: DisTubePlugin | null;
   source: string;
   playFromSource: boolean;
-  streamURL?: string;
-  id?: string;
+  id: string;
   name?: string;
   isLive?: boolean;
   duration?: number;

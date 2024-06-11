@@ -14,7 +14,7 @@ export class Song<T = unknown> {
   /**
    * Song ID.
    */
-  id?: string;
+  id: string;
   /**
    * Song name.
    */

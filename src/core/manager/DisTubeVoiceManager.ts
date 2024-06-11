@@ -11,7 +11,7 @@ import type { VoiceBasedChannel } from "discord.js";
 export class DisTubeVoiceManager extends GuildIdManager<DisTubeVoice> {
   /**
    * Create a {@link DisTubeVoice} instance
-   * @param channel - A voice channel to join
+   * @param channel - A voice chann el to join
    */
   create(channel: VoiceBasedChannel): DisTubeVoice {
     const existing = this.get(channel.guildId);
