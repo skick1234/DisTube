@@ -2,5 +2,5 @@
 . "$(dirname "$0")/_/husky.sh"
 
 pnpm install --frozen-lockfile
-pnpm run build:check
+pnpm run type
 pnpm run test
