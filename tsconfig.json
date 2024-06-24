@@ -1,10 +1,11 @@
 {
   "include": ["src/**/*.ts"],
+  "exclude": ["node_modules"],
   "compilerOptions": {
-    "module": "CommonJS",
-    "moduleResolution": "node",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
     "lib": ["ESNext"],
-    "target": "ES2021",
+    "target": "ESNext",
     "emitDecoratorMetadata": false,
     "experimentalDecorators": true,
     "useDefineForClassFields": true,

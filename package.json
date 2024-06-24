@@ -3,8 +3,20 @@
   "version": "5.0.2",
   "description": "A powerful Discord.js module for simplifying music commands and effortless playback of various sources with integrated audio filters.",
   "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
-  "exports": "./dist/index.js",
+  "exports": {
+    ".": {
+      "require": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "import": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      }
+    }
+  },
   "directories": {
     "lib": "src",
     "test": "tests"
@@ -13,7 +25,7 @@
     "dist"
   ],
   "scripts": {
-    "test": "VITE_CJS_IGNORE_WARNING=true vitest run",
+    "test": "vitest run",
     "docs": "typedoc",
     "lint": "prettier --check . && eslint .",
     "lint:fix": "eslint . --fix",
@@ -63,6 +75,7 @@
     "@typescript-eslint/parser": "^7.13.0",
     "@vitest/coverage-v8": "^1.6.0",
     "discord.js": "^14.15.3",
+    "esbuild-plugin-version-injector": "^1.2.1",
     "eslint": "^8.57.0",
     "eslint-config-distube": "^1.7.0",
     "husky": "^9.0.11",

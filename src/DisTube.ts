@@ -18,6 +18,7 @@ import {
   isSupportedVoiceChannel,
   isTextChannelInstance,
   isURL,
+  version,
 } from ".";
 import type { Client, VoiceBasedChannel } from "discord.js";
 import type {
@@ -32,10 +33,6 @@ import type {
   RepeatMode,
   TypedDisTubeEvents,
 } from ".";
-
-// Cannot be `import` as it's not under TS root dir
-// eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
-export const { version }: { version: string } = require("../package.json");
 
 /**
  * DisTube class
