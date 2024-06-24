@@ -181,6 +181,18 @@ export class Queue extends DisTubeBase {
     return this;
   }
   /**
+   * @returns `true` if the queue is playing
+   */
+  isPlaying(): boolean {
+    return this.playing;
+  }
+  /**
+   * @returns `true` if the queue is paused
+   */
+  isPaused(): boolean {
+    return this.paused;
+  }
+  /**
    * Pause the guild stream
    * @returns The guild queue
    */
@@ -402,7 +414,7 @@ export class Queue extends DisTubeBase {
     return this.autoplay;
   }
   /**
-   * Play the queue
+   * Play the first song in the queue
    * @param emitPlaySong - Whether or not emit {@link Events.PLAY_SONG} event
    */
   play(emitPlaySong = true) {
