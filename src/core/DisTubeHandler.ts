@@ -31,7 +31,8 @@ export class DisTubeHandler extends DisTubeBase {
     if (typeof input === "string") {
       if (isURL(input)) {
         const plugin =
-          (await this._getPluginFromURL(input)) || (await this._getPluginFromURL(await this.followRedirectLink(input)));
+          (await this._getPluginFromURL(input)) ||
+          (await this._getPluginFromURL((input = await this.followRedirectLink(input))));
         if (!plugin) throw new DisTubeError("NOT_SUPPORTED_URL");
         this.debug(`[${plugin.constructor.name}] Resolving from url: ${input}`);
         return plugin.resolve(input, options);
