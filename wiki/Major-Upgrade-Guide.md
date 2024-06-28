@@ -53,15 +53,17 @@ ytPlugin.search(query, { type: "video", limit: 5, safeSearch: true }).then(conso
 - Remove `Song#chapters`
 
 ```diff
-- const streamURL = song.streamURL
-+ const streamURL = song.stream.playFromSource ? song.stream.url : song.stream.song.stream.url
 - const ageRestricted = song.age_restricted
 + const ageRestricted = song.ageRestricted
+- const duration = song.duration
++ const streamURL = song.stream.playFromSource ? song.duration : song.stream.song.duration
+- const streamURL = song.streamURL
++ const streamURL = song.stream.playFromSource ? song.stream.url : song.stream.song.stream.url
 ```
 
 On v5, `Song` info is not represented the `Song` will be streamed to the voice channel if `Song#playFromSource` is `false`
 
-Example: `s` is a Spotify `Song`, `s.source` is `spotify`, `s.playFromSource` is `false`. When the song plays, `s.stream.song` will be a streamable `Song` searched with an `ExtractorPlugin`. And DisTube will play the `s.stream.song` instead of `s`
+Example: `s` is a Spotify `Song`, `s.source` is `spotify`, `s.playFromSource` is `false`. When the song plays, `s.stream.song` will be a stream-able `Song` searched with an `ExtractorPlugin`. And DisTube will play the `s.stream.song` instead of `s`
 
 Note: `Song#stream.url` or `Song#stream.song` is only available when the song is playing.
 
