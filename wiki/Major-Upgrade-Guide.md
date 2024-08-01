@@ -56,7 +56,7 @@ ytPlugin.search(query, { type: "video", limit: 5, safeSearch: true }).then(conso
 - const ageRestricted = song.age_restricted
 + const ageRestricted = song.ageRestricted
 - const duration = song.duration
-+ const streamURL = song.stream.playFromSource ? song.duration : song.stream.song.duration
++ const duration = song.stream.playFromSource ? song.duration : song.stream.song.duration
 - const streamURL = song.streamURL
 + const streamURL = song.stream.playFromSource ? song.stream.url : song.stream.song.stream.url
 ```
