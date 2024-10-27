@@ -39,7 +39,7 @@ const ERROR_MESSAGES = {
   NO_UP_NEXT: "There is no up next song",
   NO_SONG_POSITION: "Does not have any song at this position",
   NO_PLAYING_SONG: "There is no playing song in the queue",
-
+  NO_EXTRACTOR_PLUGIN: "There is no extractor plugin in the DisTubeOptions.plugins, please add one for searching songs",
   NO_RELATED: "Cannot find any related songs",
   CANNOT_PLAY_RELATED: "Cannot play the related song",
   UNAVAILABLE_VIDEO: "This video is unavailable",
@@ -49,9 +49,9 @@ const ERROR_MESSAGES = {
   NOT_SUPPORTED_SONG: (song: string) => `There is no plugin supporting this song (${song})`,
   NO_VALID_SONG: "'songs' array does not have any valid Song or url",
   CANNOT_RESOLVE_SONG: (t: any) => `Cannot resolve ${inspect(t)} to a Song`,
-  CANNOT_GET_STREAM_URL: (song: string) => `Cannot get stream url from this song (${song})`,
-  CANNOT_GET_SEARCH_QUERY: (song: string) => `Cannot get search query from this song (${song})`,
-  NO_RESULT: (query: string) => `Cannot get song stream from this query (${query})`,
+  CANNOT_GET_STREAM_URL: (song: string) => `Cannot get stream url with this song (${song})`,
+  CANNOT_GET_SEARCH_QUERY: (song: string) => `Cannot get search query with this song (${song})`,
+  NO_RESULT: (query: string) => `Cannot find any song with this query (${query})`,
   NO_STREAM_URL: (song: string) => `No stream url attached (${song})`,
 
   EMPTY_FILTERED_PLAYLIST:

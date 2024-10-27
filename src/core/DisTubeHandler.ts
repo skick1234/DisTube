@@ -41,7 +41,7 @@ export class DisTubeHandler extends DisTubeBase {
         const song = await this.#searchSong(input, options);
         if (song) return song;
       } catch {
-        // ignore
+        throw new DisTubeError("NO_RESULT", input);
       }
     }
     throw new DisTubeError("CANNOT_RESOLVE_SONG", input);
@@ -74,14 +74,14 @@ export class DisTubeHandler extends DisTubeBase {
   }
 
   async #searchSong(query: string, options: ResolveOptions = {}, getStreamURL = false): Promise<Song | null> {
-    for (const plugin of this.plugins) {
-      if (plugin.type === PluginType.EXTRACTOR) {
-        this.debug(`[${plugin.constructor.name}] Searching for song: ${query}`);
-        const result = await plugin.searchSong(query, options);
-        if (result) {
-          if (getStreamURL && result.stream.playFromSource) result.stream.url = await plugin.getStreamURL(result);
-          return result;
-        }
+    const plugins = this.plugins.filter(p => p.type === PluginType.EXTRACTOR);
+    if (!plugins.length) throw new DisTubeError("NO_EXTRACTOR_PLUGIN");
+    for (const plugin of plugins) {
+      this.debug(`[${plugin.constructor.name}] Searching for song: ${query}`);
+      const result = await plugin.searchSong(query, options);
+      if (result) {
+        if (getStreamURL && result.stream.playFromSource) result.stream.url = await plugin.getStreamURL(result);
+        return result;
       }
     }
     return null;
