@@ -1,6 +1,6 @@
 import { Constants } from "discord.js";
 import { TypedEmitter } from "tiny-typed-emitter";
-import { DisTubeError, isSupportedVoiceChannel } from "..";
+import { checkEncryptionLibraries, DisTubeError, isSupportedVoiceChannel } from "..";
 import {
   AudioPlayerStatus,
   VoiceConnectionDisconnectReason,
@@ -114,6 +114,7 @@ export class DisTubeVoice extends TypedEmitter<DisTubeVoiceEvents> {
     return joinVoiceChannel({
       channelId: channel.id,
       guildId: this.id,
+      // @ts-ignore
       adapterCreator: channel.guild.voiceAdapterCreator,
       group: channel.client.user?.id,
     });
@@ -161,6 +162,10 @@ export class DisTubeVoice extends TypedEmitter<DisTubeVoiceEvents> {
    * @param dtStream - DisTubeStream
    */
   play(dtStream: DisTubeStream) {
+    if (!checkEncryptionLibraries()) {
+      dtStream.kill();
+      throw new DisTubeError("ENCRYPTION_LIBRARIES_MISSING");
+    }
     this.emittedError = false;
     dtStream.on("error", (error: NodeJS.ErrnoException) => {
       if (this.emittedError || error.code === "ERR_STREAM_PREMATURE_CLOSE") return;

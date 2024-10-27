@@ -29,6 +29,8 @@ const ERROR_MESSAGES = {
 
   FFMPEG_EXITED: (code: number) => `ffmpeg exited with code ${code}`,
   FFMPEG_NOT_INSTALLED: (path: string) => `ffmpeg is not installed at '${path}' path`,
+  ENCRYPTION_LIBRARIES_MISSING:
+    "Cannot play audio as no valid encryption package is installed. Please install sodium-native, sodium, libsodium-wrappers, or tweetnacl.",
 
   NO_QUEUE: "There is no playing queue in this guild",
   QUEUE_EXIST: "This guild has a Queue already",

@@ -172,3 +172,13 @@ export function isNsfwChannel(channel?: GuildTextBasedChannel): boolean {
 
 export type Falsy = undefined | null | false | 0 | "";
 export const isTruthy = <T>(x: T | Falsy): x is T => Boolean(x);
+
+export const checkEncryptionLibraries = () => {
+  for (const lib of ["sodium-native", "sodium", "libsodium-wrappers", "tweetnacl"]) {
+    try {
+      require(lib);
+      return true;
+    } catch {}
+  }
+  return false;
+};
