@@ -176,6 +176,7 @@ export const isTruthy = <T>(x: T | Falsy): x is T => Boolean(x);
 export const checkEncryptionLibraries = () => {
   for (const lib of ["sodium-native", "sodium", "libsodium-wrappers", "tweetnacl"]) {
     try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
       require(lib);
       return true;
     } catch {}

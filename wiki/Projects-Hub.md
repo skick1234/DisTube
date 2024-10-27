@@ -31,6 +31,7 @@
 - [distube-yandex-music-plugin](https://www.npmjs.com/package/distube-yandex-music-plugin): Support Yandex Music.
 
 ### PlayableExtractorPlugin
+
 - [distube-vk-music-plugin](https://www.npmjs.com/package/distube-vk-music-plugin): Support VK Music.
 
 # Bots

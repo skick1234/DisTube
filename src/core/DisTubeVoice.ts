@@ -1,6 +1,6 @@
 import { Constants } from "discord.js";
 import { TypedEmitter } from "tiny-typed-emitter";
-import { checkEncryptionLibraries, DisTubeError, isSupportedVoiceChannel } from "..";
+import { DisTubeError, checkEncryptionLibraries, isSupportedVoiceChannel } from "..";
 import {
   AudioPlayerStatus,
   VoiceConnectionDisconnectReason,
@@ -114,7 +114,6 @@ export class DisTubeVoice extends TypedEmitter<DisTubeVoiceEvents> {
     return joinVoiceChannel({
       channelId: channel.id,
       guildId: this.id,
-      // @ts-ignore
       adapterCreator: channel.guild.voiceAdapterCreator,
       group: channel.client.user?.id,
     });
