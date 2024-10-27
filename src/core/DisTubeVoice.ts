@@ -160,8 +160,8 @@ export class DisTubeVoice extends TypedEmitter<DisTubeVoiceEvents> {
    * Play a {@link DisTubeStream}
    * @param dtStream - DisTubeStream
    */
-  play(dtStream: DisTubeStream) {
-    if (!checkEncryptionLibraries()) {
+  async play(dtStream: DisTubeStream) {
+    if (!(await checkEncryptionLibraries())) {
       dtStream.kill();
       throw new DisTubeError("ENCRYPTION_LIBRARIES_MISSING");
     }

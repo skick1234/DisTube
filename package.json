@@ -84,7 +84,7 @@
     "husky": "^9.1.6",
     "nano-staged": "^0.8.0",
     "prettier": "^3.3.3",
-    "sodium-native": "^4.2.2",
+    "sodium-native": "^4.2.1",
     "ts-node": "^10.9.2",
     "tsup": "^8.3.5",
     "typedoc": "^0.26.10",

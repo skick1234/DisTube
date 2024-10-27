@@ -73,8 +73,8 @@ importers:
         specifier: ^3.3.3
         version: 3.3.3
       sodium-native:
-        specifier: ^4.2.2
-        version: 4.2.2
+        specifier: ^4.2.1
+        version: 4.2.1
       ts-node:
         specifier: ^10.9.2
         version: 10.9.2(@types/node@22.8.1)(typescript@5.6.3)
@@ -1971,8 +1971,8 @@ packages:
     resolution: {integrity: sha512-g9Q1haeby36OSStwb4ntCGGGaKsaVSjQ68fBxoQcutl5fS1vuY18H3wSt3jFyFtrkx+Kz0V1G85A4MyAdDMi2Q==}
     engines: {node: '>=8'}
 
-  sodium-native@4.2.2:
-    resolution: {integrity: sha512-/gYaDtIK76FRcW0oBhIKJvLCDp706rJugd8wxJUBdbutgWrDlviG4tp8k+HfIRdy0Z+MbQE32ZGr4RPu1vXSsw==}
+  sodium-native@4.2.1:
+    resolution: {integrity: sha512-48X3PfRLW+f0fgb3J7f7mkZ9eBKcGR/bD5mdXXLAx4RWwKUe3095yPQgiUUQTfh8Q29JzwhSQATitQDBIozN/w==}
 
   source-map-js@1.2.1:
     resolution: {integrity: sha512-UXWMKhLOwVKb728IUtQPXxfYU+usdybtUrK/8uGE8CQMvrhOpwvzDBwj0QhSL7MQc7vIsISBG8VQ8+IDQxpfQA==}
@@ -4235,7 +4235,7 @@ snapshots:
 
   slash@3.0.0: {}
 
-  sodium-native@4.2.2:
+  sodium-native@4.2.1:
     dependencies:
       node-gyp-build: 4.8.2
 

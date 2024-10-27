@@ -170,7 +170,7 @@ export class QueueManager extends GuildIdManager<Queue> {
       const dtStream = new DisTubeStream(stream.url, streamOptions);
       dtStream.on("debug", data => this.emit(Events.FFMPEG_DEBUG, `[${queue.id}] ${data}`));
       this.debug(`[${queue.id}] Started playing: ${willPlaySong}`);
-      queue.voice.play(dtStream);
+      await queue.voice.play(dtStream);
       if (emitPlaySong) this.emit(Events.PLAY_SONG, queue, song);
     } catch (e: any) {
       this.#handlePlayingError(queue, e);
