@@ -21,6 +21,7 @@
 - [@distube/yt-dlp](https://www.npmjs.com/package/@distube/yt-dlp): Use `yt-dlp` for supporting 700+ sites.
 - [@distube/direct-link](https://www.npmjs.com/package/@distube/direct-link): Support direct audio links.
 - [@distube/file](https://www.npmjs.com/package/@distube/file): Support local files.
+- [@distube/bandlab](https://www.npmjs.com/package/@distube/bandlab): Support BandLab.
 
 # Unofficial Plugins
 
