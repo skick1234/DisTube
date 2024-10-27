@@ -1,8 +1,11 @@
 name: Documentation Generator
 on:
   push:
-    branches:
-      - "main"
+    branches: [main]
+    paths:
+      - src/**
+      - tsconfig.json
+      - .github/workflows/docs.yml
 jobs:
   docs:
     name: Documentation

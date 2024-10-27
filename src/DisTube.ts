@@ -243,6 +243,7 @@ export class DisTube extends TypedEmitter<TypedDisTubeEvents> {
       }
 
       if (!queue.playing) await queue.play();
+      else if (skip) await queue.skip();
     } catch (e: any) {
       if (!(e instanceof DisTubeError)) {
         this.debug(`[${queue.id}] Unexpected error while playing song: ${e.stack || e.message}`);
