@@ -30,6 +30,9 @@
 - [distube-tidal](https://www.npmjs.com/package/distube-tidal): Support Tidal.
 - [distube-yandex-music-plugin](https://www.npmjs.com/package/distube-yandex-music-plugin): Support Yandex Music.
 
+### PlayableExtractorPlugin
+- [distube-vk-music-plugin](https://www.npmjs.com/package/distube-vk-music-plugin): Support VK Music.
+
 # Bots
 
 - [DisTube Example](https://github.com/distubejs/example) - Example bot with simple command handler.
