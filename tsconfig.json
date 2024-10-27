@@ -42,7 +42,7 @@
       "Discord": "https://discord.gg/feaDd9h",
       "Guide": "https://github.com/skick1234/DisTube/wiki"
     },
-    "sitemapBaseUrl": "https://distube.js.org",
+    "hostedBaseUrl": "https://distube.js.org",
     "favicon": "https://github.com/skick1234/MaBu-CDN/blob/master/DisTube/img/favicon.png?raw=true",
     "customDescription": "A powerful Discord.js module for simplifying music commands and effortless playback of various sources with integrated audio filters."
   }

@@ -1,6 +1,6 @@
 {
   "name": "distube",
-  "version": "5.0.2",
+  "version": "5.0.3",
   "description": "A powerful Discord.js module for simplifying music commands and effortless playback of various sources with integrated audio filters.",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
@@ -63,33 +63,36 @@
   "homepage": "https://distube.js.org/",
   "dependencies": {
     "tiny-typed-emitter": "^2.1.0",
-    "undici": "^6.18.2"
+    "undici": "^6.20.1"
   },
   "devDependencies": {
-    "@commitlint/cli": "^19.3.0",
-    "@commitlint/config-conventional": "^19.2.2",
+    "@commitlint/cli": "^19.5.0",
+    "@commitlint/config-conventional": "^19.5.0",
+    "@discordjs/opus": "^0.9.0",
     "@discordjs/voice": "^0.17.0",
-    "@types/node": "^20.14.2",
+    "@distube/youtube": "^1.0.4",
+    "@types/node": "^22.8.1",
     "@types/tough-cookie": "^4.0.5",
-    "@typescript-eslint/eslint-plugin": "^7.13.0",
-    "@typescript-eslint/parser": "^7.13.0",
-    "@vitest/coverage-v8": "^1.6.0",
-    "discord.js": "^14.15.3",
+    "@typescript-eslint/eslint-plugin": "^7.18.0",
+    "@typescript-eslint/parser": "^7.18.0",
+    "@vitest/coverage-v8": "^2.1.3",
+    "discord-api-types": "^0.37.103",
+    "discord.js": "^14.16.3",
     "esbuild-plugin-version-injector": "^1.2.1",
-    "eslint": "^8.57.0",
-    "eslint-config-distube": "^1.7.0",
-    "husky": "^9.0.11",
+    "eslint": "^8.57.1",
+    "eslint-config-distube": "^1.7.1",
+    "husky": "^9.1.6",
     "nano-staged": "^0.8.0",
-    "prettier": "^3.3.2",
-    "sodium-native": "^4.1.1",
+    "prettier": "^3.3.3",
+    "sodium-native": "^4.2.2",
     "ts-node": "^10.9.2",
-    "tsup": "^8.1.0",
-    "typedoc": "^0.25.13",
-    "typedoc-material-theme": "^1.0.2",
-    "typedoc-plugin-extras": "^3.0.0",
-    "typescript": "^5.4.5",
-    "vite-tsconfig-paths": "^4.3.2",
-    "vitest": "^1.6.0"
+    "tsup": "^8.3.5",
+    "typedoc": "^0.26.10",
+    "typedoc-material-theme": "^1.1.0",
+    "typedoc-plugin-extras": "^3.1.0",
+    "typescript": "^5.6.3",
+    "vite-tsconfig-paths": "^5.0.1",
+    "vitest": "^2.1.3"
   },
   "peerDependencies": {
     "@discordjs/voice": "*",
@@ -106,5 +109,10 @@
   },
   "engines": {
     "node": ">=18.17"
+  },
+  "pnpm": {
+    "overrides": {
+      "discord-api-types": "^0.37.103"
+    }
   }
 }
