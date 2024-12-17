@@ -238,6 +238,7 @@ packages:
   '@discordjs/voice@0.17.0':
     resolution: {integrity: sha512-hArn9FF5ZYi1IkxdJEVnJi+OxlwLV0NJYWpKXsmNOojtGtAZHxmsELA+MZlu2KW1F/K1/nt7lFOfcMXNYweq9w==}
     engines: {node: '>=16.11.0'}
+    deprecated: This version uses deprecated encryption modes. Please use a newer version.
 
   '@discordjs/ws@1.1.1':
     resolution: {integrity: sha512-PZ+vLpxGCRtmr2RMkqh8Zp+BenUaJqlS6xhgWKEZcgC/vfHLEzpHtKkB0sl3nZWpwtcKk6YWy+pU3okL2I97FA==}
@@ -251,6 +252,7 @@ packages:
   '@distube/ytdl-core@4.15.0':
     resolution: {integrity: sha512-NOb8yMEhMWxDbRVnSDkJAHvwqUQSRCKYvA0Ly65zPDrV98WkY/Ks60118EiNV8iUxqN+P9gGXnGhE8Unl7NNOg==}
     engines: {node: '>=14.0'}
+    deprecated: This version is deprecated, please upgrade to the latest version.
 
   '@distube/ytpl@1.2.1':
     resolution: {integrity: sha512-cp9nDYyGTZ2DNHURQXS76ptKWijLMspoxJEj03i++9tJf0LFGTWkskL3sLwcY4qQPLXjlH9FAXwwpjVttdXvZQ==}
@@ -1144,6 +1146,7 @@ packages:
   distube@5.0.2:
     resolution: {integrity: sha512-VR+js/RS+sbxQIGaewh1jZtQDeSE1x05V6CFDb7/KATXSln+nUemIh/RTqKPuPeFJhcPcYGdZWPvEliDU/RS/g==}
     engines: {node: '>=18.17'}
+    deprecated: This version is deprecated, please upgrade to the latest version.
     peerDependencies:
       '@discordjs/voice': '*'
       discord.js: '14'
@@ -1693,8 +1696,8 @@ packages:
     engines: {node: ^12.20.0 || ^14.13.1 || >=16.0.0}
     hasBin: true
 
-  nanoid@3.3.7:
-    resolution: {integrity: sha512-eSRppjcPIatRIMC1U6UngP8XFcz8MQWGQdt1MTBQ7NaAmvXDfvNxbvWV3x2y6CdEUciCSsDHDQZbhYaB8QEo2g==}
+  nanoid@3.3.8:
+    resolution: {integrity: sha512-WNLf5Sd8oZxOm+TzppcYk8gVOgP+l58xNy58D0nbUnOxOWRWvlcCV4kUF7ltmI6PsrLl/BgKEyS4mqsGChFN0w==}
     engines: {node: ^10 || ^12 || ^13.7 || ^14 || >=15.0.1}
     hasBin: true
 
@@ -4017,7 +4020,7 @@ snapshots:
     dependencies:
       picocolors: 1.1.1
 
-  nanoid@3.3.7: {}
+  nanoid@3.3.8: {}
 
   natural-compare@1.4.0: {}
 
@@ -4125,7 +4128,7 @@ snapshots:
 
   postcss@8.4.47:
     dependencies:
-      nanoid: 3.3.7
+      nanoid: 3.3.8
       picocolors: 1.1.1
       source-map-js: 1.2.1
 
