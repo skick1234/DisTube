@@ -16,7 +16,7 @@ importers:
         version: 2.1.0
       undici:
         specifier: ^6.20.1
-        version: 6.20.1
+        version: 6.21.1
     devDependencies:
       '@commitlint/cli':
         specifier: ^19.5.0
@@ -238,6 +238,7 @@ packages:
   '@discordjs/voice@0.17.0':
     resolution: {integrity: sha512-hArn9FF5ZYi1IkxdJEVnJi+OxlwLV0NJYWpKXsmNOojtGtAZHxmsELA+MZlu2KW1F/K1/nt7lFOfcMXNYweq9w==}
     engines: {node: '>=16.11.0'}
+    deprecated: This version uses deprecated encryption modes. Please use a newer version.
 
   '@discordjs/ws@1.1.1':
     resolution: {integrity: sha512-PZ+vLpxGCRtmr2RMkqh8Zp+BenUaJqlS6xhgWKEZcgC/vfHLEzpHtKkB0sl3nZWpwtcKk6YWy+pU3okL2I97FA==}
@@ -251,6 +252,7 @@ packages:
   '@distube/ytdl-core@4.15.0':
     resolution: {integrity: sha512-NOb8yMEhMWxDbRVnSDkJAHvwqUQSRCKYvA0Ly65zPDrV98WkY/Ks60118EiNV8iUxqN+P9gGXnGhE8Unl7NNOg==}
     engines: {node: '>=14.0'}
+    deprecated: This version is deprecated, please upgrade to the latest version.
 
   '@distube/ytpl@1.2.1':
     resolution: {integrity: sha512-cp9nDYyGTZ2DNHURQXS76ptKWijLMspoxJEj03i++9tJf0LFGTWkskL3sLwcY4qQPLXjlH9FAXwwpjVttdXvZQ==}
@@ -1144,6 +1146,7 @@ packages:
   distube@5.0.2:
     resolution: {integrity: sha512-VR+js/RS+sbxQIGaewh1jZtQDeSE1x05V6CFDb7/KATXSln+nUemIh/RTqKPuPeFJhcPcYGdZWPvEliDU/RS/g==}
     engines: {node: '>=18.17'}
+    deprecated: This version is deprecated, please upgrade to the latest version.
     peerDependencies:
       '@discordjs/voice': '*'
       discord.js: '14'
@@ -2196,16 +2199,16 @@ packages:
   undici-types@6.19.8:
     resolution: {integrity: sha512-ve2KP6f/JnbPBFyobGHuerC9g1FYGn/F8n1LWTwNxCEzd6IfqTwUQcNXgEtmmQ6DlRrC1hrSrBnCZPokRrDHjw==}
 
-  undici@5.28.4:
-    resolution: {integrity: sha512-72RFADWFqKmUb2hmmvNODKL3p9hcB6Gt2DOQMis1SEBaV6a4MH8soBvzg+95CYhCKPFedut2JY9bMfrDl9D23g==}
+  undici@5.28.5:
+    resolution: {integrity: sha512-zICwjrDrcrUE0pyyJc1I2QzBkLM8FINsgOrt6WjA+BgajVq9Nxu2PbFFXUrAggLfDXlZGZBVZYw7WNV5KiBiBA==}
     engines: {node: '>=14.0'}
 
   undici@6.19.8:
     resolution: {integrity: sha512-U8uCCl2x9TK3WANvmBavymRzxbfFYG+tAu+fgx3zxQy3qdagQqBLwJVrdyO1TBfUXvfKveMKJZhpvUYoOjM+4g==}
     engines: {node: '>=18.17'}
 
-  undici@6.20.1:
-    resolution: {integrity: sha512-AjQF1QsmqfJys+LXfGTNum+qw4S88CojRInG/6t31W/1fk6G59s92bnAvGz5Cmur+kQv2SURXEvvudLmbrE8QA==}
+  undici@6.21.1:
+    resolution: {integrity: sha512-q/1rj5D0/zayJB2FraXdaWxbhWiNKDvu8naDT2dl1yTlvJp4BLtOcp2a5BvgGNQpYYJzau7tf1WgKv3b+7mqpQ==}
     engines: {node: '>=18.17'}
 
   unicorn-magic@0.1.0:
@@ -2643,22 +2646,22 @@ snapshots:
 
   '@distube/ytdl-core@4.15.0':
     dependencies:
-      http-cookie-agent: 6.0.6(tough-cookie@4.1.4)(undici@5.28.4)
+      http-cookie-agent: 6.0.6(tough-cookie@4.1.4)(undici@5.28.5)
       m3u8stream: 0.8.6
       miniget: 4.2.3
       sax: 1.4.1
       tough-cookie: 4.1.4
-      undici: 5.28.4
+      undici: 5.28.5
     transitivePeerDependencies:
       - supports-color
 
   '@distube/ytpl@1.2.1':
     dependencies:
-      undici: 5.28.4
+      undici: 5.28.5
 
   '@distube/ytsr@2.0.4':
     dependencies:
-      undici: 6.20.1
+      undici: 6.21.1
 
   '@esbuild/aix-ppc64@0.21.5':
     optional: true
@@ -3398,7 +3401,7 @@ snapshots:
       '@discordjs/voice': 0.17.0(@discordjs/opus@0.9.0)
       discord.js: 14.16.3
       tiny-typed-emitter: 2.1.0
-      undici: 6.20.1
+      undici: 6.21.1
 
   doctrine@3.0.0:
     dependencies:
@@ -3738,12 +3741,12 @@ snapshots:
 
   html-void-elements@3.0.0: {}
 
-  http-cookie-agent@6.0.6(tough-cookie@4.1.4)(undici@5.28.4):
+  http-cookie-agent@6.0.6(tough-cookie@4.1.4)(undici@5.28.5):
     dependencies:
       agent-base: 7.1.1
       tough-cookie: 4.1.4
     optionalDependencies:
-      undici: 5.28.4
+      undici: 5.28.5
     transitivePeerDependencies:
       - supports-color
 
@@ -4454,13 +4457,13 @@ snapshots:
 
   undici-types@6.19.8: {}
 
-  undici@5.28.4:
+  undici@5.28.5:
     dependencies:
       '@fastify/busboy': 2.1.1
 
   undici@6.19.8: {}
 
-  undici@6.20.1: {}
+  undici@6.21.1: {}
 
   unicorn-magic@0.1.0: {}
 
