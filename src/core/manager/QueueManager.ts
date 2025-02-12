@@ -143,7 +143,7 @@ export class QueueManager extends GuildIdManager<Queue> {
    * @param emitPlaySong  - Whether or not emit {@link Events.PLAY_SONG} event
    */
   async playSong(queue: Queue, emitPlaySong = true) {
-    if (!queue) return;
+    if (!queue || queue.voice.audioPlayer.state.status == "paused") return;
     if (queue.stopped || !queue.songs.length) {
       queue.stop();
       return;
