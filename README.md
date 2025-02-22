@@ -19,31 +19,61 @@
 
 # DisTube
 
-A powerful Discord.js module for simplifying music commands and effortless playback of various sources with integrated audio filters.
+DisTube is a comprehensive Discord music bot library built for Discord.js, offering simplified music commands, effortless playback from diverse sources, and integrated audio filters.
 
-[DisTube Support Server](https://discord.gg/feaDd9h) - [Frequently Asked Questions](https://discord.gg/feaDd9h)
+## 🌟 Features
 
-## Features
+- **Easy Integration**: Built on top of [discord.js](https://discord.js.org) v14 and [@discordjs/voice](https://discord.js.org)
+- **Voice Management**: Robust handling of voice connections and queue management
+- **Audio Filters**: Built-in filters (bassboost, echo, karaoke, etc.) and custom filter support
+- **Plugin System**: Extensible architecture supporting various music sources through plugins
+- **Type Safety**: Written in TypeScript for better development experience
+- **Active Community**: Join our [Discord Support Server](https://discord.gg/feaDd9h) for help
 
-- Easy Integration: Built on top of [discord.js](https://discord.js.org) v14 and [@discordjs/voice](https://discord.js.org).
-- Voice and Queue Management: Handles voice channel connections, disconnections, and manages music queues efficiently.
-- Audio Filters: Offers built-in audio filters (bassboost, echo, karaoke, etc.) and allows for custom filter implementations.
-- Plugin System: Supports extensibility through plugins
-  > DisTube does not have built-in support for music sources. You need to use plugins to add support for them.
-
-## Requirement
+## 📋 Requirements
 
 - Node.js 18.17.0 or higher
 - [discord.js](https://discord.js.org) v14
 - [@discordjs/voice](https://github.com/discordjs/voice)
 - [@discordjs/opus](https://github.com/discordjs/opus)
 - [FFmpeg](https://www.ffmpeg.org/download.html)
+
+### 🔒 Encryption Libraries
+
+> [!NOTE]
+> You only need to install one of these libraries if your system does not support `aes-256-gcm` (verify by running `require('node:crypto').getCiphers().includes('aes-256-gcm')`).
+
+- [@noble/ciphers](https://www.npmjs.com/package/@noble/ciphers)
 - [sodium-native](https://www.npmjs.com/package/sodium-native)
 
-## Documentation
+## 🚀 Installation
 
-Read DisTube's definitions, properties and events details in the [API Documentation page](https://distube.js.org/).
+```bash
+npm install distube @discordjs/voice @discordjs/opus
+```
 
-Learn how to build a music bot from scratch with [DisTube Guide](https://github.com/skick1234/DisTube/wiki)
+For FFmpeg installation:
 
-[List of plugins](https://github.com/skick1234/DisTube/wiki/Projects-Hub#plugins) for supporting various sites
+- [Windows Guide](http://blog.gregzaal.com/how-to-install-ffmpeg-on-windows/)
+- [Linux Guide](https://www.tecmint.com/install-ffmpeg-in-linux/)
+
+> [!NOTE]
+> Alternative FFmpeg builds available [here](https://github.com/BtbN/FFmpeg-Builds/releases)
+
+## 📚 Documentation
+
+- [API Documentation](https://distube.js.org/) - Detailed API reference
+- [DisTube Guide](https://github.com/skick1234/DisTube/wiki) - Step-by-step guide for beginners
+- [Plugin List](https://github.com/skick1234/DisTube/wiki/Projects-Hub#plugins) - Available plugins for music sources
+
+## 🤝 Contributing
+
+Contributions are welcome! Please read our [Contributing Guidelines](https://github.com/skick1234/DisTube/blob/main/.github/CONTRIBUTING.md) before submitting a pull request.
+
+## 📄 License
+
+Licensed under [MIT License](https://github.com/skick1234/DisTube/blob/main/LICENSE)
+
+## 💖 Support
+
+<a href='https://ko-fi.com/skick' target='_blank'><img height='48' src='https://storage.ko-fi.com/cdn/kofi3.png' alt='Support me on Ko-fi' /></a>

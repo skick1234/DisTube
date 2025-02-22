@@ -1,47 +1,46 @@
 > [!WARNING]
-> DisTube Guide is Working in Process
+> This DisTube Guide is a work in progress.
 
 > [!NOTE]
-> This guide follows [discordjs.guide notation](https://discordjs.guide/additional-info/notation.html)
+> This guide follows the [discordjs.guide notation](https://discordjs.guide/additional-info/notation.html).
 
 # Introduction
 
-Welcome to the guide on creating a Discord bot with DisTube! Whether you're a seasoned developer or just starting, this step-by-step tutorial will walk you through the process of setting up a Discord bot capable of handling music commands with ease. DisTube, a powerful Discord.js module, simplifies the integration of music playback functionality, making your bot not only versatile but also enjoyable for your server members.
+Welcome to the DisTube guide! This tutorial will guide you through creating a Discord bot with music commands using DisTube, a comprehensive Discord music bot library built for Discord.js. DisTube simplifies music commands, offers effortless playback from diverse sources, and provides integrated audio filters.
 
-Let's dive in and bring your Discord bot to life with the magic of DisTube! 🤖🎵
+Let's bring your Discord bot to life with DisTube! 🤖🎵
 
 [![Support me on ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/skick)
 
 # Prerequisites
 
-To create a Discord music bot with DisTube, you should have a solid understanding of JavaScript. You can make a music bot with very little JS, programming knowledge by using DisTube. But you may get stuck on many uncomplicated issues, and struggle with solutions to incredibly easy problems.
+- Solid understanding of JavaScript. While you can create a basic music bot with limited JS knowledge, a strong foundation will help you troubleshoot issues.
+- A basic Discord bot set up with Discord.js. Refer to [discordjs.guide](https://discordjs.guide/) if you haven't already.
 
-# Preparations
-
-Before diving into this guide, you have to create a Discord bot using Discord.js. If you haven't already, visit [discordjs.guide](https://discordjs.guide/) to familiarize yourself with the process of setting up a basic Discord bot.
-
-This guide is a continuation of your [discordjs.guide](https://discordjs.guide/) development journey, focusing on seamlessly integrating DisTube for advanced music functionality.
-The code written follows command handling setup from [discordjs.guide](https://discordjs.guide/), so adjustments may be necessary based on your command handler's structure.
-If you encounter any issues, refer to your command handler's documentation or seek assistance in the Discord.js community.
+This guide assumes you're familiar with the command handling setup from [discordjs.guide](https://discordjs.guide/). Adjustments may be needed based on your command handler's structure.
 
 # Installation
 
-Install DisTube in your bot project folder
+1.  Install DisTube and required dependencies in your bot project:
 
-```sh
-npm install distube
-```
+    ```sh
+    npm install distube @discordjs/voice @discordjs/opus
+    ```
 
-And you need to install all the [requirements](https://github.com/skick1234/DisTube#requirement) too.
+2.  Install FFmpeg. See the guides for:
 
-```sh
-npm install @discordjs/voice @discordjs/opus sodium-native
-```
+    - [Windows](http://blog.gregzaal.com/how-to-install-ffmpeg-on-windows/)
+    - [Linux (Ubuntu, Mint,...)](https://www.tecmint.com/install-ffmpeg-in-linux/)
 
-FFmpeg installation guide: [Windows](http://blog.gregzaal.com/how-to-install-ffmpeg-on-windows/) - [Linux (Ubuntu, Mint,...)](https://www.tecmint.com/install-ffmpeg-in-linux/)
-\
-Download FFmpeg from [this repo](https://github.com/BtbN/FFmpeg-Builds/releases) if the download links in the guide are not available.
+    If the links above are unavailable, download FFmpeg from [this repo](https://github.com/BtbN/FFmpeg-Builds/releases).
 
 > [!WARNING]
-> While `ffmpeg-static` may function, it's important to note that its stability can vary across different machines, potentially leading to issues.\
-> Do NOT install `ffmpeg` npm package. Uninstall it if installed with `npm uninstall ffmpeg`.
+> Avoid using `ffmpeg-static` due to potential stability issues across different machines. Also, do NOT install the `ffmpeg` npm package. Uninstall it if installed with `npm uninstall ffmpeg`.
+
+3. Encryption Libraries
+
+> [!NOTE]
+> You only need to install one of these libraries if your system does not support `aes-256-gcm` (verify by running `require('node:crypto').getCiphers().includes('aes-256-gcm')`).
+
+- [@noble/ciphers](https://www.npmjs.com/package/@noble/ciphers)
+- [sodium-native](https://www.npmjs.com/package/sodium-native)

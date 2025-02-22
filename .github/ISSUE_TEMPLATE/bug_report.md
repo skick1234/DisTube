@@ -1,16 +1,34 @@
 ---
 name: Bug report
 about: Create a report to help us improve (Check the FAQ and created issues first)
-title: ""
+title: "[BUG] Short description of the bug"
 labels: bug
 assignees: ""
 ---
 
-**Please describe your problem in as much detail as possible:**
+**Describe the bug**
+A clear and concise description of what the bug is.
 
-**Further information:**
+**To Reproduce**
+Steps to reproduce the behavior:
 
-- DisTube version:
-- discord.js version:
-- Node.js version:
+1.  Go to '...'
+2.  Play '....'
+3.  Run command '....'
+4.  See error
+
+**Expected behavior**
+A clear and concise description of what you expected to happen.
+
+**Screenshots**
+If applicable, add screenshots to help explain your problem.
+
+**Environment Information:**
+
+- DisTube version: (See line 3 of [package.json](https://github.com/skick1234/DisTube/blob/main/package.json))
+- discord.js version: (See line 79 of [package.json](https://github.com/skick1234/DisTube/blob/main/package.json))
+- Node.js version: (`node -v`)
 - Operating system:
+
+**Additional context**
+Add any other context about the problem here.
