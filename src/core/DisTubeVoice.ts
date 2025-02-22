@@ -24,6 +24,7 @@ export class DisTubeVoice extends TypedEmitter<DisTubeVoiceEvents> {
   emittedError!: boolean;
   isDisconnected = false;
   stream?: DisTubeStream;
+  pausingStream?: DisTubeStream;
   #channel!: VoiceBasedChannel;
   #volume = 100;
   constructor(voiceManager: DisTubeVoiceManager, channel: VoiceBasedChannel) {
@@ -171,11 +172,15 @@ export class DisTubeVoice extends TypedEmitter<DisTubeVoiceEvents> {
       this.emittedError = true;
       this.emit("error", error);
     });
-    if (this.audioPlayer.state.status !== AudioPlayerStatus.Paused) this.audioPlayer.play(dtStream.audioResource);
-    this.stream?.kill();
+    if (this.audioPlayer.state.status !== AudioPlayerStatus.Paused) {
+      this.audioPlayer.play(dtStream.audioResource);
+      this.stream?.kill();
+      dtStream.spawn();
+    } else if (!this.pausingStream) {
+      this.pausingStream = this.stream;
+    }
     this.stream = dtStream;
     this.volume = this.#volume;
-    dtStream.spawn();
   }
   set volume(volume: number) {
     if (typeof volume !== "number" || isNaN(volume)) {
@@ -207,6 +212,9 @@ export class DisTubeVoice extends TypedEmitter<DisTubeVoiceEvents> {
     if (state.status !== AudioPlayerStatus.Paused) return;
     if (this.stream?.audioResource && state.resource !== this.stream.audioResource) {
       this.audioPlayer.play(this.stream.audioResource);
+      this.stream.spawn();
+      this.pausingStream?.kill();
+      delete this.pausingStream;
     } else {
       this.audioPlayer.unpause();
     }
