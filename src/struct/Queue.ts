@@ -196,21 +196,31 @@ export class Queue extends DisTubeBase {
    * Pause the guild stream
    * @returns The guild queue
    */
-  pause(): Queue {
-    if (this.paused) throw new DisTubeError("PAUSED");
-    this.paused = true;
-    this.voice.pause();
-    return this;
+  async pause(): Promise<Queue> {
+    await this._taskQueue.queuing();
+    try {
+      if (this.paused) throw new DisTubeError("PAUSED");
+      this.paused = true;
+      this.voice.pause();
+      return this;
+    } finally {
+      this._taskQueue.resolve();
+    }
   }
   /**
    * Resume the guild stream
    * @returns The guild queue
    */
-  resume(): Queue {
-    if (!this.paused) throw new DisTubeError("RESUMED");
-    this.paused = false;
-    this.voice.unpause();
-    return this;
+  async resume(): Promise<Queue> {
+    await this._taskQueue.queuing();
+    try {
+      if (!this.paused) throw new DisTubeError("RESUMED");
+      this.paused = false;
+      this.voice.unpause();
+      return this;
+    } finally {
+      this._taskQueue.resolve();
+    }
   }
   /**
    * Set the guild stream's volume

@@ -320,7 +320,7 @@ export class DisTube extends TypedEmitter<TypedDisTubeEvents> {
    * @param guild - The type can be resolved to give a {@link Queue}
    * @returns The guild queue
    */
-  pause(guild: GuildIdResolvable): Queue {
+  pause(guild: GuildIdResolvable): Promise<Queue> {
     return this.#getQueue(guild).pause();
   }
 
@@ -329,7 +329,7 @@ export class DisTube extends TypedEmitter<TypedDisTubeEvents> {
    * @param guild - The type can be resolved to give a {@link Queue}
    * @returns The guild queue
    */
-  resume(guild: GuildIdResolvable): Queue {
+  resume(guild: GuildIdResolvable): Promise<Queue> {
     return this.#getQueue(guild).resume();
   }
 
