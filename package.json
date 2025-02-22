@@ -1,6 +1,6 @@
 {
   "name": "distube",
-  "version": "5.0.5",
+  "version": "5.0.6",
   "description": "A powerful Discord.js module for simplifying music commands and effortless playback of various sources with integrated audio filters.",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
