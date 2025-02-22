@@ -174,7 +174,15 @@ export type Falsy = undefined | null | false | 0 | "";
 export const isTruthy = <T>(x: T | Falsy): x is T => Boolean(x);
 
 export const checkEncryptionLibraries = async () => {
-  for (const lib of ["sodium-native", "sodium", "libsodium-wrappers", "tweetnacl"]) {
+  if (await import("node:crypto").then(m => m.getCiphers().includes("aes-256-gcm"))) return true;
+  for (const lib of [
+    "@noble/ciphers",
+    "@stablelib/xchacha20poly1305",
+    "sodium-native",
+    "sodium",
+    "libsodium-wrappers",
+    "tweetnacl",
+  ]) {
     try {
       await import(lib);
       return true;
