@@ -219,7 +219,7 @@ export class DisTube extends TypedEmitter<TypedDisTubeEvents> {
     }
 
     const queue = this.getQueue(voiceChannel) || (await this.queues.create(voiceChannel, textChannel));
-    await queue._taskQueue.queuing();
+    await queue._taskQueue.queuing(true);
     try {
       this.debug(`[${queue.id}] Playing input: ${song}`);
       const resolved = await this.handler.resolve(song, { member, metadata });
@@ -256,6 +256,7 @@ export class DisTube extends TypedEmitter<TypedDisTubeEvents> {
       }
       throw e;
     } finally {
+      if (!queue.songs.length && !queue._taskQueue.hasPlayTask) queue.remove();
       queue._taskQueue.resolve();
     }
   }

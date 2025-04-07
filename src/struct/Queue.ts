@@ -391,9 +391,6 @@ export class Queue extends DisTubeBase {
   async stop() {
     await this._taskQueue.queuing();
     try {
-      this.playing = false;
-      this.paused = false;
-      this.stopped = true;
       this.voice.stop();
       this.remove();
     } finally {
@@ -404,14 +401,12 @@ export class Queue extends DisTubeBase {
    * Remove the queue from the manager
    */
   remove() {
+    this.playing = false;
+    this.paused = false;
     this.stopped = true;
     this.songs = [];
     this.previousSongs = [];
-    if (this._listeners) {
-      for (const event of objectKeys(this._listeners)) {
-        this.voice.off(event, this._listeners[event]);
-      }
-    }
+    if (this._listeners) for (const event of objectKeys(this._listeners)) this.voice.off(event, this._listeners[event]);
     this.queues.remove(this.id);
     this.emit(Events.DELETE_QUEUE, this);
   }
