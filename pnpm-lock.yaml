@@ -13,7 +13,7 @@ importers:
         version: 2.1.0
       undici:
         specifier: ^7.7.0
-        version: 7.7.0
+        version: 7.9.0
     devDependencies:
       '@commitlint/cli':
         specifier: ^19.8.0
@@ -1878,8 +1878,8 @@ packages:
     resolution: {integrity: sha512-q/1rj5D0/zayJB2FraXdaWxbhWiNKDvu8naDT2dl1yTlvJp4BLtOcp2a5BvgGNQpYYJzau7tf1WgKv3b+7mqpQ==}
     engines: {node: '>=18.17'}
 
-  undici@7.7.0:
-    resolution: {integrity: sha512-tZ6+5NBq4KH35rr46XJ2JPFKxfcBlYNaqLF/wyWIO9RMHqqU/gx/CLB1Y2qMcgB8lWw/bKHa7qzspqCN7mUHvA==}
+  undici@7.9.0:
+    resolution: {integrity: sha512-e696y354tf5cFZPXsF26Yg+5M63+5H3oE6Vtkh2oqbvsE2Oe7s2nIbcQh5lmG7Lp/eS29vJtTpw9+p6PX0qNSg==}
     engines: {node: '>=20.18.1'}
 
   unicorn-magic@0.1.0:
@@ -3800,7 +3800,7 @@ snapshots:
 
   undici@6.21.1: {}
 
-  undici@7.7.0: {}
+  undici@7.9.0: {}
 
   unicorn-magic@0.1.0: {}
 
