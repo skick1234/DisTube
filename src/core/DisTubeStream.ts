@@ -30,7 +30,7 @@ export const checkFFmpeg = (distube: DisTube) => {
   const debug = (str: string) => distube.emit(Events.FFMPEG_DEBUG, str);
   try {
     debug(`[test] spawn ffmpeg at '${path}' path`);
-    const process = spawnSync(path, ["-h"], { windowsHide: true, shell: true, encoding: "utf-8" });
+    const process = spawnSync(path, ["-h"], { windowsHide: true, encoding: "utf-8" });
     if (process.error) throw process.error;
     if (process.stderr && !process.stdout) throw new Error(process.stderr);
 
