@@ -33,7 +33,7 @@ DisTube is a comprehensive Discord music bot library built for [Discord.js](http
 
 | Resource | Description |
 | --- | --- |
-| [Interactive Guide](https://deepwiki.com/skick1234/DisTube) | Learn DisTube with AI-powered assistance. |
+| [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/skick1234/DisTube) | Learn DisTube with AI-powered assistance. |
 | [Installation](https://deepwiki.com/skick1234/DisTube/Installation) | Detailed requirements and setup guide. |
 | [API Reference](https://distube.js.org/) | Complete technical documentation. |
 | [Discord Support](https://discord.gg/feaDd9h) | Join our community for help and discussion. |

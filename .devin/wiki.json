@@ -1,7 +1,7 @@
 {
   "repo_notes": [
     {
-      "content": "DisTube is a comprehensive Discord music bot library built for Discord.js. Documentation should prioritize library users (developers building bots), focusing on installation, basic usage, and the public API (DisTube, Queue, Song, Playlist classes). Internal architecture and development guides should be kept in a separate 'Internal Architecture' section.",
+      "content": "DisTube is a comprehensive Discord music bot library built for Discord.js. Documentation should prioritize library users (developers building bots), focusing on installation, basic usage, and the public API. All user-facing guides must be kept simple and follow a reference style. Avoid deep technical dives in getting started guides. Complex internal workflows (e.g., Initialization Flow, Playback Workflow) MUST be documented ONLY in the \"Internal Architecture\" section, not in user guides.",
       "author": "Skick"
     }
   ],
@@ -22,10 +22,10 @@
     },
     {
       "title": "Getting Started",
-      "purpose": "Guide for beginners to quickly integrate DisTube into their Discord.js bots.",
+      "purpose": "Basic library usage for beginners.",
       "page_notes": [
         {
-          "content": "Include basic examples for play, skip, and stop commands."
+          "content": "Keep this simple. Show how to play, stop, and skip. Do NOT include initialization diagrams or internal workflow steps."
         }
       ]
     },
@@ -91,7 +91,7 @@
       "purpose": "Dedicated section for internal library logic, core classes, and development guidelines. Only relevant for DisTube contributors.",
       "page_notes": [
         {
-          "content": "This section should be isolated from general user guides."
+          "content": "This section should be isolated from general user guides. This section is the ONLY place for detailed internal workflows like Initialization and Playback flow."
         }
       ]
     },
