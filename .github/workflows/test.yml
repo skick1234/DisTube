@@ -6,6 +6,8 @@ on:
   pull_request:
     branches:
       - "main"
+  permissions:
+    contents: read
 jobs:
   test:
     name: Test on node v${{ matrix.node-version }} (${{ matrix.os }})
