@@ -18,7 +18,10 @@ describe("FilterManager#add()", () => {
     filters.add("3d");
     expect(filters.collection.size).toBe(1);
     expect(filters.has("3d")).toBe(true);
-    expect(filters.collection.get("3d")).toEqual({ name: "3d", value: defaultFilters["3d"] });
+    expect(filters.collection.get("3d")).toEqual({
+      name: "3d",
+      value: defaultFilters["3d"],
+    });
     expect(filters.names).toEqual(["3d"]);
     expect(filters.values).toEqual([{ name: "3d", value: defaultFilters["3d"] }]);
     expect(filters.ffmpegArgs).toEqual({ af: defaultFilters["3d"] });
@@ -32,7 +35,7 @@ describe("FilterManager#add()", () => {
     expect(filters.collection.get("3d")).toBe(oldFilter);
     expect(filters.names).toEqual(["3d"]);
     expect(filters.values).toEqual([oldFilter]);
-    expect(filters.ffmpegArgs).toEqual({ af: oldFilter.value });
+    expect(filters.ffmpegArgs).toEqual({ af: oldFilter!.value });
     expect(play).toHaveBeenCalledTimes(1);
   });
   test("Add a filter with override", () => {
@@ -44,7 +47,7 @@ describe("FilterManager#add()", () => {
     expect(filters.collection.get("3d")).toEqual(oldFilter);
     expect(filters.names).toEqual(["3d"]);
     expect(filters.values).toEqual([oldFilter]);
-    expect(filters.ffmpegArgs).toEqual({ af: oldFilter.value });
+    expect(filters.ffmpegArgs).toEqual({ af: oldFilter!.value });
     expect(play).toHaveBeenCalledTimes(1);
   });
   test("Add multiple filters without override", () => {
@@ -53,7 +56,10 @@ describe("FilterManager#add()", () => {
     expect(filters.collection.size).toBe(fNames.length);
     for (const filter of fNames) {
       expect(filters.has(filter)).toBe(true);
-      expect(filters.collection.get(filter)).toEqual({ name: filter, value: defaultFilters[filter] });
+      expect(filters.collection.get(filter)).toEqual({
+        name: filter,
+        value: defaultFilters[filter],
+      });
     }
     expect(filters.collection.get("3d")).toBe(oldFilter);
     expect(filters.names).toEqual(fNames);
@@ -68,7 +74,10 @@ describe("FilterManager#add()", () => {
     for (const filter of fNames) {
       expect(filters.has(filter)).toBe(true);
       expect(filters.collection.get(filter)).not.toBe(oldFilters.get(filter));
-      expect(filters.collection.get(filter)).toEqual({ name: filter, value: defaultFilters[filter] });
+      expect(filters.collection.get(filter)).toEqual({
+        name: filter,
+        value: defaultFilters[filter],
+      });
     }
     expect(filters.names).toEqual(fNames);
     expect(filters.values).toEqual(fNames.map(f => ({ name: f, value: defaultFilters[f] })));
@@ -88,7 +97,9 @@ describe("FilterManager#add()", () => {
     }
     expect(filters.names).toEqual([...fNames, customFilter.name]);
     expect(filters.values).toEqual([...fNames.map(f => ({ name: f, value: defaultFilters[f] })), customFilter]);
-    expect(filters.ffmpegArgs).toEqual({ af: [...fValues, customFilter.value].join(",") });
+    expect(filters.ffmpegArgs).toEqual({
+      af: [...fValues, customFilter.value].join(","),
+    });
     expect(play).toHaveBeenCalledTimes(1);
   });
   test("Add an invalid filter", () => {
@@ -115,7 +126,9 @@ describe("FilterManager#remove()", () => {
     }
     expect(filters.names).toEqual(fNames.filter(f => f !== "3d"));
     expect(filters.values).toEqual(fNames.filter(f => f !== "3d").map(f => ({ name: f, value: defaultFilters[f] })));
-    expect(filters.ffmpegArgs).toEqual({ af: fValues.filter(f => f !== defaultFilters["3d"]).join(",") });
+    expect(filters.ffmpegArgs).toEqual({
+      af: fValues.filter(f => f !== defaultFilters["3d"]).join(","),
+    });
     expect(play).toHaveBeenCalledTimes(1);
   });
   test("Remove multiple filters", () => {
@@ -129,7 +142,9 @@ describe("FilterManager#remove()", () => {
     }
     expect(filters.names).toEqual(restFilters);
     expect(filters.values).toEqual(restFilters.map(f => ({ name: f, value: defaultFilters[f] })));
-    expect(filters.ffmpegArgs).toEqual({ af: restFilters.map(f => defaultFilters[f]).join(",") });
+    expect(filters.ffmpegArgs).toEqual({
+      af: restFilters.map(f => defaultFilters[f]).join(","),
+    });
     expect(play).toHaveBeenCalledTimes(1);
   });
 });
@@ -140,7 +155,10 @@ describe("FilterManager#set()", () => {
     filters.set(["3d"]);
     expect(filters.collection.size).toBe(1);
     expect(filters.has("3d")).toBe(true);
-    expect(filters.collection.get("3d")).toEqual({ name: "3d", value: defaultFilters["3d"] });
+    expect(filters.collection.get("3d")).toEqual({
+      name: "3d",
+      value: defaultFilters["3d"],
+    });
     expect(filters.names).toEqual(["3d"]);
     expect(filters.values).toEqual([{ name: "3d", value: defaultFilters["3d"] }]);
     expect(filters.ffmpegArgs).toEqual({ af: defaultFilters["3d"] });
@@ -155,7 +173,10 @@ describe("FilterManager#set()", () => {
     for (const filter of newFilters) {
       if (typeof filter === "string") {
         expect(filters.has(filter)).toBe(true);
-        expect(filters.collection.get(filter)).toEqual({ name: filter, value: defaultFilters[filter] });
+        expect(filters.collection.get(filter)).toEqual({
+          name: filter,
+          value: defaultFilters[filter],
+        });
       } else {
         expect(filters.has(filter.name)).toBe(true);
         expect(filters.collection.get(filter.name)).toBe(filter);

@@ -57,8 +57,8 @@ test("DisTubeVoiceManager#create()", () => {
 
 test("DisTubeVoiceManager#join()", () => {
   manager.join(channel1);
-  expect(manager.get(channel1).join).toHaveBeenCalledTimes(1);
-  expect(manager.get(channel1).join).toHaveBeenCalledWith(channel1);
+  expect(manager.get(channel1)!.join).toHaveBeenCalledTimes(1);
+  expect(manager.get(channel1)!.join).toHaveBeenCalledWith(channel1);
   manager.create = vi.fn();
   const fVoice = { join: vi.fn() };
   (<Mock>manager.create).mockReturnValueOnce(fVoice);
@@ -69,7 +69,7 @@ test("DisTubeVoiceManager#join()", () => {
 
 test("DisTubeVoiceManager#leave()", () => {
   manager.leave(channel1);
-  expect(manager.get(channel1).leave).toHaveBeenCalledTimes(1);
+  expect(manager.get(channel1)!.leave).toHaveBeenCalledTimes(1);
   const fConnection = {
     destroy: vi.fn(),
     state: {

@@ -1,10 +1,11 @@
 {
-  "include": ["src/**/*.ts"],
+  "include": ["src/**/*.ts", "tests/**/*.ts"],
   "exclude": ["node_modules"],
   "compilerOptions": {
     "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": ["src/*"],
+      "@": ["src/index.ts"]
     },
     "module": "ESNext",
     "moduleResolution": "Bundler",

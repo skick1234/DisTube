@@ -12,7 +12,6 @@ export default defineConfig({
     exclude: ["**/node_modules", "**/dist", ".idea", ".git"],
     coverage: {
       enabled: true,
-      all: true,
       reporter: ["text", "lcov", "cobertura"],
       provider: "v8",
       include: ["src"],
