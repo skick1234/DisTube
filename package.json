@@ -93,11 +93,11 @@
   },
   "nano-staged": {
     "*.ts": [
-      "biome check --write",
+      "biome check --write --no-errors-on-unmatched",
       "pnpm run type"
     ],
-    "*.{js,json,yml,yaml,md}": [
-      "biome check --write"
+    "*.{js,json}": [
+      "biome check --write --no-errors-on-unmatched"
     ]
   },
   "engines": {
