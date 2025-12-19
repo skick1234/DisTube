@@ -1,12 +1,13 @@
 /* eslint-disable @typescript-eslint/ban-ts-comment */
-import { expect, test, vi } from "vitest";
+
 import { Client, ClientUser, Guild, Message, VoiceState } from "discord.js";
-import { rawBotVoiceState, rawClientUser, rawGuild, rawMessage, rawUserVoiceState } from "./raw";
+import type { Mocked } from "vitest";
+import { expect, test, vi } from "vitest";
 import {
-  DisTubeError,
   DisTubeVoice as _Voice,
   checkIntents,
   checkInvalidKey,
+  DisTubeError,
   formatDuration,
   isClientInstance,
   isMemberInstance,
@@ -18,7 +19,7 @@ import {
   isVoiceChannelEmpty,
   resolveGuildId,
 } from "@";
-import type { Mocked } from "vitest";
+import { rawBotVoiceState, rawClientUser, rawGuild, rawMessage, rawUserVoiceState } from "./raw";
 
 vi.mock("@/core/DisTubeVoice");
 

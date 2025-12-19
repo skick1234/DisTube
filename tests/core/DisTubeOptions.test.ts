@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { Options, defaultOptions } from "@";
+import { defaultOptions, Options } from "@";
 
 test("Default DisTubeOptions", () => {
   expect(new Options({})).toEqual({

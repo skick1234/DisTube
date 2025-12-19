@@ -1,26 +1,14 @@
-import { TypedEmitter } from "tiny-typed-emitter";
-import {
-  DisTubeError,
-  DisTubeHandler,
-  DisTubeVoiceManager,
-  Events,
-  Options,
-  Playlist,
-  QueueManager,
-  Song,
-  checkIntents,
-  defaultFilters,
-  isClientInstance,
-  isMemberInstance,
-  isMessageInstance,
-  isNsfwChannel,
-  isObject,
-  isSupportedVoiceChannel,
-  isTextChannelInstance,
-  isURL,
-  version,
-} from ".";
 import type { Client, VoiceBasedChannel } from "discord.js";
+import { TypedEmitter } from "tiny-typed-emitter";
+import { defaultFilters, version } from "./constant";
+import { DisTubeHandler } from "./core/DisTubeHandler";
+import { Options } from "./core/DisTubeOptions";
+import { DisTubeVoiceManager } from "./core/manager/DisTubeVoiceManager";
+import { QueueManager } from "./core/manager/QueueManager";
+import { DisTubeError } from "./struct/DisTubeError";
+import { Playlist } from "./struct/Playlist";
+import type { Queue } from "./struct/Queue";
+import { Song } from "./struct/Song";
 import type {
   Awaitable,
   CustomPlaylistOptions,
@@ -29,10 +17,20 @@ import type {
   Filters,
   GuildIdResolvable,
   PlayOptions,
-  Queue,
-  RepeatMode,
   TypedDisTubeEvents,
-} from ".";
+} from "./type";
+import { Events, type RepeatMode } from "./type";
+import {
+  checkIntents,
+  isClientInstance,
+  isMemberInstance,
+  isMessageInstance,
+  isNsfwChannel,
+  isObject,
+  isSupportedVoiceChannel,
+  isTextChannelInstance,
+  isURL,
+} from "./util";
 
 /**
  * DisTube class

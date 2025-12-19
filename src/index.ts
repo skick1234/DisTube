@@ -1,15 +1,23 @@
-/**
- * The current version that you are currently using.
- *
- * Note to developers:
- * This needs to explicitly be `string` so it is not typed as a "const string" that gets injected by esbuild
- */
-// eslint-disable-next-line @typescript-eslint/no-inferrable-types
-export const version: string = "[VI]{{inject}}[/VI]";
-
-export * from "./type";
 export * from "./constant";
-export * from "./struct";
-export * from "./util";
-export * from "./core";
+export * from "./core/DisTubeBase";
+export * from "./core/DisTubeHandler";
+export * from "./core/DisTubeOptions";
+export * from "./core/DisTubeStream";
+export * from "./core/DisTubeVoice";
+export * from "./core/manager/BaseManager";
+export * from "./core/manager/DisTubeVoiceManager";
+export * from "./core/manager/FilterManager";
+export * from "./core/manager/GuildIdManager";
+export * from "./core/manager/QueueManager";
 export { DisTube, DisTube as default } from "./DisTube";
+export * from "./struct/DisTubeError";
+export * from "./struct/ExtractorPlugin";
+export * from "./struct/InfoExtratorPlugin";
+export * from "./struct/PlayableExtratorPlugin";
+export * from "./struct/Playlist";
+export * from "./struct/Plugin";
+export * from "./struct/Queue";
+export * from "./struct/Song";
+export * from "./struct/TaskQueue";
+export * from "./type";
+export * from "./util";

@@ -1,4 +1,6 @@
-import type { Awaitable, DisTube, PluginType, Song } from "..";
+import type { DisTube } from "../DisTube";
+import type { Awaitable, PluginType } from "../type";
+import type { Song } from "./Song";
 
 /**
  * DisTube Plugin

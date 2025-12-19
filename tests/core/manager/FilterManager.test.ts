@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import { DisTubeError, FilterManager, defaultFilters } from "@";
 import type { FilterResolvable, Queue } from "@";
+import { DisTubeError, defaultFilters, FilterManager } from "@";
 
 const play = vi.fn();
 const queue = <Queue>(<unknown>{ distube: { filters: defaultFilters }, play });

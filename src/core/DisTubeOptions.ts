@@ -1,5 +1,7 @@
-import { DisTubeError, checkInvalidKey, defaultOptions } from "..";
-import type { DisTubeOptions, DisTubePlugin, FFmpegArgs, FFmpegOptions, Filters } from "..";
+import { defaultOptions } from "../constant";
+import { DisTubeError } from "../struct/DisTubeError";
+import type { DisTubeOptions, DisTubePlugin, FFmpegArgs, FFmpegOptions, Filters } from "../type";
+import { checkInvalidKey } from "../util";
 
 export class Options {
   plugins: DisTubePlugin[];
@@ -52,7 +54,7 @@ export class Options {
           throw new DisTubeError("INVALID_TYPE", "boolean", value, `DisTubeOptions.${key}`);
         }
       } else if (numberOptions.has(key)) {
-        if (typeof value !== "number" || isNaN(value)) {
+        if (typeof value !== "number" || Number.isNaN(value)) {
           throw new DisTubeError("INVALID_TYPE", "number", value, `DisTubeOptions.${key}`);
         }
       } else if (stringOptions.has(key)) {

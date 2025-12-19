@@ -2,6 +2,10 @@
   "include": ["src/**/*.ts"],
   "exclude": ["node_modules"],
   "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"]
+    },
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "lib": ["ESNext"],

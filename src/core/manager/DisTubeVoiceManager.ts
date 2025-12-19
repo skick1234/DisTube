@@ -1,9 +1,9 @@
-import { GuildIdManager } from ".";
-import { DisTubeVoice } from "../DisTubeVoice";
-import { DisTubeError, resolveGuildId } from "../..";
-import { VoiceConnectionStatus, getVoiceConnection } from "@discordjs/voice";
-import type { GuildIdResolvable } from "../..";
+import { getVoiceConnection, VoiceConnectionStatus } from "@discordjs/voice";
 import type { VoiceBasedChannel } from "discord.js";
+import type { GuildIdResolvable } from "../..";
+import { DisTubeError, resolveGuildId } from "../..";
+import { DisTubeVoice } from "../DisTubeVoice";
+import { GuildIdManager } from "./GuildIdManager";
 
 /**
  * Manages voice connections

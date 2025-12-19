@@ -1,7 +1,11 @@
-import { DisTubeBase } from ".";
 import { request } from "undici";
-import { DisTubeError, Playlist, PluginType, Song, isURL } from "..";
-import type { DisTubePlugin, ResolveOptions } from "..";
+import { DisTubeError } from "../struct/DisTubeError";
+import { Playlist } from "../struct/Playlist";
+import { Song } from "../struct/Song";
+import type { DisTubePlugin, ResolveOptions } from "../type";
+import { PluginType } from "../type";
+import { isURL } from "../util";
+import { DisTubeBase } from "./DisTubeBase";
 
 const REDIRECT_CODES = new Set([301, 302, 303, 307, 308]);
 

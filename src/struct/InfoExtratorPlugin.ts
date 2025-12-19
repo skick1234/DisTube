@@ -1,6 +1,8 @@
-import { Plugin } from ".";
-import { PluginType } from "..";
-import type { Awaitable, Playlist, ResolveOptions, Song } from "..";
+import type { Awaitable, ResolveOptions } from "../type";
+import { PluginType } from "../type";
+import type { Playlist } from "./Playlist";
+import { Plugin } from "./Plugin";
+import type { Song } from "./Song";
 
 /**
  * This plugin only can extract the info from supported links, but not play song directly from its source

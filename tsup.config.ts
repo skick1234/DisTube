@@ -1,5 +1,5 @@
-import { defineConfig } from "tsup";
 import { esbuildPluginVersionInjector } from "esbuild-plugin-version-injector";
+import { defineConfig } from "tsup";
 
 export default defineConfig({
   platform: "node",

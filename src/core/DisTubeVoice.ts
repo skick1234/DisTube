@@ -1,17 +1,20 @@
-import { Constants } from "discord.js";
-import { TypedEmitter } from "tiny-typed-emitter";
-import { DisTubeError, checkEncryptionLibraries, isSupportedVoiceChannel } from "..";
+import type { AudioPlayer, VoiceConnection } from "@discordjs/voice";
 import {
   AudioPlayerStatus,
-  VoiceConnectionDisconnectReason,
-  VoiceConnectionStatus,
   createAudioPlayer,
   entersState,
   joinVoiceChannel,
+  VoiceConnectionDisconnectReason,
+  VoiceConnectionStatus,
 } from "@discordjs/voice";
-import type { AudioPlayer, VoiceConnection } from "@discordjs/voice";
 import type { Snowflake, VoiceBasedChannel, VoiceState } from "discord.js";
-import type { DisTubeStream, DisTubeVoiceEvents, DisTubeVoiceManager } from "..";
+import { Constants } from "discord.js";
+import { TypedEmitter } from "tiny-typed-emitter";
+import { DisTubeError } from "../struct/DisTubeError";
+import type { DisTubeVoiceEvents } from "../type";
+import { checkEncryptionLibraries, isSupportedVoiceChannel } from "../util";
+import type { DisTubeStream } from "./DisTubeStream";
+import type { DisTubeVoiceManager } from "./manager/DisTubeVoiceManager";
 
 /**
  * Create a voice connection to the voice channel
@@ -183,14 +186,14 @@ export class DisTubeVoice extends TypedEmitter<DisTubeVoiceEvents> {
     this.volume = this.#volume;
   }
   set volume(volume: number) {
-    if (typeof volume !== "number" || isNaN(volume)) {
+    if (typeof volume !== "number" || Number.isNaN(volume)) {
       throw new DisTubeError("INVALID_TYPE", "number", volume, "volume");
     }
     if (volume < 0) {
       throw new DisTubeError("NUMBER_COMPARE", "Volume", "bigger or equal to", 0);
     }
     this.#volume = volume;
-    this.stream?.setVolume(Math.pow(this.#volume / 100, 0.5 / Math.log10(2)));
+    this.stream?.setVolume((this.#volume / 100) ** (0.5 / Math.log10(2)));
   }
   /**
    * Get or set the volume percentage

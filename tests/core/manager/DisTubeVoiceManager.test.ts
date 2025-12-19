@@ -1,7 +1,7 @@
-import { beforeEach, expect, test, vi } from "vitest";
-import { DisTubeVoiceManager, DisTubeVoice as _DTV } from "@";
-import { VoiceConnectionStatus, getVoiceConnection } from "@discordjs/voice";
+import { getVoiceConnection, VoiceConnectionStatus } from "@discordjs/voice";
 import type { Mock, Mocked } from "vitest";
+import { beforeEach, expect, test, vi } from "vitest";
+import { DisTubeVoice as _DTV, DisTubeVoiceManager } from "@";
 
 vi.mock("@/core/DisTubeVoice");
 vi.mock(

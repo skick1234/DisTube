@@ -1,14 +1,4 @@
 import type {
-  DisTubeError,
-  DisTubeVoice,
-  ExtractorPlugin,
-  InfoExtractorPlugin,
-  PlayableExtractorPlugin,
-  Playlist,
-  Queue,
-  Song,
-} from ".";
-import type {
   Guild,
   GuildMember,
   GuildTextBasedChannel,
@@ -18,6 +8,16 @@ import type {
   VoiceBasedChannel,
   VoiceState,
 } from "discord.js";
+import type {
+  DisTubeError,
+  DisTubeVoice,
+  ExtractorPlugin,
+  InfoExtractorPlugin,
+  PlayableExtractorPlugin,
+  Playlist,
+  Queue,
+  Song,
+} from ".";
 
 export type Awaitable<T = any> = T | PromiseLike<T>;
 

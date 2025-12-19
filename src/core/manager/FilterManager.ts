@@ -1,6 +1,6 @@
-import { BaseManager } from ".";
-import { DisTubeError } from "../..";
 import type { FFmpegArg as FFmpegArgsValue, Filter, FilterResolvable, Queue } from "../..";
+import { DisTubeError } from "../..";
+import { BaseManager } from "./BaseManager";
 
 /**
  * Manage filters of a playing {@link Queue}
@@ -19,7 +19,7 @@ export class FilterManager extends BaseManager<Filter> {
     if (typeof filter === "object" && typeof filter.name === "string" && typeof filter.value === "string") {
       return filter;
     }
-    if (typeof filter === "string" && Object.prototype.hasOwnProperty.call(this.distube.filters, filter)) {
+    if (typeof filter === "string" && Object.hasOwn(this.distube.filters, filter)) {
       return {
         name: filter,
         value: this.distube.filters[filter],

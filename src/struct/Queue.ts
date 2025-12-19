@@ -1,7 +1,14 @@
-import { DisTubeBase, FilterManager } from "../core";
-import { DisTubeError, Events, RepeatMode, TaskQueue, formatDuration, objectKeys } from "..";
 import type { GuildTextBasedChannel, Snowflake } from "discord.js";
-import type { DisTube, DisTubeVoice, DisTubeVoiceEvents, FFmpegArgs, Song } from "..";
+import { DisTubeBase } from "../core/DisTubeBase";
+import type { DisTubeVoice } from "../core/DisTubeVoice";
+import { FilterManager } from "../core/manager/FilterManager";
+import type { DisTube } from "../DisTube";
+import type { DisTubeVoiceEvents, FFmpegArgs } from "../type";
+import { Events, RepeatMode } from "../type";
+import { formatDuration, objectKeys } from "../util";
+import { DisTubeError } from "./DisTubeError";
+import type { Song } from "./Song";
+import { TaskQueue } from "./TaskQueue";
 
 /**
  * Represents a queue.
@@ -353,7 +360,7 @@ export class Queue extends DisTubeBase {
    */
   seek(time: number): Queue {
     if (typeof time !== "number") throw new DisTubeError("INVALID_TYPE", "number", time, "time");
-    if (isNaN(time) || time < 0) throw new DisTubeError("NUMBER_COMPARE", "time", "bigger or equal to", 0);
+    if (Number.isNaN(time) || time < 0) throw new DisTubeError("NUMBER_COMPARE", "time", "bigger or equal to", 0);
     this._beginTime = time;
     this.play(false);
     return this;

@@ -1,6 +1,8 @@
-import { DisTubeError, formatDuration, isMemberInstance } from "..";
 import type { GuildMember } from "discord.js";
-import type { PlaylistInfo, ResolveOptions, Song } from "..";
+import type { PlaylistInfo, ResolveOptions } from "../type";
+import { formatDuration, isMemberInstance } from "../util";
+import { DisTubeError } from "./DisTubeError";
+import type { Song } from "./Song";
 
 /**
  * Class representing a playlist.

@@ -1,7 +1,7 @@
-import { GuildIdManager } from ".";
-import { DisTubeError, DisTubeStream, Events, Queue, RepeatMode, checkFFmpeg, objectKeys } from "../..";
-import type { Song } from "../..";
 import type { GuildTextBasedChannel, VoiceBasedChannel } from "discord.js";
+import type { Song } from "../..";
+import { checkFFmpeg, DisTubeError, DisTubeStream, Events, objectKeys, Queue, RepeatMode } from "../..";
+import { GuildIdManager } from "./GuildIdManager";
 
 /**
  * Queue manager

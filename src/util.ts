@@ -1,7 +1,4 @@
-import { URL } from "url";
-import { DisTubeError, DisTubeVoice, Queue } from ".";
-import { Constants, GatewayIntentBits, IntentsBitField, SnowflakeUtil } from "discord.js";
-import type { GuildIdResolvable } from ".";
+import { URL } from "node:url";
 import type {
   Client,
   ClientOptions,
@@ -13,6 +10,11 @@ import type {
   VoiceBasedChannel,
   VoiceState,
 } from "discord.js";
+import { Constants, GatewayIntentBits, IntentsBitField, SnowflakeUtil } from "discord.js";
+import { DisTubeVoice } from "./core/DisTubeVoice";
+import { DisTubeError } from "./struct/DisTubeError";
+import { Queue } from "./struct/Queue";
+import type { GuildIdResolvable } from "./type";
 
 const formatInt = (int: number) => (int < 10 ? `0${int}` : int);
 

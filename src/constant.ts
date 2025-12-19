@@ -1,4 +1,7 @@
-import type { DisTubeOptions, Filters } from ".";
+import type { DisTubeOptions } from "./type";
+export const version: string = "[VI]{{inject}}[/VI]";
+
+import type { Filters } from "./type";
 
 /**
  * Default DisTube audio filters.

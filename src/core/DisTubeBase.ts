@@ -1,15 +1,12 @@
 import type { Client } from "discord.js";
-import type {
-  DisTube,
-  DisTubeEvents,
-  DisTubeHandler,
-  DisTubePlugin,
-  DisTubeVoiceManager,
-  Options,
-  Queue,
-  QueueManager,
-  Song,
-} from "..";
+import type { DisTube } from "../DisTube";
+import type { Queue } from "../struct/Queue";
+import type { Song } from "../struct/Song";
+import type { DisTubeEvents, DisTubePlugin } from "../type";
+import type { DisTubeHandler } from "./DisTubeHandler";
+import type { Options } from "./DisTubeOptions";
+import type { DisTubeVoiceManager } from "./manager/DisTubeVoiceManager";
+import type { QueueManager } from "./manager/QueueManager";
 
 export abstract class DisTubeBase {
   distube: DisTube;
