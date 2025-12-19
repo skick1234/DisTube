@@ -16,6 +16,7 @@ import type {
   DisTubePlugin,
   Filters,
   GuildIdResolvable,
+  JumpOptions,
   PlayOptions,
   TypedDisTubeEvents,
 } from "./type";
@@ -165,7 +166,7 @@ export class DisTube extends TypedEmitter<TypedDisTubeEvents> {
     this.queues = new QueueManager(this);
     this.filters = { ...defaultFilters, ...this.options.customFilters };
     this.plugins = [...this.options.plugins];
-    this.plugins.forEach(p => p.init(this));
+    for (const p of this.plugins) p.init(this);
   }
 
   static get version() {
@@ -357,8 +358,8 @@ export class DisTube extends TypedEmitter<TypedDisTubeEvents> {
    * @param guild - The type can be resolved to give a {@link Queue}
    * @returns The new Song will be played
    */
-  skip(guild: GuildIdResolvable): Promise<Song> {
-    return this.#getQueue(guild).skip();
+  skip(guild: GuildIdResolvable, options?: JumpOptions): Promise<Song> {
+    return this.#getQueue(guild).skip(options);
   }
 
   /**
@@ -386,8 +387,8 @@ export class DisTube extends TypedEmitter<TypedDisTubeEvents> {
    * @param num   - The song number to play
    * @returns The new Song will be played
    */
-  jump(guild: GuildIdResolvable, num: number): Promise<Song> {
-    return this.#getQueue(guild).jump(num);
+  jump(guild: GuildIdResolvable, num: number, options?: JumpOptions): Promise<Song> {
+    return this.#getQueue(guild).jump(num, options);
   }
 
   /**

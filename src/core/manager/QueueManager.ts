@@ -44,7 +44,7 @@ export class QueueManager extends GuildIdManager<Queue> {
         if (error) this.emitError(error, queue, queue.songs?.[0]);
       },
       error: error => this.#handlePlayingError(queue, error),
-      finish: () => this.#handleSongFinish(queue),
+      finish: () => this.handleSongFinish(queue),
     };
     for (const event of objectKeys(queue._listeners)) {
       queue.voice.on(event, queue._listeners[event]);
@@ -52,61 +52,51 @@ export class QueueManager extends GuildIdManager<Queue> {
   }
 
   /**
-   * Whether or not emit playSong event
-   * @param queue - Queue
-   */
-  #emitPlaySong(queue: Queue): boolean {
-    if (!this.options.emitNewSongOnly) return true;
-    if (queue.repeatMode === RepeatMode.SONG) return queue._next || queue._prev;
-    return queue.songs[0].id !== queue.songs[1].id;
-  }
-
-  /**
    * Handle the queue when a Song finish
    * @param queue - queue
    */
-  async #handleSongFinish(queue: Queue): Promise<void> {
+  async handleSongFinish(queue: Queue): Promise<void> {
+    if (queue._manualUpdate) {
+      queue._manualUpdate = false;
+      await this.playSong(queue);
+      return;
+    }
     this.debug(`[QueueManager] Handling song finish: ${queue.id}`);
     const song = queue.songs[0];
-    this.emit(Events.FINISH_SONG, queue, queue.songs[0]);
+    this.emit(Events.FINISH_SONG, queue, song);
     await queue._taskQueue.queuing();
     try {
       if (queue.stopped) return;
-      if (queue.repeatMode === RepeatMode.QUEUE && !queue._prev) queue.songs.push(song);
-      if (queue._prev) {
-        if (queue.repeatMode === RepeatMode.QUEUE) queue.songs.unshift(queue.songs.pop() as Song);
-        else queue.songs.unshift(queue.previousSongs.pop() as Song);
-      }
-      if (queue.songs.length <= 1 && (queue._next || queue.repeatMode === RepeatMode.DISABLED)) {
-        if (queue.autoplay) {
-          try {
-            this.debug(`[QueueManager] Adding related song: ${queue.id}`);
-            await queue.addRelatedSong();
-          } catch (e: any) {
-            this.debug(`[${queue.id}] Add related song error: ${e.message}`);
-            this.emit(Events.NO_RELATED, queue, e);
-          }
-        }
-        if (queue.songs.length <= 1) {
-          this.debug(`[${queue.id}] Queue is empty, stopping...`);
-          if (!queue.autoplay) this.emit(Events.FINISH, queue);
-          queue.remove();
-          return;
-        }
-      }
-      const emitPlaySong = this.#emitPlaySong(queue);
-      if (!queue._prev && (queue.repeatMode !== RepeatMode.SONG || queue._next)) {
+      if (queue.repeatMode === RepeatMode.QUEUE) queue.songs.push(song);
+
+      if (queue.repeatMode !== RepeatMode.SONG) {
         const prev = queue.songs.shift() as Song;
         if (this.options.savePreviousSongs) queue.previousSongs.push(prev);
         else queue.previousSongs.push({ id: prev.id } as Song);
       }
-      queue._next = queue._prev = false;
-      queue._beginTime = 0;
+
+      if (queue.songs.length === 0 && queue.autoplay) {
+        try {
+          this.debug(`[QueueManager] Adding related song: ${queue.id}`);
+          await queue.addRelatedSong();
+        } catch (e: any) {
+          this.debug(`[${queue.id}] Add related song error: ${e.message}`);
+          this.emit(Events.NO_RELATED, queue, e);
+        }
+      }
+
+      if (queue.songs.length === 0) {
+        this.debug(`[${queue.id}] Queue is empty, stopping...`);
+        if (!queue.autoplay) this.emit(Events.FINISH, queue);
+        queue.remove();
+        return;
+      }
+
       if (song !== queue.songs[0]) {
         const playedSong = song.stream.playFromSource ? song : song.stream.song;
         if (playedSong?.stream.playFromSource) delete playedSong.stream.url;
       }
-      await this.playSong(queue, emitPlaySong);
+      await this.playSong(queue, true);
     } finally {
       queue._taskQueue.resolve();
     }
@@ -128,8 +118,6 @@ export class QueueManager extends GuildIdManager<Queue> {
     this.emitError(error, queue, song);
     if (queue.songs.length > 0) {
       this.debug(`[${queue.id}] Playing next song: ${queue.songs[0]}`);
-      queue._next = queue._prev = false;
-      queue._beginTime = 0;
       this.playSong(queue);
     } else {
       this.debug(`[${queue.id}] Queue is empty, stopping...`);

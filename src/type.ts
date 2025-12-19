@@ -239,6 +239,14 @@ export type PlayHandlerOptions = {
   textChannel?: GuildTextBasedChannel;
 };
 
+export interface JumpOptions {
+  /**
+   * [Default: false] Whether or not skipped song(s) will be added to the end of the
+   * queue
+   */
+  requeue?: boolean;
+}
+
 export interface PlayOptions<T = unknown> extends PlayHandlerOptions, ResolveOptions<T> {
   /**
    * Called message (For built-in search events. If this is a {@link

@@ -3,7 +3,7 @@ import { DisTubeBase } from "../core/DisTubeBase";
 import type { DisTubeVoice } from "../core/DisTubeVoice";
 import { FilterManager } from "../core/manager/FilterManager";
 import type { DisTube } from "../DisTube";
-import type { DisTubeVoiceEvents, FFmpegArgs } from "../type";
+import type { DisTubeVoiceEvents, FFmpegArgs, JumpOptions } from "../type";
 import { Events, RepeatMode } from "../type";
 import { formatDuration, objectKeys } from "../util";
 import { DisTubeError } from "./DisTubeError";
@@ -60,19 +60,15 @@ export class Queue extends DisTubeBase {
    * The text channel of the Queue. (Default: where the first command is called).
    */
   textChannel?: GuildTextBasedChannel;
-  #filters: FilterManager;
   /**
    * What time in the song to begin (in seconds).
    */
   _beginTime: number;
+  #filters: FilterManager;
   /**
-   * Whether or not the last song was skipped to next song.
+   * Whether or not the queue is being updated manually (skip, jump, previous)
    */
-  _next: boolean;
-  /**
-   * Whether or not the last song was skipped to previous song.
-   */
-  _prev: boolean;
+  _manualUpdate: boolean;
   /**
    * Task queuing system
    */
@@ -95,8 +91,7 @@ export class Queue extends DisTubeBase {
     this.songs = [];
     this.previousSongs = [];
     this.stopped = false;
-    this._next = false;
-    this._prev = false;
+    this._manualUpdate = false;
     this.playing = false;
     this.paused = false;
     this.repeatMode = RepeatMode.DISABLED;
@@ -111,6 +106,23 @@ export class Queue extends DisTubeBase {
       input: { ...this.options.ffmpeg.args.input },
       output: { ...this.options.ffmpeg.args.output },
     };
+  }
+  #addToPreviousSongs(songs: Song | Song[]) {
+    if (Array.isArray(songs)) {
+      if (this.options.savePreviousSongs) {
+        this.previousSongs.push(...songs);
+      } else {
+        this.previousSongs.push(...songs.map(s => ({ id: s.id }) as Song));
+      }
+    } else if (this.options.savePreviousSongs) {
+      this.previousSongs.push(songs);
+    } else {
+      this.previousSongs.push({ id: songs.id } as Song);
+    }
+  }
+  #stop() {
+    this._manualUpdate = true;
+    this.voice.stop();
   }
   /**
    * The client user as a `GuildMember` of this queue's guild
@@ -243,22 +255,11 @@ export class Queue extends DisTubeBase {
    * Skip the playing song if there is a next song in the queue. <info>If {@link
    * Queue#autoplay} is `true` and there is no up next song, DisTube will add and
    * play a related song.</info>
+   * @param options - Skip options
    * @returns The song will skip to
    */
-  async skip(): Promise<Song> {
-    await this._taskQueue.queuing();
-    try {
-      if (this.songs.length <= 1) {
-        if (this.autoplay) await this.addRelatedSong();
-        else throw new DisTubeError("NO_UP_NEXT");
-      }
-      const song = this.songs[1];
-      this._next = true;
-      this.voice.stop();
-      return song;
-    } finally {
-      this._taskQueue.resolve();
-    }
+  async skip(options?: JumpOptions): Promise<Song> {
+    return this.jump(1, options);
   }
 
   /**
@@ -269,13 +270,15 @@ export class Queue extends DisTubeBase {
     await this._taskQueue.queuing();
     try {
       if (!this.options.savePreviousSongs) throw new DisTubeError("DISABLED_OPTION", "savePreviousSongs");
-      if (this.previousSongs?.length === 0 && this.repeatMode !== RepeatMode.QUEUE) {
+      if (this.previousSongs.length === 0 && this.repeatMode !== RepeatMode.QUEUE) {
         throw new DisTubeError("NO_PREVIOUS");
       }
       const song =
-        this.repeatMode === 2 ? this.songs[this.songs.length - 1] : this.previousSongs[this.previousSongs.length - 1];
-      this._prev = true;
-      this.voice.stop();
+        this.repeatMode === RepeatMode.QUEUE && this.previousSongs.length === 0
+          ? (this.songs[this.songs.length - 1] as Song)
+          : (this.previousSongs.pop() as Song);
+      this.songs.unshift(song);
+      this.#stop();
       return song;
     } finally {
       this._taskQueue.resolve();
@@ -305,35 +308,38 @@ export class Queue extends DisTubeBase {
    * one is -1, -2,...
    * if `num` is invalid number
    * @param position - The song position to play
+   * @param options  - Skip options
    * @returns The new Song will be played
    */
-  async jump(position: number): Promise<Song> {
+  async jump(position: number, options?: JumpOptions): Promise<Song> {
     await this._taskQueue.queuing();
     try {
       if (typeof position !== "number") throw new DisTubeError("INVALID_TYPE", "number", position, "position");
       if (!position || position > this.songs.length || -position > this.previousSongs.length) {
         throw new DisTubeError("NO_SONG_POSITION");
       }
-      let nextSong: Song;
       if (position > 0) {
-        const nextSongs = this.songs.splice(position - 1);
-        if (this.options.savePreviousSongs) {
-          this.previousSongs.push(...this.songs);
-        } else {
-          this.previousSongs.push(...this.songs.map(s => ({ id: s.id }) as Song));
+        if (position >= this.songs.length) {
+          if (this.autoplay) {
+            await this.addRelatedSong();
+          } else {
+            throw new DisTubeError("NO_UP_NEXT");
+          }
         }
-        this.songs = nextSongs;
-        this._next = true;
-        nextSong = nextSongs[1];
+        const skipped = this.songs.splice(0, position);
+        if (options?.requeue) {
+          this.songs.push(...skipped);
+        } else {
+          this.#addToPreviousSongs(skipped);
+        }
       } else if (!this.options.savePreviousSongs) {
         throw new DisTubeError("DISABLED_OPTION", "savePreviousSongs");
       } else {
-        this._prev = true;
-        if (position !== -1) this.songs.unshift(...this.previousSongs.splice(position + 1));
-        nextSong = this.previousSongs[this.previousSongs.length - 1];
+        const skipped = this.previousSongs.splice(position);
+        this.songs.unshift(...skipped);
       }
-      this.voice.stop();
-      return nextSong;
+      this.#stop();
+      return this.songs[0];
     } finally {
       this._taskQueue.resolve();
     }
