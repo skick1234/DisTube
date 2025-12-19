@@ -1,12 +1,16 @@
-# Welcome to DisTube.js.org Wiki
+# Welcome to the DisTube Wiki
 
-A collection of information about the [distube](https://www.npmjs.com/package/distube) package.
+DisTube is a powerful and easy-to-use music library for Discord.js. This wiki provide comprehensive guides and documentation to help you build the best music bot.
 
-## Getting started with DisTube
+## Getting Started
 
-- [[DisTube Guide]] is the optimal starting point for mastering the usage of DisTube.
-- Explore the [DisTube Documentation](https://distube.js.org/) to acquaint yourself with the standard library.
-- Explore a range of open-source projects leveraging DisTube featured on the [[Projects Hub]].
-- For upgrading from a lower version, refer to the [[Major Upgrade Guide]].
-- Prior to seeking assistance, please review the [[Frequently Asked Questions]] section for potential resolutions to your issue.
-- If you still require assistance, feel free to visit our [Discord](https://discord.gg/feaDd9h) community for support.
+- [[Installation]] - System requirements and installation guide.
+- [[DisTube Guide]] - The perfect starting point for beginners.
+- [API Documentation](https://distube.js.org/) - Detailed technical reference for all classes and methods.
+- [[Projects Hub]] - Explore plugins and community projects.
+- [[Major Upgrade Guide]] - Essential reading for upgrading from older versions.
+- [[Frequently Asked Questions]] - Quick answers to common issues.
+
+## Support
+
+If you need further assistance, join our [Discord Support Server](https://discord.gg/feaDd9h).

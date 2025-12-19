@@ -1,0 +1,119 @@
+{
+  "repo_notes": [
+    {
+      "content": "DisTube is a comprehensive Discord music bot library built for Discord.js. Documentation should prioritize library users (developers building bots), focusing on installation, basic usage, and the public API (DisTube, Queue, Song, Playlist classes). Internal architecture and development guides should be kept in a separate 'Internal Architecture' section.",
+      "author": "Skick"
+    }
+  ],
+  "pages": [
+    {
+      "title": "Project Overview",
+      "purpose": "Provide a high-level introduction to DisTube, its key features, and why it's a great choice for Discord music bots.",
+      "page_notes": [
+        {
+          "content": "Highlight support for various sources via plugins and built-in audio filters."
+        }
+      ]
+    },
+    {
+      "title": "Installation",
+      "purpose": "Step-by-step guide for installing DisTube and its necessary dependencies like FFmpeg and encryption libraries.",
+      "parent": "Project Overview"
+    },
+    {
+      "title": "Getting Started",
+      "purpose": "Guide for beginners to quickly integrate DisTube into their Discord.js bots.",
+      "page_notes": [
+        {
+          "content": "Include basic examples for play, skip, and stop commands."
+        }
+      ]
+    },
+    {
+      "title": "Handling Events",
+      "purpose": "Explain how to listen to and handle DisTube events like 'playSong', 'addSong', 'error', etc.",
+      "parent": "Getting Started"
+    },
+    {
+      "title": "Public API Reference",
+      "purpose": "Detailed documentation of the classes and types that developers interact with most frequently.",
+      "page_notes": [
+        {
+          "content": "Focus on public methods and properties of exported classes."
+        }
+      ]
+    },
+    {
+      "title": "DisTube Class",
+      "purpose": "Comprehensive reference for the main DisTube class, its constructor options, and main methods like play(), skip(), pause().",
+      "parent": "Public API Reference"
+    },
+    {
+      "title": "Queue Class",
+      "purpose": "Documentation for the Queue class, representing a guild's music queue and playback state.",
+      "parent": "Public API Reference"
+    },
+    {
+      "title": "Song and Playlist",
+      "purpose": "Reference for Song and Playlist structures, including metadata like duration, thumbnail, and source.",
+      "parent": "Public API Reference"
+    },
+    {
+      "title": "Plugin System",
+      "purpose": "Overview of DisTube's extensible plugin architecture.",
+      "page_notes": [
+        {
+          "content": "Explain how plugins enable support for YouTube, Spotify, SoundCloud, etc."
+        }
+      ]
+    },
+    {
+      "title": "Official Plugins",
+      "purpose": "List and link to official @distube plugins (YouTube, Spotify, etc.) with usage examples.",
+      "parent": "Plugin System"
+    },
+    {
+      "title": "Custom Plugins",
+      "purpose": "Guide for advanced users to create their own extractor or info extractor plugins.",
+      "parent": "Plugin System"
+    },
+    {
+      "title": "Audio Effects & Filters",
+      "purpose": "Documentation for applying audio filters like bassboost, nightcore, etc.",
+      "page_notes": [
+        {
+          "content": "Explain how to use built-in filters and define custom ones."
+        }
+      ]
+    },
+    {
+      "title": "Internal Architecture",
+      "purpose": "Dedicated section for internal library logic, core classes, and development guidelines. Only relevant for DisTube contributors.",
+      "page_notes": [
+        {
+          "content": "This section should be isolated from general user guides."
+        }
+      ]
+    },
+    {
+      "title": "Core Logic",
+      "purpose": "Explain internal handlers like DisTubeHandler, DisTubeStream, and DisTubeVoice.",
+      "parent": "Internal Architecture"
+    },
+    {
+      "title": "Managers",
+      "purpose": "Document internal managers like QueueManager, DisTubeVoiceManager, and FilterManager.",
+      "parent": "Internal Architecture"
+    },
+    {
+      "title": "Contributing Guide",
+      "purpose": "Instructions for setting up the development environment, running tests, and submitting pull requests.",
+      "parent": "Internal Architecture"
+    },
+    {
+      "title": "Dev and Testing",
+      "purpose": "Deep dive into the testing framework (Vitest) and debugging internal issues.",
+      "parent": "Internal Architecture"
+    }
+  ]
+}

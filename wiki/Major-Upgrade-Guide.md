@@ -8,7 +8,7 @@ DisTube doesn't support any music sources anymore. You have to use plugins to su
 
 Removed `streamType`, `youtubeCookie`, `ytdlOptions`, `searchSongs`, `directLink`, `leaveOnStop`, `leaveOnEmpty` and `leaveOnFinish` options.
 
-- `leaveOnEmpty`: Check [Handling Discord.js Events](https://github.com/skick1234/DisTube/wiki/Handling-Discord.js-Events)
+- `leaveOnEmpty`: Check [[Handling Discord.js Events]]
 - `leaveOnStop`: Add `queue.voice.leave()` after `queue.stop()` line
 - `leaveOnFinish`: Add `queue.voice.leave()` in the `finish` event
 - `directLink`: Use `@distube/direct-link` plugin

@@ -19,28 +19,131 @@ Let's bring your Discord bot to life with DisTube! 🤖🎵
 
 This guide assumes you're familiar with the command handling setup from [discordjs.guide](https://discordjs.guide/). Adjustments may be needed based on your command handler's structure.
 
+# Prerequisites
+
+- Solid understanding of JavaScript. While you can create a basic music bot with limited JS knowledge, a strong foundation will help you troubleshoot issues.
+- A basic Discord bot set up with Discord.js. Refer to [discordjs.guide](https://discordjs.guide/) if you haven't already.
+
 # Installation
 
-1.  Install DisTube and required dependencies in your bot project:
+Please follow the [[Installation]] guide to set up DisTube and its dependencies (like FFmpeg) before proceeding.
 
-    ```sh
-    npm install distube @discordjs/voice @discordjs/opus
-    ```
+# Getting Started
 
-2.  Install FFmpeg. See the guides for:
+## 1. Initialize DisTube
 
-    - [Windows](http://blog.gregzaal.com/how-to-install-ffmpeg-on-windows/)
-    - [Linux (Ubuntu, Mint,...)](https://www.tecmint.com/install-ffmpeg-in-linux/)
+First, you need to initialize the DisTube class in your main bot file.
 
-    If the links above are unavailable, download FFmpeg from [this repo](https://github.com/BtbN/FFmpeg-Builds/releases).
+```javascript
+const { Client, GatewayIntentBits } = require("discord.js");
+const { DisTube } = require("distube");
 
-> [!WARNING]
-> Avoid using `ffmpeg-static` due to potential stability issues across different machines. Also, do NOT install the `ffmpeg` npm package. Uninstall it if installed with `npm uninstall ffmpeg`.
+const client = new Client({
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildVoiceStates,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent,
+  ],
+});
 
-3. Encryption Libraries
+// Create a new DisTube instance
+const distube = new DisTube(client, {
+  emitNewSongOnly: true,
+  emitAddSongWhenCreatingQueue: false,
+  emitAddListWhenCreatingQueue: false,
+});
 
-> [!NOTE]
-> You only need to install one of these libraries if your system does not support `aes-256-gcm` (verify by running `require('node:crypto').getCiphers().includes('aes-256-gcm')`).
+client.login("YOUR_BOT_TOKEN");
+```
 
-- [@noble/ciphers](https://www.npmjs.com/package/@noble/ciphers)
-- [sodium-native](https://www.npmjs.com/package/sodium-native)
+## 2. Handling Events
+
+DisTube emits various events to keep you updated on the playback status. You should listen to these events to interact with your users.
+
+```javascript
+distube
+  .on("playSong", (queue, song) =>
+    queue.textChannel.send(
+      `Playing \`${song.name}\` - \`${song.formatDuration()}\`\nRequested by: ${song.user}`,
+    )
+  )
+  .on("addSong", (queue, song) =>
+    queue.textChannel.send(
+      `Added ${song.name} - \`${song.formatDuration()}\` to the queue by ${song.user}`,
+    )
+  )
+  .on("error", (channel, e) => {
+    if (channel) channel.send(`An error encountered: ${e.message.slice(0, 1970)}`);
+    else console.error(e);
+  })
+  .on("empty", channel => channel.send("Voice channel is empty! Leaving the channel..."))
+  .on("searchNoResult", (message, query) =>
+    message.channel.send(`No result found for \`${query}\`!`)
+  )
+  .on("finish", queue => queue.textChannel.send("Finished!"));
+```
+
+## 3. Creating Commands
+
+Now, let's implement basic music commands. This example uses a simple message-based command handler.
+
+### Play Command
+
+The `play` method is the core of DisTube. It handles searching, joining voice channels, and managing the queue.
+
+```javascript
+client.on("messageCreate", async message => {
+  if (message.author.bot || !message.guild) return;
+  const prefix = "!";
+  if (!message.content.startsWith(prefix)) return;
+  const args = message.content.slice(prefix.length).trim().split(/ +/g);
+  const command = args.shift().toLowerCase();
+
+  if (command === "play") {
+    const voiceChannel = message.member.voice.channel;
+    if (!voiceChannel) {
+      return message.channel.send("You must be in a voice channel to play music!");
+    }
+    const query = args.join(" ");
+    if (!query) {
+      return message.channel.send("Please provide a song name or URL!");
+    }
+    distube.play(voiceChannel, query, {
+      message,
+      textChannel: message.channel,
+      member: message.member,
+    });
+  }
+});
+```
+
+### Basic Controls (Skip, Stop, Pause, Resume)
+
+```javascript
+  if (command === "stop") {
+    distube.stop(message);
+    message.channel.send("Stopped the player!");
+  }
+
+  if (command === "skip") {
+    distube.skip(message);
+    message.channel.send("Skipped the song!");
+  }
+
+  if (command === "pause") {
+    distube.pause(message);
+    message.channel.send("Paused the song!");
+  }
+
+  if (command === "resume") {
+    distube.resume(message);
+    message.channel.send("Resumed the song!");
+  }
+```
+
+# Next Steps
+
+- Explore the [[Public API Reference]] for more advanced methods.
+- Learn how to use [[Audio Effects & Filters]] to enhance the listening experience.
+- Check out the [[Plugin System]] to support more music sources.
