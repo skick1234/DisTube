@@ -378,10 +378,11 @@ export class Queue extends DisTubeBase {
   }
   /**
    * Add a related song of the playing song to the queue
+   * @param song - The song to get related songs from. Defaults to the current playing song.
    * @returns The added song
    */
-  async addRelatedSong(): Promise<Song> {
-    const current = this.songs?.[0];
+  async addRelatedSong(song?: Song): Promise<Song> {
+    const current = song ?? this.songs?.[0];
     if (!current) throw new DisTubeError("NO_PLAYING_SONG");
     const prevIds = this.previousSongs.map(p => p.id);
     const relatedSongs = (await this.#getRelatedSong(current)).filter(s => !prevIds.includes(s.id));
@@ -391,12 +392,12 @@ export class Queue extends DisTubeBase {
       if (altSong) relatedSongs.push(...(await this.#getRelatedSong(altSong)).filter(s => !prevIds.includes(s.id)));
       this.debug(`[${this.id}] Getting related songs from streamed song: ${altSong}`);
     }
-    const song = relatedSongs[0];
-    if (!song) throw new DisTubeError("NO_RELATED");
-    song.metadata = current.metadata;
-    song.member = this.clientMember;
-    this.addToQueue(song);
-    return song;
+    const nextSong = relatedSongs[0];
+    if (!nextSong) throw new DisTubeError("NO_RELATED");
+    nextSong.metadata = current.metadata;
+    nextSong.member = this.clientMember;
+    this.addToQueue(nextSong);
+    return nextSong;
   }
   /**
    * Stop the guild stream and delete the queue
