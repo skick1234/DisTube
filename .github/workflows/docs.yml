@@ -6,8 +6,6 @@ on:
       - src/**
       - tsconfig.json
       - .github/workflows/docs.yml
-  permissions:
-    contents: read
 jobs:
   docs:
     name: Documentation
