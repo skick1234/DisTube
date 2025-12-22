@@ -1,38 +1,29 @@
-> [!WARNING]
-> This DisTube Guide is a work in progress.
+# DisTube Guide
 
 > [!NOTE]
 > This guide follows the [discordjs.guide notation](https://discordjs.guide/additional-info/notation.html).
 
-# Introduction
+## Introduction
 
 Welcome to the DisTube guide! This tutorial will guide you through creating a Discord bot with music commands using DisTube, a comprehensive Discord music bot library built for Discord.js. DisTube simplifies music commands, offers effortless playback from diverse sources, and provides integrated audio filters.
 
-Let's bring your Discord bot to life with DisTube! 🤖🎵
+Let's bring your Discord bot to life with DisTube!
 
 [![Support me on ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/skick)
 
-# Prerequisites
+## Prerequisites
 
-- Solid understanding of JavaScript. While you can create a basic music bot with limited JS knowledge, a strong foundation will help you troubleshoot issues.
+- Solid understanding of JavaScript/TypeScript
 - A basic Discord bot set up with Discord.js. Refer to [discordjs.guide](https://discordjs.guide/) if you haven't already.
+- Node.js 22.12.0 or higher
 
-This guide assumes you're familiar with the command handling setup from [discordjs.guide](https://discordjs.guide/). Adjustments may be needed based on your command handler's structure.
+Please follow the [[Installation]] guide to set up DisTube and its dependencies before proceeding.
 
-# Prerequisites
+## Getting Started
 
-- Solid understanding of JavaScript. While you can create a basic music bot with limited JS knowledge, a strong foundation will help you troubleshoot issues.
-- A basic Discord bot set up with Discord.js. Refer to [discordjs.guide](https://discordjs.guide/) if you haven't already.
+### 1. Initialize DisTube
 
-# Installation
-
-Please follow the [[Installation]] guide to set up DisTube and its dependencies (like FFmpeg) before proceeding.
-
-# Getting Started
-
-## 1. Initialize DisTube
-
-First, you need to initialize the DisTube class in your main bot file.
+First, initialize the DisTube class in your main bot file:
 
 ```javascript
 const { Client, GatewayIntentBits } = require("discord.js");
@@ -57,93 +48,252 @@ const distube = new DisTube(client, {
 client.login("YOUR_BOT_TOKEN");
 ```
 
-## 2. Handling Events
+### 2. Handling Events
 
-DisTube emits various events to keep you updated on the playback status. You should listen to these events to interact with your users.
+DisTube emits various events to keep you updated on the playback status:
 
 ```javascript
+const { Events } = require("distube");
+
 distube
-  .on("playSong", (queue, song) =>
-    queue.textChannel.send(
-      `Playing \`${song.name}\` - \`${song.formatDuration()}\`\nRequested by: ${song.user}`,
-    )
+  .on(Events.PLAY_SONG, (queue, song) =>
+    queue.textChannel?.send(
+      `Playing \`${song.name}\` - \`${song.formattedDuration}\`\nRequested by: ${song.user}`,
+    ),
   )
-  .on("addSong", (queue, song) =>
-    queue.textChannel.send(
-      `Added ${song.name} - \`${song.formatDuration()}\` to the queue by ${song.user}`,
-    )
+  .on(Events.ADD_SONG, (queue, song) =>
+    queue.textChannel?.send(
+      `Added ${song.name} - \`${song.formattedDuration}\` to the queue by ${song.user}`,
+    ),
   )
-  .on("error", (channel, e) => {
-    if (channel) channel.send(`An error encountered: ${e.message.slice(0, 1970)}`);
-    else console.error(e);
+  .on(Events.ERROR, (error, queue, song) => {
+    console.error(error);
+    queue.textChannel?.send(`An error occurred: ${error.message.slice(0, 1979)}`);
   })
-  .on("empty", channel => channel.send("Voice channel is empty! Leaving the channel..."))
-  .on("searchNoResult", (message, query) =>
-    message.channel.send(`No result found for \`${query}\`!`)
+  .on(Events.EMPTY, queue =>
+    queue.textChannel?.send("Voice channel is empty! Leaving the channel...")
   )
-  .on("finish", queue => queue.textChannel.send("Finished!"));
+  .on(Events.FINISH, queue =>
+    queue.textChannel?.send("Queue finished!")
+  );
 ```
 
-## 3. Creating Commands
+### 3. Creating Commands
 
-Now, let's implement basic music commands. This example uses a simple message-based command handler.
+#### Play Command
 
-### Play Command
-
-The `play` method is the core of DisTube. It handles searching, joining voice channels, and managing the queue.
+The `play` method is the core of DisTube. It handles searching, joining voice channels, and managing the queue:
 
 ```javascript
 client.on("messageCreate", async message => {
   if (message.author.bot || !message.guild) return;
   const prefix = "!";
   if (!message.content.startsWith(prefix)) return;
+
   const args = message.content.slice(prefix.length).trim().split(/ +/g);
-  const command = args.shift().toLowerCase();
+  const command = args.shift()?.toLowerCase();
 
   if (command === "play") {
-    const voiceChannel = message.member.voice.channel;
+    const voiceChannel = message.member?.voice.channel;
     if (!voiceChannel) {
-      return message.channel.send("You must be in a voice channel to play music!");
+      return message.channel.send("You must be in a voice channel!");
     }
     const query = args.join(" ");
     if (!query) {
       return message.channel.send("Please provide a song name or URL!");
     }
-    distube.play(voiceChannel, query, {
-      message,
-      textChannel: message.channel,
-      member: message.member,
-    });
+
+    try {
+      await distube.play(voiceChannel, query, {
+        message,
+        textChannel: message.channel,
+        member: message.member,
+      });
+    } catch (error) {
+      message.channel.send(`Error: ${error.message}`);
+    }
   }
 });
 ```
 
-### Basic Controls (Skip, Stop, Pause, Resume)
+#### Basic Controls
+
+> [!IMPORTANT]
+> Always use `queue` methods directly instead of `distube` shortcut methods. The shortcut methods are deprecated and will be removed in v6.0.
 
 ```javascript
-  if (command === "stop") {
-    distube.stop(message);
-    message.channel.send("Stopped the player!");
-  }
+// Get the queue for the guild
+const queue = distube.getQueue(message.guildId);
 
-  if (command === "skip") {
-    distube.skip(message);
-    message.channel.send("Skipped the song!");
-  }
+if (command === "stop") {
+  if (!queue) return message.channel.send("Nothing is playing!");
+  await queue.stop();
+  message.channel.send("Stopped the player!");
+}
 
-  if (command === "pause") {
-    distube.pause(message);
-    message.channel.send("Paused the song!");
-  }
+if (command === "skip") {
+  if (!queue) return message.channel.send("Nothing is playing!");
+  await queue.skip();
+  message.channel.send("Skipped the song!");
+}
 
-  if (command === "resume") {
-    distube.resume(message);
-    message.channel.send("Resumed the song!");
+if (command === "pause") {
+  if (!queue) return message.channel.send("Nothing is playing!");
+  queue.pause();
+  message.channel.send("Paused the song!");
+}
+
+if (command === "resume") {
+  if (!queue) return message.channel.send("Nothing is playing!");
+  queue.resume();
+  message.channel.send("Resumed the song!");
+}
+
+if (command === "volume") {
+  if (!queue) return message.channel.send("Nothing is playing!");
+  const volume = parseInt(args[0]);
+  if (isNaN(volume) || volume < 0 || volume > 100) {
+    return message.channel.send("Please provide a valid volume (0-100)!");
   }
+  queue.setVolume(volume);
+  message.channel.send(`Volume set to ${volume}%`);
+}
+
+if (command === "shuffle") {
+  if (!queue) return message.channel.send("Nothing is playing!");
+  queue.shuffle();
+  message.channel.send("Shuffled the queue!");
+}
+
+if (command === "repeat") {
+  if (!queue) return message.channel.send("Nothing is playing!");
+  const mode = queue.setRepeatMode();
+  const modeText = ["Off", "Song", "Queue"][mode];
+  message.channel.send(`Repeat mode: ${modeText}`);
+}
+
+if (command === "queue") {
+  if (!queue) return message.channel.send("Nothing is playing!");
+  const songs = queue.songs
+    .map((song, i) => `${i === 0 ? "Playing:" : `${i}.`} ${song.name} - \`${song.formattedDuration}\``)
+    .join("\n");
+  message.channel.send(songs.slice(0, 1990));
+}
+
+if (command === "nowplaying" || command === "np") {
+  if (!queue) return message.channel.send("Nothing is playing!");
+  const song = queue.songs[0];
+  message.channel.send(
+    `Now playing: ${song.name}\n` +
+    `Duration: ${queue.formattedCurrentTime} / ${song.formattedDuration}`
+  );
+}
 ```
 
-# Next Steps
+## Best Practices
 
-- Explore the [[Public API Reference]] for more advanced methods.
-- Learn how to use [[Audio Effects & Filters]] to enhance the listening experience.
-- Check out the [[Plugin System]] to support more music sources.
+### 1. Always Check for Queue Existence
+
+Before performing queue operations, always check if the queue exists:
+
+```javascript
+const queue = distube.getQueue(guildId);
+if (!queue) {
+  return message.reply("Nothing is playing!");
+}
+```
+
+### 2. Handle Errors Properly
+
+Always wrap `distube.play()` in try-catch and listen to the error event:
+
+```javascript
+try {
+  await distube.play(voiceChannel, query, options);
+} catch (error) {
+  // Handle errors like invalid URLs, no results, etc.
+  message.reply(`Error: ${error.message}`);
+}
+
+// Also handle playback errors
+distube.on(Events.ERROR, (error, queue, song) => {
+  console.error(`[${queue.id}] Error:`, error);
+  queue.textChannel?.send(`Error playing ${song?.name}: ${error.message}`);
+});
+```
+
+### 3. Use TypeScript for Better Development Experience
+
+DisTube is written in TypeScript and provides full type definitions:
+
+```typescript
+import { Client, GatewayIntentBits, Message } from "discord.js";
+import { DisTube, Events, Queue, Song } from "distube";
+
+const distube = new DisTube(client);
+
+distube.on(Events.PLAY_SONG, (queue: Queue, song: Song) => {
+  // Full type support
+});
+```
+
+### 4. Clean Up Resources
+
+Leave voice channels when appropriate to free up resources:
+
+```javascript
+// Leave when queue finishes
+distube.on(Events.FINISH, queue => {
+  queue.voice.leave();
+});
+
+// Leave when voice channel is empty
+import { isVoiceChannelEmpty } from "distube";
+
+client.on("voiceStateUpdate", oldState => {
+  if (!oldState?.channel) return;
+  const voice = distube.voices.get(oldState);
+  if (voice && isVoiceChannelEmpty(oldState)) {
+    voice.leave();
+  }
+});
+```
+
+### 5. Use Plugins for Additional Sources
+
+DisTube doesn't include music sources by default. Use official plugins:
+
+```javascript
+import { DisTube } from "distube";
+import { YouTubePlugin } from "@distube/youtube";
+import { SpotifyPlugin } from "@distube/spotify";
+import { SoundCloudPlugin } from "@distube/soundcloud";
+
+const distube = new DisTube(client, {
+  plugins: [
+    new YouTubePlugin(),
+    new SpotifyPlugin(),
+    new SoundCloudPlugin(),
+  ],
+});
+```
+
+### 6. Configure Queue Defaults
+
+Set default queue properties using the `initQueue` event:
+
+```javascript
+distube.on(Events.INIT_QUEUE, queue => {
+  queue.autoplay = false;        // Disable autoplay
+  queue.setVolume(50);           // Set default volume
+  queue.setRepeatMode(0);        // Disable repeat
+});
+```
+
+## Next Steps
+
+- Explore the [API Documentation](https://distube.js.org/) for all available methods
+- Check out [[Audio Effects & Filters]] to enhance the listening experience
+- Learn about the [[Plugin System]] to support more music sources
+- See [[Handling Discord.js Events]] for advanced voice state handling
+- Read [[Frequently Asked Questions]] for common issues and solutions

@@ -1,1 +1,1 @@
-pnpm exec commitlint --edit 
+bunx commitlint --edit "$1"

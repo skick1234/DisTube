@@ -4,7 +4,7 @@ DisTube depends on several libraries and system tools to function correctly. Thi
 
 ## Requirements
 
-- **Node.js**: `18.17.0` or higher
+- **Node.js**: `22.12.0` or higher
 - **discord.js**: `v14`
 - **@discordjs/voice**: Required for audio handling
 - **@discordjs/opus**: Opus encoding/decoding
@@ -15,11 +15,21 @@ DisTube depends on several libraries and system tools to function correctly. Thi
 Install DisTube and its peer dependencies in your project:
 
 ```bash
+# Using bun (recommended)
+bun add distube @discordjs/voice @discordjs/opus
+
+# Using npm
 npm install distube @discordjs/voice @discordjs/opus
+
+# Using yarn
+yarn add distube @discordjs/voice @discordjs/opus
+
+# Using pnpm
+pnpm add distube @discordjs/voice @discordjs/opus
 ```
 
 > [!TIP]
-> You can also use `yarn` or `pnpm`.
+> We recommend using [Bun](https://bun.sh/) for faster installation and better performance.
 
 ## 2. Install FFmpeg
 
@@ -50,5 +60,9 @@ If it returns `false`, you **must** install one of the following:
 - [sodium-native](https://www.npmjs.com/package/sodium-native)
 
 ```bash
+# Using bun
+bun add @noble/ciphers
+
+# Using npm
 npm install @noble/ciphers
 ```

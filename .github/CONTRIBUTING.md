@@ -21,7 +21,7 @@ We welcome contributions via pull requests! Please follow these guidelines:
 2.  **Install dependencies:**
 
     ```bash
-    npm ci
+    bun install
     ```
 
 3.  **Make your changes**, ensuring they align with the project's goals and coding style.
@@ -29,10 +29,10 @@ We welcome contributions via pull requests! Please follow these guidelines:
 4.  **Run checks:** Before submitting, ensure your code passes the following checks:
 
     ```bash
-    npm run prettier   # Format code
-    npm run lint      # Check for linting errors
-    npm run build:check # Ensure the project compiles
-    npm run test      # Run tests
+    bun run prettier   # Format code
+    bun run lint       # Check for linting errors
+    bun run type       # Ensure TypeScript compiles
+    bun run test       # Run tests
     ```
 
 5.  **Commit your changes** using the [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) format:
@@ -56,11 +56,24 @@ We welcome contributions via pull requests! Please follow these guidelines:
 
 DisTube is built with TypeScript and uses the following tools:
 
-- [pnpm](https://pnpm.io/): Package manager (though npm is also supported)
-- [Prettier](https://prettier.io/): Code formatter
-- [ESLint](https://eslint.org/): Linter
+- [Bun](https://bun.sh/): Package manager and runtime
+- [Biome](https://biomejs.dev/): Linter and formatter
 - [Vitest](https://vitest.dev/): Test runner
 - [TypeDoc](https://typedoc.org/): Documentation generator
+- [tsup](https://tsup.egoist.dev/): Build tool (ESM/CJS)
+
+### Quick Commands
+
+```bash
+bun install           # Install dependencies
+bun run build         # Build the project
+bun run test          # Run tests
+bun run lint          # Check linting
+bun run lint:fix      # Fix linting issues
+bun run prettier      # Format code
+bun run type          # Type check
+bun run docs          # Generate documentation
+```
 
 ## ⚖️ License
 
