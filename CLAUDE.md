@@ -54,8 +54,8 @@ src/
     ├── DisTubeError.ts     # Custom error class with 60+ predefined codes
     ├── Plugin.ts           # Abstract plugin base
     ├── ExtractorPlugin.ts  # Full-featured plugin (validate, resolve, search, stream)
-    ├── InfoExtratorPlugin.ts     # Info-only plugin (note: filename has typo)
-    ├── PlayableExtratorPlugin.ts  # Playable plugin (note: filename has typo)
+    ├── InfoExtractorPlugin.ts    # Info-only plugin
+    ├── PlayableExtractorPlugin.ts # Playable plugin (no search)
     └── TaskQueue.ts        # Sequential task queuing
 ```
 
