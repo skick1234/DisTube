@@ -208,10 +208,16 @@ export class DisTubeVoice extends TypedEmitter<DisTubeVoiceEvents> {
     return this.#volume;
   }
   /**
-   * Playback duration of the audio resource in seconds
+   * Playback duration of the audio resource in seconds (time since playback started)
    */
   get playbackDuration() {
     return (this.stream?.audioResource?.playbackDuration ?? 0) / 1000;
+  }
+  /**
+   * Current playback time in seconds, accounting for seek offset
+   */
+  get playbackTime() {
+    return this.playbackDuration + (this.stream?.seekTime ?? 0);
   }
   pause() {
     this.audioPlayer.pause();

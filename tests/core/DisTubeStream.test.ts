@@ -69,6 +69,21 @@ describe("DisTubeStream", () => {
       const stream = new DisTubeStream("http://example.com/audio.mp3", options);
 
       expect(stream).toBeDefined();
+      expect(stream.seekTime).toBe(30);
+    });
+
+    it("sets seekTime to 0 when no seek option provided", () => {
+      const stream = new DisTubeStream("http://example.com/audio.mp3", defaultOptions);
+
+      expect(stream.seekTime).toBe(0);
+    });
+
+    it("sets seekTime to 0 for invalid seek values", () => {
+      const stream1 = new DisTubeStream("http://example.com/audio.mp3", { ...defaultOptions, seek: -10 });
+      const stream2 = new DisTubeStream("http://example.com/audio.mp3", { ...defaultOptions, seek: 0 });
+
+      expect(stream1.seekTime).toBe(0);
+      expect(stream2.seekTime).toBe(0);
     });
 
     it("handles file:// URLs", () => {

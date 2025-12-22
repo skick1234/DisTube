@@ -65,6 +65,10 @@ export class DisTubeStream extends TypedEmitter<{
   stream: VolumeTransformer;
   audioResource: AudioResource;
   /**
+   * The seek time in seconds that this stream started from
+   */
+  readonly seekTime: number;
+  /**
    * Create a DisTubeStream to play with {@link DisTubeVoice}
    * @param url     - Stream URL
    * @param options - Stream options
@@ -72,6 +76,7 @@ export class DisTubeStream extends TypedEmitter<{
   constructor(url: string, options: StreamOptions) {
     super();
     const { ffmpeg, seek } = options;
+    this.seekTime = typeof seek === "number" && seek > 0 ? seek : 0;
     const opts: FFmpegArg = {
       reconnect: 1,
       reconnect_streamed: 1,

@@ -352,10 +352,9 @@ describe("Queue", () => {
       expect(queue.formattedDuration).toBe("01:05");
     });
 
-    it("returns current time", () => {
-      const mockVoice = { ...createMockVoice(), playbackDuration: 10 };
+    it("returns current time from voice.playbackTime", () => {
+      const mockVoice = { ...createMockVoice(), playbackTime: 40 };
       const queue = new Queue(mockDisTube, mockVoice as any);
-      queue._beginTime = 30;
 
       expect(queue.currentTime).toBe(40);
     });

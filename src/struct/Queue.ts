@@ -157,7 +157,7 @@ export class Queue extends DisTubeBase {
    * What time in the song is playing (in seconds).
    */
   get currentTime() {
-    return this.voice.playbackDuration + this._beginTime;
+    return this.voice.playbackTime;
   }
   /**
    * Formatted {@link Queue#currentTime} string.

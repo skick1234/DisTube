@@ -392,6 +392,26 @@ describe("DisTubeVoice", () => {
       expect(voice.playbackDuration).toBe(0);
     });
 
+    it("returns playbackTime as 0 when no stream", () => {
+      const manager = createMockVoiceManager();
+      const channel = createMockChannel();
+      const voice = new DisTubeVoice(manager, channel);
+
+      expect(voice.playbackTime).toBe(0);
+    });
+
+    it("returns playbackTime including seekTime", () => {
+      const manager = createMockVoiceManager();
+      const channel = createMockChannel();
+      const voice = new DisTubeVoice(manager, channel);
+      voice.stream = {
+        audioResource: { playbackDuration: 10000 },
+        seekTime: 30,
+      } as any;
+
+      expect(voice.playbackTime).toBe(40);
+    });
+
     it("returns channelId from connection", () => {
       const manager = createMockVoiceManager();
       const channel = createMockChannel();
