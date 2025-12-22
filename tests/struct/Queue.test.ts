@@ -409,7 +409,7 @@ describe("Queue", () => {
       await expect(queue.pause()).rejects.toThrow(DisTubeError);
     });
 
-    it("resume sets playing state and calls voice.unpause", async () => {
+    it("resume clears paused state and calls voice.unpause", async () => {
       const mockVoice = createMockVoice();
       const queue = new Queue(mockDisTube, mockVoice);
       queue.paused = true;

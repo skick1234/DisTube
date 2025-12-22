@@ -318,5 +318,11 @@ Use properties directly instead of getter methods:
 
 | Deprecated | Replacement |
 |------------|-------------|
-| `queue.isPlaying()` | `queue.playing` |
+| `queue.isPlaying()` | `!queue.paused` |
 | `queue.isPaused()` | `queue.paused` |
+
+### Queue Properties
+
+| Deprecated | Replacement |
+|------------|-------------|
+| `queue.playing` | `!queue.paused` |

@@ -215,3 +215,21 @@ This change provides:
 - More explicit code
 - Easier error handling
 - Better IDE autocompletion
+
+### Why is queue.playing true when paused?
+
+The `queue.playing` property indicates the queue is **active** (has started playing), not that audio is currently outputting. It remains `true` when paused and only becomes `false` when stopped.
+
+```javascript
+// ❌ Deprecated - don't use queue.playing (will be removed in v6.0)
+if (queue.playing) { ... }
+
+// ✅ Check if audio is currently playing
+if (!queue.paused) { ... }
+
+// ✅ Check if paused or stopped
+if (queue.paused) { ... }
+
+// ✅ Check if stopped
+if (queue.stopped) { ... }
+```

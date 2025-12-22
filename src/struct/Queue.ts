@@ -36,7 +36,10 @@ export class Queue extends DisTubeBase {
    */
   stopped: boolean;
   /**
-   * Whether or not the stream is currently playing.
+   * Whether or not the queue is active.
+   *
+   * Note: This remains `true` when paused. It only becomes `false` when stopped.
+   * @deprecated Use `!queue.paused` to check if audio is playing. Will be removed in v6.0.
    */
   playing: boolean;
   /**
@@ -205,8 +208,8 @@ export class Queue extends DisTubeBase {
     return this;
   }
   /**
-   * @returns `true` if the queue is playing
-   * @deprecated Use `queue.playing` property instead. Will be removed in v6.0.
+   * @returns `true` if the queue is active (not stopped)
+   * @deprecated Use `!queue.paused` to check if audio is playing. Will be removed in v6.0.
    */
   isPlaying(): boolean {
     return this.playing;
@@ -423,7 +426,7 @@ export class Queue extends DisTubeBase {
    */
   remove() {
     this.playing = false;
-    this.paused = false;
+    this.paused = true;
     this.stopped = true;
     this.songs = [];
     this.previousSongs = [];
