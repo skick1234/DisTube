@@ -30,7 +30,6 @@ jobs:
       - name: Publish
         run: |
           npm publish --access public
-          npm deprecate distube@"< ${{ github.event.release.tag_name }}" "This version is deprecated, please upgrade to the latest version."
+          # npm deprecate distube@"< ${{ github.event.release.tag_name }}" "This version is deprecated, please upgrade to the latest version."
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           NPM_CONFIG_PROVENANCE: true
