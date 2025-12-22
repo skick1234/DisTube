@@ -111,4 +111,44 @@ describe("Queue", () => {
       expect(queue._manualUpdate).toBe(true);
     });
   });
+
+  describe("seek", () => {
+    const mockDisTube = {
+      options: {
+        savePreviousSongs: true,
+        ffmpeg: { path: "ffmpeg", args: { global: {}, input: {}, output: {} } },
+      },
+      emit: vi.fn(),
+      debug: vi.fn(),
+      handler: { _getPluginFromSong: vi.fn().mockResolvedValue(null) },
+      queues: { playSong: vi.fn() },
+    } as any;
+
+    beforeEach(() => {
+      vi.clearAllMocks();
+    });
+
+    it("seek sets _beginTime to the specified time and calls play(false)", () => {
+      const queue = new Queue(mockDisTube, createMockVoice());
+      queue.songs = [{ id: "1" } as Song];
+
+      queue.seek(30);
+
+      expect(queue._beginTime).toBe(30);
+      expect(mockDisTube.queues.playSong).toHaveBeenCalledWith(queue, false);
+    });
+
+    it("play() delegates to queues.playSong with emitPlaySong parameter", () => {
+      const queue = new Queue(mockDisTube, createMockVoice());
+      queue.songs = [{ id: "1" } as Song];
+
+      queue.play(true);
+      expect(mockDisTube.queues.playSong).toHaveBeenCalledWith(queue, true);
+
+      vi.clearAllMocks();
+
+      queue.play(false);
+      expect(mockDisTube.queues.playSong).toHaveBeenCalledWith(queue, false);
+    });
+  });
 });

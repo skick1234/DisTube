@@ -155,6 +155,7 @@ export class QueueManager extends GuildIdManager<Queue> {
         },
         seek: willPlaySong.duration ? queue._beginTime : undefined,
       };
+      queue._beginTime = 0;
       const dtStream = new DisTubeStream(stream.url, streamOptions);
       dtStream.on("debug", data => this.emit(Events.FFMPEG_DEBUG, `[${queue.id}] ${data}`));
       this.debug(`[${queue.id}] Started playing: ${willPlaySong}`);

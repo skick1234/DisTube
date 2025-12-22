@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { Events, Queue, QueueManager, type Song } from "@";
+import { DisTubeStream, Events, Queue, QueueManager, type Song } from "@";
+
+vi.mock("src/core/DisTubeStream", () => ({
+  DisTubeStream: vi.fn(() => ({ on: vi.fn() })),
+}));
 
 describe("QueueManager", () => {
   const createMockDisTube = (overrides = {}) =>
@@ -161,6 +165,72 @@ describe("QueueManager", () => {
         expect(queue.remove).toHaveBeenCalled();
         // Should NOT emit FINISH event when autoplay is true
         expect(mockDisTube.emit).not.toHaveBeenCalledWith(Events.FINISH, queue);
+      });
+    });
+  });
+
+  describe("playSong", () => {
+    describe("_beginTime reset", () => {
+      beforeEach(() => {
+        vi.clearAllMocks();
+      });
+
+      it("resets _beginTime to 0 after using it for seek", async () => {
+        const mockDisTube = createMockDisTube({
+          emitError: vi.fn(),
+          queues: { remove: vi.fn() },
+        });
+        const queueManager = new QueueManager(mockDisTube);
+        const mockVoice = createMockVoice();
+        mockVoice.play.mockResolvedValue(undefined);
+        const queue = new Queue(mockDisTube, mockVoice);
+        const song = {
+          id: "1",
+          duration: 180,
+          stream: { playFromSource: true, url: "http://test.com/stream" },
+        } as Song;
+        queue.songs = [song];
+        queue._beginTime = 60; // Simulating a previous seek
+
+        await queueManager.playSong(queue);
+
+        expect(queue._beginTime).toBe(0);
+        expect(DisTubeStream).toHaveBeenCalledWith(
+          "http://test.com/stream",
+          expect.objectContaining({
+            seek: 60, // The seek value should use the original _beginTime
+          }),
+        );
+      });
+
+      it("preserves _beginTime value for seek option before resetting", async () => {
+        const mockDisTube = createMockDisTube({
+          emitError: vi.fn(),
+          queues: { remove: vi.fn() },
+        });
+        const queueManager = new QueueManager(mockDisTube);
+        const mockVoice = createMockVoice();
+        mockVoice.play.mockResolvedValue(undefined);
+        const queue = new Queue(mockDisTube, mockVoice);
+        const song = {
+          id: "1",
+          duration: 300,
+          stream: { playFromSource: true, url: "http://test.com/stream" },
+        } as Song;
+        queue.songs = [song];
+        queue._beginTime = 120;
+
+        await queueManager.playSong(queue);
+
+        // Verify seek was called with the original _beginTime value
+        expect(DisTubeStream).toHaveBeenCalledWith(
+          expect.any(String),
+          expect.objectContaining({
+            seek: 120,
+          }),
+        );
+        // Then verify it was reset
+        expect(queue._beginTime).toBe(0);
       });
     });
   });
