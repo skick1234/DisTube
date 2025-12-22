@@ -89,7 +89,7 @@ describe("QueueManager", () => {
         queue.autoplay = true;
         queue._manualUpdate = false;
 
-        vi.spyOn(queue, "addRelatedSong").mockImplementation(async (song?: Song) => {
+        vi.spyOn(queue, "_addRelatedSong").mockImplementation(async (song?: Song) => {
           expect(song).toBe(lastSong);
           queue.songs.push(relatedSong);
           return relatedSong;
@@ -98,7 +98,7 @@ describe("QueueManager", () => {
 
         await queueManager.handleSongFinish(queue);
 
-        expect(queue.addRelatedSong).toHaveBeenCalledWith(lastSong);
+        expect(queue._addRelatedSong).toHaveBeenCalledWith(lastSong);
         expect(queue.songs).toContain(relatedSong);
         expect(queueManager.playSong).toHaveBeenCalledWith(queue, true);
       });
@@ -113,7 +113,7 @@ describe("QueueManager", () => {
         queue.autoplay = true;
         queue._manualUpdate = false;
 
-        vi.spyOn(queue, "addRelatedSong").mockImplementation(async (song?: Song) => {
+        vi.spyOn(queue, "_addRelatedSong").mockImplementation(async (song?: Song) => {
           // Verify queue.songs is empty at this point but we still receive the song
           expect(queue.songs.length).toBe(0);
           expect(song).toBe(onlySong);
@@ -124,7 +124,7 @@ describe("QueueManager", () => {
 
         await queueManager.handleSongFinish(queue);
 
-        expect(queue.addRelatedSong).toHaveBeenCalledWith(onlySong);
+        expect(queue._addRelatedSong).toHaveBeenCalledWith(onlySong);
         expect(queue.songs[0]).toBe(relatedSong);
       });
 
@@ -138,12 +138,12 @@ describe("QueueManager", () => {
         queue._manualUpdate = false;
 
         const noRelatedError = new DisTubeError("NO_RELATED");
-        vi.spyOn(queue, "addRelatedSong").mockRejectedValue(noRelatedError);
+        vi.spyOn(queue, "_addRelatedSong").mockRejectedValue(noRelatedError);
         vi.spyOn(queue, "remove").mockImplementation(() => {});
 
         await queueManager.handleSongFinish(queue);
 
-        expect(queue.addRelatedSong).toHaveBeenCalledWith(onlySong);
+        expect(queue._addRelatedSong).toHaveBeenCalledWith(onlySong);
         expect(mockDisTube.emit).toHaveBeenCalledWith(Events.NO_RELATED, queue, noRelatedError);
         expect(queue.remove).toHaveBeenCalled();
       });

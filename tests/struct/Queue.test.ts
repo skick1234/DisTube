@@ -132,14 +132,26 @@ describe("Queue", () => {
       vi.clearAllMocks();
     });
 
-    it("seek sets _beginTime to the specified time and calls play(false)", () => {
-      const queue = new Queue(mockDisTube, createMockVoice());
+    it("seek sets _beginTime to the specified time and calls play(false)", async () => {
+      const mockVoice = createMockVoice();
+      // Initial playbackTime is 0
+      mockVoice.playbackTime = 0;
+
+      const queue = new Queue(mockDisTube, mockVoice);
       queue.songs = [{ id: "1" } as Song];
 
-      queue.seek(30);
+      // Mock playSong to simulate stream starting at seek position
+      // In real implementation, voice.playbackTime = playbackDuration + stream.seekTime
+      mockDisTube.queues.playSong.mockImplementation(async () => {
+        mockVoice.playbackTime = 30;
+      });
 
-      expect(queue._beginTime).toBe(30);
+      expect(queue.currentTime).toBe(0);
+
+      await queue.seek(30);
+
       expect(mockDisTube.queues.playSong).toHaveBeenCalledWith(queue, false);
+      expect(queue.currentTime).toBe(30);
     });
 
     it("play() delegates to queues.playSong with emitPlaySong parameter", () => {

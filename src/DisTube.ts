@@ -231,17 +231,17 @@ export class DisTube extends TypedEmitter<TypedDisTubeEvents> {
         if (!resolved.songs.length) throw new DisTubeError("EMPTY_PLAYLIST");
         this.debug(`[${queue.id}] Adding playlist to queue: ${resolved.songs.length} songs`);
         queue.addToQueue(resolved.songs, position);
-        if (queue.playing || this.options.emitAddListWhenCreatingQueue) this.emit(Events.ADD_LIST, queue, resolved);
+        if (!queue.stopped || this.options.emitAddListWhenCreatingQueue) this.emit(Events.ADD_LIST, queue, resolved);
       } else {
         if (!this.options.nsfw && resolved.ageRestricted && !isNsfwChannel(queue?.textChannel || textChannel)) {
           throw new DisTubeError("NON_NSFW");
         }
         this.debug(`[${queue.id}] Adding song to queue: ${resolved.name || resolved.url || resolved.id || resolved}`);
         queue.addToQueue(resolved, position);
-        if (queue.playing || this.options.emitAddSongWhenCreatingQueue) this.emit(Events.ADD_SONG, queue, resolved);
+        if (!queue.stopped || this.options.emitAddSongWhenCreatingQueue) this.emit(Events.ADD_SONG, queue, resolved);
       }
 
-      if (!queue.playing) await queue.play();
+      if (queue.stopped) await queue.play();
       else if (skip) await queue.skip();
     } catch (e: unknown) {
       if (!(e instanceof DisTubeError)) {
@@ -443,7 +443,7 @@ export class DisTube extends TypedEmitter<TypedDisTubeEvents> {
    * @returns Seeked queue
    * @deprecated Use `distube.getQueue(guild).seek(time)` instead. Will be removed in v6.0.
    */
-  seek(guild: GuildIdResolvable, time: number): Queue {
+  seek(guild: GuildIdResolvable, time: number): Promise<Queue> {
     return this.#getQueue(guild).seek(time);
   }
 

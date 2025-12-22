@@ -78,7 +78,7 @@ export class QueueManager extends GuildIdManager<Queue> {
       if (queue.songs.length === 0 && queue.autoplay) {
         try {
           this.debug(`[QueueManager] Adding related song: ${queue.id}`);
-          await queue.addRelatedSong(song);
+          await queue._addRelatedSong(song);
         } catch (e: unknown) {
           const errorMessage = e instanceof Error ? e.message : String(e);
           this.debug(`[${queue.id}] Add related song error: ${errorMessage}`);

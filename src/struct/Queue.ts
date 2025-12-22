@@ -331,7 +331,7 @@ export class Queue extends DisTubeBase {
       if (position > 0) {
         if (position >= this.songs.length) {
           if (this.autoplay) {
-            await this.addRelatedSong();
+            await this._addRelatedSong();
           } else {
             throw new DisTubeError("NO_UP_NEXT");
           }
@@ -374,12 +374,17 @@ export class Queue extends DisTubeBase {
    * @param time - Time in seconds
    * @returns The guild queue
    */
-  seek(time: number): Queue {
-    if (typeof time !== "number") throw new DisTubeError("INVALID_TYPE", "number", time, "time");
-    if (Number.isNaN(time) || time < 0) throw new DisTubeError("NUMBER_COMPARE", "time", "bigger or equal to", 0);
-    this._beginTime = time;
-    this.play(false);
-    return this;
+  async seek(time: number): Promise<Queue> {
+    await this._taskQueue.queuing();
+    try {
+      if (typeof time !== "number") throw new DisTubeError("INVALID_TYPE", "number", time, "time");
+      if (Number.isNaN(time) || time < 0) throw new DisTubeError("NUMBER_COMPARE", "time", "bigger or equal to", 0);
+      this._beginTime = time;
+      await this.play(false);
+      return this;
+    } finally {
+      this._taskQueue.resolve();
+    }
   }
   async #getRelatedSong(current: Song): Promise<Song[]> {
     const plugin = await this.handler._getPluginFromSong(current);
@@ -387,11 +392,11 @@ export class Queue extends DisTubeBase {
     return [];
   }
   /**
-   * Add a related song of the playing song to the queue
-   * @param song - The song to get related songs from. Defaults to the current playing song.
-   * @returns The added song
+   * Internal implementation of addRelatedSong without task queue protection.
+   * Used by methods that already hold the task queue lock.
+   * @internal
    */
-  async addRelatedSong(song?: Song): Promise<Song> {
+  async _addRelatedSong(song?: Song): Promise<Song> {
     const current = song ?? this.songs?.[0];
     if (!current) throw new DisTubeError("NO_PLAYING_SONG");
     const prevIds = this.previousSongs.map(p => p.id);
@@ -408,6 +413,19 @@ export class Queue extends DisTubeBase {
     nextSong.member = this.clientMember;
     this.addToQueue(nextSong);
     return nextSong;
+  }
+  /**
+   * Add a related song of the playing song to the queue
+   * @param song - The song to get related songs from. Defaults to the current playing song.
+   * @returns The added song
+   */
+  async addRelatedSong(song?: Song): Promise<Song> {
+    await this._taskQueue.queuing();
+    try {
+      return await this._addRelatedSong(song);
+    } finally {
+      this._taskQueue.resolve();
+    }
   }
   /**
    * Stop the guild stream and delete the queue
