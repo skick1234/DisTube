@@ -10,6 +10,7 @@ import {
 import type { Snowflake, VoiceBasedChannel, VoiceState } from "discord.js";
 import { Constants } from "discord.js";
 import { TypedEmitter } from "tiny-typed-emitter";
+import { JOIN_TIMEOUT_MS, RECONNECT_MAX_ATTEMPTS, RECONNECT_TIMEOUT_MS } from "../constant";
 import { DisTubeError } from "../struct/DisTubeError";
 import type { DisTubeVoiceEvents } from "../type";
 import { checkEncryptionLibraries, isSupportedVoiceChannel } from "../util";
@@ -55,20 +56,20 @@ export class DisTubeVoice extends TypedEmitter<DisTubeVoiceEvents> {
           this.leave();
         } else if (newState.reason === VoiceConnectionDisconnectReason.WebSocketClose && newState.closeCode === 4014) {
           // Move to other channel
-          entersState(this.connection, VoiceConnectionStatus.Connecting, 5e3).catch(() => {
+          entersState(this.connection, VoiceConnectionStatus.Connecting, RECONNECT_TIMEOUT_MS).catch(() => {
             if (
               ![VoiceConnectionStatus.Ready, VoiceConnectionStatus.Connecting].includes(this.connection.state.status)
             ) {
               this.leave();
             }
           });
-        } else if (this.connection.rejoinAttempts < 5) {
+        } else if (this.connection.rejoinAttempts < RECONNECT_MAX_ATTEMPTS) {
           // Try to rejoin
           setTimeout(
             () => {
               this.connection.rejoin();
             },
-            (this.connection.rejoinAttempts + 1) * 5e3,
+            (this.connection.rejoinAttempts + 1) * RECONNECT_TIMEOUT_MS,
           ).unref();
         } else if (this.connection.state.status !== VoiceConnectionStatus.Destroyed) {
           // Leave after 5 attempts
@@ -127,15 +128,14 @@ export class DisTubeVoice extends TypedEmitter<DisTubeVoiceEvents> {
    * @param channel - A voice channel
    */
   async join(channel?: VoiceBasedChannel): Promise<DisTubeVoice> {
-    const TIMEOUT = 30e3;
     if (channel) this.channel = channel;
     try {
-      await entersState(this.connection, VoiceConnectionStatus.Ready, TIMEOUT);
+      await entersState(this.connection, VoiceConnectionStatus.Ready, JOIN_TIMEOUT_MS);
     } catch {
       if (this.connection.state.status === VoiceConnectionStatus.Ready) return this;
       if (this.connection.state.status !== VoiceConnectionStatus.Destroyed) this.connection.destroy();
       this.voices.remove(this.id);
-      throw new DisTubeError("VOICE_CONNECT_FAILED", TIMEOUT / 1e3);
+      throw new DisTubeError("VOICE_CONNECT_FAILED", JOIN_TIMEOUT_MS / 1000);
     }
     return this;
   }
@@ -160,6 +160,7 @@ export class DisTubeVoice extends TypedEmitter<DisTubeVoiceEvents> {
   stop(force = false) {
     this.audioPlayer.stop(force);
   }
+  #streamErrorHandler?: (error: NodeJS.ErrnoException) => void;
   /**
    * Play a {@link DisTubeStream}
    * @param dtStream - DisTubeStream
@@ -170,11 +171,16 @@ export class DisTubeVoice extends TypedEmitter<DisTubeVoiceEvents> {
       throw new DisTubeError("ENCRYPTION_LIBRARIES_MISSING");
     }
     this.emittedError = false;
-    dtStream.on("error", (error: NodeJS.ErrnoException) => {
+    // Remove previous error listener to prevent memory leaks
+    if (this.stream && this.#streamErrorHandler) {
+      this.stream.off("error", this.#streamErrorHandler);
+    }
+    this.#streamErrorHandler = (error: NodeJS.ErrnoException) => {
       if (this.emittedError || error.code === "ERR_STREAM_PREMATURE_CLOSE") return;
       this.emittedError = true;
       this.emit("error", error);
-    });
+    };
+    dtStream.on("error", this.#streamErrorHandler);
     if (this.audioPlayer.state.status !== AudioPlayerStatus.Paused) {
       this.audioPlayer.play(dtStream.audioResource);
       this.stream?.kill();

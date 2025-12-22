@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { DisTubeStream, Events, Queue, QueueManager, type Song } from "@";
+import { DisTubeError, DisTubeStream, Events, Queue, QueueManager, type Song } from "@";
 
 vi.mock("src/core/DisTubeStream", () => ({
   DisTubeStream: vi.fn(() => ({ on: vi.fn() })),
@@ -137,7 +137,7 @@ describe("QueueManager", () => {
         queue.autoplay = true;
         queue._manualUpdate = false;
 
-        const noRelatedError = new Error("NO_RELATED");
+        const noRelatedError = new DisTubeError("NO_RELATED");
         vi.spyOn(queue, "addRelatedSong").mockRejectedValue(noRelatedError);
         vi.spyOn(queue, "remove").mockImplementation(() => {});
 

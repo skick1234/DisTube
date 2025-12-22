@@ -43,8 +43,8 @@ export class QueueManager extends GuildIdManager<Queue> {
         this.emit(Events.DISCONNECT, queue);
         if (error) this.emitError(error, queue, queue.songs?.[0]);
       },
-      error: error => this.#handlePlayingError(queue, error),
-      finish: () => this.handleSongFinish(queue),
+      error: error => void this.#handlePlayingError(queue, error),
+      finish: () => void this.handleSongFinish(queue),
     };
     for (const event of objectKeys(queue._listeners)) {
       queue.voice.on(event, queue._listeners[event]);
@@ -79,9 +79,14 @@ export class QueueManager extends GuildIdManager<Queue> {
         try {
           this.debug(`[QueueManager] Adding related song: ${queue.id}`);
           await queue.addRelatedSong(song);
-        } catch (e: any) {
-          this.debug(`[${queue.id}] Add related song error: ${e.message}`);
-          this.emit(Events.NO_RELATED, queue, e);
+        } catch (e: unknown) {
+          const errorMessage = e instanceof Error ? e.message : String(e);
+          this.debug(`[${queue.id}] Add related song error: ${errorMessage}`);
+          if (e instanceof DisTubeError) {
+            this.emit(Events.NO_RELATED, queue, e);
+          } else {
+            this.emit(Events.NO_RELATED, queue, new DisTubeError("NO_RELATED"));
+          }
         }
       }
 
@@ -107,7 +112,7 @@ export class QueueManager extends GuildIdManager<Queue> {
    * @param queue - queue
    * @param error - error
    */
-  #handlePlayingError(queue: Queue, error: Error) {
+  async #handlePlayingError(queue: Queue, error: Error) {
     const song = queue.songs.shift()!;
     try {
       error.name = "PlayingError";
@@ -118,10 +123,10 @@ export class QueueManager extends GuildIdManager<Queue> {
     this.emitError(error, queue, song);
     if (queue.songs.length > 0) {
       this.debug(`[${queue.id}] Playing next song: ${queue.songs[0]}`);
-      this.playSong(queue);
+      await this.playSong(queue);
     } else {
       this.debug(`[${queue.id}] Queue is empty, stopping...`);
-      queue.stop();
+      await queue.stop();
     }
   }
 
@@ -133,7 +138,7 @@ export class QueueManager extends GuildIdManager<Queue> {
   async playSong(queue: Queue, emitPlaySong = true) {
     if (!queue) return;
     if (queue.stopped || !queue.songs.length) {
-      queue.stop();
+      await queue.stop();
       return;
     }
     try {
@@ -161,8 +166,9 @@ export class QueueManager extends GuildIdManager<Queue> {
       this.debug(`[${queue.id}] Started playing: ${willPlaySong}`);
       await queue.voice.play(dtStream);
       if (emitPlaySong) this.emit(Events.PLAY_SONG, queue, song);
-    } catch (e: any) {
-      this.#handlePlayingError(queue, e);
+    } catch (e: unknown) {
+      const error = e instanceof Error ? e : new Error(String(e));
+      this.#handlePlayingError(queue, error);
     }
   }
 }
