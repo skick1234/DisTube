@@ -8,38 +8,31 @@ on:
       - "main"
 jobs:
   test:
-    name: Test on node v${{ matrix.node-version }} (${{ matrix.os }})
+    name: Test on Bun (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        node-version: [20, 24]
         os: [ubuntu-latest]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install pnpm
-        uses: pnpm/action-setup@v3
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
         with:
-          version: latest
-
-      - name: Install Node.js ${{ matrix.node-version }}
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ matrix.node-version }}
-          cache: "pnpm"
+          bun-version: latest
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: bun install --frozen-lockfile
 
       - name: Linting
-        run: pnpm run lint
+        run: bun run lint
 
       - name: Run type check
-        run: pnpm run type
+        run: bun run type
 
       - name: Run tests
-        run: pnpm run test
+        run: bun run test
 
       - name: Upload Coverage
         uses: codecov/codecov-action@v3

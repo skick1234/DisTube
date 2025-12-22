@@ -14,19 +14,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install pnpm
-        uses: pnpm/action-setup@v3
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
         with:
-          version: latest
-
-      - name: Install Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: "pnpm"
+          bun-version: latest
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: bun install --frozen-lockfile
 
       - name: Checkout docs branch
         uses: actions/checkout@v4
@@ -40,7 +34,7 @@ jobs:
         run: find gh-pages -mindepth 1 ! -regex 'gh-pages/\.git.*' ! -name 'CNAME' -exec rm -rf {} +
 
       - name: Generate documentation
-        run: pnpm run docs
+        run: bun run docs
 
       - name: Commit and push
         run: |
@@ -49,5 +43,5 @@ jobs:
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git add .
-          git commit -m "${{ github.repository }}@${{ github.sha }} 🚀"
+          git commit -m "${{ github.repository }}@${{ github.sha }}"
           git push

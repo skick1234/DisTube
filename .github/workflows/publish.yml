@@ -13,24 +13,24 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install pnpm
-        uses: pnpm/action-setup@v3
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
         with:
-          version: latest
+          bun-version: latest
 
       - name: Install Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 24
-          cache: "pnpm"
           registry-url: "https://registry.npmjs.org"
 
       - name: Install dependencies
-        run: pnpm install --ignore-scripts --frozen-lockfile
+        run: bun install --frozen-lockfile
 
       - name: Publish
         run: |
-          pnpm publish --access public --no-git-checks
-          pnpm deprecate distube@"< ${{ github.event.release.tag_name }}" "This version is deprecated, please upgrade to the latest version."
+          npm publish --access public
+          npm deprecate distube@"< ${{ github.event.release.tag_name }}" "This version is deprecated, please upgrade to the latest version."
         env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           NPM_CONFIG_PROVENANCE: true

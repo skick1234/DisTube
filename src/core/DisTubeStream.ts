@@ -5,6 +5,7 @@ import { Transform } from "node:stream";
 import type { AudioResource } from "@discordjs/voice";
 import { createAudioResource, StreamType } from "@discordjs/voice";
 import { TypedEmitter } from "tiny-typed-emitter";
+import { AUDIO_CHANNELS, AUDIO_SAMPLE_RATE } from "../constant";
 import type { DisTube } from "../DisTube";
 import { DisTubeError } from "../struct/DisTubeError";
 import type { Awaitable, FFmpegArg, FFmpegOptions } from "../type";
@@ -43,8 +44,9 @@ export const checkFFmpeg = (distube: DisTube) => {
     const version = /ffmpeg version (\S+)/iu.exec(result)?.[1];
     if (!version) throw new Error("Invalid FFmpeg version");
     debug(`[test] ffmpeg version: ${version}`);
-  } catch (e: any) {
-    debug(`[test] failed to spawn ffmpeg at '${path}': ${e?.stack ?? e}`);
+  } catch (e: unknown) {
+    const errorMessage = e instanceof Error ? (e.stack ?? e.message) : String(e);
+    debug(`[test] failed to spawn ffmpeg at '${path}': ${errorMessage}`);
     throw new DisTubeError("FFMPEG_NOT_INSTALLED", path);
   }
   checked = true;
@@ -79,8 +81,8 @@ export class DisTubeStream extends TypedEmitter<{
       ...ffmpeg.args.global,
       ...ffmpeg.args.input,
       i: url,
-      ar: 48000,
-      ac: 2,
+      ar: AUDIO_SAMPLE_RATE,
+      ac: AUDIO_CHANNELS,
       ...ffmpeg.args.output,
       f: "s16le",
     };

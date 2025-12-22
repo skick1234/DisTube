@@ -1,1 +1,1 @@
-pnpm exec nano-staged
+bun exec nano-staged

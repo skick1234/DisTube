@@ -32,10 +32,10 @@
     "prettier": "biome format --write",
     "build": "tsup",
     "type": "tsc --noEmit",
-    "update": "pnpm up -L",
+    "update": "bun upgrade",
     "prepare": "husky",
-    "prepublishOnly": "pnpm run lint && pnpm run test",
-    "prepack": "pnpm run build"
+    "prepublishOnly": "bun run lint && bun run test",
+    "prepack": "bun run build"
   },
   "repository": {
     "type": "git",
@@ -97,12 +97,10 @@
     ]
   },
   "engines": {
-    "node": ">=18.17"
+    "node": ">=22.12.0"
   },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "@discordjs/opus",
-      "esbuild"
-    ]
-  }
+  "trustedDependencies": [
+    "@discordjs/opus",
+    "esbuild"
+  ]
 }

@@ -1,7 +1,30 @@
-import type { DisTubeOptions } from "./type";
+import type { DisTubeOptions, Filters } from "./type";
+
 export const version: string = "[VI]{{inject}}[/VI]";
 
-import type { Filters } from "./type";
+/**
+ * Audio configuration constants
+ */
+export const AUDIO_SAMPLE_RATE = 48000;
+export const AUDIO_CHANNELS = 2;
+
+/**
+ * Default volume percentage (0-100)
+ */
+export const DEFAULT_VOLUME = 50;
+
+/**
+ * Timeout constants (in milliseconds)
+ */
+export const JOIN_TIMEOUT_MS = 30_000;
+export const RECONNECT_TIMEOUT_MS = 5_000;
+export const RECONNECT_MAX_ATTEMPTS = 5;
+
+/**
+ * HTTP redirect status codes
+ */
+export const HTTP_REDIRECT_CODES = new Set([301, 302, 303, 307, 308]);
+export const MAX_REDIRECT_DEPTH = 5;
 
 /**
  * Default DisTube audio filters.

@@ -1,4 +1,5 @@
 import { request } from "undici";
+import { HTTP_REDIRECT_CODES, MAX_REDIRECT_DEPTH } from "../constant";
 import { DisTubeError } from "../struct/DisTubeError";
 import { Playlist } from "../struct/Playlist";
 import { Song } from "../struct/Song";
@@ -6,8 +7,6 @@ import type { DisTubePlugin, ResolveOptions } from "../type";
 import { PluginType } from "../type";
 import { isURL } from "../util";
 import { DisTubeBase } from "./DisTubeBase";
-
-const REDIRECT_CODES = new Set([301, 302, 303, 307, 308]);
 
 /**
  * DisTube's Handler
@@ -118,7 +117,7 @@ export class DisTubeHandler extends DisTubeBase {
     }
   }
 
-  async followRedirectLink(url: string, maxRedirect = 5): Promise<string> {
+  async followRedirectLink(url: string, maxRedirect = MAX_REDIRECT_DEPTH): Promise<string> {
     if (maxRedirect === 0) return url;
 
     const res = await request(url, {
@@ -130,7 +129,7 @@ export class DisTubeHandler extends DisTubeBase {
       },
     });
 
-    if (REDIRECT_CODES.has(res.statusCode ?? 200)) {
+    if (HTTP_REDIRECT_CODES.has(res.statusCode ?? 200)) {
       let location = res.headers.location;
       if (typeof location !== "string") location = location?.[0] ?? url;
       return this.followRedirectLink(location, --maxRedirect);
