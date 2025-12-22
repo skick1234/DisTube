@@ -223,6 +223,7 @@ export class DisTube extends TypedEmitter<TypedDisTubeEvents> {
       this.debug(`[${queue.id}] Playing input: ${song}`);
       const resolved = await this.handler.resolve(song, { member, metadata });
       const isNsfw = isNsfwChannel(queue?.textChannel || textChannel);
+      const isFirstSong = queue.songs.length === 0;
       if (resolved instanceof Playlist) {
         if (!this.options.nsfw && !isNsfw) {
           resolved.songs = resolved.songs.filter(s => !s.ageRestricted);
@@ -231,19 +232,17 @@ export class DisTube extends TypedEmitter<TypedDisTubeEvents> {
         if (!resolved.songs.length) throw new DisTubeError("EMPTY_PLAYLIST");
         this.debug(`[${queue.id}] Adding playlist to queue: ${resolved.songs.length} songs`);
         queue.addToQueue(resolved.songs, position);
-        if (queue.songs.length !== 0 || this.options.emitAddListWhenCreatingQueue)
-          this.emit(Events.ADD_LIST, queue, resolved);
+        if (!isFirstSong || this.options.emitAddListWhenCreatingQueue) this.emit(Events.ADD_LIST, queue, resolved);
       } else {
         if (!this.options.nsfw && resolved.ageRestricted && !isNsfwChannel(queue?.textChannel || textChannel)) {
           throw new DisTubeError("NON_NSFW");
         }
         this.debug(`[${queue.id}] Adding song to queue: ${resolved.name || resolved.url || resolved.id || resolved}`);
         queue.addToQueue(resolved, position);
-        if (queue.songs.length !== 0 || this.options.emitAddSongWhenCreatingQueue)
-          this.emit(Events.ADD_SONG, queue, resolved);
+        if (!isFirstSong || this.options.emitAddSongWhenCreatingQueue) this.emit(Events.ADD_SONG, queue, resolved);
       }
 
-      if (queue.songs.length === 0) await queue.play();
+      if (isFirstSong) await queue.play();
       else if (skip) await queue.skip();
     } catch (e: unknown) {
       if (!(e instanceof DisTubeError)) {
