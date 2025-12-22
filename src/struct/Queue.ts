@@ -1,4 +1,5 @@
 import type { GuildTextBasedChannel, Snowflake } from "discord.js";
+import { DEFAULT_VOLUME } from "../constant";
 import { DisTubeBase } from "../core/DisTubeBase";
 import type { DisTubeVoice } from "../core/DisTubeVoice";
 import { FilterManager } from "../core/manager/FilterManager";
@@ -62,19 +63,23 @@ export class Queue extends DisTubeBase {
   textChannel?: GuildTextBasedChannel;
   /**
    * What time in the song to begin (in seconds).
+   * @internal
    */
   _beginTime: number;
   #filters: FilterManager;
   /**
    * Whether or not the queue is being updated manually (skip, jump, previous)
+   * @internal
    */
   _manualUpdate: boolean;
   /**
    * Task queuing system
+   * @internal
    */
   _taskQueue: TaskQueue;
   /**
    * {@link DisTubeVoice} listener
+   * @internal
    */
   _listeners?: DisTubeVoiceEvents;
   /**
@@ -87,7 +92,7 @@ export class Queue extends DisTubeBase {
     super(distube);
     this.voice = voice;
     this.id = voice.id;
-    this.volume = 50;
+    this.volume = DEFAULT_VOLUME;
     this.songs = [];
     this.previousSongs = [];
     this.stopped = false;
@@ -201,12 +206,14 @@ export class Queue extends DisTubeBase {
   }
   /**
    * @returns `true` if the queue is playing
+   * @deprecated Use `queue.playing` property instead. Will be removed in v6.0.
    */
   isPlaying(): boolean {
     return this.playing;
   }
   /**
    * @returns `true` if the queue is paused
+   * @deprecated Use `queue.paused` property instead. Will be removed in v6.0.
    */
   isPaused(): boolean {
     return this.paused;
