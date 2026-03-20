@@ -37,7 +37,7 @@ export class QueueManager extends GuildIdManager<Queue> {
    * @param queue - Queue
    */
   #voiceEventHandler(queue: Queue) {
-    // 既存のリスナーを削除して重複登録を防ぐ
+    // Remove existing listeners to prevent duplicate registration
     if (queue._listeners) {
       for (const event of objectKeys(queue._listeners)) {
         queue.voice.off(event, queue._listeners[event]);
