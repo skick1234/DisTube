@@ -1,0 +1,45 @@
+{
+  "name": "@distube/eris",
+  "version": "6.0.0-dev.0",
+  "description": "Eris Adapter and Player for DisTube",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "check": "biome check .",
+    "type": "tsc --noEmit",
+    "test": "vitest run --coverage=false",
+    "build": "tsdown && bun ../../scripts/clean-source-declarations.ts",
+    "check:circular": "dpdm --tree=false --warning=false --exit-code circular:1 --tsconfig tsconfig.json \"src/**/*.ts\"",
+    "prepack": "bun run build"
+  },
+  "peerDependencies": {
+    "distube": "^6.0.0-dev.0",
+    "eris": "^0.18.0"
+  },
+  "devDependencies": {
+    "distube": "workspace:*",
+    "eris": "^0.18.0"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "license": "MIT"
+}

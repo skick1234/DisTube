@@ -1,0 +1,38 @@
+{
+  "name": "distube",
+  "version": "6.0.0-dev.0",
+  "description": "Minimal queue and playback orchestration for Discord audio",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "check": "biome check .",
+    "type": "tsc --noEmit",
+    "test": "vitest run --coverage=false",
+    "build": "tsdown && bun ../../scripts/clean-source-declarations.ts",
+    "check:circular": "dpdm --tree=false --warning=false --exit-code circular:1 --tsconfig tsconfig.json \"src/**/*.ts\"",
+    "test:mutation": "vitest run --coverage=false",
+    "prepack": "bun run build"
+  },
+  "engines": {
+    "node": "^22.22.2 || ^24.15.0 || >=26.0.0"
+  },
+  "license": "MIT"
+}

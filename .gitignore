@@ -11,3 +11,5 @@ node_modules
 *.tgz
 
 /docs
+/website/api
+.turbo

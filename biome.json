@@ -1,5 +1,5 @@
 {
-  "$schema": "https://biomejs.dev/schemas/2.3.10/schema.json",
+  "$schema": "https://biomejs.dev/schemas/2.5.4/schema.json",
   "vcs": {
     "enabled": true,
     "clientKind": "git",
@@ -7,7 +7,16 @@
   },
   "files": {
     "ignoreUnknown": true,
-    "includes": ["**", "!!**/dist", "!!**/docs", "!!**/coverage", "!!**/node_modules"]
+    "includes": [
+      "**",
+      "!!**/dist",
+      "!!**/docs",
+      "!!**/coverage",
+      "!!**/node_modules",
+      "!!**/reports",
+      "!!**/.stryker-tmp",
+      "!!**/stryker-setup-*.js"
+    ]
   },
   "formatter": {
     "enabled": true,
@@ -17,26 +26,42 @@
     "lineWidth": 120,
     "attributePosition": "auto"
   },
+  "assist": {
+    "actions": {
+      "source": {
+        "organizeImports": "on"
+      }
+    }
+  },
   "linter": {
     "enabled": true,
     "rules": {
-      "recommended": true,
+      "preset": "recommended",
       "style": {
         "useImportType": "error",
         "useTemplate": "error",
-        "noNonNullAssertion": "off",
+        "noNonNullAssertion": "error",
         "useConsistentCurlyBraces": "error"
       },
       "correctness": {
-        "noUnusedVariables": "error"
+        "noUnusedVariables": "error",
+        "noUnusedImports": "error"
       },
       "suspicious": {
-        "noExplicitAny": "off",
+        "noDeprecatedImports": "error",
+        "noExplicitAny": "error",
         "noConsole": "error",
-        "noAssignInExpressions": "off",
-        "useIterableCallbackReturn": "off"
+        "noAssignInExpressions": "error",
+        "useIterableCallbackReturn": "error",
+        "noCommentText": "warn",
+        "noDebugger": "error"
       },
-      "nursery": {}
+      "complexity": {
+        "noForEach": "warn"
+      },
+      "nursery": {
+        "useSortedClasses": "warn"
+      }
     }
   },
   "javascript": {
@@ -46,5 +71,17 @@
       "trailingCommas": "all",
       "quoteProperties": "asNeeded"
     }
-  }
+  },
+  "overrides": [
+    {
+      "includes": ["tests/**/*.ts"],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noExplicitAny": "off"
+          }
+        }
+      }
+    }
+  ]
 }

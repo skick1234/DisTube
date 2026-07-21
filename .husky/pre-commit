@@ -1,1 +1,1 @@
-bun exec nano-staged
+bunx nano-staged

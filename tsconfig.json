@@ -1,19 +1,10 @@
 {
-  "include": ["src/**/*.ts", "tests/**/*.ts"],
-  "exclude": ["node_modules"],
   "compilerOptions": {
-    "baseUrl": ".",
-    "paths": {
-      "@/*": ["src/*"],
-      "@": ["src/index.ts"]
-    },
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "lib": ["ESNext"],
+    "types": ["node", "bun"],
     "target": "ESNext",
-    "emitDecoratorMetadata": false,
-    "experimentalDecorators": true,
-    "useDefineForClassFields": true,
     "allowUnreachableCode": false,
     "allowUnusedLabels": false,
     "noFallthroughCasesInSwitch": true,
@@ -23,32 +14,21 @@
     "noUnusedParameters": true,
     "strict": true,
     "declaration": true,
+    "declarationMap": true,
     "inlineSources": true,
     "newLine": "lf",
-    "noEmitHelpers": true,
-    "outDir": "dist",
-    "preserveConstEnums": true,
     "removeComments": false,
+    "resolveJsonModule": true,
     "sourceMap": true,
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
-    "downlevelIteration": true,
     "skipLibCheck": true,
-    "isolatedModules": true
-  },
-  "typedocOptions": {
-    "name": "DisTube API Documentation",
-    "plugin": ["typedoc-material-theme", "typedoc-plugin-extras"],
-    "themeColor": "#ED4245",
-    "entryPoints": ["src/index.ts"],
-    "out": "docs",
-    "sidebarLinks": {
-      "GitHub": "https://github.com/skick1234/DisTube",
-      "Discord": "https://discord.gg/feaDd9h",
-      "Guide": "https://github.com/skick1234/DisTube/wiki"
-    },
-    "hostedBaseUrl": "https://distube.js.org",
-    "favicon": "https://raw.githubusercontent.com/skick1234/cdn/refs/heads/main/DisTube/img/favicon.png",
-    "customDescription": "A powerful Discord.js module for simplifying music commands and effortless playback of various sources with integrated audio filters."
+    "isolatedModules": true,
+    "paths": {
+      "distube": ["./packages/distube/src/index.ts"],
+      "@distube/discordjs": ["./packages/discordjs/src/index.ts"],
+      "@distube/eris": ["./packages/eris/src/index.ts"],
+      "@distube/oceanic": ["./packages/oceanic/src/index.ts"]
+    }
   }
 }
