@@ -1,0 +1,93 @@
+{
+  "selectedAt": "2026-07-18T23:43:09Z",
+  "packageManager": "bun@1.3.14",
+  "lockfileVersion": 1,
+  "manifests": {
+    "package.json": {
+      "devDependencies": {
+        "@biomejs/biome": "^2.5.4",
+        "@changesets/cli": "^2.31.1",
+        "@discordjs/voice": "^0.19.2",
+        "@microsoft/api-extractor": "^7.58.11",
+        "@types/bun": "^1.3.14",
+        "@types/node": "^26.1.1",
+        "@vitest/coverage-v8": "^4.1.10",
+        "discord.js": "^14.27.0",
+        "dpdm": "^4.2.0",
+        "eris": "^0.18.0",
+        "oceanic.js": "^1.14.0",
+        "tsdown": "^0.22.9",
+        "typescript": "^7.0.2",
+        "vitepress": "2.0.0-alpha.18",
+        "vitest": "^4.1.10"
+      }
+    },
+    "packages/discordjs/package.json": {
+      "peerDependencies": {
+        "@discordjs/voice": "^0.19.0",
+        "discord.js": "^14.26.0",
+        "distube": "^6.0.0-dev.0"
+      },
+      "devDependencies": {
+        "@discordjs/voice": "^0.19.2",
+        "discord.js": "^14.27.0",
+        "distube": "workspace:*"
+      }
+    },
+    "packages/distube/package.json": {},
+    "packages/eris/package.json": {
+      "peerDependencies": {
+        "distube": "^6.0.0-dev.0",
+        "eris": "^0.18.0"
+      },
+      "devDependencies": {
+        "distube": "workspace:*",
+        "eris": "^0.18.0"
+      }
+    },
+    "packages/oceanic/package.json": {
+      "peerDependencies": {
+        "@discordjs/voice": "^0.19.0",
+        "distube": "^6.0.0-dev.0",
+        "oceanic.js": "^1.14.0"
+      },
+      "devDependencies": {
+        "@discordjs/voice": "^0.19.2",
+        "distube": "workspace:*",
+        "oceanic.js": "^1.14.0"
+      }
+    }
+  },
+  "allowedPrereleases": [
+    "package.json:devDependencies:vitepress",
+    "packages/discordjs/package.json:peerDependencies:distube",
+    "packages/eris/package.json:peerDependencies:distube",
+    "packages/oceanic/package.json:peerDependencies:distube"
+  ],
+  "peerEvidence": {
+    "packages/discordjs/package.json:@discordjs/voice": "adapter-compatibility.json lower/latest clean installs",
+    "packages/discordjs/package.json:discord.js": "adapter-compatibility.json lower/latest clean installs",
+    "packages/discordjs/package.json:distube": "core contract freeze packed install",
+    "packages/eris/package.json:distube": "core contract freeze packed install",
+    "packages/eris/package.json:eris": "adapter-compatibility.json lower/latest clean installs",
+    "packages/oceanic/package.json:@discordjs/voice": "adapter-compatibility.json lower/latest clean installs",
+    "packages/oceanic/package.json:distube": "core contract freeze packed install",
+    "packages/oceanic/package.json:oceanic.js": "adapter-compatibility.json lower/latest clean installs"
+  },
+  "localContracts": [],
+  "deprecations": [
+    {
+      "id": "workspace-tsdown-typescript-7-experimental-api",
+      "classification": "upstream-only",
+      "owner": "core maintainers",
+      "evidence": "tsdown 0.22.9 builds all packages successfully with TypeScript 7.0.2; project code uses no private compiler API.",
+      "risk": "Declaration emission could encounter an unsupported TypeScript 7 compiler option.",
+      "recheckCondition": "date:2026-10-19"
+    },
+    {
+      "id": "api-extractor-release-tag-tiering",
+      "classification": "false-positive",
+      "evidence": "The project has no alpha/beta API tiers; package exports and packed declarations define the public surface, which API Extractor models as Public."
+    }
+  ]
+}

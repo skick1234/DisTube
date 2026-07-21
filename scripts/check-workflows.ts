@@ -1,0 +1,76 @@
+import { readFile } from "node:fs/promises";
+import { resolve } from "node:path";
+
+export interface WorkflowPolicy {
+  readonly file: string;
+  readonly publishCommand?: string;
+  readonly requiredCommands: readonly string[];
+}
+
+export const requiredVerifyCommands = [
+  "bun run check",
+  "bun run check:dependencies",
+  "bun run type",
+  "bun run test",
+  "bun run build",
+  "bun run check:circular",
+  "bun run api-report",
+  "bun run check:packages",
+  "bun run check:adapter-compatibility",
+  "bun run docs",
+  "bun run test:mutation",
+  "bun run check:audit",
+  "bun run check:workflows",
+] as const;
+
+export function inspectVerifyScript(script: string, required = requiredVerifyCommands): string[] {
+  return required.filter(command => !script.includes(command)).map(command => `verify script omits ${command}`);
+}
+
+export function inspectWorkflow(content: string, bunVersion: string, policy: WorkflowPolicy): string[] {
+  const errors: string[] = [];
+  const escapedVersion = bunVersion.replaceAll(".", "\\.");
+  if (!new RegExp(`bun-version:\\s*["']?${escapedVersion}["']?`, "u").test(content)) {
+    errors.push(`${policy.file}: expected Bun ${bunVersion}`);
+  }
+  for (const command of policy.requiredCommands) {
+    if (!content.includes(command)) errors.push(`${policy.file}: missing ${command}`);
+  }
+  if (policy.publishCommand) {
+    const verifyIndex = Math.max(...policy.requiredCommands.map(command => content.indexOf(command)));
+    const publishIndex = content.indexOf(policy.publishCommand);
+    if (publishIndex < 0) errors.push(`${policy.file}: missing ${policy.publishCommand}`);
+    else if (verifyIndex < 0 || publishIndex < verifyIndex) {
+      errors.push(`${policy.file}: publish command precedes required verification`);
+    }
+  }
+  return errors;
+}
+
+async function main(): Promise<void> {
+  const repositoryRoot = resolve(import.meta.dirname, "..");
+  const manifest = JSON.parse(await readFile(resolve(repositoryRoot, "package.json"), "utf8")) as {
+    readonly packageManager?: string;
+    readonly scripts?: Readonly<Record<string, string>>;
+  };
+  const bunVersion = manifest.packageManager?.replace(/^bun@/u, "");
+  if (!bunVersion) throw new Error("package.json must pin packageManager to bun@<version>");
+  const errors = inspectVerifyScript(manifest.scripts?.verify ?? "");
+  const policies: readonly WorkflowPolicy[] = [
+    { file: ".github/workflows/test.yml", requiredCommands: ["bun run verify"] },
+    {
+      file: ".github/workflows/publish.yml",
+      requiredCommands: ["bun run verify"],
+      publishCommand: "bun changeset publish",
+    },
+    { file: ".github/workflows/docs.yml", requiredCommands: ["bun run docs"] },
+  ];
+  for (const policy of policies) {
+    const content = await readFile(resolve(repositoryRoot, policy.file), "utf8");
+    errors.push(...inspectWorkflow(content, bunVersion, policy));
+  }
+  if (errors.length > 0) throw new Error(errors.join("\n"));
+  process.stdout.write("Workflow parity verified: Bun pin and repository gates precede publication.\n");
+}
+
+if (import.meta.main) await main();
