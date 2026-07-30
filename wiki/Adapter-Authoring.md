@@ -7,12 +7,15 @@ resource and must never call its `dispose()` method; core owns that cleanup, whi
 audio resource, listener, timer, and connection.
 
 Set terminal state synchronously when `stop()` is invoked, suppress late native outcomes, attempt native cleanup once,
-and reject later playback. Keep native clients, channels, connections, and platform events inside the adapter package.
+share one memoized teardown result with every concurrent stop caller, aggregate distinct cleanup causes, and reject
+later playback. An unrecoverable disconnect terminalizes before reporting at most one failure; recoverable connection
+changes remain private Adapter policy. Keep native clients, channels, connections, and platform events inside the adapter package.
 Never inspect Song or QueueItem, resolve providers, mutate QueueState, dispose a source resource, or send bot messages.
 
 Adapter packages import `Adapter`, `PlaybackRequest`, `Player`, `PlayerEvent`, and `QueueBinding` from public `distube`,
 own prepared-resource/connection/control/stale-callback tests, and pass packed-install verification with the packed core
 contract. There is no `play(item)` compatibility overload.
+Official Adapters expose direct classes only—no create-adapter aliases or caller-provided `playerFactory` option.
 
 <!-- verify-ts -->
 ```ts

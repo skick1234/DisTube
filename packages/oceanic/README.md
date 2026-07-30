@@ -8,3 +8,7 @@ HTTP(S) resource URL, and terminalizes before connection teardown. Core—not th
 ```ts
 const adapter = new OceanicAdapter(client);
 ```
+
+Construct the class directly; there is no create-adapter alias or public `playerFactory` option. Concurrent stop calls
+join one terminal teardown, every native cleanup unit is attempted once, and unrecoverable disconnects retire the
+Player before reporting the active item failure.

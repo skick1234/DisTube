@@ -33,6 +33,10 @@ class ExampleSource implements SourcePlugin {
 }
 ```
 
+`PluginContext.diagnostic()` accepts structured `{ severity, stage, message, error?, detail? }` records; the runtime
+adds the Plugin name and isolates callback throws or rejections. Initialization must finish synchronously and must not
+return a Promise. Diagnostics must redact credentials, tokens, query strings, and prepared URLs.
+
 A streaming source returns one fresh absolute HTTP(S) URL resource immediately before playback. A metadata-only
 source returns one trimmed non-empty provider-derived search query. Core performs only that explicit bounded fallback,
 keeps the original QueueItem public, and owns exactly-once source-resource disposal. The Player only borrows it.
@@ -40,3 +44,8 @@ keeps the original QueueItem public, and owns exactly-once source-resource dispo
 Keep authentication, URL/network policy, retries, metadata mapping, collection ordering, fixtures, and cleanup in the
 provider package. Import no private core paths, SDK, testkit, registry, role, manifest, capability graph, cross-plugin
 lifecycle hook, or public resource manager. Do not cache prepared URLs or fallback candidates on Song metadata.
+
+An official package may expose a typed provider constructor option. Injected providers are advanced supported seams,
+not unvalidated shortcuts: they must honor AbortSignals and lifecycle disposal, return correctly owned Songs and safe
+playback outcomes, and pass the same shape, pagination, destination/redirect/body/final-URL, and redaction validation
+as the default provider.

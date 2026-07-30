@@ -8,6 +8,7 @@ DisTube v6 is intentionally breaking. There are no deprecated aliases, compatibi
 | --- | --- |
 | `DisTube.create(...)` or legacy constructor options | `new DisTube({ adapter, plugins, onDiagnostic? })` |
 | `distube.queue(guild)` / implicit guild session | `distube.createQueue({ guildId, channelId })`, then retain its ID/facade |
+| multiple channel queues in one guild | one active GuildQueue per guild; destroy it before rebinding another channel |
 | `play(...)` and `add(...)` | `queue.enqueue(source)` only |
 | awaiting `play` as proof of active audio | await `enqueue` for insertion; observe `queue.item.started` or `queue.item.failed` |
 | `join`, `leave`, `moveVoice` | binding at queue creation; `stop` or destroy the queue to release playback |
@@ -16,6 +17,8 @@ DisTube v6 is intentionally breaking. There are no deprecated aliases, compatibi
 | `move`, play-now replacement | removed; use waiting-item `remove`, `skip`, `stop`, and `enqueue` |
 | public queue/voice snapshots | readonly `queue.state` with waiting `items`, optional `current`, and status |
 | `destroy()` and `DestroyReport` | idempotent `shutdown(): Promise<void>` |
+| caller-supplied QueueItem `id` / `addedAt` | omit them; core creates occurrence identity and insertion time at commit |
+| Error objects used as debug records | structured diagnostics with severity, stage, message, and optional plugin/error/detail |
 
 Events map as follows:
 
@@ -42,6 +45,11 @@ boundary and only `play({ itemId, resource })` at playback. Use the prepared URL
 terminalize synchronously before stop teardown, own native resources, and never inspect Song/QueueItem or dispose the
 borrowed source resource. There is no `play(item)` overload. GuildQueue alone owns ordering, QueueState, public events,
 fallback identity, and source-resource disposal.
+
+Construct `DiscordJSAdapter`, `OceanicAdapter`, and `ErisAdapter` directly. The former create-adapter aliases and
+public `playerFactory` options are removed; package-local typed Adapter/Player fakes replace those test hooks. Failed
+skip retires the old Player and progresses with a fresh Player; a cleanup rejection reports `VOICE_FAILED` without
+rolling queue state back.
 
 Official replacements:
 

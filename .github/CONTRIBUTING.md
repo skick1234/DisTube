@@ -35,6 +35,9 @@ We welcome contributions via pull requests!
     bun run verify
     ```
 
+    Use the globally installed `gitnexus status` and `gitnexus analyze` commands for graph freshness. Run tooling with
+    Bun/Bunx; do not invoke project tools through Node, npm, or npx command runners.
+
 5.  **Commit your changes** using [Conventional Commits](https://www.conventionalcommits.org/):
     ```bash
     git commit -m "feat(Queue): add shuffle method"
@@ -57,7 +60,7 @@ The codebase is organized by durable ownership:
 - `packages/discordjs/`: direct discord.js Adapter and Player with package-local tests.
 - `packages/oceanic/`: direct Oceanic Adapter and Player with package-local tests.
 - `packages/eris/`: direct Eris Adapter and Player with package-local tests.
-- `scripts/`: architecture, API, documentation, package, inventory, audit, and mutation release gates.
+- `scripts/`: architecture, API, documentation, package, structural inventory, audit, and critical-coverage release gates.
 
 ### Scripts
 - `bun run build`: Build the project with tsdown
@@ -65,7 +68,8 @@ The codebase is organized by durable ownership:
 - `bun run check:circular`: Check for circular dependencies
 - `bun run check:write`: Fix linting/formatting issues
 - `bun run docs`: Generate the API Extractor model and build the VitePress documentation site
-- `bun run verify`: Run the complete non-publishing v6 release gate, including workflow parity
+- `bun run test:critical-quality`: Execute measured V8 coverage for critical lifecycle and Player modules
+- `bun run verify`: Run the complete non-publishing repository gate, including structural workflow parity
 
 ## Dependency modernization
 
@@ -81,6 +85,11 @@ lower/latest cases in `adapter-compatibility.json` rather than being mechanicall
 For cross-repository work, verify and pack `distube` plus adapters first, record archive hashes, verify and pack media
 plugins against that core archive, then install all fingerprinted archives in the example. Never publish or commit
 the temporary archives.
+
+Workspace orchestration derives package, export, dependency, and test inventories from manifests and syntax. Its
+fingerprinted dependency DAG invalidates only downstream consumers when an input changes; it never becomes a hidden
+prerequisite for this repository's `verify` command. Any changed commit, declaration, archive, peer range, or lock
+invalidates the affected candidate evidence and resets publication authorization to false.
 
 ## ⚖️ License
 
