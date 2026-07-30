@@ -1,6 +1,8 @@
 export type {
   Adapter,
   CreateQueueOptions,
+  Diagnostic,
+  DiagnosticSeverity,
   PlaybackContext,
   PlaybackPreparation,
   PlaybackRequest,
@@ -8,6 +10,7 @@ export type {
   PlayerEvent,
   Plugin,
   PluginContext,
+  PluginDiagnostic,
   QueueBinding,
   SourceOperationOptions,
   SourcePlugin,

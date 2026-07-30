@@ -1,7 +1,20 @@
 import type { Song } from "./media";
 
+export type DiagnosticSeverity = "debug" | "info" | "warning" | "error";
+
+export interface Diagnostic {
+  readonly severity: DiagnosticSeverity;
+  readonly stage: string;
+  readonly message: string;
+  readonly plugin?: string;
+  readonly error?: Error;
+  readonly detail?: Readonly<Record<string, unknown>>;
+}
+
+export type PluginDiagnostic = Omit<Diagnostic, "plugin">;
+
 export interface PluginContext {
-  readonly diagnostic: (message: string, detail?: unknown) => void;
+  readonly diagnostic: (diagnostic: PluginDiagnostic) => void;
 }
 
 export interface Plugin {
@@ -36,7 +49,7 @@ export interface SourcePlugin extends Plugin {
 
 export type PlayerEvent =
   | Readonly<{ type: "finished"; itemId: string }>
-  | Readonly<{ type: "failed"; itemId: string; error: Error }>;
+  | Readonly<{ type: "failed"; itemId: string; error: Error; terminal?: true }>;
 
 export interface PlaybackRequest {
   readonly itemId: string;

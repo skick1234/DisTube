@@ -35,6 +35,10 @@ const song = new Song({
   source: "source",
 });
 const item = new QueueItem({ song });
+// @ts-expect-error QueueItem identity is core-owned
+new QueueItem({ song, id: "caller-owned" });
+// @ts-expect-error QueueItem insertion time is core-owned
+new QueueItem({ song, addedAt: new Date(0) });
 
 const source: SourcePlugin = {
   name: "source",

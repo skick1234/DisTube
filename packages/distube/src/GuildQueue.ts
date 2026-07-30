@@ -5,7 +5,16 @@ import { QueueItem, Song } from "./media";
 import { type OwnedPlaybackResource, preparePlaybackResource } from "./playback/prepare";
 import { requireSongOwner, type SourceCatalog, validateSourceSongs } from "./playback/sources";
 import { validatePlaybackRequest } from "./playback/validation";
+import { CleanupBarrier } from "./queue/cleanup";
+import { runDetachedEffect } from "./queue/effects";
 import { Mailbox } from "./queue/mailbox";
+import type {
+  ActivePlayback,
+  EnqueueCompletion,
+  EnqueueOperation,
+  PlaybackAttempt,
+  QueueMessage,
+} from "./queue/protocol";
 import {
   appendItems,
   clearQueue,
@@ -17,97 +26,6 @@ import {
   setStatus,
   startFirst,
 } from "./queue/state";
-import { settleAll } from "./utils/dispose";
-
-interface EnqueueOperation {
-  readonly id: number;
-  readonly sequence: number;
-  readonly controller: AbortController;
-  readonly metadata?: Readonly<Record<string, unknown>>;
-  readonly resolve: (items: readonly QueueItem[]) => void;
-  readonly reject: (error: unknown) => void;
-}
-
-type EnqueueCompletion =
-  | Readonly<{ operation: EnqueueOperation; songs: readonly Song[] }>
-  | Readonly<{ operation: EnqueueOperation; error: unknown }>;
-
-interface PlaybackAttempt {
-  readonly id: number;
-  readonly item: QueueItem;
-  readonly controller: AbortController;
-  player?: Player;
-  resource?: OwnedPlaybackResource;
-  phase: "connecting" | "preparing" | "activating";
-}
-
-interface ActivePlayback {
-  readonly item: QueueItem;
-  readonly player: Player;
-  readonly resource: OwnedPlaybackResource;
-}
-
-type QueueMessage =
-  | Readonly<{ type: "enqueue"; source: string | Song; operation: EnqueueOperation }>
-  | Readonly<{ type: "enqueue.completed"; completion: EnqueueCompletion }>
-  | Readonly<{ type: "start" }>
-  | Readonly<{
-      type: "player.ready";
-      attemptId: number;
-      itemId: string;
-      player?: Player;
-      unsubscribe?: () => void;
-      error?: unknown;
-    }>
-  | Readonly<{
-      type: "preparation.completed";
-      attemptId: number;
-      itemId: string;
-      player: Player;
-      resource?: OwnedPlaybackResource;
-      error?: unknown;
-    }>
-  | Readonly<{
-      type: "play.completed";
-      attemptId: number;
-      itemId: string;
-      player: Player;
-      resource: OwnedPlaybackResource;
-      error?: unknown;
-    }>
-  | Readonly<{ type: "player.outcome"; player: Player; event: PlayerEvent }>
-  | Readonly<{ type: "remove"; itemId: string; resolve: (item: QueueItem) => void; reject: (error: unknown) => void }>
-  | Readonly<{
-      type: "control";
-      operationId: number;
-      control: "pause" | "resume" | "seek";
-      seconds?: number;
-      resolve: () => void;
-      reject: (error: unknown) => void;
-    }>
-  | Readonly<{
-      type: "control.completed";
-      operationId: number;
-      control: "pause" | "resume" | "seek";
-      itemId: string;
-      player: Player;
-      resolve: () => void;
-      reject: (error: unknown) => void;
-      error?: unknown;
-    }>
-  | Readonly<{ type: "skip"; operationId: number; resolve: () => void; reject: (error: unknown) => void }>
-  | Readonly<{
-      type: "skip.completed";
-      operationId: number;
-      itemId: string;
-      player: Player;
-      active: ActivePlayback;
-      resolve: () => void;
-      reject: (error: unknown) => void;
-      error?: unknown;
-    }>
-  | Readonly<{ type: "stop"; resolve: () => void; reject: (error: unknown) => void }>
-  | Readonly<{ type: "destroy"; resolve: () => void; reject: (error: unknown) => void }>;
 
 export class GuildQueue {
   readonly id: string;
@@ -124,10 +42,13 @@ export class GuildQueue {
   #unsubscribe?: () => void;
   #attempt?: PlaybackAttempt;
   #active?: ActivePlayback;
-  #nextOperationId = 1;
   #nextEnqueueSequence = 0;
   #nextEnqueueCommit = 0;
+  #destroyRequested = false;
   #destroyed = false;
+  #destroyEventEmitted = false;
+  #cleanupBarrier?: CleanupBarrier;
+  #terminalPromise?: Promise<void>;
   #destroyPromise?: Promise<void>;
 
   /** @internal */
@@ -148,7 +69,6 @@ export class GuildQueue {
   enqueue(source: string | Song, metadata?: Readonly<Record<string, unknown>>): Promise<readonly QueueItem[]> {
     return new Promise((resolve, reject) => {
       const operation: EnqueueOperation = {
-        id: this.#nextOperationId++,
         sequence: this.#nextEnqueueSequence++,
         controller: new AbortController(),
         ...(metadata ? { metadata } : {}),
@@ -164,9 +84,7 @@ export class GuildQueue {
   }
 
   skip(): Promise<void> {
-    return new Promise((resolve, reject) =>
-      this.#mailbox.post({ type: "skip", operationId: this.#nextOperationId++, resolve, reject }),
-    );
+    return new Promise((resolve, reject) => this.#mailbox.post({ type: "skip", resolve, reject }));
   }
 
   pause(): Promise<void> {
@@ -186,6 +104,8 @@ export class GuildQueue {
   }
 
   destroy(): Promise<void> {
+    this.#destroyRequested = true;
+    this.#attempt?.controller.abort(this.#stale());
     this.#destroyPromise ??= new Promise((resolve, reject) => this.#mailbox.post({ type: "destroy", resolve, reject }));
     return this.#destroyPromise;
   }
@@ -194,7 +114,6 @@ export class GuildQueue {
     return new Promise((resolve, reject) =>
       this.#mailbox.post({
         type: "control",
-        operationId: this.#nextOperationId++,
         control,
         ...(seconds === undefined ? {} : { seconds }),
         resolve,
@@ -288,8 +207,9 @@ export class GuildQueue {
       }
       const items = Object.freeze(completion.songs.map(song => new QueueItem({ song, metadata: operation.metadata })));
       this.#state = appendItems(this.#state, items);
+      const timestamp = Date.now();
       this.#runEffect(async () => {
-        for (const item of items) this.#emit("queue.item.added", { item });
+        for (const item of items) this.#emit("queue.item.added", { item }, timestamp);
         operation.resolve(items);
         this.#mailbox.post({ type: "start" });
       });
@@ -299,7 +219,6 @@ export class GuildQueue {
   #startNext(): void {
     if (this.#destroyed || this.#attempt || this.#active || this.#state.current || !this.#state.items[0]) return;
     const attempt: PlaybackAttempt = {
-      id: this.#nextOperationId++,
       item: this.#state.items[0],
       controller: new AbortController(),
       phase: this.#player ? "preparing" : "connecting",
@@ -326,8 +245,7 @@ export class GuildQueue {
         );
         this.#mailbox.post({
           type: "player.ready",
-          attemptId: attempt.id,
-          itemId: attempt.item.id,
+          attempt,
           player,
           unsubscribe,
         });
@@ -336,8 +254,7 @@ export class GuildQueue {
         unsubscribe?.();
         this.#mailbox.post({
           type: "player.ready",
-          attemptId: attempt.id,
-          itemId: attempt.item.id,
+          attempt,
           error,
         });
       }
@@ -345,7 +262,7 @@ export class GuildQueue {
   }
 
   #completePlayer(message: Extract<QueueMessage, { type: "player.ready" }>): void {
-    const attempt = this.#currentAttempt(message.attemptId, message.itemId);
+    const attempt = this.#currentAttempt(message.attempt);
     if (!attempt) {
       message.unsubscribe?.();
       if (message.player) this.#runPlayerStop(message.player, "stale Player creation");
@@ -376,16 +293,14 @@ export class GuildQueue {
         );
         this.#mailbox.post({
           type: "preparation.completed",
-          attemptId: attempt.id,
-          itemId: attempt.item.id,
+          attempt,
           player,
           resource,
         });
       } catch (error: unknown) {
         this.#mailbox.post({
           type: "preparation.completed",
-          attemptId: attempt.id,
-          itemId: attempt.item.id,
+          attempt,
           player,
           error,
         });
@@ -394,7 +309,7 @@ export class GuildQueue {
   }
 
   #completePreparation(message: Extract<QueueMessage, { type: "preparation.completed" }>): void {
-    const attempt = this.#currentAttempt(message.attemptId, message.itemId, message.player);
+    const attempt = this.#currentAttempt(message.attempt, message.player);
     if (!attempt) {
       if (message.resource) this.#runDisposal(message.resource, "stale preparation");
       return;
@@ -414,16 +329,14 @@ export class GuildQueue {
         await message.player.play(request);
         this.#mailbox.post({
           type: "play.completed",
-          attemptId: attempt.id,
-          itemId: attempt.item.id,
+          attempt,
           player: message.player,
           resource: message.resource as OwnedPlaybackResource,
         });
       } catch (error: unknown) {
         this.#mailbox.post({
           type: "play.completed",
-          attemptId: attempt.id,
-          itemId: attempt.item.id,
+          attempt,
           player: message.player,
           resource: message.resource as OwnedPlaybackResource,
           error,
@@ -433,7 +346,7 @@ export class GuildQueue {
   }
 
   #completePlay(message: Extract<QueueMessage, { type: "play.completed" }>): void {
-    const attempt = this.#currentAttempt(message.attemptId, message.itemId, message.player);
+    const attempt = this.#currentAttempt(message.attempt, message.player);
     if (!attempt) {
       this.#runDisposal(message.resource, "stale Player activation");
       return;
@@ -442,10 +355,11 @@ export class GuildQueue {
       this.#attempt = undefined;
       attempt.controller.abort(this.#stale());
       this.#state = failFirst(this.#state, attempt.item.id);
+      const timestamp = Date.now();
       const error = asDisTubeError(ErrorCode.VOICE_FAILED, "Player failed to start QueueItem", message.error);
       const player = this.#retirePlayer(message.player);
       this.#runEffect(async () => {
-        this.#emit("queue.item.failed", { item: attempt.item, error });
+        this.#emit("queue.item.failed", { item: attempt.item, error }, timestamp);
         if (player) await player.stop().catch(cleanup => this.#report(cleanup, "Player cleanup after play rejection"));
         await message.resource
           .dispose()
@@ -461,9 +375,10 @@ export class GuildQueue {
       return;
     }
     this.#state = selected.state;
+    const timestamp = Date.now();
     this.#attempt = undefined;
     this.#active = Object.freeze({ item: attempt.item, player: message.player, resource: message.resource });
-    this.#runEffect(async () => this.#emit("queue.item.started", { item: attempt.item }));
+    this.#runEffect(async () => this.#emit("queue.item.started", { item: attempt.item }, timestamp));
   }
 
   #completeOutcome(player: Player, event: PlayerEvent): void {
@@ -478,13 +393,22 @@ export class GuildQueue {
     }
     this.#active = undefined;
     this.#state = finishCurrent(this.#state);
+    const terminalPlayer = event.type === "failed" && event.terminal ? this.#retirePlayer(player) : undefined;
+    const timestamp = Date.now();
     this.#runEffect(async () => {
-      if (event.type === "finished") this.#emit("queue.item.finished", { item: active.item });
+      if (event.type === "finished") this.#emit("queue.item.finished", { item: active.item }, timestamp);
       else {
-        this.#emit("queue.item.failed", {
-          item: active.item,
-          error: asDisTubeError(ErrorCode.VOICE_FAILED, "Player reported playback failure", event.error),
-        });
+        this.#emit(
+          "queue.item.failed",
+          {
+            item: active.item,
+            error: asDisTubeError(ErrorCode.VOICE_FAILED, "Player reported playback failure", event.error),
+          },
+          timestamp,
+        );
+      }
+      if (terminalPlayer) {
+        await terminalPlayer.stop().catch(error => this.#report(error, "terminal Player outcome cleanup"));
       }
       await active.resource.dispose().catch(error => this.#report(error, "resource cleanup after Player outcome"));
       this.#mailbox.post({ type: "start" });
@@ -546,7 +470,6 @@ export class GuildQueue {
         }
         this.#mailbox.post({
           type: "control.completed",
-          operationId: message.operationId,
           control: message.control,
           itemId: active.item.id,
           player: active.player,
@@ -597,7 +520,6 @@ export class GuildQueue {
         }
         this.#mailbox.post({
           type: "skip.completed",
-          operationId: message.operationId,
           itemId: active.item.id,
           player: active.player,
           active,
@@ -616,34 +538,47 @@ export class GuildQueue {
       message.reject(this.#stale());
       return;
     }
-    if (message.error) {
-      message.reject(asDisTubeError(ErrorCode.VOICE_FAILED, "Player failed to skip", message.error));
-      return;
-    }
     this.#active = undefined;
     this.#state = finishCurrent(this.#state);
+    const timestamp = Date.now();
     this.#runEffect(async () => {
-      this.#emit("queue.item.finished", { item: message.active.item });
-      await message.active.resource.dispose().catch(error => this.#report(error, "resource cleanup after skip"));
-      message.resolve();
+      this.#emit("queue.item.finished", { item: message.active.item }, timestamp);
+      const failures: Error[] = [];
+      if (message.error) failures.push(asError(message.error));
+      try {
+        await message.active.resource.dispose();
+      } catch (error: unknown) {
+        failures.push(asError(error));
+      }
+      if (failures.length === 0) message.resolve();
+      else {
+        message.reject(
+          new DisTubeError(ErrorCode.VOICE_FAILED, "Player failed to skip cleanly", {
+            cause: failures.length === 1 ? failures[0] : new AggregateError(failures, "Skip cleanup failures"),
+          }),
+        );
+      }
       this.#mailbox.post({ type: "start" });
     });
   }
 
   #terminalize(destroy: boolean, resolve: () => void, reject: (error: unknown) => void): void {
-    if (destroy && this.#destroyed) {
-      resolve();
+    if (destroy) {
+      this.#destroyRequested = true;
+      this.#destroyed = true;
+    }
+    if (this.#terminalPromise) {
+      if (destroy && !this.#destroyEventEmitted) {
+        this.#destroyEventEmitted = true;
+        this.#emit("queue.destroyed", {}, Date.now());
+      }
+      this.#terminalPromise.then(resolve, reject);
       return;
     }
-    if (!destroy) {
-      try {
-        this.#assertActive();
-      } catch (error: unknown) {
-        reject(error);
-        return;
-      }
+    if (!destroy && this.#destroyed) {
+      reject(new DisTubeError(ErrorCode.QUEUE_FAILED, "GuildQueue is destroyed"));
+      return;
     }
-    if (destroy) this.#destroyed = true;
     this.#cancelEnqueues();
     const attempt = this.#attempt;
     attempt?.controller.abort(this.#stale());
@@ -651,28 +586,30 @@ export class GuildQueue {
     const active = this.#active;
     this.#active = undefined;
     this.#state = clearQueue(this.#state);
+    if (destroy && !this.#destroyEventEmitted) {
+      this.#destroyEventEmitted = true;
+      this.#emit("queue.destroyed", {}, Date.now());
+    }
     const player = this.#retirePlayer(this.#player);
     const resources = [...new Set([attempt?.resource, active?.resource].filter(Boolean))] as OwnedPlaybackResource[];
-    this.#runEffect(async () => {
-      const failures: Error[] = [];
-      if (destroy) this.#emit("queue.destroyed", {});
-      if (player) {
-        try {
-          await player.stop();
-        } catch (error: unknown) {
-          failures.push(asError(error));
-        }
-      }
-      failures.push(...(await settleAll(resources.map(resource => () => resource.dispose()))));
-      if (failures.length === 0) resolve();
-      else {
-        reject(
-          new DisTubeError(player ? ErrorCode.VOICE_FAILED : ErrorCode.QUEUE_FAILED, "Queue cleanup failed", {
-            cause: failures.length === 1 ? failures[0] : new AggregateError(failures, "Queue cleanup failures"),
-          }),
-        );
-      }
-    });
+    const barrier = new CleanupBarrier();
+    this.#cleanupBarrier = barrier;
+    if (player) barrier.add(() => player.stop());
+    for (const resource of resources) barrier.add(() => resource.dispose());
+    const terminal = barrier
+      .settle()
+      .then(failures => {
+        if (failures.length === 0) return;
+        throw new DisTubeError(player ? ErrorCode.VOICE_FAILED : ErrorCode.QUEUE_FAILED, "Queue cleanup failed", {
+          cause: failures.length === 1 ? failures[0] : new AggregateError(failures, "Queue cleanup failures"),
+        });
+      })
+      .finally(() => {
+        if (this.#cleanupBarrier === barrier) this.#cleanupBarrier = undefined;
+        if (!this.#destroyed && this.#terminalPromise === terminal) this.#terminalPromise = undefined;
+      });
+    this.#terminalPromise = terminal;
+    terminal.then(resolve, reject);
   }
 
   async #resolve(source: string | Song, signal: AbortSignal): Promise<readonly Song[]> {
@@ -704,8 +641,9 @@ export class GuildQueue {
     this.#attempt = undefined;
     attempt.controller.abort(this.#stale());
     this.#state = failFirst(this.#state, attempt.item.id);
+    const timestamp = Date.now();
     this.#runEffect(async () => {
-      this.#emit("queue.item.failed", { item: attempt.item, error });
+      this.#emit("queue.item.failed", { item: attempt.item, error }, timestamp);
       if (attempt.resource) {
         await attempt.resource
           .dispose()
@@ -715,9 +653,8 @@ export class GuildQueue {
     });
   }
 
-  #currentAttempt(attemptId: number, itemId: string, player?: Player): PlaybackAttempt | undefined {
-    const attempt = this.#attempt;
-    if (!attempt || attempt.id !== attemptId || attempt.item.id !== itemId || this.#destroyed) return undefined;
+  #currentAttempt(attempt: PlaybackAttempt, player?: Player): PlaybackAttempt | undefined {
+    if (this.#attempt !== attempt || this.#destroyRequested) return undefined;
     if (player && (attempt.player !== player || this.#player !== player)) return undefined;
     return attempt;
   }
@@ -741,23 +678,23 @@ export class GuildQueue {
   }
 
   #runPlayerStop(player: Player, stage: string): void {
+    if (this.#cleanupBarrier?.add(() => player.stop())) return;
     this.#runEffect(async () => player.stop().catch(error => this.#report(error, stage)));
   }
 
   #runDisposal(resource: OwnedPlaybackResource, stage: string): void {
+    if (this.#cleanupBarrier?.add(() => resource.dispose())) return;
     this.#runEffect(async () => resource.dispose().catch(error => this.#report(error, stage)));
   }
 
   #runEffect(effect: () => void | Promise<void>): void {
-    queueMicrotask(() => {
-      void Promise.resolve()
-        .then(effect)
-        .catch(error => this.#report(error, "GuildQueue effect"));
-    });
+    runDetachedEffect(effect, error => this.#report(error, "GuildQueue effect"));
   }
 
   #assertActive(): void {
-    if (this.#destroyed) throw new DisTubeError(ErrorCode.QUEUE_FAILED, "GuildQueue is destroyed");
+    if (this.#destroyRequested || this.#destroyed) {
+      throw new DisTubeError(ErrorCode.QUEUE_FAILED, "GuildQueue is destroyed");
+    }
   }
 
   #stale(): DisTubeError {
@@ -765,7 +702,13 @@ export class GuildQueue {
   }
 
   #report(error: unknown, stage: string): void {
-    this.#events.report(asError(error), stage);
+    this.#events.report({
+      severity: "error",
+      stage,
+      message: `GuildQueue ${this.id} background operation failed`,
+      error: asError(error),
+      detail: Object.freeze({ queueId: this.id }),
+    });
   }
 
   #emit<
@@ -775,8 +718,12 @@ export class GuildQueue {
       | "queue.item.finished"
       | "queue.item.failed"
       | "queue.destroyed",
-  >(name: Name, detail: Omit<Parameters<QueueEventEmitter["emit"]>[1], "queueId" | "timestamp">): void {
-    this.#events.emit(name, Object.freeze({ queueId: this.id, timestamp: Date.now(), ...detail }) as never);
+  >(
+    name: Name,
+    detail: Omit<Parameters<QueueEventEmitter["emit"]>[1], "queueId" | "timestamp">,
+    timestamp: number,
+  ): void {
+    this.#events.emit(name, Object.freeze({ queueId: this.id, timestamp, ...detail }) as never);
   }
 }
 

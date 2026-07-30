@@ -1,3 +1,4 @@
+import type { Diagnostic } from "./contracts";
 import type { DisTubeError } from "./errors";
 import type { QueueItem } from "./media";
 
@@ -20,9 +21,9 @@ export type QueueEventListener<Name extends QueueEventName> = (event: QueueEvent
 
 export class QueueEventEmitter {
   readonly #listeners = new Map<QueueEventName, Set<(event: never) => unknown>>();
-  readonly #diagnostic: (error: Error, context: string) => void;
+  readonly #diagnostic: (diagnostic: Diagnostic) => unknown;
 
-  constructor(diagnostic: (error: Error, context: string) => void) {
+  constructor(diagnostic: (diagnostic: Diagnostic) => unknown) {
     this.#diagnostic = diagnostic;
   }
 
@@ -56,11 +57,26 @@ export class QueueEventEmitter {
     }
   }
 
-  report(error: Error, context: string): void {
-    this.#diagnostic(error, context);
+  report(diagnostic: Diagnostic): void {
+    this.#deliver(diagnostic);
   }
 
   #report(error: unknown, event: QueueEventName): void {
-    this.#diagnostic(error instanceof Error ? error : new Error(String(error)), event);
+    this.#deliver({
+      severity: "error",
+      stage: "event.listener",
+      message: `Listener failed for ${event}`,
+      error: error instanceof Error ? error : new Error(String(error)),
+      detail: Object.freeze({ event }),
+    });
+  }
+
+  #deliver(diagnostic: Diagnostic): void {
+    const record = Object.freeze({ ...diagnostic });
+    try {
+      void Promise.resolve(this.#diagnostic(record)).catch(() => undefined);
+    } catch {
+      // Diagnostic consumers are terminal observers and cannot affect runtime work.
+    }
   }
 }

@@ -17,7 +17,7 @@ export class DisTubeError extends Error {
 }
 
 export function asDisTubeError(code: ErrorCode, message: string, error: unknown): DisTubeError {
-  if (error instanceof DisTubeError) return error;
+  if (error instanceof DisTubeError && error.code === code) return error;
   const cause = error instanceof Error ? error : new Error(String(error));
   return new DisTubeError(code, message, { cause });
 }

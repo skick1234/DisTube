@@ -1,4 +1,4 @@
-import type { Adapter, CreateQueueOptions, Plugin, SourcePlugin } from "./contracts";
+import type { Adapter, CreateQueueOptions, Diagnostic, Plugin, SourcePlugin } from "./contracts";
 import { isSourcePlugin } from "./contracts";
 import { asDisTubeError, DisTubeError, ErrorCode } from "./errors";
 import { QueueEventEmitter, type QueueEventListener, type QueueEventName } from "./events";
@@ -11,7 +11,7 @@ import { settleAll } from "./utils/dispose";
 export interface DisTubeOptions {
   readonly adapter: Adapter;
   readonly plugins: readonly Plugin[];
-  readonly onDiagnostic?: (error: Error, context: Readonly<Record<string, unknown>>) => void;
+  readonly onDiagnostic?: (diagnostic: Diagnostic) => unknown;
 }
 
 export class DisTube {
@@ -24,22 +24,37 @@ export class DisTube {
   constructor(options: DisTubeOptions) {
     this.#validateOptions(options);
     const diagnostic = options.onDiagnostic ?? (() => undefined);
-    this.#events = new QueueEventEmitter((error, context) => diagnostic(error, Object.freeze({ context })));
+    this.#events = new QueueEventEmitter(diagnostic);
     const initialized: Plugin[] = [];
     try {
       for (const plugin of options.plugins) {
         const result: unknown = (plugin.initialize as (context: Parameters<Plugin["initialize"]>[0]) => unknown)({
-          diagnostic: (message, detail) => diagnostic(new Error(message), { detail }),
+          diagnostic: record => this.#events.report(Object.freeze({ ...record, plugin: plugin.name })),
         });
         if (result && typeof (result as PromiseLike<unknown>).then === "function") {
-          throw new DisTubeError(ErrorCode.INVALID_ARGUMENT, `${plugin.name}.initialize must be synchronous`);
+          void Promise.resolve(result).catch(error =>
+            this.#events.report({
+              severity: "error",
+              stage: "plugin.initialize.late-rejection",
+              message: `${plugin.name}.initialize rejected after returning an unsupported thenable`,
+              plugin: plugin.name,
+              error: asError(error),
+            }),
+          );
+          throw new Error(`${plugin.name}.initialize must be synchronous`);
         }
         initialized.push(plugin);
       }
     } catch (error: unknown) {
       for (const plugin of initialized.reverse())
         void Promise.resolve(plugin.dispose()).catch(disposeError =>
-          diagnostic(asError(disposeError), { plugin: plugin.name }),
+          this.#events.report({
+            severity: "error",
+            stage: "plugin.initialize.rollback",
+            message: `${plugin.name}.dispose failed during initialization rollback`,
+            plugin: plugin.name,
+            error: asError(disposeError),
+          }),
         );
       throw asDisTubeError(ErrorCode.PLUGIN_FAILED, "Plugin initialization failed", error);
     }
@@ -86,15 +101,13 @@ export class DisTube {
     this.#shuttingDown = true;
     const queueFailures = await this.#queues.destroyAll();
     const pluginFailures = await settleAll([...this.#plugins].reverse().map(plugin => () => plugin.dispose()));
-    if (queueFailures.length > 0) {
-      throw new DisTubeError(ErrorCode.QUEUE_FAILED, "Queue shutdown failed", {
-        cause: new AggregateError(queueFailures),
-      });
-    }
-    if (pluginFailures.length > 0) {
-      throw new DisTubeError(ErrorCode.PLUGIN_FAILED, "Plugin shutdown failed", {
-        cause: new AggregateError(pluginFailures),
-      });
+    const failures = [...queueFailures.flatMap(cleanupCauses), ...pluginFailures.flatMap(cleanupCauses)];
+    if (failures.length > 0) {
+      throw new DisTubeError(
+        queueFailures.length > 0 ? ErrorCode.QUEUE_FAILED : ErrorCode.PLUGIN_FAILED,
+        "DisTube shutdown cleanup failed",
+        { cause: new AggregateError(failures, "DisTube shutdown cleanup failures") },
+      );
     }
   }
 
@@ -131,4 +144,12 @@ export class DisTube {
 
 function asError(error: unknown): Error {
   return error instanceof Error ? error : new Error(String(error));
+}
+
+function cleanupCauses(error: Error): readonly Error[] {
+  if (!(error instanceof DisTubeError)) return [error];
+  if (error.cause instanceof AggregateError) {
+    return error.cause.errors.flatMap((cause: unknown) => cleanupCauses(asError(cause)));
+  }
+  return error.cause instanceof Error ? cleanupCauses(error.cause) : [error];
 }

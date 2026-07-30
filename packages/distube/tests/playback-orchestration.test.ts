@@ -86,7 +86,7 @@ function setup(sources: readonly FakeSource[], createPlayer: Adapter["createPlay
   return { adapter, diagnostics, distube, queue };
 }
 
-describe("mailbox enqueue ordering", () => {
+describe("queue decision ordering", () => {
   it("commits concurrent resolution in acceptance order despite out-of-order completion", async () => {
     const source = new FakeSource("source");
     const first = deferred<Song>();
@@ -355,6 +355,34 @@ describe("terminal authority and cleanup", () => {
     await vi.waitFor(() => expect(late.stop).toHaveBeenCalledTimes(1));
     expect(queue.state).toMatchObject({ items: [], status: "idle" });
     expect(late.requests).toHaveLength(0);
+  });
+
+  it("joins late resource cleanup that starts before terminal settlement", async () => {
+    const source = new FakeSource("source");
+    const preparation = deferred<PlaybackPreparation>();
+    source.preparePlayback.mockImplementation(() => preparation.promise);
+    const player = new FakePlayer();
+    const playerStop = deferred<void>();
+    player.stop.mockImplementation(() => playerStop.promise);
+    const resourceDisposal = deferred<void>();
+    const dispose = vi.fn(() => resourceDisposal.promise);
+    const { queue } = setup([source], async () => player);
+    await queue.enqueue(media("source"));
+    await vi.waitFor(() => expect(source.preparePlayback).toHaveBeenCalledOnce());
+    const stopping = queue.stop();
+    await vi.waitFor(() => expect(player.stop).toHaveBeenCalledOnce());
+    preparation.resolve({
+      kind: "resource",
+      resource: { kind: "url", url: "https://stream.example/late", dispose },
+    });
+    await vi.waitFor(() => expect(dispose).toHaveBeenCalledOnce());
+    let settled = false;
+    void stopping.then(() => (settled = true));
+    playerStop.resolve();
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    resourceDisposal.resolve();
+    await stopping;
   });
 
   it("unregisters a destroyed binding even when cleanup rejects", async () => {

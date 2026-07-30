@@ -12,7 +12,7 @@ export class QueueManager {
   readonly #sources: SourceCatalog;
   readonly #events: QueueEventEmitter;
   readonly #queues = new Map<string, GuildQueue>();
-  readonly #bindings = new Map<string, string>();
+  readonly #guilds = new Map<string, string>();
 
   constructor(adapter: Adapter, sources: SourceCatalog, events: QueueEventEmitter) {
     this.#adapter = adapter;
@@ -27,14 +27,13 @@ export class QueueManager {
     if (typeof options.channelId !== "string" || options.channelId.length === 0) {
       throw new DisTubeError(ErrorCode.INVALID_ARGUMENT, "channelId must be a non-empty string");
     }
-    const binding = `${options.guildId}:${options.channelId}`;
-    if (this.#bindings.has(binding)) {
-      throw new DisTubeError(ErrorCode.QUEUE_FAILED, "A GuildQueue already owns this guild/channel binding");
+    if (this.#guilds.has(options.guildId)) {
+      throw new DisTubeError(ErrorCode.QUEUE_FAILED, "A GuildQueue already owns this guild");
     }
     const queueId = randomUUID();
     const queue = new GuildQueue({ queueId, ...options }, this.#adapter, this.#sources, this.#events);
     this.#queues.set(queueId, queue);
-    this.#bindings.set(binding, queueId);
+    this.#guilds.set(options.guildId, queueId);
     this.#events.emit("queue.created", Object.freeze({ queueId, timestamp: Date.now() }));
     return queue;
   }
@@ -47,18 +46,15 @@ export class QueueManager {
     const queue = this.#queues.get(queueId);
     if (!queue) throw new DisTubeError(ErrorCode.QUEUE_FAILED, `Unknown GuildQueue: ${queueId}`);
     this.#queues.delete(queueId);
-    this.#bindings.delete(`${queue.guildId}:${queue.channelId}`);
+    this.#guilds.delete(queue.guildId);
     await queue.destroy();
   }
 
   destroyAll(): Promise<readonly Error[]> {
     const queues = [...this.#queues.values()];
     this.#queues.clear();
-    this.#bindings.clear();
-    return settleAll(queues.map(queue => () => queue.destroy()));
-  }
-
-  values(): readonly GuildQueue[] {
-    return Object.freeze([...this.#queues.values()]);
+    this.#guilds.clear();
+    const completions = queues.map(queue => queue.destroy());
+    return settleAll(completions.map(completion => () => completion));
   }
 }

@@ -50,10 +50,8 @@ export class Song {
 }
 
 export interface QueueItemData {
-  readonly id?: string;
   readonly song: Song;
   readonly metadata?: Readonly<Record<string, unknown>>;
-  readonly addedAt?: Date;
 }
 
 export class QueueItem {
@@ -66,10 +64,10 @@ export class QueueItem {
     if (!(data?.song instanceof Song)) {
       throw new DisTubeError(ErrorCode.INVALID_ARGUMENT, "QueueItem song must be a Song");
     }
-    this.id = data.id ?? randomUUID();
+    this.id = randomUUID();
     this.song = data.song;
     this.#metadata = immutableClone(data.metadata ?? {});
-    this.#addedAt = new Date(data.addedAt?.getTime() ?? Date.now());
+    this.#addedAt = new Date();
     Object.freeze(this);
   }
 
