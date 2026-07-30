@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { inspectRuntimeVersion } from "./check-runtime";
 import { inspectVerifyScript, inspectWorkflow, requiredVerifyCommands, type WorkflowPolicy } from "./check-workflows";
 
 const publishPolicy: WorkflowPolicy = {
@@ -8,6 +9,10 @@ const publishPolicy: WorkflowPolicy = {
 };
 
 describe("workflow parity", () => {
+  test("rejects actual Bun runtime drift", () => {
+    expect(inspectRuntimeVersion("1.3.14", "1.4.0")).toEqual(["expected Bun 1.3.14, observed 1.4.0"]);
+  });
+
   test("rejects a wrong Bun pin", () => {
     expect(
       inspectWorkflow("bun-version: 1.4.0\nrun: bun run verify\nrun: bun changeset publish", "1.3.14", publishPolicy),

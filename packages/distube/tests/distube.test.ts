@@ -4,6 +4,9 @@ import {
   DisTube,
   DisTubeError,
   ErrorCode,
+  type PlaybackContext,
+  type PlaybackPreparation,
+  type PlaybackRequest,
   type Player,
   type PlayerEvent,
   type PluginContext,
@@ -20,8 +23,8 @@ class TestPlayer implements Player {
   failPlayCount = 0;
   failStop = false;
 
-  async play(item: QueueItem): Promise<void> {
-    this.calls.push(`play:${item.id}`);
+  async play(request: PlaybackRequest): Promise<void> {
+    this.calls.push(`play:${request.itemId}`);
     if (this.failPlay || this.failPlayCount-- > 0) throw new Error("play failed");
   }
   async pause(): Promise<void> {
@@ -52,6 +55,7 @@ class TestSource implements SourcePlugin {
   readonly initialize = vi.fn((_context: PluginContext) => undefined);
   readonly dispose = vi.fn(() => undefined);
   resolveImpl?: (url: string) => Promise<Song | readonly Song[] | undefined>;
+  prepareImpl?: (song: Song, context: PlaybackContext) => Promise<PlaybackPreparation>;
 
   constructor(name = "test-source") {
     this.name = name;
@@ -62,6 +66,15 @@ class TestSource implements SourcePlugin {
   }
   resolve(url: string): Promise<Song | readonly Song[] | undefined> {
     return this.resolveImpl?.(url) ?? Promise.resolve(this.song);
+  }
+  preparePlayback(song: Song, context: PlaybackContext): Promise<PlaybackPreparation> {
+    return (
+      this.prepareImpl?.(song, context) ??
+      Promise.resolve({
+        kind: "resource",
+        resource: { kind: "url", url: `https://stream.test/${song.id}`, dispose: () => undefined },
+      })
+    );
   }
 }
 
@@ -157,7 +170,9 @@ describe("DisTube lifecycle and queues", () => {
       events.push(`started:${event.item.id}`);
     });
     const [item] = await queue.enqueue("https://provider.test/item");
-    expect(queue.state).toMatchObject({ current: item, items: [], status: "playing" });
+    expect(queue.state).toMatchObject({ items: [item], status: "idle" });
+    expect(events).toEqual([`added:${item?.id}`]);
+    await vi.waitFor(() => expect(queue.state).toMatchObject({ current: item, items: [], status: "playing" }));
     expect(events).toEqual([`added:${item?.id}`, `started:${item?.id}`]);
   });
 
@@ -218,9 +233,11 @@ describe("DisTube lifecycle and queues", () => {
     const distube = new DisTube({ adapter: { createPlayer }, plugins: [source] });
     const queue = distube.createQueue({ guildId: "guild", channelId: "voice" });
     const [first] = await queue.enqueue(source.song);
+    await vi.waitFor(() => expect(queue.state.current).toBe(first));
     await queue.stop();
     expect(firstPlayer.listeners.size).toBe(0);
     const [second] = await queue.enqueue(source.song);
+    await vi.waitFor(() => expect(queue.state.current).toBe(second));
     expect(createPlayer).toHaveBeenCalledTimes(2);
     expect(queue.state.current).toBe(second);
     firstPlayer.emit({ type: "finished", itemId: first?.id ?? "missing" });
@@ -235,9 +252,10 @@ describe("DisTube lifecycle and queues", () => {
     const distube = new DisTube({ adapter: { createPlayer }, plugins: [source] });
     const queue = distube.createQueue({ guildId: "guild", channelId: "voice" });
     const first = (await queue.enqueue(source.song))[0] as QueueItem;
+    await vi.waitFor(() => expect(queue.state.current).toBe(first));
     const second = (await queue.enqueue(source.song))[0] as QueueItem;
     await queue.skip();
-    expect(queue.state.current).toBe(second);
+    await vi.waitFor(() => expect(queue.state.current).toBe(second));
     expect(createPlayer).toHaveBeenCalledTimes(2);
     firstPlayer.emit({ type: "finished", itemId: first.id });
     expect(queue.state.current).toBe(second);
@@ -253,6 +271,7 @@ describe("DisTube lifecycle and queues", () => {
       source: source.name,
     });
     const first = (await queue.enqueue(source.song))[0] as QueueItem;
+    await vi.waitFor(() => expect(queue.state.current).toBe(first));
     const second = (await queue.enqueue(other))[0] as QueueItem;
     player.emit({ type: "finished", itemId: "stale" });
     expect(queue.state.current).toBe(first);
@@ -291,7 +310,8 @@ describe("DisTube lifecycle and queues", () => {
 
   it("commits controls only after Player success", async () => {
     const { player, queue } = fixture();
-    await queue.enqueue("https://provider.test/item");
+    const [item] = await queue.enqueue("https://provider.test/item");
+    await vi.waitFor(() => expect(queue.state.current).toBe(item));
     await queue.pause();
     expect(queue.state.status).toBe("paused");
     await queue.resume();
@@ -351,7 +371,7 @@ describe("DisTube lifecycle and queues", () => {
     });
     await queue.enqueue(source.song);
     await vi.waitFor(() => expect(diagnostic).toHaveBeenCalled());
-    expect(queue.state.current?.song).toBe(source.song);
+    await vi.waitFor(() => expect(queue.state.current?.song).toBe(source.song));
   });
 });
 

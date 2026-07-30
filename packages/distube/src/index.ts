@@ -1,12 +1,17 @@
 export type {
   Adapter,
   CreateQueueOptions,
+  PlaybackContext,
+  PlaybackPreparation,
+  PlaybackRequest,
   Player,
   PlayerEvent,
   Plugin,
   PluginContext,
   QueueBinding,
+  SourceOperationOptions,
   SourcePlugin,
+  UrlPlaybackResource,
 } from "./contracts";
 export { DisTube, type DisTubeOptions } from "./DisTube";
 export { asDisTubeError, DisTubeError, ErrorCode } from "./errors";

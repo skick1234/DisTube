@@ -1,5 +1,5 @@
 import { AudioPlayerStatus, VoiceConnectionStatus } from "@discordjs/voice";
-import { type Player, QueueItem, Song } from "distube";
+import type { PlaybackRequest, Player } from "distube";
 import type { Client } from "oceanic.js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { OceanicAdapter } from "../src";
@@ -12,6 +12,7 @@ const voice = vi.hoisted(() => {
     pause: vi.fn(() => true),
     unpause: vi.fn(() => true),
     stop: vi.fn(() => true),
+    removeAllListeners: vi.fn(),
   };
   const connection = {
     subscribe: vi.fn(),
@@ -54,11 +55,11 @@ function client(): Client {
   } as unknown as Client;
 }
 
-function item(): QueueItem {
-  return new QueueItem({
-    id: "item",
-    song: new Song({ id: "song", title: "Song", url: "https://example.com/audio", duration: 1, source: "test" }),
-  });
+function request(): PlaybackRequest {
+  return {
+    itemId: "item",
+    resource: { kind: "url", url: "https://stream.example/audio", dispose: vi.fn() },
+  };
 }
 
 beforeEach(() => {
@@ -94,8 +95,8 @@ describe("OceanicAdapter", () => {
     const player = await new OceanicAdapter(client()).createPlayer(binding);
     const listener = vi.fn();
     player.subscribe(listener);
-    await player.play(item());
-    expect(voice.createAudioResource).toHaveBeenCalledWith("https://example.com/audio");
+    await player.play(request());
+    expect(voice.createAudioResource).toHaveBeenCalledWith("https://stream.example/audio");
     expect(voice.audioPlayer.play).toHaveBeenCalledOnce();
     voice.handlers.get(AudioPlayerStatus.Idle)?.();
     expect(listener).toHaveBeenCalledWith({ type: "finished", itemId: "item" });
@@ -106,7 +107,7 @@ describe("OceanicAdapter", () => {
     const player = await adapter.createPlayer(binding);
     const listener = vi.fn();
     player.subscribe(listener);
-    await player.play(item());
+    await player.play(request());
     const playbackError = new Error("decoder failed");
     voice.handlers.get("error")?.(playbackError);
     expect(listener).toHaveBeenCalledWith({ type: "failed", itemId: "item", error: playbackError });
@@ -114,5 +115,24 @@ describe("OceanicAdapter", () => {
     voice.entersState.mockRejectedValueOnce(new Error("connection timeout"));
     await expect(adapter.createPlayer(binding)).rejects.toThrow("connection timeout");
     expect(voice.connection.destroy).toHaveBeenCalledOnce();
+  });
+
+  it("validates prepared resources and retires terminally without disposing the source resource", async () => {
+    const player = await new OceanicAdapter(client()).createPlayer(binding);
+    await expect(
+      player.play({ itemId: "item", resource: { kind: "url", url: "file:///audio", dispose: vi.fn() } }),
+    ).rejects.toThrow("absolute HTTP(S)");
+    const prepared = request();
+    const listener = vi.fn();
+    player.subscribe(listener);
+    await player.play(prepared);
+    const first = player.stop();
+    const second = player.stop();
+    await Promise.all([first, second]);
+    voice.handlers.get(AudioPlayerStatus.Idle)?.();
+    expect(listener).not.toHaveBeenCalled();
+    expect(prepared.resource.dispose).not.toHaveBeenCalled();
+    expect(voice.connection.destroy).toHaveBeenCalledTimes(1);
+    await expect(player.play(request())).rejects.toThrow("stopped");
   });
 });

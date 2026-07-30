@@ -20,9 +20,9 @@ export type QueueEventListener<Name extends QueueEventName> = (event: QueueEvent
 
 export class QueueEventEmitter {
   readonly #listeners = new Map<QueueEventName, Set<(event: never) => unknown>>();
-  readonly #diagnostic: (error: Error, event: QueueEventName) => void;
+  readonly #diagnostic: (error: Error, context: string) => void;
 
-  constructor(diagnostic: (error: Error, event: QueueEventName) => void) {
+  constructor(diagnostic: (error: Error, context: string) => void) {
     this.#diagnostic = diagnostic;
   }
 
@@ -54,6 +54,10 @@ export class QueueEventEmitter {
         this.#report(error, name);
       }
     }
+  }
+
+  report(error: Error, context: string): void {
+    this.#diagnostic(error, context);
   }
 
   #report(error: unknown, event: QueueEventName): void {

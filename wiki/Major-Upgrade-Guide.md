@@ -9,6 +9,7 @@ DisTube v6 is intentionally breaking. There are no deprecated aliases, compatibi
 | `DisTube.create(...)` or legacy constructor options | `new DisTube({ adapter, plugins, onDiagnostic? })` |
 | `distube.queue(guild)` / implicit guild session | `distube.createQueue({ guildId, channelId })`, then retain its ID/facade |
 | `play(...)` and `add(...)` | `queue.enqueue(source)` only |
+| awaiting `play` as proof of active audio | await `enqueue` for insertion; observe `queue.item.started` or `queue.item.failed` |
 | `join`, `leave`, `moveVoice` | binding at queue creation; `stop` or destroy the queue to release playback |
 | `volume`, repeat, autoplay | removed from the v6 queue surface |
 | queue filters and filter catalogs | removed |
@@ -36,9 +37,11 @@ are removed with their feature.
 ## Adapter authors
 
 Remove adapter PluginClasses, definitions, manifests, roles, capability requirements, and separate voice plugins.
-Implement `Adapter` directly and return a complete `Player`. Accept only queue/guild/channel IDs at the core boundary;
-keep Discord/Oceanic clients and connections private. Player owns effects and normalized callbacks, while GuildQueue
-alone owns ordering, QueueState, and events.
+Implement `Adapter` directly and return a complete `Player`. Accept only queue/guild/channel IDs at the creation
+boundary and only `play({ itemId, resource })` at playback. Use the prepared URL, correlate outcomes to `itemId`,
+terminalize synchronously before stop teardown, own native resources, and never inspect Song/QueueItem or dispose the
+borrowed source resource. There is no `play(item)` overload. GuildQueue alone owns ordering, QueueState, public events,
+fallback identity, and source-resource disposal.
 
 Official replacements:
 
@@ -60,9 +63,13 @@ no supported seek operation, so `queue.seek()` maps the rejected effect to `VOIC
 
 Remove `@distube/plugin-sdk`, PluginClass, `define()`, PluginDefinition, manifest/contract version, roles, capabilities,
 registry lookup, resource/stream leases, related/resource capability methods, and `@distube/testkit`. Export a direct
-Plugin instance/class implementing `name`, synchronous `initialize`, `dispose`, `search`, and `resolve`. Import `Song`
-from public `distube`, return `undefined` to decline, throw when an accepted provider request fails, and keep all tests
-and fixtures in the package.
+Plugin instance/class implementing `name`, synchronous `initialize`, `dispose`, cancellable `search`/`resolve`, and
+required `preparePlayback(song, { signal })`. Import contracts from public `distube`, return `undefined` only when
+declining URL resolution, and throw when accepted provider or preparation work fails. Return either a fresh
+`{ kind: "resource", resource: { kind: "url", url, dispose } }` or an explicit trimmed
+`{ kind: "search", query }`. Keep `Song.url` canonical, never store a stream/resource on Song, validate exact
+`song.source === name`, and keep all tests and fixtures package-local. There is no compatibility overload, Plugin role,
+fallback injection, mutable Song stream field, or public resource manager.
 
 Provider package status:
 

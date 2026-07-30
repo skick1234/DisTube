@@ -1,4 +1,4 @@
-import type { Adapter, Player, PlayerEvent, QueueBinding, QueueItem } from "distube";
+import type { Adapter, PlaybackRequest, Player, PlayerEvent, QueueBinding } from "distube";
 import type { Client, VoiceConnection } from "eris";
 
 export interface ErisAdapterOptions {
@@ -56,14 +56,20 @@ class ErisPlayer implements Player {
     connection.on("disconnect", this.#onDisconnect);
   }
 
-  play(item: QueueItem): Promise<void> {
+  play(value: PlaybackRequest): Promise<void> {
     if (this.#disposed) return Promise.reject(new Error("Eris Player is stopped"));
     if (this.#active) return Promise.reject(new Error("Eris Player already has active playback"));
+    let request: PlaybackRequest;
+    try {
+      request = playbackRequest(value);
+    } catch (error: unknown) {
+      return Promise.reject(error);
+    }
     const generation = ++this.#generation;
     return new Promise<void>((resolve, reject) => {
       const active: ActivePlayback = {
         generation,
-        itemId: item.id,
+        itemId: request.itemId,
         resolveStart: resolve,
         rejectStart: reject,
         startTimer: setTimeout(() => {
@@ -78,7 +84,7 @@ class ErisPlayer implements Player {
       };
       this.#active = active;
       try {
-        this.#connection.play(item.song.url);
+        this.#connection.play(request.resource.url);
       } catch (cause: unknown) {
         clearTimeout(active.startTimer);
         active.terminal = true;
@@ -221,6 +227,28 @@ class ErisPlayer implements Player {
     this.#connection.off("error", this.#onError);
     this.#connection.off("disconnect", this.#onDisconnect);
   }
+}
+
+function playbackRequest(value: unknown): PlaybackRequest {
+  if (!value || typeof value !== "object") throw new TypeError("Playback request must be an object");
+  const request = value as Readonly<Record<string, unknown>>;
+  const resource = request.resource;
+  if (Object.keys(request).length !== 2 || typeof request.itemId !== "string" || request.itemId.length === 0) {
+    throw new TypeError("Playback request must contain only itemId and resource");
+  }
+  if (!resource || typeof resource !== "object") throw new TypeError("Playback resource must be a URL resource");
+  const candidate = resource as Readonly<Record<string, unknown>>;
+  if (candidate.kind !== "url" || typeof candidate.url !== "string" || typeof candidate.dispose !== "function") {
+    throw new TypeError("Playback resource must be a valid URL resource");
+  }
+  try {
+    const url = new URL(candidate.url);
+    if (!(["http:", "https:"] as const).includes(url.protocol as "http:" | "https:") || !url.hostname)
+      throw new Error();
+  } catch {
+    throw new TypeError("Playback resource must contain an absolute HTTP(S) URL");
+  }
+  return value as PlaybackRequest;
 }
 
 export class ErisAdapter implements Adapter {

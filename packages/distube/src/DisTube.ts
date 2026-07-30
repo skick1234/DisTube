@@ -3,6 +3,8 @@ import { isSourcePlugin } from "./contracts";
 import { asDisTubeError, DisTubeError, ErrorCode } from "./errors";
 import { QueueEventEmitter, type QueueEventListener, type QueueEventName } from "./events";
 import type { GuildQueue } from "./GuildQueue";
+import { createSourceCatalog } from "./playback/sources";
+import { validateSourceName } from "./playback/validation";
 import { QueueManager } from "./QueueManager";
 import { settleAll } from "./utils/dispose";
 
@@ -22,7 +24,7 @@ export class DisTube {
   constructor(options: DisTubeOptions) {
     this.#validateOptions(options);
     const diagnostic = options.onDiagnostic ?? (() => undefined);
-    this.#events = new QueueEventEmitter((error, event) => diagnostic(error, Object.freeze({ event })));
+    this.#events = new QueueEventEmitter((error, context) => diagnostic(error, Object.freeze({ context })));
     const initialized: Plugin[] = [];
     try {
       for (const plugin of options.plugins) {
@@ -43,7 +45,7 @@ export class DisTube {
     }
     this.#plugins = Object.freeze([...options.plugins]);
     const sources = this.#plugins.filter(isSourcePlugin) as readonly SourcePlugin[];
-    this.#queues = new QueueManager(options.adapter, sources, this.#events);
+    this.#queues = new QueueManager(options.adapter, createSourceCatalog(sources), this.#events);
   }
 
   createQueue(options: CreateQueueOptions): GuildQueue {
@@ -82,7 +84,7 @@ export class DisTube {
 
   async #performShutdown(): Promise<void> {
     this.#shuttingDown = true;
-    const queueFailures = await settleAll(this.#queues.values().map(queue => () => queue.destroy()));
+    const queueFailures = await this.#queues.destroyAll();
     const pluginFailures = await settleAll([...this.#plugins].reverse().map(plugin => () => plugin.dispose()));
     if (queueFailures.length > 0) {
       throw new DisTubeError(ErrorCode.QUEUE_FAILED, "Queue shutdown failed", {
@@ -110,15 +112,10 @@ export class DisTube {
     const instances = new Set<Plugin>();
     const names = new Set<string>();
     for (const plugin of options.plugins) {
-      if (
-        !plugin ||
-        typeof plugin.name !== "string" ||
-        plugin.name.length === 0 ||
-        typeof plugin.initialize !== "function" ||
-        typeof plugin.dispose !== "function"
-      ) {
+      if (!plugin || typeof plugin.initialize !== "function" || typeof plugin.dispose !== "function") {
         throw new DisTubeError(ErrorCode.INVALID_ARGUMENT, "Each plugin must implement Plugin");
       }
+      validateSourceName(plugin.name, "Plugin name");
       if (instances.has(plugin) || names.has(plugin.name)) {
         throw new DisTubeError(ErrorCode.INVALID_ARGUMENT, `Duplicate Plugin: ${plugin.name}`);
       }

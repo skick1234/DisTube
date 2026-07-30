@@ -38,10 +38,14 @@ Adapters own platform connections and Player behavior; core sees only queue, gui
 ## 4. Add Plugins
 
 ```ts
+import { SoundCloudPlugin } from "@distube/soundcloud";
+import { SpotifyPlugin } from "@distube/spotify";
 import { YouTubePlugin } from "@distube/youtube";
 
 const youtube = new YouTubePlugin();
-const plugins = [youtube];
+const spotify = new SpotifyPlugin();
+const soundcloud = new SoundCloudPlugin();
+const plugins = [youtube, spotify, soundcloud];
 ```
 
 Official media plugins live in the independent plugins repository. Retain an instance to call typed provider search:
@@ -61,11 +65,14 @@ The binding is explicit and stable. A second active queue cannot claim the same 
 ## 6. Enqueue Media
 
 ```ts
-await queue.enqueue("https://youtube.com/watch?v=example");
+const items = await queue.enqueue("https://youtube.com/watch?v=example");
 await queue.enqueue(results[0], { requestedBy: "user-id" });
+console.log(`Committed ${items.length} insertion(s)`);
 ```
 
-`enqueue` is the only insertion method. Queue controls are `remove`, `skip`, `pause`, `resume`, `stop`, and `seek`.
+`enqueue` is the only insertion method and resolves after QueueItems plus `queue.item.added` commit—not after audio
+starts. Queue controls are `remove`, `skip`, `pause`, `resume`, `stop`, and `seek`. Stop clears logical state and fences
+late work before awaiting terminal Player and source-resource cleanup.
 
 ## 7. Events
 
@@ -76,11 +83,13 @@ distube.on("queue.item.started", ({ queueId, item, timestamp }) => {
 ```
 
 The client emits `queue.created`, `queue.item.added`, `queue.item.started`, `queue.item.finished`,
-`queue.item.failed`, and `queue.destroyed`. Events describe committed queue actions; bot code owns messages.
+`queue.item.failed`, and `queue.destroyed`. Events describe committed queue actions; bot code owns messages. Explicit
+Spotify-style fallback retains the original QueueItem in state and events and exposes no candidate or stream URL.
 
 ## 8. Advanced Extensions
 
 Implement `Adapter` and `Player` from `distube` to connect another platform. Implement `SourcePlugin` to add a media
-provider. Extensions import only public `distube` contracts, return canonical `Song` values, own their tests and
-provider/platform policy, and verify packed public entry points. See the authoring guides and breaking migration guide
-in `wiki/`.
+provider. SourcePlugins implement cancellable search/resolve plus `preparePlayback`; Players accept only
+`{ itemId, resource }`. Extensions import public `distube` contracts, keep `Song.url` canonical, own package-local tests
+and provider/platform cleanup policy, and verify packed public entry points. See the authoring guides and breaking
+migration guide in `wiki/`.

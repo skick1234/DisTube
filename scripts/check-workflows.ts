@@ -8,6 +8,7 @@ export interface WorkflowPolicy {
 }
 
 export const requiredVerifyCommands = [
+  "bun run check:runtime",
   "bun run check",
   "bun run check:dependencies",
   "bun run type",
@@ -36,6 +37,11 @@ export function inspectWorkflow(content: string, bunVersion: string, policy: Wor
   for (const command of policy.requiredCommands) {
     if (!content.includes(command)) errors.push(`${policy.file}: missing ${command}`);
   }
+  const runtimeIndex = content.indexOf("bun run check:runtime");
+  const installIndex = content.indexOf("bun install");
+  if (installIndex >= 0 && (runtimeIndex < 0 || runtimeIndex > installIndex)) {
+    errors.push(`${policy.file}: runtime verification must precede dependency installation`);
+  }
   if (policy.publishCommand) {
     const verifyIndex = Math.max(...policy.requiredCommands.map(command => content.indexOf(command)));
     const publishIndex = content.indexOf(policy.publishCommand);
@@ -57,13 +63,13 @@ async function main(): Promise<void> {
   if (!bunVersion) throw new Error("package.json must pin packageManager to bun@<version>");
   const errors = inspectVerifyScript(manifest.scripts?.verify ?? "");
   const policies: readonly WorkflowPolicy[] = [
-    { file: ".github/workflows/test.yml", requiredCommands: ["bun run verify"] },
+    { file: ".github/workflows/test.yml", requiredCommands: ["bun run check:runtime", "bun run verify"] },
     {
       file: ".github/workflows/publish.yml",
-      requiredCommands: ["bun run verify"],
+      requiredCommands: ["bun run check:runtime", "bun run verify"],
       publishCommand: "bun changeset publish",
     },
-    { file: ".github/workflows/docs.yml", requiredCommands: ["bun run docs"] },
+    { file: ".github/workflows/docs.yml", requiredCommands: ["bun run check:runtime", "bun run docs"] },
   ];
   for (const policy of policies) {
     const content = await readFile(resolve(repositoryRoot, policy.file), "utf8");

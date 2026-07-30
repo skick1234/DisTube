@@ -6,6 +6,7 @@
     "packages/*"
   ],
   "scripts": {
+    "check:runtime": "bun ./scripts/check-runtime.ts",
     "check": "biome check . && bun run check:boundaries",
     "check:write": "biome check . --write --unsafe",
     "check:boundaries": "bun ./scripts/check-boundaries.ts",
@@ -20,13 +21,14 @@
     "api-extractor": "api-extractor run --local --config packages/distube/api-extractor.json",
     "check:packages": "bun ./scripts/check-packages.ts",
     "check:adapter-compatibility": "bun ./scripts/check-adapter-compatibility.ts",
+    "check:playback-contract": "bun ./scripts/check-playback-contract.ts",
     "check:workflows": "bun test ./scripts/check-workflows.test.ts && bun ./scripts/check-workflows.ts",
     "docs": "bun ./scripts/generate-docs.ts",
     "test:mutation": "bun run --cwd packages/distube test:mutation",
-    "verify": "bun run check && bun run check:dependencies && bun run type && bun run test && bun run build && bun run check:circular && bun run api-report && bun run check:packages && bun run check:adapter-compatibility && bun run docs && bun run test:mutation && bun run check:audit && bun run check:workflows",
+    "verify": "bun run check:runtime && bun run check && bun run check:dependencies && bun run type && bun run test && bun run build && bun run check:circular && bun run api-report && bun run check:packages && bun run check:adapter-compatibility && bun run docs && bun run test:mutation && bun run check:audit && bun run check:workflows",
     "changeset": "changeset",
-    "version-packages": "changeset version",
-    "release": "changeset publish"
+    "version-packages": "bun run check:runtime && changeset version",
+    "release": "bun run check:runtime && changeset publish"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.4",

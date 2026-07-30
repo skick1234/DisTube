@@ -2,6 +2,9 @@
 
 Direct Eris Adapter for DisTube v6.
 
+Its Player accepts the public `{ itemId, resource }` playback request and sends only the prepared HTTP(S) URL to Eris.
+It owns native listeners and connection teardown; core retains disposal ownership of the borrowed source resource.
+
 ```ts
 import { ErisAdapter } from "@distube/eris";
 

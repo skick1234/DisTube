@@ -28,7 +28,7 @@
     "test": "vitest run --coverage=false",
     "build": "tsdown && bun ../../scripts/clean-source-declarations.ts",
     "check:circular": "dpdm --tree=false --warning=false --exit-code circular:1 --tsconfig tsconfig.json \"src/**/*.ts\"",
-    "test:mutation": "vitest run --coverage=false",
+    "test:mutation": "vitest run --coverage && bun ../../scripts/check-critical-quality.ts",
     "prepack": "bun run build"
   },
   "engines": {

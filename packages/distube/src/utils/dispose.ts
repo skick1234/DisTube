@@ -9,3 +9,17 @@ export async function settleAll(operations: readonly (() => void | Promise<void>
   }
   return Object.freeze(failures);
 }
+
+export interface DisposeOnce {
+  readonly dispose: () => Promise<void>;
+}
+
+export function disposeOnce(operation: () => void | Promise<void>): DisposeOnce {
+  let result: Promise<void> | undefined;
+  return Object.freeze({
+    dispose: (): Promise<void> => {
+      result ??= Promise.resolve().then(operation);
+      return result;
+    },
+  });
+}
