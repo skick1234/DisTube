@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { commandPrecedes, parseWorkflow, runContains } from "./workflow-structure";
 
 export interface WorkflowPolicy {
   readonly file: string;
@@ -19,7 +20,7 @@ export const requiredVerifyCommands = [
   "bun run check:packages",
   "bun run check:adapter-compatibility",
   "bun run docs",
-  "bun run test:mutation",
+  "bun run test:critical-quality",
   "bun run check:audit",
   "bun run check:workflows",
 ] as const;
@@ -30,31 +31,51 @@ export function inspectVerifyScript(script: string, required = requiredVerifyCom
 
 export function inspectWorkflow(content: string, bunVersion: string, policy: WorkflowPolicy): string[] {
   const errors: string[] = [];
-  const escapedVersion = bunVersion.replaceAll(".", "\\.");
-  if (!new RegExp(`bun-version:\\s*["']?${escapedVersion}["']?`, "u").test(content)) {
+  let workflow: ReturnType<typeof parseWorkflow>;
+  try {
+    workflow = parseWorkflow(content);
+  } catch (error) {
+    return [`${policy.file}: invalid workflow: ${error instanceof Error ? error.message : String(error)}`];
+  }
+  const jobs = Object.entries(workflow.jobs);
+  const steps = jobs.flatMap(([jobId, job]) => job.steps.map((step, stepIndex) => ({ jobId, step, stepIndex })));
+  const bunPins = steps
+    .filter(({ step }) => step.uses?.startsWith("oven-sh/setup-bun@"))
+    .map(({ step }) => step.with?.["bun-version"]);
+  if (!bunPins.some(version => String(version) === bunVersion)) {
     errors.push(`${policy.file}: expected Bun ${bunVersion}`);
   }
   for (const command of policy.requiredCommands) {
-    if (!content.includes(command)) errors.push(`${policy.file}: missing ${command}`);
+    if (!steps.some(({ step }) => runContains(step, command))) errors.push(`${policy.file}: missing ${command}`);
   }
-  const runtimeIndex = content.indexOf("bun run check:runtime");
-  const installIndex = content.indexOf("bun install");
-  if (installIndex >= 0 && (runtimeIndex < 0 || runtimeIndex > installIndex)) {
+  const installs = steps.filter(({ step }) => runContains(step, "bun install"));
+  if (
+    installs.some(
+      ({ jobId, stepIndex }) => !commandPrecedes(workflow, jobId, stepIndex, "bun run check:runtime", "bun install"),
+    )
+  ) {
     errors.push(`${policy.file}: runtime verification must precede dependency installation`);
   }
   if (policy.publishCommand) {
-    const verifyIndex = Math.max(...policy.requiredCommands.map(command => content.indexOf(command)));
-    const publishIndex = content.indexOf(policy.publishCommand);
-    if (publishIndex < 0) errors.push(`${policy.file}: missing ${policy.publishCommand}`);
-    else if (verifyIndex < 0 || publishIndex < verifyIndex) {
+    const publish = steps.find(({ step }) => runContains(step, policy.publishCommand ?? ""));
+    if (!publish) errors.push(`${policy.file}: missing ${policy.publishCommand}`);
+    else if (
+      policy.requiredCommands.some(command => !commandPrecedes(workflow, publish.jobId, publish.stepIndex, command))
+    ) {
       errors.push(`${policy.file}: publish command precedes required verification`);
     }
-    const authorizationIndex = content.indexOf("bun run check:publish-authorization");
-    if (authorizationIndex < 0 || authorizationIndex > publishIndex) {
+    if (
+      !publish ||
+      !commandPrecedes(workflow, publish.jobId, publish.stepIndex, "bun run check:publish-authorization")
+    ) {
       errors.push(`${policy.file}: exact-candidate authorization must precede publication`);
     }
-    const releaseInputIndex = content.indexOf("bun run check:release-inputs");
-    if (releaseInputIndex < 0 || (installIndex >= 0 && releaseInputIndex > installIndex)) {
+    if (
+      installs.some(
+        ({ jobId, stepIndex }) =>
+          !commandPrecedes(workflow, jobId, stepIndex, "bun run check:release-inputs", "bun install"),
+      )
+    ) {
       errors.push(`${policy.file}: committed release-input verification must precede installation`);
     }
   }

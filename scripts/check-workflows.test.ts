@@ -10,15 +10,19 @@ const publishPolicy: WorkflowPolicy = {
   publishCommand: "bun changeset publish",
 };
 
-const validPublishWorkflow = [
-  "bun-version: 1.3.14",
-  "run: bun run check:runtime",
-  "run: bun run check:release-inputs",
-  "run: bun install --frozen-lockfile",
-  "run: bun run verify",
-  "run: bun run check:publish-authorization",
-  "run: bun changeset publish",
-].join("\n");
+const validPublishWorkflow = `
+jobs:
+  publish:
+    steps:
+      - uses: oven-sh/setup-bun@v2
+        with: { bun-version: 1.3.14 }
+      - run: bun run check:runtime
+      - run: bun run check:release-inputs
+      - run: bun install --frozen-lockfile
+      - run: bun run verify
+      - run: bun run check:publish-authorization
+      - run: bun changeset publish
+`;
 
 describe("workflow parity", () => {
   test("rejects actual Bun runtime drift", () => {
@@ -50,7 +54,10 @@ describe("workflow parity", () => {
   test("rejects publication before verification", () => {
     expect(
       inspectWorkflow(
-        validPublishWorkflow.replace("run: bun run verify", "run: bun changeset publish\nrun: bun run verify"),
+        validPublishWorkflow.replace(
+          "      - run: bun run verify",
+          "      - run: bun changeset publish\n      - run: bun run verify",
+        ),
         "1.3.14",
         publishPolicy,
       ),
@@ -61,10 +68,32 @@ describe("workflow parity", () => {
     expect(inspectVerifyScript(requiredVerifyCommands.join(" && "))).toEqual([]);
   });
 
+  test("accepts formatting-equivalent YAML and verification in a needed job", () => {
+    const workflow = `
+jobs:
+  verify:
+    steps:
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.14"
+      - run: |-
+          bun run check:runtime
+          bun run check:release-inputs
+          bun install --frozen-lockfile
+      - run: bun run verify
+      - run: bun run check:publish-authorization
+  publish:
+    needs: verify
+    steps:
+      - run: bun changeset publish
+`;
+    expect(inspectWorkflow(workflow, "1.3.14", publishPolicy)).toEqual([]);
+  });
+
   test("rejects publication without exact-candidate authorization", () => {
     expect(
       inspectWorkflow(
-        validPublishWorkflow.replace("run: bun run check:publish-authorization\n", ""),
+        validPublishWorkflow.replace("      - run: bun run check:publish-authorization\n", ""),
         "1.3.14",
         publishPolicy,
       ),

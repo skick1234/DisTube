@@ -8,7 +8,7 @@ Follow the workspace orchestrator in `../AGENTS.md` and the active root OpenSpec
 - `packages/discordjs/`: direct discord.js Adapter, connection/Player implementation, package-owned tests, and release metadata.
 - `packages/oceanic/`: direct Oceanic Adapter, connection/Player implementation, package-owned tests, and release metadata.
 - `packages/eris/`: direct Eris Adapter, connection/Player implementation, package-owned tests, and release metadata.
-- `scripts/`: repository-owned boundary, inventory, API, docs, package, audit, cycle, and mutation gates.
+- `scripts/`: repository-owned boundary, inventory, API, docs, package, audit, cycle, and critical-quality gates.
 - `website/` and `wiki/`: maintained public documentation. API Extractor/VitePress output is generated only through `bun run docs`.
 
 Media provider implementations belong in `../plugins/`. `@distube/plugin-sdk`, `@distube/testkit`, public utilities/types packages, voice-plugin packages, and compatibility surfaces are forbidden.
@@ -27,7 +27,7 @@ bun run api-report
 bun run check:packages
 bun run check:adapter-compatibility
 bun run docs
-bun run test:mutation
+bun run test:critical-quality
 bun run check:audit
 ```
 

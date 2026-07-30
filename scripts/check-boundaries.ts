@@ -1,5 +1,6 @@
 import { readdir } from "node:fs/promises";
 import { join } from "node:path";
+import { collectExportedNames, collectModuleReferences } from "./source-structure";
 
 const coreForbidden = [
   "discord.js",
@@ -29,12 +30,19 @@ async function files(root: string): Promise<string[]> {
 for (const root of ["packages/distube/src", "packages/discordjs/src", "packages/oceanic/src", "packages/eris/src"]) {
   for (const file of await files(root)) {
     const source = await Bun.file(file).text();
+    const references = collectModuleReferences(source, file);
     for (const dependency of globallyForbidden) {
-      if (source.includes(dependency)) throw new Error(`${file} references removed contract ${dependency}`);
+      if (references.some(reference => reference.specifier.startsWith(dependency))) {
+        throw new Error(`${file} imports removed contract ${dependency}`);
+      }
     }
     if (root === "packages/distube/src") {
       for (const dependency of coreForbidden) {
-        if (source.includes(`from "${dependency}`) || source.includes(`import("${dependency}`)) {
+        if (
+          references.some(
+            reference => reference.specifier === dependency || reference.specifier.startsWith(`${dependency}/`),
+          )
+        ) {
           throw new Error(`${file} imports forbidden core dependency ${dependency}`);
         }
       }
@@ -59,8 +67,15 @@ const privateExports = [
 ] as const;
 
 function assertPublicEntry(source: string, path: string): void {
+  const references = collectModuleReferences(source, path);
+  const names = collectExportedNames(source, path);
   for (const privatePath of privateExports) {
-    if (source.includes(privatePath)) throw new Error(`${path} exposes removed/private surface ${privatePath}`);
+    if (
+      references.some(reference => reference.specifier.includes(privatePath)) ||
+      [...names].some(name => name.includes(privatePath))
+    ) {
+      throw new Error(`${path} exposes removed/private surface ${privatePath}`);
+    }
   }
 }
 
@@ -73,7 +88,9 @@ for (const publicType of [
   "PlaybackPreparation",
   "PlaybackRequest",
 ]) {
-  if (!entry.includes(publicType)) throw new Error(`distube public entry is missing playback contract ${publicType}`);
+  if (!collectExportedNames(entry, "packages/distube/src/index.ts").has(publicType)) {
+    throw new Error(`distube public entry is missing playback contract ${publicType}`);
+  }
 }
 
 for (const adapterRoot of ["packages/discordjs/src", "packages/oceanic/src", "packages/eris/src"]) {
