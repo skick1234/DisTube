@@ -21,11 +21,23 @@ jobs:
       - name: Verify release runtime
         run: bun run check:runtime
 
+      - name: Verify committed stable release inputs
+        run: bun run check:release-inputs
+
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
       - name: Run complete release verification
         run: bun run verify
+
+      - name: Verify exact-candidate publication authorization
+        run: bun run check:publish-authorization
+        env:
+          PUBLISH_AUTHORIZED: ${{ vars.PUBLISH_AUTHORIZED }}
+          RELEASE_CANDIDATE_ID: ${{ vars.RELEASE_CANDIDATE_ID }}
+          AUTHORIZED_RELEASE_CANDIDATE_ID: ${{ secrets.AUTHORIZED_RELEASE_CANDIDATE_ID }}
+          RELEASE_SOURCE_REVISION: ${{ github.sha }}
+          CANDIDATE_DISTUBE_REVISION: ${{ vars.CANDIDATE_DISTUBE_REVISION }}
 
       - name: Publish independently versioned changed packages
         run: bun changeset publish

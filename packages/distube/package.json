@@ -1,6 +1,6 @@
 {
   "name": "distube",
-  "version": "6.0.0-dev.0",
+  "version": "6.0.0",
   "description": "Minimal queue and playback orchestration for Discord audio",
   "type": "module",
   "main": "./dist/index.cjs",

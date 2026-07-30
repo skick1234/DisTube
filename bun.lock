@@ -24,7 +24,7 @@
     },
     "packages/discordjs": {
       "name": "@distube/discordjs",
-      "version": "6.0.0-dev.0",
+      "version": "6.0.0",
       "devDependencies": {
         "@discordjs/voice": "^0.19.2",
         "discord.js": "^14.27.0",
@@ -33,28 +33,28 @@
       "peerDependencies": {
         "@discordjs/voice": "^0.19.0",
         "discord.js": "^14.26.0",
-        "distube": "^6.0.0-dev.0",
+        "distube": "^6.0.0",
       },
     },
     "packages/distube": {
       "name": "distube",
-      "version": "6.0.0-dev.0",
+      "version": "6.0.0",
     },
     "packages/eris": {
       "name": "@distube/eris",
-      "version": "6.0.0-dev.0",
+      "version": "6.0.0",
       "devDependencies": {
         "distube": "workspace:*",
         "eris": "^0.18.0",
       },
       "peerDependencies": {
-        "distube": "^6.0.0-dev.0",
+        "distube": "^6.0.0",
         "eris": "^0.18.0",
       },
     },
     "packages/oceanic": {
       "name": "@distube/oceanic",
-      "version": "6.0.0-dev.0",
+      "version": "6.0.0",
       "devDependencies": {
         "@discordjs/voice": "^0.19.2",
         "distube": "workspace:*",
@@ -62,7 +62,7 @@
       },
       "peerDependencies": {
         "@discordjs/voice": "^0.19.0",
-        "distube": "^6.0.0-dev.0",
+        "distube": "^6.0.0",
         "oceanic.js": "^1.14.0",
       },
     },

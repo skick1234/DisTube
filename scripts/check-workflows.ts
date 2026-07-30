@@ -49,6 +49,14 @@ export function inspectWorkflow(content: string, bunVersion: string, policy: Wor
     else if (verifyIndex < 0 || publishIndex < verifyIndex) {
       errors.push(`${policy.file}: publish command precedes required verification`);
     }
+    const authorizationIndex = content.indexOf("bun run check:publish-authorization");
+    if (authorizationIndex < 0 || authorizationIndex > publishIndex) {
+      errors.push(`${policy.file}: exact-candidate authorization must precede publication`);
+    }
+    const releaseInputIndex = content.indexOf("bun run check:release-inputs");
+    if (releaseInputIndex < 0 || (installIndex >= 0 && releaseInputIndex > installIndex)) {
+      errors.push(`${policy.file}: committed release-input verification must precede installation`);
+    }
   }
   return errors;
 }
@@ -66,7 +74,12 @@ async function main(): Promise<void> {
     { file: ".github/workflows/test.yml", requiredCommands: ["bun run check:runtime", "bun run verify"] },
     {
       file: ".github/workflows/publish.yml",
-      requiredCommands: ["bun run check:runtime", "bun run verify"],
+      requiredCommands: [
+        "bun run check:runtime",
+        "bun run check:release-inputs",
+        "bun run verify",
+        "bun run check:publish-authorization",
+      ],
       publishCommand: "bun changeset publish",
     },
     { file: ".github/workflows/docs.yml", requiredCommands: ["bun run check:runtime", "bun run docs"] },

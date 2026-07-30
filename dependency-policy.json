@@ -26,7 +26,7 @@
       "peerDependencies": {
         "@discordjs/voice": "^0.19.0",
         "discord.js": "^14.26.0",
-        "distube": "^6.0.0-dev.0"
+        "distube": "^6.0.0"
       },
       "devDependencies": {
         "@discordjs/voice": "^0.19.2",
@@ -37,7 +37,7 @@
     "packages/distube/package.json": {},
     "packages/eris/package.json": {
       "peerDependencies": {
-        "distube": "^6.0.0-dev.0",
+        "distube": "^6.0.0",
         "eris": "^0.18.0"
       },
       "devDependencies": {
@@ -48,7 +48,7 @@
     "packages/oceanic/package.json": {
       "peerDependencies": {
         "@discordjs/voice": "^0.19.0",
-        "distube": "^6.0.0-dev.0",
+        "distube": "^6.0.0",
         "oceanic.js": "^1.14.0"
       },
       "devDependencies": {
@@ -58,12 +58,7 @@
       }
     }
   },
-  "allowedPrereleases": [
-    "package.json:devDependencies:vitepress",
-    "packages/discordjs/package.json:peerDependencies:distube",
-    "packages/eris/package.json:peerDependencies:distube",
-    "packages/oceanic/package.json:peerDependencies:distube"
-  ],
+  "allowedPrereleases": ["package.json:devDependencies:vitepress"],
   "peerEvidence": {
     "packages/discordjs/package.json:@discordjs/voice": "adapter-compatibility.json lower/latest clean installs",
     "packages/discordjs/package.json:discord.js": "adapter-compatibility.json lower/latest clean installs",

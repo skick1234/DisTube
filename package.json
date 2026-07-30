@@ -22,6 +22,8 @@
     "check:packages": "bun ./scripts/check-packages.ts",
     "check:adapter-compatibility": "bun ./scripts/check-adapter-compatibility.ts",
     "check:playback-contract": "bun ./scripts/check-playback-contract.ts",
+    "check:release-inputs": "bun run check:runtime && bun ./scripts/check-release-inputs.ts",
+    "check:publish-authorization": "bun run check:runtime && bun ./scripts/check-publish-authorization.ts",
     "check:workflows": "bun test ./scripts/check-workflows.test.ts && bun ./scripts/check-workflows.ts",
     "docs": "bun ./scripts/generate-docs.ts",
     "test:mutation": "bun run --cwd packages/distube test:mutation",
