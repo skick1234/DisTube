@@ -5,7 +5,6 @@ export interface ErisAdapterOptions {
   readonly connectionTimeoutMs?: number;
   readonly selfDeaf?: boolean;
   readonly selfMute?: boolean;
-  readonly playerFactory?: (binding: QueueBinding) => Promise<Player>;
 }
 
 interface ActivePlayback {
@@ -43,7 +42,9 @@ class ErisPlayer implements Player {
   #active?: ActivePlayback;
   #generation = 0;
   #disposed = false;
+  #disconnected = false;
   #stopResolve?: () => void;
+  #stopPromise?: Promise<void>;
 
   constructor(client: Client, connection: VoiceConnection, channelId: string, timeout: number) {
     this.#client = client;
@@ -104,9 +105,14 @@ class ErisPlayer implements Player {
     this.#connection.resume();
   }
 
-  async stop(): Promise<void> {
-    if (this.#disposed) return;
+  stop(): Promise<void> {
+    this.#stopPromise ??= this.#performStop();
+    return this.#stopPromise;
+  }
+
+  async #performStop(): Promise<void> {
     this.#disposed = true;
+    const failures: Error[] = [];
     const active = this.#active;
     this.#active = undefined;
     if (active) {
@@ -115,27 +121,47 @@ class ErisPlayer implements Player {
       if (!active.started) active.rejectStart(new Error("Eris playback was stopped before start"));
     }
 
-    if (this.#connection.playing) {
-      await new Promise<void>(resolve => {
-        let settled = false;
-        const finish = () => {
-          if (settled) return;
-          settled = true;
-          clearTimeout(timer);
-          this.#stopResolve = undefined;
-          resolve();
-        };
-        const timer = setTimeout(finish, this.#timeout);
-        this.#stopResolve = finish;
+    try {
+      if (this.#connection.playing && !this.#disconnected) {
+        await new Promise<void>((resolve, reject) => {
+          let settled = false;
+          const finish = () => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            this.#stopResolve = undefined;
+            resolve();
+          };
+          const timer = setTimeout(finish, this.#timeout);
+          this.#stopResolve = finish;
+          try {
+            this.#connection.stopPlaying();
+          } catch (error: unknown) {
+            clearTimeout(timer);
+            this.#stopResolve = undefined;
+            reject(error);
+          }
+        });
+      } else {
         this.#connection.stopPlaying();
-      });
-    } else {
-      this.#connection.stopPlaying();
+      }
+    } catch (error: unknown) {
+      failures.push(asError(error));
     }
 
-    this.#detachNativeListeners();
-    this.#listeners.clear();
-    this.#client.leaveVoiceChannel(this.#channelId);
+    for (const operation of [
+      () => this.#detachNativeListeners(),
+      () => this.#listeners.clear(),
+      () => this.#client.leaveVoiceChannel(this.#channelId),
+    ]) {
+      try {
+        operation();
+      } catch (error: unknown) {
+        failures.push(asError(error));
+      }
+    }
+    if (failures.length === 1) throw failures[0];
+    if (failures.length > 1) throw new AggregateError(failures, "Eris Player cleanup failures");
   }
 
   async seek(_seconds: number): Promise<void> {
@@ -192,16 +218,24 @@ class ErisPlayer implements Player {
       return;
     }
     const active = this.#active;
-    if (!active || active.terminal) return;
+    this.#disconnected = true;
+    if (!active || active.terminal) {
+      this.#disposed = true;
+      void this.stop().catch(() => undefined);
+      return;
+    }
     const failure = error ?? new Error("Eris voice connection disconnected");
+    this.#disposed = true;
     if (!active.started) {
       clearTimeout(active.startTimer);
       active.terminal = true;
       this.#active = undefined;
       active.rejectStart(failure);
+      void this.stop().catch(() => undefined);
       return;
     }
-    this.#finish(active, { type: "failed", itemId: active.itemId, error: failure });
+    this.#finish(active, { type: "failed", itemId: active.itemId, error: failure, terminal: true });
+    void this.stop().catch(() => undefined);
   };
 
   #finish(active: ActivePlayback, event: PlayerEvent): void {
@@ -227,6 +261,10 @@ class ErisPlayer implements Player {
     this.#connection.off("error", this.#onError);
     this.#connection.off("disconnect", this.#onDisconnect);
   }
+}
+
+function asError(error: unknown): Error {
+  return error instanceof Error ? error : new Error(String(error));
 }
 
 function playbackRequest(value: unknown): PlaybackRequest {
@@ -256,7 +294,6 @@ export class ErisAdapter implements Adapter {
   readonly #timeout: number;
   readonly #selfDeaf: boolean;
   readonly #selfMute: boolean;
-  readonly #factory?: (binding: QueueBinding) => Promise<Player>;
 
   constructor(client: Client, options: ErisAdapterOptions = {}) {
     if (!client) throw new TypeError("ErisAdapter requires an Eris Client");
@@ -270,11 +307,9 @@ export class ErisAdapter implements Adapter {
     }
     this.#selfDeaf = options.selfDeaf ?? true;
     this.#selfMute = options.selfMute ?? false;
-    this.#factory = options.playerFactory;
   }
 
   async createPlayer(binding: QueueBinding): Promise<Player> {
-    if (this.#factory) return this.#factory(binding);
     const channel = this.#client.getChannel(binding.channelId);
     const guildId = voiceChannelGuildId(channel);
     if (!guildId) throw new Error(`Eris voice channel is unavailable: ${binding.channelId}`);
@@ -306,8 +341,4 @@ export class ErisAdapter implements Adapter {
       if (timer) clearTimeout(timer);
     }
   }
-}
-
-export function createErisAdapter(client: Client, options?: ErisAdapterOptions): ErisAdapter {
-  return new ErisAdapter(client, options);
 }

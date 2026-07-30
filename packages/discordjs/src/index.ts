@@ -14,7 +14,6 @@ import type { Adapter, PlaybackRequest, Player, PlayerEvent, QueueBinding } from
 
 export interface DiscordJSAdapterOptions {
   readonly connectionTimeoutMs?: number;
-  readonly playerFactory?: (binding: QueueBinding) => Promise<Player>;
 }
 
 class DiscordJSPlayer implements Player {
@@ -29,6 +28,7 @@ class DiscordJSPlayer implements Player {
     this.#connection = connection;
     this.#player = createAudioPlayer({ behaviors: { noSubscriber: NoSubscriberBehavior.Pause } });
     connection.subscribe(this.#player);
+    connection.on("stateChange", this.#onConnectionStateChange);
     this.#player.on(AudioPlayerStatus.Idle, () => {
       if (this.#terminal) return;
       const itemId = this.#itemId;
@@ -65,11 +65,14 @@ class DiscordJSPlayer implements Player {
     this.#terminal = true;
     this.#itemId = undefined;
     this.#listeners.clear();
-    this.#stopPromise = Promise.resolve().then(() => {
-      this.#player.stop(true);
-      this.#player.removeAllListeners();
-      if (this.#connection.state.status !== VoiceConnectionStatus.Destroyed) this.#connection.destroy();
-    });
+    this.#stopPromise = cleanupAll([
+      () => this.#player.stop(true),
+      () => this.#player.removeAllListeners(),
+      () => this.#connection.off("stateChange", this.#onConnectionStateChange),
+      () => {
+        if (this.#connection.state.status !== VoiceConnectionStatus.Destroyed) this.#connection.destroy();
+      },
+    ]);
     return this.#stopPromise;
   }
 
@@ -82,10 +85,39 @@ class DiscordJSPlayer implements Player {
     return () => this.#listeners.delete(listener);
   }
 
-  #emit(event: PlayerEvent): void {
-    if (this.#terminal) return;
+  readonly #onConnectionStateChange = (
+    _oldState: VoiceConnection["state"],
+    newState: VoiceConnection["state"],
+  ): void => {
+    if (this.#terminal || newState.status !== VoiceConnectionStatus.Destroyed) return;
+    const itemId = this.#itemId;
+    this.#itemId = undefined;
+    this.#terminal = true;
+    if (itemId) {
+      this.#emit(
+        { type: "failed", itemId, error: new Error("Discord voice connection was destroyed"), terminal: true },
+        true,
+      );
+    }
+  };
+
+  #emit(event: PlayerEvent, terminalOutcome = false): void {
+    if (this.#terminal && !terminalOutcome) return;
     for (const listener of this.#listeners) listener(event);
   }
+}
+
+async function cleanupAll(operations: readonly (() => unknown)[]): Promise<void> {
+  const failures: Error[] = [];
+  for (const operation of operations) {
+    try {
+      await operation();
+    } catch (error: unknown) {
+      failures.push(error instanceof Error ? error : new Error(String(error)));
+    }
+  }
+  if (failures.length === 1) throw failures[0];
+  if (failures.length > 1) throw new AggregateError(failures, "Discord Player cleanup failures");
 }
 
 function playbackRequest(value: unknown): PlaybackRequest {
@@ -113,7 +145,6 @@ function playbackRequest(value: unknown): PlaybackRequest {
 export class DiscordJSAdapter implements Adapter {
   readonly #client: Client;
   readonly #timeout: number;
-  readonly #factory?: (binding: QueueBinding) => Promise<Player>;
 
   constructor(client: Client, options: DiscordJSAdapterOptions = {}) {
     if (!client) throw new TypeError("DiscordJSAdapter requires a discord.js Client");
@@ -121,11 +152,9 @@ export class DiscordJSAdapter implements Adapter {
     if (!Number.isInteger(timeout) || timeout < 1) throw new TypeError("connectionTimeoutMs must be positive");
     this.#client = client;
     this.#timeout = timeout;
-    this.#factory = options.playerFactory;
   }
 
   async createPlayer(binding: QueueBinding): Promise<Player> {
-    if (this.#factory) return this.#factory(binding);
     const guild = this.#client.guilds.cache.get(binding.guildId);
     if (!guild) throw new Error(`Discord guild is unavailable: ${binding.guildId}`);
     const connection = joinVoiceChannel({
@@ -143,8 +172,4 @@ export class DiscordJSAdapter implements Adapter {
       throw error;
     }
   }
-}
-
-export function createDiscordJSAdapter(client: Client, options?: DiscordJSAdapterOptions): DiscordJSAdapter {
-  return new DiscordJSAdapter(client, options);
 }

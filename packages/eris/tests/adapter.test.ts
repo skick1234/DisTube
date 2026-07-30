@@ -1,5 +1,5 @@
 import { EventEmitter } from "node:events";
-import type { PlaybackRequest, Player, PlayerEvent, QueueBinding } from "distube";
+import type { PlaybackRequest, PlayerEvent, QueueBinding } from "distube";
 import type { Client, VoiceConnection } from "eris";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ErisAdapter } from "../src";
@@ -65,15 +65,6 @@ function voiceFixture(guildId = binding.guildId): VoiceFixture {
   };
 }
 
-const injectedPlayer: Player = {
-  play: vi.fn(async () => undefined),
-  pause: vi.fn(async () => undefined),
-  resume: vi.fn(async () => undefined),
-  stop: vi.fn(async () => undefined),
-  seek: vi.fn(async () => undefined),
-  subscribe: vi.fn(() => () => undefined),
-};
-
 beforeEach(() => vi.clearAllMocks());
 
 describe("ErisAdapter", () => {
@@ -81,13 +72,6 @@ describe("ErisAdapter", () => {
     expect(() => new ErisAdapter(undefined as unknown as Client)).toThrow(TypeError);
     expect(() => new ErisAdapter({} as Client, { connectionTimeoutMs: 0 })).toThrow(TypeError);
     expect(() => new ErisAdapter({} as Client, { selfDeaf: "yes" as unknown as boolean })).toThrow(TypeError);
-  });
-
-  it("passes only neutral binding data to an injected factory", async () => {
-    const factory = vi.fn(async () => injectedPlayer);
-    const adapter = new ErisAdapter({} as Client, { playerFactory: factory });
-    await expect(adapter.createPlayer(binding)).resolves.toBe(injectedPlayer);
-    expect(factory).toHaveBeenCalledWith(binding);
   });
 
   it("validates channel ownership before joining", async () => {
@@ -212,7 +196,9 @@ describe("ErisPlayer", () => {
     fixture.emitter.emit("start");
     await started;
     fixture.emitter.emit("disconnect", new Error("network lost"));
-    expect(second).toHaveBeenCalledWith(expect.objectContaining({ type: "failed", itemId: "a" }));
+    expect(second).toHaveBeenCalledWith(expect.objectContaining({ type: "failed", itemId: "a", terminal: true }));
+    await expect(player.play(request("b"))).rejects.toThrow("stopped");
+    await vi.waitFor(() => expect(fixture.leaveVoiceChannel).toHaveBeenCalledOnce());
   });
 
   it("pauses, resumes, and rejects unsupported seek", async () => {
@@ -238,6 +224,7 @@ describe("ErisPlayer", () => {
     await started;
     fixture.setPlaying(true);
     const stopped = player.stop();
+    expect(player.stop()).toBe(stopped);
     fixture.emitter.emit("end");
     await stopped;
     await player.stop();
@@ -247,6 +234,29 @@ describe("ErisPlayer", () => {
     expect(fixture.leaveVoiceChannel).toHaveBeenCalledOnce();
     expect(fixture.emitter.listenerCount("end")).toBe(0);
     await expect(player.play(request())).rejects.toThrow("stopped");
+  });
+
+  it("attempts every native cleanup unit and aggregates failures", async () => {
+    const fixture = voiceFixture();
+    const player = await new ErisAdapter(fixture.client).createPlayer(binding);
+    fixture.stopPlaying.mockImplementation(() => {
+      throw new Error("stop playing failed");
+    });
+    fixture.leaveVoiceChannel.mockImplementation(() => {
+      throw new Error("leave voice failed");
+    });
+    let failure: unknown;
+    try {
+      await player.stop();
+    } catch (error: unknown) {
+      failure = error;
+    }
+    expect(failure).toBeInstanceOf(AggregateError);
+    expect((failure as AggregateError).errors.map((error: unknown) => (error as Error).message)).toEqual([
+      "stop playing failed",
+      "leave voice failed",
+    ]);
+    expect(fixture.emitter.listenerCount("end")).toBe(0);
   });
 
   it("unsubscribes public listeners", async () => {

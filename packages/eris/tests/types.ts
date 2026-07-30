@@ -1,15 +1,17 @@
 import type { Adapter, Player, PlayerEvent } from "distube";
 import type { Client } from "eris";
-import { createErisAdapter, ErisAdapter, type ErisAdapterOptions } from "../src";
+import * as erisExports from "../src";
 
 declare const client: Client;
 
-const options: ErisAdapterOptions = { connectionTimeoutMs: 10_000, selfDeaf: true, selfMute: false };
-const adapter: Adapter = new ErisAdapter(client, options);
-const factoryAdapter: Adapter = createErisAdapter(client, options);
+const options: erisExports.ErisAdapterOptions = { connectionTimeoutMs: 10_000, selfDeaf: true, selfMute: false };
+const adapter: Adapter = new erisExports.ErisAdapter(client, options);
+// @ts-expect-error public Player factories are not configurable
+new erisExports.ErisAdapter(client, { playerFactory: async () => Promise.reject(new Error("unused")) });
+// @ts-expect-error redundant create-adapter aliases are removed
+erisExports.createErisAdapter;
 const playerPromise: Promise<Player> = adapter.createPlayer({ queueId: "queue", guildId: "guild", channelId: "voice" });
 const terminal: PlayerEvent = { type: "finished", itemId: "item" };
 
-void factoryAdapter;
 void playerPromise;
 void terminal;

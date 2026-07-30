@@ -1,11 +1,12 @@
 import { AudioPlayerStatus, VoiceConnectionStatus } from "@discordjs/voice";
-import type { PlaybackRequest, Player } from "distube";
+import type { PlaybackRequest } from "distube";
 import type { Client } from "oceanic.js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { OceanicAdapter } from "../src";
 
 const voice = vi.hoisted(() => {
   const handlers = new Map<string, (error?: Error) => void>();
+  const connectionHandlers = new Map<string, (oldState: unknown, newState: unknown) => void>();
   const audioPlayer = {
     on: vi.fn((event: string, listener: (error?: Error) => void) => handlers.set(event, listener)),
     play: vi.fn(),
@@ -17,10 +18,15 @@ const voice = vi.hoisted(() => {
   const connection = {
     subscribe: vi.fn(),
     destroy: vi.fn(),
+    on: vi.fn((event: string, listener: (oldState: unknown, newState: unknown) => void) =>
+      connectionHandlers.set(event, listener),
+    ),
+    off: vi.fn((event: string) => connectionHandlers.delete(event)),
     state: { status: "ready" },
   };
   return {
     handlers,
+    connectionHandlers,
     audioPlayer,
     connection,
     createAudioPlayer: vi.fn(() => audioPlayer),
@@ -37,15 +43,6 @@ vi.mock("@discordjs/voice", async () => ({
   entersState: voice.entersState,
   joinVoiceChannel: voice.joinVoiceChannel,
 }));
-
-const injectedPlayer: Player = {
-  play: vi.fn(async () => undefined),
-  pause: vi.fn(async () => undefined),
-  resume: vi.fn(async () => undefined),
-  stop: vi.fn(async () => undefined),
-  seek: vi.fn(async () => undefined),
-  subscribe: vi.fn(() => () => undefined),
-};
 
 const binding = { queueId: "queue", guildId: "guild", channelId: "channel" };
 
@@ -65,18 +62,16 @@ function request(): PlaybackRequest {
 beforeEach(() => {
   vi.clearAllMocks();
   voice.handlers.clear();
+  voice.connectionHandlers.clear();
   voice.connection.state.status = VoiceConnectionStatus.Ready;
   voice.entersState.mockImplementation(async (target: unknown) => target);
+  voice.audioPlayer.stop.mockImplementation(() => true);
+  voice.audioPlayer.removeAllListeners.mockImplementation(() => undefined);
+  voice.connection.destroy.mockImplementation(() => undefined);
+  voice.connection.off.mockImplementation((event: string) => voice.connectionHandlers.delete(event));
 });
 
 describe("OceanicAdapter", () => {
-  it("passes only platform-neutral binding data to a Player factory", async () => {
-    const factory = vi.fn(async () => injectedPlayer);
-    const adapter = new OceanicAdapter({} as Client, { playerFactory: factory });
-    await expect(adapter.createPlayer(binding)).resolves.toBe(injectedPlayer);
-    expect(factory).toHaveBeenCalledWith(binding);
-  });
-
   it("validates construction options", () => {
     expect(() => new OceanicAdapter(undefined as unknown as Client)).toThrow(TypeError);
     expect(() => new OceanicAdapter({} as Client, { connectionTimeoutMs: -1 })).toThrow(TypeError);
@@ -117,6 +112,20 @@ describe("OceanicAdapter", () => {
     expect(voice.connection.destroy).toHaveBeenCalledOnce();
   });
 
+  it("terminalizes an unrecoverable native disconnect", async () => {
+    const player = await new OceanicAdapter(client()).createPlayer(binding);
+    const listener = vi.fn();
+    player.subscribe(listener);
+    await player.play(request());
+    voice.connection.state.status = VoiceConnectionStatus.Destroyed;
+    voice.connectionHandlers.get("stateChange")?.(
+      { status: VoiceConnectionStatus.Ready },
+      { status: VoiceConnectionStatus.Destroyed },
+    );
+    expect(listener).toHaveBeenCalledWith(expect.objectContaining({ type: "failed", itemId: "item", terminal: true }));
+    await expect(player.play(request())).rejects.toThrow("stopped");
+  });
+
   it("validates prepared resources and retires terminally without disposing the source resource", async () => {
     const player = await new OceanicAdapter(client()).createPlayer(binding);
     await expect(
@@ -128,11 +137,34 @@ describe("OceanicAdapter", () => {
     await player.play(prepared);
     const first = player.stop();
     const second = player.stop();
+    expect(second).toBe(first);
     await Promise.all([first, second]);
     voice.handlers.get(AudioPlayerStatus.Idle)?.();
     expect(listener).not.toHaveBeenCalled();
     expect(prepared.resource.dispose).not.toHaveBeenCalled();
     expect(voice.connection.destroy).toHaveBeenCalledTimes(1);
     await expect(player.play(request())).rejects.toThrow("stopped");
+  });
+
+  it("attempts every native cleanup unit and aggregates failures", async () => {
+    const player = await new OceanicAdapter(client()).createPlayer(binding);
+    voice.audioPlayer.stop.mockImplementation(() => {
+      throw new Error("audio stop failed");
+    });
+    voice.connection.destroy.mockImplementation(() => {
+      throw new Error("connection destroy failed");
+    });
+    let failure: unknown;
+    try {
+      await player.stop();
+    } catch (error: unknown) {
+      failure = error;
+    }
+    expect(failure).toBeInstanceOf(AggregateError);
+    expect((failure as AggregateError).errors.map((error: unknown) => (error as Error).message)).toEqual([
+      "audio stop failed",
+      "connection destroy failed",
+    ]);
+    expect(voice.audioPlayer.removeAllListeners).toHaveBeenCalledOnce();
   });
 });
