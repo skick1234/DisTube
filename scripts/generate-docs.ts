@@ -61,5 +61,9 @@ await writeFile(
   ].join("\n"),
 );
 
-await rm(resolve(root, "docs"), { recursive: true, force: true });
-await run(["bunx", "vitepress", "build", "website", "--outDir", "../docs"]);
+const docsDirectory = resolve(root, "docs");
+await rm(docsDirectory, { recursive: true, force: true });
+await run(["bunx", "vitepress", "build", "website", "--outDir", "docs"]);
+if (!(await Bun.file(resolve(docsDirectory, "index.html")).exists())) {
+  throw new Error("VitePress did not write docs/index.html");
+}
