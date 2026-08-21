@@ -4,14 +4,27 @@ on:
     types: [published]
 jobs:
   publish:
-    name: Validate, Build & Publish
+    name: Validate and publish candidate archives
     runs-on: ubuntu-latest
     permissions:
       contents: read
       id-token: write
     steps:
-      - name: Checkout repository
+      - name: Checkout repository at the candidate workspace path
         uses: actions/checkout@v4
+        with:
+          path: DisTube
+
+      - name: Download the exact release candidate
+        env:
+          AUTHORIZED_RELEASE_CANDIDATE_ID: ${{ secrets.AUTHORIZED_RELEASE_CANDIDATE_ID }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p .candidate-download
+          gh release download "${{ github.event.release.tag_name }}" --repo "${{ github.repository }}" --pattern "candidate-${AUTHORIZED_RELEASE_CANDIDATE_ID}.tar.gz" --dir .candidate-download
+          test -f ".candidate-download/candidate-${AUTHORIZED_RELEASE_CANDIDATE_ID}.tar.gz"
+          python3 DisTube/scripts/extract-release-candidate.py ".candidate-download/candidate-${AUTHORIZED_RELEASE_CANDIDATE_ID}.tar.gz" .candidate-bundle
+          test -f .candidate-bundle/.artifacts/release-candidate/manifest.json
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -19,27 +32,41 @@ jobs:
           bun-version: 1.4.0
 
       - name: Verify release runtime
+        working-directory: DisTube
         run: bun run check:runtime
 
       - name: Verify committed stable release inputs
+        working-directory: DisTube
         run: bun run check:release-inputs
 
       - name: Install dependencies
+        working-directory: DisTube
         run: bun install --frozen-lockfile
 
       - name: Run complete release verification
+        working-directory: DisTube
         run: bun run verify
 
-      - name: Verify exact-candidate publication authorization
-        run: bun run check:publish-authorization
+      - name: Publish distube candidate archive
+        working-directory: DisTube
         env:
-          PUBLISH_AUTHORIZED: ${{ vars.PUBLISH_AUTHORIZED }}
-          RELEASE_CANDIDATE_ID: ${{ vars.RELEASE_CANDIDATE_ID }}
           AUTHORIZED_RELEASE_CANDIDATE_ID: ${{ secrets.AUTHORIZED_RELEASE_CANDIDATE_ID }}
-          RELEASE_SOURCE_REVISION: ${{ github.sha }}
-          CANDIDATE_DISTUBE_REVISION: ${{ vars.CANDIDATE_DISTUBE_REVISION }}
+        run: bun ./scripts/check-publish-authorization.ts --candidate-dir=../.candidate-bundle/.artifacts/release-candidate --package=distube --archive=../.candidate-bundle/.artifacts/release-candidate/core/archives/distube-6.0.0.tgz && npm publish ../.candidate-bundle/.artifacts/release-candidate/core/archives/distube-6.0.0.tgz --provenance
 
-      - name: Publish independently versioned changed packages
-        run: bun changeset publish
+      - name: Publish discord.js adapter candidate archive
+        working-directory: DisTube
         env:
-          NPM_CONFIG_PROVENANCE: true
+          AUTHORIZED_RELEASE_CANDIDATE_ID: ${{ secrets.AUTHORIZED_RELEASE_CANDIDATE_ID }}
+        run: bun ./scripts/check-publish-authorization.ts --candidate-dir=../.candidate-bundle/.artifacts/release-candidate --package=@distube/discordjs --archive=../.candidate-bundle/.artifacts/release-candidate/core/archives/distube-discordjs-6.0.0.tgz && npm publish ../.candidate-bundle/.artifacts/release-candidate/core/archives/distube-discordjs-6.0.0.tgz --provenance
+
+      - name: Publish Oceanic adapter candidate archive
+        working-directory: DisTube
+        env:
+          AUTHORIZED_RELEASE_CANDIDATE_ID: ${{ secrets.AUTHORIZED_RELEASE_CANDIDATE_ID }}
+        run: bun ./scripts/check-publish-authorization.ts --candidate-dir=../.candidate-bundle/.artifacts/release-candidate --package=@distube/oceanic --archive=../.candidate-bundle/.artifacts/release-candidate/core/archives/distube-oceanic-6.0.0.tgz && npm publish ../.candidate-bundle/.artifacts/release-candidate/core/archives/distube-oceanic-6.0.0.tgz --provenance
+
+      - name: Publish Eris adapter candidate archive
+        working-directory: DisTube
+        env:
+          AUTHORIZED_RELEASE_CANDIDATE_ID: ${{ secrets.AUTHORIZED_RELEASE_CANDIDATE_ID }}
+        run: bun ./scripts/check-publish-authorization.ts --candidate-dir=../.candidate-bundle/.artifacts/release-candidate --package=@distube/eris --archive=../.candidate-bundle/.artifacts/release-candidate/core/archives/distube-eris-6.0.0.tgz && npm publish ../.candidate-bundle/.artifacts/release-candidate/core/archives/distube-eris-6.0.0.tgz --provenance

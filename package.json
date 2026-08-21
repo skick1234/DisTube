@@ -28,16 +28,14 @@
     "check:playback-contract": "bun ./scripts/check-playback-contract.ts",
     "check:release-inputs": "bun run check:runtime && bun ./scripts/check-release-inputs.ts",
     "check:publish-authorization": "bun run check:runtime && bun ./scripts/check-publish-authorization.ts",
-    "check:workflows": "bun test ./scripts/check-workflows.test.ts && bun ./scripts/check-workflows.ts",
+    "check:workflows": "bun test ./scripts/check-publish-authorization.test.ts ./scripts/check-workflows.test.ts ./scripts/extract-release-candidate.test.ts && bun ./scripts/check-workflows.ts",
     "docs": "bun ./scripts/generate-docs.ts",
     "docs:prepared": "bun ./scripts/generate-docs.ts --prepared",
     "test:release": "bun run check:test-inventory && bun run --filter '*' test:release",
     "check:critical-quality": "bun ./scripts/check-critical-quality.ts",
     "check:prepared-build": "bun test ./scripts/prepared-build.test.ts",
     "verify": "bun run check:runtime && bun run check && bun run check:dependencies && bun run type && bun run test:release && bun run build && bun run check:prepared-build && bun run check:circular && bun run api-report:prepared && bun run check:packages:prepared && bun run check:local-playback && bun run check:adapter-compatibility:prepared && bun run docs:prepared && bun run check:critical-quality && bun run check:audit && bun run check:workflows",
-    "changeset": "changeset",
-    "version-packages": "bun run check:runtime && changeset version",
-    "release": "bun run check:runtime && changeset publish"
+    "version-packages": "bun run check:runtime && changeset version"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.4",
