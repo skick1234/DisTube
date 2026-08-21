@@ -6,6 +6,10 @@ Its Player accepts the public `{ itemId, resource }` playback request, creates n
 HTTP(S) resource URL, and terminalizes before connection teardown. Core—not this Adapter—disposes the source resource.
 
 ```ts
+import { DiscordJSAdapter } from "@distube/discordjs";
+
+declare const client: ConstructorParameters<typeof DiscordJSAdapter>[0];
+
 const adapter = new DiscordJSAdapter(client);
 ```
 
@@ -17,6 +21,8 @@ Player before reporting the active item failure.
 
 Use Node 22.12.0 or later. Install FFmpeg and expose `ffmpeg` on `PATH`, or set `FFMPEG_PATH` to its executable.
 Install one Opus encoder: `@discordjs/opus` or `opusscript`.
+
+FFmpeg receives the playable URL as a process argument. Another process running as the same operating-system user may inspect that argument while decoding is active. Public errors and captured decoder output redact the URL, and the engine refuses redirects after source validation.
 
 The default engine checks both requirements before its first URL playback. If either is unavailable, playback rejects
 with DisTube's `VOICE_FAILED` error and names the missing dependency.

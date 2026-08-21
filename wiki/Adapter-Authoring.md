@@ -42,6 +42,7 @@ const player: Player = {
   setVolume: async (_percent: number) => undefined,
   setFilters: async () => undefined,
   subscribe: (_listener: (event: PlayerEvent) => void) => () => undefined,
+  release: async () => undefined,
 };
 ```
 
@@ -62,9 +63,8 @@ declare const client: ConstructorParameters<typeof ErisAdapter>[0];
 const distube = new DisTube({ adapter: new ErisAdapter(client), plugins: [] });
 ```
 
-Eris 0.18 voice playback requires its optional voice dependencies (`opusscript` or `@discordjs/opus`, plus
-`ffmpeg-static` for non-Opus inputs). Eris exposes no supported seek operation, so its Player rejects `seek` with
-`UNSUPPORTED` without changing playback state.
+Eris 0.18 voice playback requires system FFmpeg or `FFMPEG_PATH` plus `opusscript` or `@discordjs/opus`. Eris exposes
+no supported seek operation, so its Player rejects `seek` with `UNSUPPORTED` without changing playback state.
 
 ## Engine-capable Plugins
 

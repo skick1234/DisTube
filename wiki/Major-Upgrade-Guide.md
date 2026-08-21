@@ -3,7 +3,7 @@
 DisTube v6 is intentionally breaking. There are no deprecated aliases, compatibility events, or shims. The surface is
 deliberately v5-shaped: guild-keyed queues, `play` as the single insertion entry point, restored volume/repeat/
 autoplay/filters, and a restored `Playlist`. This guide covers both audiences: v5 users, and adopters of the earlier
-v6 pre-releases (queue-ID facades, `createQueue`/`enqueue`).
+v6 pre-releases that exposed queue-ID facades and a separate queue factory.
 
 ## The three lifetimes
 
@@ -22,7 +22,7 @@ Every migration question resolves to one of three lifetimes:
 | --- | --- |
 | `distube.play(voiceChannel, song, options)` | `distube.play({ guildId, voiceChannelId }, input, { position?, metadata?, skip? })` |
 | `distube.getQueue(message \| guildId)` | `distube.getQueue(guildId)` |
-| `distube.voices` (`DisTubeVoiceManager`) | `distube.voices` (`VoiceManager`): `join`, `borrow`, `get`, `has`, `leave`, iterable, `.size` |
+| `distube.voices` (`DisTubeVoiceManager`) | `distube.voices` (`VoiceManager`): `join`, `get`, `has`, `leave`, iterable, `.size` |
 | `queue.songs` (mutable array) | readonly `queue.state.items`; mutate with `enqueue`, `remove`, `jump`, `clear` |
 | `queue.previousSongs` | `queue.previousSongs` (readonly) |
 | `queue.skip()`, `queue.previous()` | unchanged in name; both return `Promise<void>` |
@@ -60,8 +60,8 @@ Mechanical mapping — every row is a rename or a merge, not a redesign:
 
 | Pre-release surface | Reshaped v6 |
 | --- | --- |
-| `distube.createQueue({ guildId, channelId })` then `queue.enqueue(input)` | `distube.play({ guildId, voiceChannelId }, input, options?)` — upserts the queue, joins voice, inserts, returns `{ queue, items }` |
-| `queue.enqueue(source)` for later insertions | still available for `Song`/`Playlist` values; strings go through `play` or `distube.resolve` |
+| separate queue factory followed by `queue.enqueue(input)` | `distube.play({ guildId, voiceChannelId }, input, options?)` upserts the queue, joins voice, inserts, and returns `{ queue, items }` |
+| `queue.enqueue(source)` for later insertions | still accepts a URL or query string, `Song`, or `Playlist` on an existing live queue |
 | queue IDs / retained queue facades | guild IDs everywhere: `distube.getQueue(guildId)`, `distube.queues.size` |
 | `queue.destroy()` | `queue.stop()` |
 | `queue.destroyed` | queue deletion (`Events.QueueDeleted`); deleted-queue calls reject with `QUEUE_FAILED` |
@@ -75,11 +75,12 @@ Mechanical mapping — every row is a rename or a merge, not a redesign:
 
 ## Adapter and engine authors
 
-The playback engine is a plugin: `Adapter` exposes `createVoiceSession(target)` and a `readonly engine: Engine`;
-`Engine` exposes `createPlayer(session)` and `resolvable(name)` for filter names. `Player` implements `position`,
-`play({ itemId, resource })`, `pause`, `resume`, `stopTrack`, `seek`, `setVolume`, `setFilters(entries)`, and
-`subscribe`. `VoiceSession` implements `guildId`, `channelId`, optional `gateway`, `join(channelId)`, `release()`, and
-`subscribe`. Volume persists on the Player across queues in the same guild; filter state resets on queue deletion.
+Every Adapter supplies the default playback `Engine` alongside `createVoiceSession(target)`. An engine-capable Plugin
+may replace that default. `Engine` exposes `createPlayer(session)` and `resolvable(name)` for filter names. `Player`
+implements `position`, `play({ itemId, resource })`, `pause`, `resume`, `stopTrack`, `seek`, `setVolume`,
+`setFilters(entries)`, `subscribe`, and terminal `release()`. `VoiceSession` implements `guildId`, `channelId`, optional
+`gateway`, `join(channelId)`, `release()`, and `subscribe`. Volume persists on the Player across queues in the same
+guild; filter state resets on queue deletion.
 Correlate outcomes to `itemId`, own native resources, and never inspect Song/QueueItem or dispose the borrowed source
 resource. An unsupported effect (such as Eris seek) rejects with `UNSUPPORTED`.
 

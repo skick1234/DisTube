@@ -22,8 +22,16 @@ On the GuildQueue: `queue.filters` (`apply`/`set`/`remove`/`clear`, rendered by 
 
 ## What deletes a queue?
 
-`queue.stop()`, `distube.voices.leave(guildId)`, shutdown, or exhaustion — after `Events.QueueFinished` the queue
-deletes itself. The guild's Voice survives everything except `leave`, a platform disconnect, and shutdown.
+`queue.stop()`, `distube.voices.leave(guildId)`, shutdown, exhaustion, or a terminal platform Voice disconnect deletes
+the queue. Exhaustion publishes `Events.QueueFinished` first. A terminal platform disconnect with an active item
+publishes `Events.QueueItemFailed`, then `Events.QueueDeleted`, then `Events.VoiceDisconnected`. The guild's Voice
+survives queue stop and exhaustion, but not `leave`, a platform disconnect, or shutdown.
+
+## How does previous-track history work?
+
+`queue.previousSongs` keeps at most 100 finished QueueItem occurrences. `queue.previous()` inserts a fresh occurrence
+for the selected Song, with a new item ID and timestamp while preserving the Song and metadata references. History
+never revives an old QueueItem identity.
 
 ## Which package handles voice?
 

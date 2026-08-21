@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { assertPreparedBuild, ensurePreparedBuild } from "./prepared-build";
 
@@ -61,4 +61,5 @@ await writeFile(
   ].join("\n"),
 );
 
+await rm(resolve(root, "docs"), { recursive: true, force: true });
 await run(["bunx", "vitepress", "build", "website", "--outDir", "../docs"]);

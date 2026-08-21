@@ -8,6 +8,7 @@ and `VoiceDisconnected` carries a `reason` (`left | platform | shutdown`).
 
 Each timestamp is captured by the transition that commits the event, not when a detached listener later runs. Events
 publish after the corresponding state commit, preserve per-queue FIFO order, and produce at most one terminal
-finished/failed event per QueueItem occurrence. Exhaustion publishes `QueueFinished` and then `QueueDeleted`; a
-guild's `VoiceDisconnected` publishes once per Voice, after that guild's `QueueDeleted`. Listener failures are
-isolated and routed to `onDiagnostic`.
+finished/failed event per QueueItem occurrence. Exhaustion publishes `QueueFinished` and then `QueueDeleted`. An
+unrecoverable Voice disconnect with an active item publishes `QueueItemFailed`, then `QueueDeleted`, then
+`VoiceDisconnected`. `VoiceDisconnected` publishes once per Voice. Listener failures are isolated and routed to
+`onDiagnostic`.

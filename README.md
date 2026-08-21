@@ -66,9 +66,10 @@ const { queue, items } = await distube.play(
 console.log(`Committed ${items.length} insertion(s)`);
 ```
 
-`play` is the only creation-capable entry point: it upserts the guild's queue, joins or reuses the guild's Voice, and
-inserts the resolved media. It resolves after QueueItems plus `Events.QueueItemAdded` commit—not after audio starts.
-Later insertions can also use `queue.enqueue(input)`; look the queue up anytime with `distube.getQueue(guildId)`.
+`play` is the only creation-capable entry point. It upserts the guild's queue, joins or reuses the guild's Voice, and
+inserts the resolved media. It resolves after the QueueItems and matching insertion event commit, not after audio
+starts. A Song publishes `Events.QueueItemAdded`; a Playlist publishes `Events.QueuePlaylistAdded`. Later insertions
+can also use `queue.enqueue(input)`. Look the queue up anytime with `distube.getQueue(guildId)`.
 
 ## 6. Control the Queue
 
