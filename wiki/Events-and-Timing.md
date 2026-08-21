@@ -1,9 +1,13 @@
 # Events and timing
 
-DisTube emits six client-wide events: `queue.created`, `queue.item.added`, `queue.item.started`,
-`queue.item.finished`, `queue.item.failed`, and `queue.destroyed`. Every payload has `queueId` and `timestamp`; item
-events also have `item`, and failed events have `error`.
+DisTube emits ten client-wide events through the string-valued `Events` enum: `QueueCreated`, `QueueItemAdded`,
+`QueuePlaylistAdded`, `QueueItemStarted`, `QueueItemFinished`, `QueueItemFailed`, `QueueFinished`,
+`QueueAutoplayFailed`, `QueueDeleted`, and `VoiceDisconnected`. Queue events carry `guildId`, the `queue`, and
+`timestamp`; item events also carry `item`, playlist additions carry `playlist` and `items`, failures carry `error`,
+and `VoiceDisconnected` carries a `reason` (`left | platform | shutdown`).
 
 Each timestamp is captured by the transition that commits the event, not when a detached listener later runs. Events
 publish after the corresponding state commit, preserve per-queue FIFO order, and produce at most one terminal
-finished/failed event per QueueItem occurrence. Listener failures are isolated and routed to `onDiagnostic`.
+finished/failed event per QueueItem occurrence. Exhaustion publishes `QueueFinished` and then `QueueDeleted`; a
+guild's `VoiceDisconnected` publishes once per Voice, after that guild's `QueueDeleted`. Listener failures are
+isolated and routed to `onDiagnostic`.

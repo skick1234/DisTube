@@ -1,0 +1,6 @@
+{
+  "extends": "../../tsconfig.json",
+  "include": ["src/**/*.ts", "tests/**/*.ts"],
+  "exclude": ["dist", "coverage", "node_modules"],
+  "compilerOptions": { "rootDir": "../..", "noEmit": true, "paths": { "distube": ["../distube/src/index.ts"] } }
+}

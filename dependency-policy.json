@@ -1,6 +1,6 @@
 {
   "selectedAt": "2026-07-18T23:43:09Z",
-  "packageManager": "bun@1.3.14",
+  "packageManager": "bun@1.4.0",
   "lockfileVersion": 1,
   "manifests": {
     "package.json": {
@@ -8,6 +8,7 @@
         "@biomejs/biome": "^2.5.4",
         "@changesets/cli": "^2.31.1",
         "@discordjs/voice": "^0.19.2",
+        "@distube/voice-core": "workspace:*",
         "@microsoft/api-extractor": "^7.58.11",
         "@types/bun": "^1.3.14",
         "@types/node": "^26.1.1",
@@ -55,6 +56,12 @@
         "@discordjs/voice": "^0.19.2",
         "distube": "workspace:*",
         "oceanic.js": "^1.14.0"
+      }
+    },
+    "packages/voice-core/package.json": {
+      "devDependencies": {
+        "@discordjs/voice": "^0.19.2",
+        "distube": "workspace:*"
       }
     }
   },

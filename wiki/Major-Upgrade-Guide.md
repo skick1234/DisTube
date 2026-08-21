@@ -1,108 +1,110 @@
-# Migrating from DisTube v5 to v6
+# Migrating to DisTube v6
 
-DisTube v6 is intentionally breaking. There are no deprecated aliases, compatibility events, or shims.
+DisTube v6 is intentionally breaking. There are no deprecated aliases, compatibility events, or shims. The surface is
+deliberately v5-shaped: guild-keyed queues, `play` as the single insertion entry point, restored volume/repeat/
+autoplay/filters, and a restored `Playlist`. This guide covers both audiences: v5 users, and adopters of the earlier
+v6 pre-releases (queue-ID facades, `createQueue`/`enqueue`).
 
-## Bot authors
+## The three lifetimes
 
-| Previous surface | v6 replacement |
+Every migration question resolves to one of three lifetimes:
+
+- **Voice** — the guild's voice presence. Created by `play` (or `voices.join`), it survives queue deletion and ends
+  only through `voices.leave(guildId)`, a voice disconnect, or `shutdown()`.
+- **GuildQueue** — one per guild, keyed by guild ID. Created by `play`, deleted by `queue.stop()`, by `voices.leave`,
+  and automatically on exhaustion after `queue.finished`. A deleted queue's methods reject with `QUEUE_FAILED`;
+  `getQueue` returns a fresh queue after the next `play`.
+- **Track** — one `QueueItem` per occurrence of a `Song` in a queue, with core-assigned `id` and `addedAt`.
+
+## Migrating from v5
+
+| v5 surface | v6 replacement |
 | --- | --- |
-| `DisTube.create(...)` or legacy constructor options | `new DisTube({ adapter, plugins, onDiagnostic? })` |
-| `distube.queue(guild)` / implicit guild session | `distube.createQueue({ guildId, channelId })`, then retain its ID/facade |
-| multiple channel queues in one guild | one active GuildQueue per guild; destroy it before rebinding another channel |
-| `play(...)` and `add(...)` | `queue.enqueue(source)` only |
-| awaiting `play` as proof of active audio | await `enqueue` for insertion; observe `queue.item.started` or `queue.item.failed` |
-| `join`, `leave`, `moveVoice` | binding at queue creation; `stop` or destroy the queue to release playback |
-| `volume`, repeat, autoplay | removed from the v6 queue surface |
-| queue filters and filter catalogs | removed |
-| `move`, play-now replacement | removed; use waiting-item `remove`, `skip`, `stop`, and `enqueue` |
-| public queue/voice snapshots | readonly `queue.state` with waiting `items`, optional `current`, and status |
-| `destroy()` and `DestroyReport` | idempotent `shutdown(): Promise<void>` |
-| caller-supplied QueueItem `id` / `addedAt` | omit them; core creates occurrence identity and insertion time at commit |
-| Error objects used as debug records | structured diagnostics with severity, stage, message, and optional plugin/error/detail |
+| `distube.play(voiceChannel, song, options)` | `distube.play({ guildId, voiceChannelId }, input, { position?, metadata?, skip? })` |
+| `distube.getQueue(message \| guildId)` | `distube.getQueue(guildId)` |
+| `distube.voices` (`DisTubeVoiceManager`) | `distube.voices` (`VoiceManager`): `join`, `borrow`, `get`, `has`, `leave`, iterable, `.size` |
+| `queue.songs` (mutable array) | readonly `queue.state.items`; mutate with `enqueue`, `remove`, `jump`, `clear` |
+| `queue.previousSongs` | `queue.previousSongs` (readonly) |
+| `queue.skip()`, `queue.previous()` | unchanged in name; both return `Promise<void>` |
+| `queue.jump(position)` | `queue.jump(target, { requeue? })` — one-based over *waiting* items (`jump(1)` is the next track) or an item ID |
+| `queue.setRepeatMode(mode)` (numeric enum) | `queue.setRepeatMode(mode)` with string-valued `RepeatMode.Off \| Song \| Queue` |
+| `queue.toggleAutoplay()` | `queue.setAutoplay(enabled)` |
+| `queue.setVolume(v)` / `queue.volume` | unchanged; percent, default `100`, persisted on the guild's Player |
+| `queue.filters` (`FilterManager`) | `queue.filters` (`QueueFilters`): `active`, `resolvable`, `apply`, `set`, `remove`, `clear` |
+| `queue.seek(seconds)` / `queue.currentTime` | unchanged in name; `seek` is engine-granularity best-effort |
+| `queue.pause()` / `queue.resume()` / `queue.paused` | `pause`/`resume` unchanged; read `queue.state.status` (`QueueStatus.Idle \| Playing \| Paused`) |
+| `queue.stop()` | `queue.stop()` — now also deletes the queue (voice stays connected) |
+| `queue.shuffle()` | `queue.shuffle()` — shuffles waiting items only |
+| `distube.play` search-string handling | a string is offered to each SourcePlugin in constructor order; all declines reject with `SOURCE_FAILED` |
+| `Playlist` | restored: playlist inputs insert their songs and emit one `queue.playlist.added` |
 
-Events map as follows:
+Events are a string-valued `Events` enum; subscribe with `distube.on(Events.X, listener)`:
 
-| Previous event family | v6 event |
+| v5 event | v6 event |
 | --- | --- |
-| queue initialization | `queue.created` |
-| `addSong`, `addList` | one `queue.item.added` per QueueItem |
-| `songStart`, `playSong` | `queue.item.started` |
-| `songFinish`, `songEnd` | `queue.item.finished` |
-| queue/item playback error | `queue.item.failed` |
-| finish/delete/leave lifecycle | `queue.destroyed` for explicit queue destruction |
-| voice, debug, ffmpeg, snapshot events | removed; use adapter policy or `onDiagnostic` where applicable |
+| `initQueue` | `Events.QueueCreated` (`"queue.created"`) |
+| `addSong` | `Events.QueueItemAdded` (`"queue.item.added"`), one per track |
+| `addList` | `Events.QueuePlaylistAdded` (`"queue.playlist.added"`) |
+| `playSong` | `Events.QueueItemStarted` (`"queue.item.started"`) |
+| `finishSong` | `Events.QueueItemFinished` (`"queue.item.finished"`) |
+| `error` (playback) | `Events.QueueItemFailed` (`"queue.item.failed"`) |
+| `finish` | `Events.QueueFinished` (`"queue.finished"`), then `Events.QueueDeleted` |
+| `noRelated` | `Events.QueueAutoplayFailed` (`"queue.autoplay.failed"`) |
+| `deleteQueue` | `Events.QueueDeleted` (`"queue.deleted"`) |
+| `disconnect` | `Events.VoiceDisconnected` (`"voice.disconnected"`) |
+| `empty`, `searchNoResult`, ffmpeg/debug events | removed; use adapter policy or `onDiagnostic` |
 
-Errors are one `DisTubeError` with `INVALID_ARGUMENT`, `SOURCE_FAILED`, `VOICE_FAILED`, `PLUGIN_FAILED`, or
-`QUEUE_FAILED`. Previous codes such as invalid-input variants, capability unsupported, aborted/superseded outcomes,
-voice/plugin-specific codes, cleanup reports, and typed detail hierarchies map to the responsible one of these five or
-are removed with their feature.
+## Migrating from the earlier v6 pre-releases
 
-## Adapter authors
+Mechanical mapping — every row is a rename or a merge, not a redesign:
 
-Remove adapter PluginClasses, definitions, manifests, roles, capability requirements, and separate voice plugins.
-Implement `Adapter` directly and return a complete `Player`. Accept only queue/guild/channel IDs at the creation
-boundary and only `play({ itemId, resource })` at playback. Use the prepared URL, correlate outcomes to `itemId`,
-terminalize synchronously before stop teardown, own native resources, and never inspect Song/QueueItem or dispose the
-borrowed source resource. There is no `play(item)` overload. GuildQueue alone owns ordering, QueueState, public events,
-fallback identity, and source-resource disposal.
+| Pre-release surface | Reshaped v6 |
+| --- | --- |
+| `distube.createQueue({ guildId, channelId })` then `queue.enqueue(input)` | `distube.play({ guildId, voiceChannelId }, input, options?)` — upserts the queue, joins voice, inserts, returns `{ queue, items }` |
+| `queue.enqueue(source)` for later insertions | still available for `Song`/`Playlist` values; strings go through `play` or `distube.resolve` |
+| queue IDs / retained queue facades | guild IDs everywhere: `distube.getQueue(guildId)`, `distube.queues.size` |
+| `queue.destroy()` | `queue.stop()` |
+| `queue.destroyed` | queue deletion (`Events.QueueDeleted`); deleted-queue calls reject with `QUEUE_FAILED` |
+| `"queue.destroyed"` event | `Events.QueueDeleted` (`"queue.deleted"`) |
+| string event names | `Events` enum members (string-valued, so existing literals still compare equal) |
+| idle queue after exhaustion | delete-on-exhaustion: `queue.finished` then `queue.deleted`; the Voice stays connected |
+| `Adapter.createPlayer(binding)` | `Adapter.createVoiceSession(target)` + `Adapter.engine.createPlayer(session)` |
+| `Player.stop()` | `Player.stopTrack()`; releasing voice is `VoiceSession.release()` |
+| no volume/repeat/autoplay/filters | restored on GuildQueue (see the v5 table) |
+| five error codes | six: `UNSUPPORTED` added for engine capabilities an adapter cannot express (e.g. Eris seek) |
 
-Construct `DiscordJSAdapter`, `OceanicAdapter`, and `ErisAdapter` directly. The former create-adapter aliases and
-public `playerFactory` options are removed; package-local typed Adapter/Player fakes replace those test hooks. Failed
-skip retires the old Player and progresses with a fresh Player; a cleanup rejection reports `VOICE_FAILED` without
-rolling queue state back.
+## Adapter and engine authors
 
-Official replacements:
+The playback engine is a plugin: `Adapter` exposes `createVoiceSession(target)` and a `readonly engine: Engine`;
+`Engine` exposes `createPlayer(session)` and `resolvable(name)` for filter names. `Player` implements `position`,
+`play({ itemId, resource })`, `pause`, `resume`, `stopTrack`, `seek`, `setVolume`, `setFilters(entries)`, and
+`subscribe`. `VoiceSession` implements `guildId`, `channelId`, optional `gateway`, `join(channelId)`, `release()`, and
+`subscribe`. Volume persists on the Player across queues in the same guild; filter state resets on queue deletion.
+Correlate outcomes to `itemId`, own native resources, and never inspect Song/QueueItem or dispose the borrowed source
+resource. An unsupported effect (such as Eris seek) rejects with `UNSUPPORTED`.
 
-- `@distube/discord.js` plus `@distube/djsvoice` → `@distube/discordjs`
-- the former Oceanic adapter/voice composition → `@distube/oceanic`
-- former Eris adapter/voice composition → `@distube/eris`
-- Lavalink voice packages → no maintained v6 package; implement a future direct Adapter/Player integration
-
-The v6 Adapter packages verify these platform peer boundaries through clean packed installs:
+Official adapter packages are unchanged in name — `@distube/discordjs`, `@distube/oceanic`, `@distube/eris` — with the
+same platform peer boundaries:
 
 - `@distube/discordjs`: discord.js 14.26 or newer within major 14 and `@discordjs/voice` 0.19.x
 - `@distube/oceanic`: Oceanic 1.14 or newer within major 1 and `@discordjs/voice` 0.19.x
 - `@distube/eris`: Eris 0.18.x; voice needs `opusscript` or `@discordjs/opus`, plus FFmpeg for transcoding
 
-Consumers on older platform releases must upgrade before adopting the corresponding v6 Adapter package. Eris exposes
-no supported seek operation, so `queue.seek()` maps the rejected effect to `VOICE_FAILED`.
-
 ## SourcePlugin authors
 
-Remove `@distube/plugin-sdk`, PluginClass, `define()`, PluginDefinition, manifest/contract version, roles, capabilities,
-registry lookup, resource/stream leases, related/resource capability methods, and `@distube/testkit`. Export a direct
-Plugin instance/class implementing `name`, synchronous `initialize`, `dispose`, cancellable `search`/`resolve`, and
-required `preparePlayback(song, { signal })`. Import contracts from public `distube`, return `undefined` only when
-declining URL resolution, and throw when accepted provider or preparation work fails. Return either a fresh
-`{ kind: "resource", resource: { kind: "url", url, dispose } }` or an explicit trimmed
-`{ kind: "search", query }`. Keep `Song.url` canonical, never store a stream/resource on Song, validate exact
-`song.source === name`, and keep all tests and fixtures package-local. There is no compatibility overload, Plugin role,
-fallback injection, mutable Song stream field, or public resource manager.
+The contract is additive from the earlier v6 pre-releases: `name`, synchronous `initialize`, `dispose`, cancellable
+`search`/`resolve`, required `preparePlayback(song, { signal })`, and now an optional `related(song, context)` used by
+autoplay. `resolve` returns a `Song`, a `Playlist`, or `undefined` to decline; playlists carry their songs. Return a
+fresh `{ kind: "resource", resource: { kind: "url", url, dispose } }` (an `{ kind: "encoded" }` resource exists for
+engines that play encoded tracks) or an explicit `{ kind: "search", query }`. Keep `Song.url` canonical, never store a
+stream on Song, and validate `song.source === name`. v5 extractor plugins map the same way they mapped to the
+pre-releases: no PluginClass, roles, capabilities, or SDK.
 
-Provider package status:
+Provider package status is unchanged: `@distube/youtube`, `@distube/spotify`, and `@distube/soundcloud` are the
+maintained media plugins; other v5 provider packages are not in the maintained v6 release.
 
-| Previous package | v6 status |
-| --- | --- |
-| `@distube/youtube` | retained and rewritten as direct SourcePlugin |
-| `@distube/spotify` | retained and rewritten as direct SourcePlugin |
-| `@distube/soundcloud` | retained and rewritten as direct SourcePlugin |
-| BandLab, Deezer, direct-link, file, HTTP, yt-dlp | not in the maintained v6 release |
-| Lavalink source, search utility | not in the maintained v6 release |
+## Errors
 
-## Maintainers
-
-The DisTube repository publishes only `distube`, `@distube/discordjs`, `@distube/oceanic`, and `@distube/eris`. The
-plugins repository publishes only the three retained media plugins. The example repository consumes packed public
-archives. Remove
-`@distube/core`, `@distube/types`, `@distube/utils`, `@distube/plugin-sdk`, `@distube/testkit`, shared fixtures, committed
-`.tgz`/`.artifacts`, and source-checkout cross-imports.
-
-Retired public types/concepts include Playlist wrappers (collections are readonly Song arrays), Plugin Registry,
-PluginClass/Definition, capability graphs/roles, SessionRegistry, GuildSession, Session Coordinator, QueueAggregate,
-VoiceRuntime/PlaybackRuntime/FilterRuntime, Event Journal, Resource Manager/Scope, StreamLease, voice backends/plugins,
-filters, snapshots, public schedulers/operation authorities, and cleanup reports. Keep any necessary coordination,
-validation, timeout, or disposal mechanism private.
-
-Release core first, record declarations/export maps/packed hashes, verify adapters, then install that frozen packed core
-in the plugins repository. Verify each plugin archive, then build the example from all frozen archives. If the public
-core contract changes, invalidate and regenerate downstream freeze evidence before continuing.
+One `DisTubeError` with six closed codes: `INVALID_ARGUMENT`, `SOURCE_FAILED`, `VOICE_FAILED`, `PLUGIN_FAILED`,
+`QUEUE_FAILED`, and `UNSUPPORTED`. v5's typed error hierarchy and the pre-releases' five-code set both map onto these;
+`UNSUPPORTED` is the only new code and marks capabilities the active playback backend cannot express.

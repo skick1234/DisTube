@@ -13,20 +13,49 @@ export const requiredVerifyCommands = [
   "bun run check",
   "bun run check:dependencies",
   "bun run type",
-  "bun run test",
+  "bun run test:release",
   "bun run build",
+  "bun run check:prepared-build",
   "bun run check:circular",
+  "bun run api-report:prepared",
+  "bun run check:packages:prepared",
+  "bun run check:local-playback",
+  "bun run check:adapter-compatibility:prepared",
+  "bun run docs:prepared",
+  "bun run check:critical-quality",
+  "bun run check:audit",
+  "bun run check:workflows",
+] as const;
+
+const supersededVerifyCommands = [
+  "bun run test",
   "bun run api-report",
   "bun run check:packages",
   "bun run check:adapter-compatibility",
   "bun run docs",
   "bun run test:critical-quality",
-  "bun run check:audit",
-  "bun run check:workflows",
 ] as const;
 
 export function inspectVerifyScript(script: string, required = requiredVerifyCommands): string[] {
-  return required.filter(command => !script.includes(command)).map(command => `verify script omits ${command}`);
+  const commands = script
+    .split(/\s*&&\s*/u)
+    .map(command => command.trim())
+    .filter(Boolean);
+  const errors = required
+    .filter(command => !commands.includes(command))
+    .map(command => `verify script omits ${command}`);
+  for (const command of required) {
+    if (commands.filter(candidate => candidate === command).length > 1) errors.push(`verify script repeats ${command}`);
+  }
+  const preparedPackages = commands.indexOf("bun run check:packages:prepared");
+  const localPlayback = commands.indexOf("bun run check:local-playback");
+  if (preparedPackages >= 0 && localPlayback >= 0 && localPlayback < preparedPackages) {
+    errors.push("verify script runs local playback before prepared package checks");
+  }
+  for (const command of supersededVerifyCommands) {
+    if (commands.includes(command)) errors.push(`verify script uses superseded ${command}`);
+  }
+  return errors;
 }
 
 export function inspectWorkflow(content: string, bunVersion: string, policy: WorkflowPolicy): string[] {

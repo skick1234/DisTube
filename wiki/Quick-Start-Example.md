@@ -5,7 +5,7 @@ import { DiscordJSAdapter } from "@distube/discordjs";
 import { SoundCloudPlugin } from "@distube/soundcloud";
 import { SpotifyPlugin } from "@distube/spotify";
 import { YouTubePlugin } from "@distube/youtube";
-import { DisTube } from "distube";
+import { DisTube, Events } from "distube";
 
 const youtube = new YouTubePlugin();
 const spotify = new SpotifyPlugin();
@@ -15,20 +15,24 @@ const distube = new DisTube({
   // Configured order is URL-routing order and explicit fallback preference.
   plugins: [youtube, spotify, soundcloud],
 });
-distube.on("queue.item.started", ({ item }) => console.log(item.song.title));
-distube.on("queue.item.failed", ({ item, error }) => console.error(item.song.title, error.code));
+distube.on(Events.QueueItemStarted, ({ item }) => console.log(item.song.title));
+distube.on(Events.QueueItemFailed, ({ item, error }) => console.error(item.song.title, error.code));
 
-const queue = distube.createQueue({ guildId, channelId });
-const items = await queue.enqueue("https://open.spotify.com/track/example");
+const { queue, items } = await distube.play(
+  { guildId, voiceChannelId },
+  "https://open.spotify.com/track/example",
+);
 console.log(`Insertion committed: ${items[0]?.id}`);
 ```
 
-`enqueue()` resolves after insertion and `queue.item.added`, before playback preparation may finish. Observe
-`queue.item.started` or `queue.item.failed` for the later outcome. A Spotify Song keeps its canonical Spotify URL and
-identity while core privately searches YouTube, then SoundCloud; no fallback candidate or stream URL enters events.
+`play()` upserts the guild's queue, joins or reuses the guild's Voice, and resolves after insertion and
+`Events.QueueItemAdded`, before playback preparation may finish. Observe `Events.QueueItemStarted` or
+`Events.QueueItemFailed` for the later outcome. A Spotify Song keeps its canonical Spotify URL and identity while core
+privately searches YouTube, then SoundCloud; no fallback candidate or stream URL enters events.
 
-The runnable example repository shows Discord interaction replies, queue lookup, all events, all error codes, and
-shutdown using packed public packages.
+The runnable example repository shows Discord interaction replies, guild queue lookup, all events, all error codes,
+and shutdown using packed public packages.
 
 For Eris, replace the Adapter construction with `new ErisAdapter(client)` from `@distube/eris`; queue and event code
-stays platform-neutral. Eris 0.18 requires an Opus implementation for voice and does not support `queue.seek()`.
+stays platform-neutral. Eris 0.18 requires an Opus implementation for voice, and `queue.seek()` rejects with
+`UNSUPPORTED`.

@@ -1,5 +1,6 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { assertPreparedBuild, ensurePreparedBuild } from "./prepared-build";
 
 const root = resolve(import.meta.dir, "..");
 
@@ -9,7 +10,8 @@ async function run(command: string[]): Promise<void> {
   if (code !== 0) process.exit(code);
 }
 
-await run(["bun", "run", "build"]);
+if (process.argv.includes("--prepared")) await assertPreparedBuild(root);
+else await ensurePreparedBuild(root);
 await run(["bun", "run", "api-extractor"]);
 await run(["bun", "scripts/clean-source-declarations.ts"]);
 

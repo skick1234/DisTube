@@ -1,14 +1,17 @@
 # DisTube guide
 
-Create the direct objects, bind a queue, and enqueue:
+Create the direct objects and play:
 
 ```ts
 const youtube = new YouTubePlugin();
 const distube = new DisTube({ adapter: new DiscordJSAdapter(client), plugins: [youtube] });
-const queue = distube.createQueue({ guildId, channelId });
-await queue.enqueue("https://youtu.be/example");
+const { queue } = await distube.play({ guildId, voiceChannelId }, "https://youtu.be/example");
 ```
 
-Read `queue.state` for readonly waiting items, current item, and `idle | playing | paused` status. Use item IDs with
-`remove`; use `skip`, `pause`, `resume`, `stop`, and `seek` for playback controls. Listen on the DisTube client for
-dotted queue events and call `shutdown()` once during application teardown.
+Read `queue.state` for readonly waiting items, optional current item, and `idle | playing | paused` status
+(`QueueStatus`). Insert more with `queue.enqueue`; use item IDs or one-based waiting positions with `remove` and
+`jump`; use `skip`, `previous`, `shuffle`, `clear`, `pause`, `resume`, `seek`, `setVolume`, `setRepeatMode`,
+`setAutoplay`, and `queue.filters` for controls. `queue.stop()` deletes the queue while the guild's Voice stays
+connected; `distube.voices.leave(guildId)` releases the Voice itself. Look queues up by guild with
+`distube.getQueue(guildId)`, listen on the DisTube client with the `Events` enum, and call `shutdown()` once during
+application teardown.

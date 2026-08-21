@@ -3,8 +3,8 @@ import { ErrorCode } from "../src";
 import {
   validatePlaybackPreparation,
   validatePlaybackRequest,
+  validatePlaybackResource,
   validateSourceName,
-  validateUrlPlaybackResource,
 } from "../src/playback/validation";
 
 const resource = () => ({
@@ -44,11 +44,25 @@ describe("playback contract validation", () => {
     { kind: "stream", url: "https://stream.example/audio", dispose: vi.fn() },
   ])("rejects malformed resources without exposing their URL %#", value => {
     try {
-      validateUrlPlaybackResource(value);
+      validatePlaybackResource(value);
       throw new Error("expected resource validation to fail");
     } catch (error: unknown) {
       expect(error).toMatchObject({ code: ErrorCode.INVALID_ARGUMENT });
       expect((error as Error).message).not.toContain(String(value.url));
+    }
+  });
+
+  it("accepts an encoded resource and rejects malformed ones", () => {
+    const encoded = { kind: "encoded" as const, encoded: "QAAAj...", dispose: vi.fn() };
+    expect(validatePlaybackResource(encoded)).toBe(encoded);
+    for (const value of [
+      { kind: "encoded", encoded: "", dispose: vi.fn() },
+      { kind: "encoded", encoded: "track", url: "https://stream.example/audio", dispose: vi.fn() },
+      { kind: "encoded", encoded: "track" },
+    ]) {
+      expect(() => validatePlaybackResource(value)).toThrowError(
+        expect.objectContaining({ code: ErrorCode.INVALID_ARGUMENT }),
+      );
     }
   });
 
@@ -65,7 +79,7 @@ describe("playback contract validation", () => {
 
   it("never includes a credentialed resource URL in validation errors", () => {
     const secret = "https://user:password@example.test/path?token=secret#fragment";
-    expect(() => validateUrlPlaybackResource({ kind: "url", url: secret, dispose: "no" })).toThrowError(
+    expect(() => validatePlaybackResource({ kind: "url", url: secret, dispose: "no" })).toThrowError(
       expect.not.objectContaining({ message: expect.stringContaining(secret) }),
     );
   });

@@ -4,6 +4,7 @@ export enum ErrorCode {
   VOICE_FAILED = "VOICE_FAILED",
   PLUGIN_FAILED = "PLUGIN_FAILED",
   QUEUE_FAILED = "QUEUE_FAILED",
+  UNSUPPORTED = "UNSUPPORTED",
 }
 
 export class DisTubeError extends Error {

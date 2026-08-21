@@ -6,8 +6,8 @@ Start with the numbered beginner path in the repository README:
 2. create DisTube;
 3. configure an Adapter;
 4. add Plugins;
-5. create a queue;
-6. enqueue media;
+5. play;
+6. control the queue;
 7. handle events;
 8. author advanced extensions.
 

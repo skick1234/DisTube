@@ -49,7 +49,7 @@ We welcome contributions via pull requests!
 ## ⚙️ Development Environment
 
 - **Runtime**: Node.js >= 22.12.0
-- **Package Manager**: Bun 1.3.14 (the version pinned by the repository toolchain)
+- **Package Manager**: Bun 1.4.0 (the version pinned by the repository toolchain)
 - **Linter/Formatter**: [Biome](https://biomejs.dev/)
 
 ## 📂 Directory Structure
@@ -63,12 +63,14 @@ The codebase is organized by durable ownership:
 - `scripts/`: architecture, API, documentation, package, structural inventory, audit, and critical-coverage release gates.
 
 ### Scripts
-- `bun run build`: Build the project with tsdown
-- `bun run test`: Run unit tests (vitest)
+- `bun run build`: Build all four packages once and record fingerprinted prepared output
+- `bun run test`: Run the fast coverage-disabled unit tests
+- `bun run test:release`: Run the sole fail-closed coverage-enabled release test pass
 - `bun run check:circular`: Check for circular dependencies
 - `bun run check:write`: Fix linting/formatting issues
 - `bun run docs`: Generate the API Extractor model and build the VitePress documentation site
-- `bun run test:critical-quality`: Execute measured V8 coverage for critical lifecycle and Player modules
+- `bun run check:critical-quality`: Verify complete production-source coverage scopes and package-class floors without rerunning tests
+- `bun run check:packages:prepared`: Verify packed imports from the current fingerprinted build; the unsuffixed command prepares stale output
 - `bun run verify`: Run the complete non-publishing repository gate, including structural workflow parity
 
 ## Dependency modernization

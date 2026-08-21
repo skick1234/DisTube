@@ -1,6 +1,13 @@
 {
   "extends": "../../tsconfig.json",
-  "include": ["src/**/*.ts", "tests/**/*.ts"],
+  "include": ["src/**/*.ts", "tests/**/*.ts", "../voice-core/src/**/*.ts"],
   "exclude": ["dist", "coverage", "node_modules"],
-  "compilerOptions": { "rootDir": "../..", "outDir": "dist", "paths": { "distube": ["../distube/src/index.ts"] } }
+  "compilerOptions": {
+    "rootDir": "../..",
+    "outDir": "dist",
+    "paths": {
+      "distube": ["../distube/src/index.ts"],
+      "@distube/voice-core": ["../voice-core/src/index.ts"]
+    }
+  }
 }

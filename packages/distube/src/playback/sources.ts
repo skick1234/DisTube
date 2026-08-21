@@ -1,6 +1,6 @@
 import type { SourcePlugin } from "../contracts";
 import { DisTubeError, ErrorCode } from "../errors";
-import { Song } from "../media";
+import { Playlist, Song } from "../media";
 
 export interface SourceCatalog {
   readonly ordered: readonly SourcePlugin[];
@@ -13,13 +13,21 @@ export function createSourceCatalog(sources: readonly SourcePlugin[]): SourceCat
   return Object.freeze({ ordered, get: (name: string) => byName.get(name) });
 }
 
+/** Flattens a resolution or search result into the ordered Songs core enqueues. */
 export function validateSourceSongs(
-  value: Song | readonly Song[],
+  value: Song | Playlist | readonly Song[],
   source: SourcePlugin,
-  operation: "resolve" | "search",
+  operation: "resolve" | "search" | "related",
   allowEmpty = false,
 ): readonly Song[] {
-  const songs = value instanceof Song ? [value] : Array.isArray(value) ? [...value] : [];
+  const songs =
+    value instanceof Song
+      ? [value]
+      : value instanceof Playlist
+        ? [...value.songs]
+        : Array.isArray(value)
+          ? [...value]
+          : [];
   if ((!allowEmpty && songs.length === 0) || songs.some(song => !(song instanceof Song))) {
     throw new DisTubeError(ErrorCode.SOURCE_FAILED, `${source.name} returned invalid media from ${operation}`);
   }
@@ -27,6 +35,11 @@ export function validateSourceSongs(
     throw new DisTubeError(ErrorCode.SOURCE_FAILED, `${source.name} returned media with mismatched source ownership`);
   }
   return Object.freeze(songs);
+}
+
+/** The ordered Songs core enqueues for a resolved input. */
+export function songsOf(value: Song | Playlist): readonly Song[] {
+  return value instanceof Song ? Object.freeze([value]) : value.songs;
 }
 
 export function requireSongOwner(song: Song, sources: SourceCatalog): SourcePlugin {

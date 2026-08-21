@@ -20,16 +20,21 @@ Use the Bun version pinned by package metadata and inspect `package.json` before
 ```bash
 bun run check
 bun run type
-bun run test
+bun run test:release
 bun run build
+bun run check:prepared-build
 bun run check:circular
-bun run api-report
-bun run check:packages
-bun run check:adapter-compatibility
-bun run docs
-bun run test:critical-quality
+bun run api-report:prepared
+bun run check:packages:prepared
+bun run check:adapter-compatibility:prepared
+bun run docs:prepared
+bun run check:critical-quality
 bun run check:audit
 ```
+
+`bun run verify` performs one coverage-enabled behavior pass and one four-package build, then uses fingerprint-checked
+prepared output for API, package, compatibility, and documentation consumers. The unsuffixed consumer commands remain
+self-sufficient and build when prepared evidence is missing or stale.
 
 Use focused package tests while iterating, then run every required repository gate. Never publish, commit, push, reset, clean, stash, or overwrite unrelated dirty-worktree changes without explicit authorization.
 

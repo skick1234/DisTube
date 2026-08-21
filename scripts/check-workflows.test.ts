@@ -15,7 +15,7 @@ jobs:
   publish:
     steps:
       - uses: oven-sh/setup-bun@v2
-        with: { bun-version: 1.3.14 }
+        with: { bun-version: 1.4.0 }
       - run: bun run check:runtime
       - run: bun run check:release-inputs
       - run: bun install --frozen-lockfile
@@ -26,12 +26,22 @@ jobs:
 
 describe("workflow parity", () => {
   test("rejects actual Bun runtime drift", () => {
-    expect(inspectRuntimeVersion("1.3.14", "1.4.0")).toEqual(["expected Bun 1.3.14, observed 1.4.0"]);
+    expect(inspectRuntimeVersion("1.4.0", "1.3.14")).toEqual(["expected Bun 1.4.0, observed 1.3.14"]);
+  });
+
+  test("rejects a canary revision that reports the pinned release version", () => {
+    expect(inspectRuntimeVersion("1.4.0", "1.4.0", "1.4.0-canary.1+32e87032b")).toEqual([
+      "expected stable Bun 1.4.0, observed canary revision 1.4.0-canary.1+32e87032b",
+    ]);
+  });
+
+  test("accepts a stable Bun revision", () => {
+    expect(inspectRuntimeVersion("1.4.0", "1.4.0", "1.4.0+32e87032b")).toEqual([]);
   });
 
   test("rejects a wrong Bun pin", () => {
-    expect(inspectWorkflow(validPublishWorkflow.replace("1.3.14", "1.4.0"), "1.3.14", publishPolicy)).toContain(
-      "publish.yml: expected Bun 1.3.14",
+    expect(inspectWorkflow(validPublishWorkflow.replace("1.4.0", "1.3.14"), "1.4.0", publishPolicy)).toContain(
+      "publish.yml: expected Bun 1.4.0",
     );
   });
 
@@ -46,9 +56,39 @@ describe("workflow parity", () => {
   test("rejects an omitted adapter compatibility gate", () => {
     expect(
       inspectVerifyScript(
-        requiredVerifyCommands.filter(command => command !== "bun run check:adapter-compatibility").join(" && "),
+        requiredVerifyCommands
+          .filter(command => command !== "bun run check:adapter-compatibility:prepared")
+          .join(" && "),
       ),
-    ).toContain("verify script omits bun run check:adapter-compatibility");
+    ).toContain("verify script omits bun run check:adapter-compatibility:prepared");
+  });
+
+  test("rejects an omitted packed local playback gate", () => {
+    expect(
+      inspectVerifyScript(
+        requiredVerifyCommands.filter(command => command !== "bun run check:local-playback").join(" && "),
+      ),
+    ).toContain("verify script omits bun run check:local-playback");
+  });
+
+  test("requires local playback after prepared package checks", () => {
+    const commands = [...requiredVerifyCommands];
+    const packages = commands.indexOf("bun run check:packages:prepared");
+    const local = commands.indexOf("bun run check:local-playback");
+    [commands[packages], commands[local]] = [commands[local], commands[packages]];
+
+    expect(inspectVerifyScript(commands.join(" && "))).toContain(
+      "verify script runs local playback before prepared package checks",
+    );
+  });
+
+  test("rejects duplicate preparation and superseded test execution", () => {
+    expect(inspectVerifyScript([...requiredVerifyCommands, "bun run build"].join(" && "))).toContain(
+      "verify script repeats bun run build",
+    );
+    expect(inspectVerifyScript([...requiredVerifyCommands, "bun run test"].join(" && "))).toContain(
+      "verify script uses superseded bun run test",
+    );
   });
 
   test("rejects publication before verification", () => {
@@ -58,7 +98,7 @@ describe("workflow parity", () => {
           "      - run: bun run verify",
           "      - run: bun changeset publish\n      - run: bun run verify",
         ),
-        "1.3.14",
+        "1.4.0",
         publishPolicy,
       ),
     ).toContain("publish.yml: publish command precedes required verification");
@@ -75,7 +115,7 @@ jobs:
     steps:
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: "1.3.14"
+          bun-version: "1.4.0"
       - run: |-
           bun run check:runtime
           bun run check:release-inputs
@@ -87,14 +127,14 @@ jobs:
     steps:
       - run: bun changeset publish
 `;
-    expect(inspectWorkflow(workflow, "1.3.14", publishPolicy)).toEqual([]);
+    expect(inspectWorkflow(workflow, "1.4.0", publishPolicy)).toEqual([]);
   });
 
   test("rejects publication without exact-candidate authorization", () => {
     expect(
       inspectWorkflow(
         validPublishWorkflow.replace("      - run: bun run check:publish-authorization\n", ""),
-        "1.3.14",
+        "1.4.0",
         publishPolicy,
       ),
     ).toContain("publish.yml: exact-candidate authorization must precede publication");

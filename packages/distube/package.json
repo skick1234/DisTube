@@ -26,9 +26,9 @@
     "check": "biome check .",
     "type": "tsc --noEmit",
     "test": "vitest run --coverage=false",
+    "test:release": "vitest run --coverage",
     "build": "tsdown && bun ../../scripts/clean-source-declarations.ts",
-    "check:circular": "dpdm --tree=false --warning=false --exit-code circular:1 --tsconfig tsconfig.json \"src/**/*.ts\"",
-    "test:critical-quality": "vitest run --coverage && bun ../../scripts/check-critical-quality.ts",
+    "check:circular": "dpdm -T --tree=false --warning=false --exit-code circular:1 --tsconfig tsconfig.json \"src/**/*.ts\"",
     "prepack": "bun run build"
   },
   "engines": {

@@ -1,4 +1,4 @@
-import type { PlaybackPreparation, SourcePlugin, UrlPlaybackResource } from "../contracts";
+import type { PlaybackPreparation, PlaybackResource, SourcePlugin } from "../contracts";
 import { DisTubeError, ErrorCode } from "../errors";
 import type { Song } from "../media";
 import { disposeOnce } from "../utils/dispose";
@@ -6,18 +6,21 @@ import { requireSongOwner, type SourceCatalog, validateSourceSongs } from "./sou
 import { validatePlaybackPreparation } from "./validation";
 
 export interface OwnedPlaybackResource {
-  readonly resource: UrlPlaybackResource;
+  readonly resource: PlaybackResource;
   dispose(): Promise<void>;
 }
+
+export type DisposePlaybackResource = (resource: OwnedPlaybackResource, stage: string) => Promise<void>;
 
 export async function preparePlaybackResource(
   song: Song,
   sources: SourceCatalog,
   signal: AbortSignal,
   report: (error: Error, stage: string) => void,
+  dispose: DisposePlaybackResource,
 ): Promise<OwnedPlaybackResource> {
   const owner = requireSongOwner(song, sources);
-  const initial = await callPreparation(owner, song, signal);
+  const initial = await callPreparation(owner, song, signal, dispose);
   if (initial.kind === "resource") return initial.resource;
   const failures: Error[] = [];
   const searched = new Set<string>([owner.name]);
@@ -29,6 +32,7 @@ export async function preparePlaybackResource(
     searched,
     failures,
     report,
+    dispose,
   );
   if (resource) return resource;
   throw new DisTubeError(ErrorCode.SOURCE_FAILED, "Explicit playback fallback was exhausted", {
@@ -44,6 +48,7 @@ async function searchSources(
   searched: Set<string>,
   failures: Error[],
   report: (error: Error, stage: string) => void,
+  dispose: DisposePlaybackResource,
 ): Promise<OwnedPlaybackResource | undefined> {
   for (const source of sources.ordered) {
     throwIfAborted(signal);
@@ -64,7 +69,7 @@ async function searchSources(
     for (const candidate of candidates.slice(0, 5)) {
       throwIfAborted(signal);
       try {
-        const preparation = await callPreparation(source, candidate, signal);
+        const preparation = await callPreparation(source, candidate, signal, dispose);
         if (preparation.kind === "resource") return preparation.resource;
         const nested = await searchSources(
           preparation.query,
@@ -74,6 +79,7 @@ async function searchSources(
           searched,
           failures,
           report,
+          dispose,
         );
         if (nested) return nested;
       } catch (error: unknown) {
@@ -91,6 +97,7 @@ async function callPreparation(
   source: SourcePlugin,
   song: Song,
   signal: AbortSignal,
+  dispose: DisposePlaybackResource,
 ): Promise<
   Readonly<{ kind: "resource"; resource: OwnedPlaybackResource }> | Readonly<{ kind: "search"; query: string }>
 > {
@@ -103,6 +110,7 @@ async function callPreparation(
     throw error;
   }
   const captured = capturePossibleResource(raw);
+  let resourceDisposed = false;
   try {
     const preparation: PlaybackPreparation = validatePlaybackPreparation(raw, ErrorCode.SOURCE_FAILED);
     if (preparation.kind === "search") {
@@ -111,12 +119,13 @@ async function callPreparation(
     }
     const owned = captured ?? ownResource(preparation.resource);
     if (signal.aborted) {
-      await owned.dispose();
+      resourceDisposed = true;
+      await dispose(owned, "aborted playback preparation");
       throw signal.reason instanceof Error ? signal.reason : new Error("Playback preparation aborted");
     }
     return Object.freeze({ kind: "resource", resource: owned });
   } catch (error: unknown) {
-    if (captured) await captured.dispose().catch(() => undefined);
+    if (captured && !resourceDisposed) await dispose(captured, "invalid playback preparation").catch(() => undefined);
     throw error;
   }
 }
@@ -132,10 +141,10 @@ function capturePossibleResource(value: unknown): OwnedPlaybackResource | undefi
   const once = disposeOnce(() =>
     Reflect.apply(resource.dispose as (...args: never[]) => unknown, preparation.resource, []),
   );
-  return Object.freeze({ resource: preparation.resource as UrlPlaybackResource, dispose: once.dispose });
+  return Object.freeze({ resource: preparation.resource as PlaybackResource, dispose: once.dispose });
 }
 
-function ownResource(resource: UrlPlaybackResource): OwnedPlaybackResource {
+function ownResource(resource: PlaybackResource): OwnedPlaybackResource {
   const once = disposeOnce(() => resource.dispose());
   return Object.freeze({ resource, dispose: once.dispose });
 }

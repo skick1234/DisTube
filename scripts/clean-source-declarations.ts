@@ -9,6 +9,6 @@ async function clean(directory: string): Promise<void> {
   }
 }
 
-for (const packageName of ["distube", "discordjs", "oceanic", "eris"]) {
+for (const packageName of ["distube", "discordjs", "oceanic", "eris", "voice-core"]) {
   await clean(join(import.meta.dir, "..", "packages", packageName, "src"));
 }

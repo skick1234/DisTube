@@ -1,274 +1,105 @@
-import { EventEmitter } from "node:events";
-import type { PlaybackRequest, PlayerEvent, QueueBinding } from "distube";
-import type { Client, VoiceConnection } from "eris";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { ErrorCode, type FilterEntry, Filters, type VoiceSession } from "distube";
+import type { Client } from "eris";
+import { describe, expect, it } from "vitest";
 import { ErisAdapter } from "../src";
+import { FilterRegistry } from "../src/filters";
+import { asClient, CHANNEL, FakeClient, GUILD, voiceChannel } from "./support/eris";
 
-const binding: QueueBinding = { queueId: "queue", guildId: "guild", channelId: "channel" };
+const TARGET = { guildId: GUILD, channelId: CHANNEL };
 
-function request(id = "item"): PlaybackRequest {
-  return {
-    itemId: id,
-    resource: { kind: "url", url: `https://stream.example/${id}`, dispose: vi.fn() },
-  };
+function adapter(client: FakeClient = new FakeClient(), options = {}): ErisAdapter {
+  return new ErisAdapter(asClient(client), options);
 }
 
-interface VoiceFixture {
-  readonly client: Client;
-  readonly connection: VoiceConnection;
-  readonly emitter: EventEmitter;
-  readonly getChannel: ReturnType<typeof vi.fn>;
-  readonly joinVoiceChannel: ReturnType<typeof vi.fn>;
-  readonly leaveVoiceChannel: ReturnType<typeof vi.fn>;
-  readonly play: ReturnType<typeof vi.fn>;
-  readonly pause: ReturnType<typeof vi.fn>;
-  readonly resume: ReturnType<typeof vi.fn>;
-  readonly stopPlaying: ReturnType<typeof vi.fn>;
-  setPlaying(value: boolean): void;
-}
-
-function voiceFixture(guildId = binding.guildId): VoiceFixture {
-  const emitter = new EventEmitter();
-  let playing = false;
-  const play = vi.fn(() => {
-    playing = true;
-  });
-  const pause = vi.fn();
-  const resume = vi.fn();
-  const stopPlaying = vi.fn();
-  const connection = emitter as unknown as VoiceConnection;
-  Object.defineProperties(connection, {
-    playing: { configurable: true, get: () => playing },
-    play: { configurable: true, value: play },
-    pause: { configurable: true, value: pause },
-    resume: { configurable: true, value: resume },
-    stopPlaying: { configurable: true, value: stopPlaying },
-  });
-  const getChannel = vi.fn(() => ({ id: binding.channelId, guild: { id: guildId }, join: vi.fn() }));
-  const joinVoiceChannel = vi.fn(async () => connection);
-  const leaveVoiceChannel = vi.fn();
-  const client = { getChannel, joinVoiceChannel, leaveVoiceChannel } as unknown as Client;
-  return {
-    client,
-    connection,
-    emitter,
-    getChannel,
-    joinVoiceChannel,
-    leaveVoiceChannel,
-    play,
-    pause,
-    resume,
-    stopPlaying,
-    setPlaying: value => {
-      playing = value;
-    },
-  };
-}
-
-beforeEach(() => vi.clearAllMocks());
-
-describe("ErisAdapter", () => {
-  it("validates construction options", () => {
-    expect(() => new ErisAdapter(undefined as unknown as Client)).toThrow(TypeError);
-    expect(() => new ErisAdapter({} as Client, { connectionTimeoutMs: 0 })).toThrow(TypeError);
-    expect(() => new ErisAdapter({} as Client, { selfDeaf: "yes" as unknown as boolean })).toThrow(TypeError);
+describe("adapter", () => {
+  it("requires a client and well-formed connection options", () => {
+    expect(() => new ErisAdapter(undefined as unknown as Client)).toThrow("requires an Eris Client");
+    expect(() => adapter(new FakeClient(), { connectionTimeoutMs: 0 })).toThrow("connectionTimeoutMs must be positive");
+    expect(() => adapter(new FakeClient(), { selfDeaf: "yes" })).toThrow("selfDeaf must be boolean");
+    expect(() => adapter(new FakeClient(), { selfMute: "no" })).toThrow("selfMute must be boolean");
   });
 
-  it("validates channel ownership before joining", async () => {
-    const fixture = voiceFixture("another-guild");
-    const adapter = new ErisAdapter(fixture.client);
-    await expect(adapter.createPlayer(binding)).rejects.toThrow("does not belong to guild");
-    expect(fixture.joinVoiceChannel).not.toHaveBeenCalled();
-  });
+  it("validates the target channel before joining voice", async () => {
+    const client = new FakeClient();
+    client.channels.set("foreign", voiceChannel("other-guild"));
 
-  it("rejects missing or non-voice channels", async () => {
-    const fixture = voiceFixture();
-    fixture.getChannel.mockReturnValueOnce(undefined);
-    await expect(new ErisAdapter(fixture.client).createPlayer(binding)).rejects.toThrow("unavailable");
-    fixture.getChannel.mockReturnValueOnce({ id: binding.channelId, guild: { id: binding.guildId } });
-    await expect(new ErisAdapter(fixture.client).createPlayer(binding)).rejects.toThrow("unavailable");
-  });
-
-  it("joins a valid channel with configured voice state", async () => {
-    const fixture = voiceFixture();
-    await expect(
-      new ErisAdapter(fixture.client, { selfDeaf: false, selfMute: true }).createPlayer(binding),
-    ).resolves.toMatchObject({ play: expect.any(Function) });
-    expect(fixture.joinVoiceChannel).toHaveBeenCalledWith(binding.channelId, { selfDeaf: false, selfMute: true });
-  });
-
-  it("releases partial connections after join failure", async () => {
-    const fixture = voiceFixture();
-    fixture.joinVoiceChannel.mockRejectedValueOnce(new Error("join failed"));
-    await expect(new ErisAdapter(fixture.client).createPlayer(binding)).rejects.toThrow("join failed");
-    expect(fixture.leaveVoiceChannel).toHaveBeenCalledWith(binding.channelId);
-  });
-
-  it("bounds connection readiness and cleans up a timed-out join", async () => {
-    const fixture = voiceFixture();
-    fixture.joinVoiceChannel.mockReturnValueOnce(new Promise(() => undefined));
-    await expect(new ErisAdapter(fixture.client, { connectionTimeoutMs: 5 }).createPlayer(binding)).rejects.toThrow(
-      "connection timed out",
+    await expect(adapter(client).createVoiceSession({ ...TARGET, channelId: "missing" })).rejects.toThrow(
+      "Eris voice channel is unavailable: missing",
     );
-    expect(fixture.leaveVoiceChannel).toHaveBeenCalledWith(binding.channelId);
+    await expect(adapter(client).createVoiceSession({ ...TARGET, channelId: "foreign" })).rejects.toThrow(
+      `does not belong to guild ${GUILD}`,
+    );
+    expect(client.joinVoiceChannel).not.toHaveBeenCalled();
+  });
+
+  it("connects a session with the presence options it was configured with", async () => {
+    const client = new FakeClient();
+
+    const session = await adapter(client, { selfDeaf: false, selfMute: true }).createVoiceSession(TARGET);
+
+    expect(client.joinVoiceChannel).toHaveBeenCalledWith(CHANNEL, { selfDeaf: false, selfMute: true });
+    expect(session.guildId).toBe(GUILD);
+    expect(session.channelId).toBe(CHANNEL);
   });
 });
 
-describe("ErisPlayer", () => {
-  it("rejects malformed prepared resources before native playback", async () => {
-    const fixture = voiceFixture();
-    const player = await new ErisAdapter(fixture.client).createPlayer(binding);
-    await expect(
-      player.play({ itemId: "item", resource: { kind: "url", url: "file:///audio", dispose: vi.fn() } }),
-    ).rejects.toThrow("absolute HTTP(S)");
-    expect(fixture.play).not.toHaveBeenCalled();
+describe("engine", () => {
+  it("plays through its own package's session only", async () => {
+    const client = new FakeClient();
+    const instance = adapter(client);
+    const session = await instance.createVoiceSession(TARGET);
+
+    const player = await instance.engine.createPlayer(session);
+    // Nothing is playing, so ending a track is a no-op rather than an error.
+    await expect(player.stopTrack()).resolves.toBeUndefined();
+
+    await expect(instance.engine.createPlayer({ guildId: GUILD } as unknown as VoiceSession)).rejects.toThrow(
+      "only plays through its own package's VoiceSession",
+    );
   });
 
-  it("acknowledges play only after native start", async () => {
-    const fixture = voiceFixture();
-    const player = await new ErisAdapter(fixture.client).createPlayer(binding);
-    let resolved = false;
-    const started = player.play(request()).then(() => {
-      resolved = true;
-    });
-    await Promise.resolve();
-    expect(resolved).toBe(false);
-    expect(fixture.play).toHaveBeenCalledWith("https://stream.example/item");
-    fixture.emitter.emit("start");
-    await started;
-    expect(resolved).toBe(true);
+  it("resolves its built-in filters alongside the presets it was configured with", () => {
+    const instance = adapter(new FakeClient(), { filters: { house: "volume=2" } });
+
+    expect(instance.engine.resolvable(Filters.Nightcore)).toBe(true);
+    expect(instance.engine.resolvable("house")).toBe(true);
+    expect(instance.engine.resolvable("unknown")).toBe(false);
+  });
+});
+
+describe("filter registry", () => {
+  const render = (entries: readonly FilterEntry[], definitions = {}): string | undefined =>
+    new FilterRegistry(definitions).render(entries);
+
+  it("folds the ordered set into one chain, calculating what takes a value", () => {
+    expect(render([])).toBeUndefined();
+    expect(render([{ name: Filters.Echo }, { name: Filters.Karaoke }])).toBe(
+      "aecho=0.8:0.9:1000:0.3,stereotools=mlev=0.03",
+    );
+    expect(render([{ name: Filters.Bassboost, value: 20 }])).toBe("bass=g=20");
+    expect(render([{ name: Filters.Bassboost }])).toBe("bass=g=10");
   });
 
-  it("rejects play errors before start", async () => {
-    const fixture = voiceFixture();
-    const player = await new ErisAdapter(fixture.client).createPlayer(binding);
-    const started = player.play(request());
-    fixture.emitter.emit("error", new Error("decoder failed"));
-    await expect(started).rejects.toThrow("decoder failed");
+  it("takes construction-time definitions over the built-in ones", () => {
+    expect(render([{ name: Filters.Echo }, { name: "house" }], { [Filters.Echo]: "aecho=1", house: "volume=2" })).toBe(
+      "aecho=1,volume=2",
+    );
+    expect(() => new FilterRegistry({ broken: 7 as unknown as string })).toThrow(TypeError);
   });
 
-  it("rejects a missing native start acknowledgement within the configured bound", async () => {
-    const fixture = voiceFixture();
-    const player = await new ErisAdapter(fixture.client, { connectionTimeoutMs: 5 }).createPlayer(binding);
-    await expect(player.play(request())).rejects.toThrow("playback start timed out");
-    expect(fixture.stopPlaying).toHaveBeenCalledOnce();
-    await player.stop();
+  it("takes an ad hoc payload as written and refuses an empty one", () => {
+    expect(render([{ name: "adhoc", payload: "  volume=3  " }])).toBe("volume=3");
+    expect(() => render([{ name: "adhoc", payload: "   " }])).toThrow(
+      expect.objectContaining({ code: ErrorCode.INVALID_ARGUMENT }),
+    );
   });
 
-  it("publishes exactly one natural finish for the active item", async () => {
-    const fixture = voiceFixture();
-    const player = await new ErisAdapter(fixture.client).createPlayer(binding);
-    const listener = vi.fn<(event: PlayerEvent) => void>();
-    player.subscribe(listener);
-    const started = player.play(request("a"));
-    fixture.emitter.emit("start");
-    await started;
-    fixture.emitter.emit("end");
-    fixture.emitter.emit("end");
-    expect(listener).toHaveBeenCalledTimes(1);
-    expect(listener).toHaveBeenCalledWith({ type: "finished", itemId: "a" });
-  });
-
-  it("publishes one failure and ignores a later end", async () => {
-    const fixture = voiceFixture();
-    const player = await new ErisAdapter(fixture.client).createPlayer(binding);
-    const listener = vi.fn<(event: PlayerEvent) => void>();
-    player.subscribe(listener);
-    const started = player.play(request("a"));
-    fixture.emitter.emit("start");
-    await started;
-    const error = new Error("voice failed");
-    fixture.emitter.emit("error", error);
-    fixture.emitter.emit("end");
-    expect(listener).toHaveBeenCalledTimes(1);
-    expect(listener).toHaveBeenCalledWith({ type: "failed", itemId: "a", error });
-  });
-
-  it("maps unexpected disconnect and isolates subscribers", async () => {
-    const fixture = voiceFixture();
-    const player = await new ErisAdapter(fixture.client).createPlayer(binding);
-    const second = vi.fn<(event: PlayerEvent) => void>();
-    player.subscribe(() => {
-      throw new Error("listener failed");
-    });
-    player.subscribe(second);
-    const started = player.play(request("a"));
-    fixture.emitter.emit("start");
-    await started;
-    fixture.emitter.emit("disconnect", new Error("network lost"));
-    expect(second).toHaveBeenCalledWith(expect.objectContaining({ type: "failed", itemId: "a", terminal: true }));
-    await expect(player.play(request("b"))).rejects.toThrow("stopped");
-    await vi.waitFor(() => expect(fixture.leaveVoiceChannel).toHaveBeenCalledOnce());
-  });
-
-  it("pauses, resumes, and rejects unsupported seek", async () => {
-    const fixture = voiceFixture();
-    const player = await new ErisAdapter(fixture.client).createPlayer(binding);
-    const started = player.play(request());
-    fixture.emitter.emit("start");
-    await started;
-    await player.pause();
-    await player.resume();
-    await expect(player.seek(10)).rejects.toThrow("not supported");
-    expect(fixture.pause).toHaveBeenCalledOnce();
-    expect(fixture.resume).toHaveBeenCalledOnce();
-  });
-
-  it("drains stop, removes listeners, releases voice once, and is idempotent", async () => {
-    const fixture = voiceFixture();
-    const player = await new ErisAdapter(fixture.client).createPlayer(binding);
-    const listener = vi.fn<(event: PlayerEvent) => void>();
-    player.subscribe(listener);
-    const started = player.play(request());
-    fixture.emitter.emit("start");
-    await started;
-    fixture.setPlaying(true);
-    const stopped = player.stop();
-    expect(player.stop()).toBe(stopped);
-    fixture.emitter.emit("end");
-    await stopped;
-    await player.stop();
-    fixture.emitter.emit("end");
-    expect(listener).not.toHaveBeenCalled();
-    expect(fixture.stopPlaying).toHaveBeenCalledOnce();
-    expect(fixture.leaveVoiceChannel).toHaveBeenCalledOnce();
-    expect(fixture.emitter.listenerCount("end")).toBe(0);
-    await expect(player.play(request())).rejects.toThrow("stopped");
-  });
-
-  it("attempts every native cleanup unit and aggregates failures", async () => {
-    const fixture = voiceFixture();
-    const player = await new ErisAdapter(fixture.client).createPlayer(binding);
-    fixture.stopPlaying.mockImplementation(() => {
-      throw new Error("stop playing failed");
-    });
-    fixture.leaveVoiceChannel.mockImplementation(() => {
-      throw new Error("leave voice failed");
-    });
-    let failure: unknown;
-    try {
-      await player.stop();
-    } catch (error: unknown) {
-      failure = error;
-    }
-    expect(failure).toBeInstanceOf(AggregateError);
-    expect((failure as AggregateError).errors.map((error: unknown) => (error as Error).message)).toEqual([
-      "stop playing failed",
-      "leave voice failed",
-    ]);
-    expect(fixture.emitter.listenerCount("end")).toBe(0);
-  });
-
-  it("unsubscribes public listeners", async () => {
-    const fixture = voiceFixture();
-    const player = await new ErisAdapter(fixture.client).createPlayer(binding);
-    const listener = vi.fn<(event: PlayerEvent) => void>();
-    const unsubscribe = player.subscribe(listener);
-    unsubscribe();
-    const started = player.play(request());
-    fixture.emitter.emit("start");
-    await started;
-    fixture.emitter.emit("end");
-    expect(listener).not.toHaveBeenCalled();
+  it("refuses a name it does not define", () => {
+    expect(() => render([{ name: "unknown" }])).toThrow(
+      expect.objectContaining({
+        code: ErrorCode.UNSUPPORTED,
+        message: "Filter unknown is not defined by this engine",
+      }),
+    );
   });
 });

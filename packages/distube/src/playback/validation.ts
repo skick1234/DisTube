@@ -1,7 +1,8 @@
-import type { PlaybackPreparation, PlaybackRequest, UrlPlaybackResource } from "../contracts";
+import type { PlaybackPreparation, PlaybackRequest, PlaybackResource } from "../contracts";
 import { DisTubeError, ErrorCode } from "../errors";
 
-const RESOURCE_KEYS = new Set(["kind", "url", "dispose"]);
+const URL_RESOURCE_KEYS = new Set(["kind", "url", "dispose"]);
+const ENCODED_RESOURCE_KEYS = new Set(["kind", "encoded", "dispose"]);
 const REQUEST_KEYS = new Set(["itemId", "resource"]);
 const RESOURCE_PREPARATION_KEYS = new Set(["kind", "resource"]);
 const SEARCH_PREPARATION_KEYS = new Set(["kind", "query"]);
@@ -20,7 +21,7 @@ export function validatePlaybackPreparation(
   const record = asRecord(value, "Playback preparation must be an object", code);
   if (record.kind === "resource") {
     assertExactKeys(record, RESOURCE_PREPARATION_KEYS, "Resource preparation", code);
-    return Object.freeze({ kind: "resource", resource: validateUrlPlaybackResource(record.resource, code) });
+    return Object.freeze({ kind: "resource", resource: validatePlaybackResource(record.resource, code) });
   }
   if (record.kind === "search") {
     assertExactKeys(record, SEARCH_PREPARATION_KEYS, "Search preparation", code);
@@ -32,22 +33,28 @@ export function validatePlaybackPreparation(
   throw new DisTubeError(code, "Playback preparation kind must be resource or search");
 }
 
-export function validateUrlPlaybackResource(
+export function validatePlaybackResource(
   value: unknown,
   code: ErrorCode = ErrorCode.INVALID_ARGUMENT,
-): UrlPlaybackResource {
-  const record = asRecord(value, "URL playback resource must be an object", code);
-  assertExactKeys(record, RESOURCE_KEYS, "URL playback resource", code);
-  if (record.kind !== "url") {
-    throw new DisTubeError(code, "URL playback resource kind must be url");
-  }
-  if (typeof record.url !== "string" || !isAbsoluteHttpUrl(record.url)) {
-    throw new DisTubeError(code, "URL playback resource must contain an absolute HTTP(S) URL");
+): PlaybackResource {
+  const record = asRecord(value, "Playback resource must be an object", code);
+  if (record.kind === "url") {
+    assertExactKeys(record, URL_RESOURCE_KEYS, "URL playback resource", code);
+    if (typeof record.url !== "string" || !isAbsoluteHttpUrl(record.url)) {
+      throw new DisTubeError(code, "URL playback resource must contain an absolute HTTP(S) URL");
+    }
+  } else if (record.kind === "encoded") {
+    assertExactKeys(record, ENCODED_RESOURCE_KEYS, "Encoded playback resource", code);
+    if (typeof record.encoded !== "string" || record.encoded.length === 0) {
+      throw new DisTubeError(code, "Encoded playback resource must contain a non-empty encoded track");
+    }
+  } else {
+    throw new DisTubeError(code, "Playback resource kind must be url or encoded");
   }
   if (typeof record.dispose !== "function") {
-    throw new DisTubeError(code, "URL playback resource must provide dispose()");
+    throw new DisTubeError(code, "Playback resource must provide dispose()");
   }
-  return value as UrlPlaybackResource;
+  return value as PlaybackResource;
 }
 
 export function validatePlaybackRequest(value: unknown): PlaybackRequest {
@@ -56,7 +63,7 @@ export function validatePlaybackRequest(value: unknown): PlaybackRequest {
   if (typeof record.itemId !== "string" || record.itemId.length === 0 || record.itemId !== record.itemId.trim()) {
     throw new DisTubeError(ErrorCode.INVALID_ARGUMENT, "Playback request itemId must be a trimmed non-empty string");
   }
-  return Object.freeze({ itemId: record.itemId, resource: validateUrlPlaybackResource(record.resource) });
+  return Object.freeze({ itemId: record.itemId, resource: validatePlaybackResource(record.resource) });
 }
 
 function asRecord(value: unknown, message: string, code: ErrorCode): Readonly<Record<string, unknown>> {

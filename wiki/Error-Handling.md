@@ -1,14 +1,15 @@
 # Error handling
 
-All public failures use `DisTubeError` and one of five codes:
+All public failures use `DisTubeError` and one of six codes:
 
 | Code | Meaning |
 | --- | --- |
 | `INVALID_ARGUMENT` | Invalid public input or configuration |
 | `SOURCE_FAILED` | Resolution, original-source preparation, or explicit fallback exhaustion failed |
-| `VOICE_FAILED` | Adapter creation, Player request/control/outcome, or native teardown failed |
+| `VOICE_FAILED` | Voice session or Player request/control/outcome, or native teardown failed |
 | `PLUGIN_FAILED` | Plugin initialization or disposal failed |
-| `QUEUE_FAILED` | Queue state, stale operation, destruction, or shutdown rejected work |
+| `QUEUE_FAILED` | Queue state, stale operation, deletion, or shutdown rejected work |
+| `UNSUPPORTED` | The active playback engine cannot express the requested effect (e.g. Eris seek) |
 
 Check `error instanceof DisTubeError`, switch on `error.code`, and inspect `error.cause` for the original provider or
 platform failure. There are no package-specific public error hierarchies.

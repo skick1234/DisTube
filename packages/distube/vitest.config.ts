@@ -5,17 +5,8 @@ export default defineConfig({
     include: ["tests/**/*.test.ts"],
     coverage: {
       provider: "v8",
-      include: [
-        "src/DisTube.ts",
-        "src/GuildQueue.ts",
-        "src/QueueManager.ts",
-        "src/errors.ts",
-        "src/events.ts",
-        "src/playback/**/*.ts",
-        "src/queue/**/*.ts",
-        "src/utils/dispose.ts",
-      ],
-      thresholds: { branches: 70, functions: 80, lines: 80, statements: 80 },
+      include: ["src/**/*.ts"],
+      thresholds: { branches: 85, functions: 90, lines: 90, statements: 90 },
     },
   },
 });

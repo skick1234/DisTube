@@ -1,533 +1,308 @@
 import { describe, expect, it, vi } from "vitest";
+import { DisTube, DisTubeError, ErrorCode, type Plugin, type PluginContext } from "../src";
 import {
-  type Adapter,
-  DisTube,
-  DisTubeError,
-  ErrorCode,
-  type PlaybackContext,
-  type PlaybackPreparation,
-  type PlaybackRequest,
-  type Player,
-  type PlayerEvent,
-  type PluginContext,
-  QueueItem,
-  Song,
-  type SourcePlugin,
-} from "../src";
-import { appendItems, IDLE_QUEUE_STATE, startFirst } from "../src/queue/state";
+  capture,
+  FakeAdapter,
+  FakeEngine,
+  FakeSource,
+  GUILD,
+  media,
+  playableSetup,
+  settle,
+  setup,
+  VOICE_CHANNEL,
+} from "./support/harness";
 
-class TestPlayer implements Player {
-  readonly calls: string[] = [];
-  readonly listeners = new Set<(event: PlayerEvent) => void>();
-  failPlay = false;
-  failPlayCount = 0;
-  failStop = false;
-  stopImpl?: () => Promise<void>;
+const TARGET = { guildId: GUILD, voiceChannelId: VOICE_CHANNEL };
 
-  async play(request: PlaybackRequest): Promise<void> {
-    this.calls.push(`play:${request.itemId}`);
-    if (this.failPlay || this.failPlayCount-- > 0) throw new Error("play failed");
-  }
-  async pause(): Promise<void> {
-    this.calls.push("pause");
-  }
-  async resume(): Promise<void> {
-    this.calls.push("resume");
-  }
-  async stop(): Promise<void> {
-    this.calls.push("stop");
-    if (this.stopImpl) return this.stopImpl();
-    if (this.failStop) throw new Error("stop failed");
-  }
-  async seek(seconds: number): Promise<void> {
-    this.calls.push(`seek:${seconds}`);
-  }
-  subscribe(listener: (event: PlayerEvent) => void): () => void {
-    this.listeners.add(listener);
-    return () => this.listeners.delete(listener);
-  }
-  emit(event: PlayerEvent): void {
-    for (const listener of this.listeners) listener(event);
-  }
-}
-
-class TestSource implements SourcePlugin {
-  readonly name: string;
-  readonly song: Song;
-  readonly initialize = vi.fn((context: PluginContext) =>
-    context.diagnostic({
-      severity: "info",
-      stage: "plugin.initialize",
-      message: `${this.name} plugin initialized`,
-    }),
-  );
+/** A Plugin that also satisfies the Engine members, so the client adopts it over the Adapter's. */
+class FakeEnginePlugin extends FakeEngine implements Plugin {
+  readonly initialize = vi.fn((_context: PluginContext) => undefined);
   readonly dispose = vi.fn(() => undefined);
-  resolveImpl?: (url: string) => Promise<Song | readonly Song[] | undefined>;
-  prepareImpl?: (song: Song, context: PlaybackContext) => Promise<PlaybackPreparation>;
 
-  constructor(name = "test-source") {
-    this.name = name;
-    this.song = new Song({ id: "song", title: "Song", url: "https://media.test/song", duration: 60, source: name });
-  }
-  search(): Promise<readonly Song[]> {
-    return Promise.resolve([this.song]);
-  }
-  resolve(url: string): Promise<Song | readonly Song[] | undefined> {
-    return this.resolveImpl?.(url) ?? Promise.resolve(this.song);
-  }
-  preparePlayback(song: Song, context: PlaybackContext): Promise<PlaybackPreparation> {
-    return (
-      this.prepareImpl?.(song, context) ??
-      Promise.resolve({
-        kind: "resource",
-        resource: { kind: "url", url: `https://stream.test/${song.id}`, dispose: () => undefined },
-      })
-    );
+  constructor(readonly name = "engine") {
+    super();
   }
 }
 
-function fixture(source = new TestSource(), player = new TestPlayer()) {
-  const adapter: Adapter = { createPlayer: vi.fn(async () => player) };
-  const distube = new DisTube({ adapter, plugins: [source] });
-  const queue = distube.createQueue({ guildId: "guild", channelId: "voice" });
-  return { adapter, distube, player, queue, source };
-}
-
-describe("media values", () => {
-  it("keeps Song metadata and QueueItem dates behaviorally immutable", () => {
-    const nested = { tags: ["a"] };
-    const song = new Song({
-      id: "id",
-      title: "title",
-      url: "https://example.test",
-      duration: 1,
-      source: "test",
-      metadata: nested,
-    });
-    nested.tags.push("b");
-    expect(song.metadata).toEqual({ tags: ["a"] });
-    const item = new QueueItem({ song });
-    const committed = item.addedAt.getTime();
-    const exposed = item.addedAt;
-    exposed.setTime(0);
-    expect(item.addedAt.getTime()).toBe(committed);
-  });
-
-  it("does not expose mutable Map storage", () => {
-    const map = new Map([["key", "value"]]);
-    const song = new Song({
-      id: "map",
-      title: "map",
-      url: "https://example.test/map",
-      duration: 1,
-      source: "test",
-      metadata: { map },
-    });
-    const exposed = song.metadata.map as Map<string, string>;
-    exposed.set("changed", "yes");
-    expect(song.metadata.map).toEqual(new Map([["key", "value"]]));
-  });
-
-  it("creates a distinct QueueItem for each occurrence", () => {
-    const song = new Song({ id: "id", title: "title", url: "https://example.test", duration: 1, source: "test" });
-    expect(new QueueItem({ song }).id).not.toBe(new QueueItem({ song }).id);
-  });
-});
-
-describe("pure QueueState", () => {
-  it("selects the earliest item without mutating the input", () => {
-    const song = new Song({ id: "id", title: "title", url: "https://example.test", duration: 1, source: "test" });
-    const first = new QueueItem({ song });
-    const second = new QueueItem({ song });
-    const queued = appendItems(IDLE_QUEUE_STATE, [first, second]);
-    const selected = startFirst(queued);
-    expect(selected?.item).toBe(first);
-    expect(selected?.state).toMatchObject({ current: first, items: [second], status: "playing" });
-    expect(queued).toMatchObject({ items: [first, second], status: "idle" });
-  });
-});
-
-describe("DisTube lifecycle and queues", () => {
-  it("rejects a second active queue for another channel in the same guild", () => {
-    const { distube, queue } = fixture();
-    expect(() => distube.createQueue({ guildId: queue.guildId, channelId: "other-voice" })).toThrowError(
-      expect.objectContaining({ code: ErrorCode.QUEUE_FAILED }),
+describe("client construction", () => {
+  it.each([
+    [undefined, "DisTube options are required"],
+    [{ adapter: {}, plugins: [] }, "options.adapter must implement Adapter"],
+    [{ adapter: new FakeAdapter(), plugins: {} }, "options.plugins must be an array"],
+    [{ adapter: new FakeAdapter(), plugins: [{}] }, "Each plugin must implement Plugin"],
+    [{ adapter: new FakeAdapter(), plugins: [], unexpected: true }, "Unknown option: unexpected"],
+  ] as const)("rejects invalid construction options %#", (options, message) => {
+    expect(() => new DisTube(options as never)).toThrowError(
+      expect.objectContaining({ code: ErrorCode.INVALID_ARGUMENT, message }),
     );
-    expect(distube.getQueue(queue.id)).toBe(queue);
   });
 
-  it("validates duplicate plugin names before initialization", () => {
-    const one = new TestSource("duplicate");
-    const two = new TestSource("duplicate");
-    expect(() => new DisTube({ adapter: { createPlayer: vi.fn() }, plugins: [one, two] })).toThrowError(
-      expect.objectContaining({ code: ErrorCode.INVALID_ARGUMENT }),
+  it("rejects a duplicate Plugin and a second engine-capable Plugin before initializing any", () => {
+    const first = new FakeSource("duplicate");
+    const second = new FakeSource("duplicate");
+    expect(() => new DisTube({ adapter: new FakeAdapter(), plugins: [first, second] })).toThrowError(
+      expect.objectContaining({ code: ErrorCode.INVALID_ARGUMENT, message: "Duplicate Plugin: duplicate" }),
     );
-    expect(one.initialize).not.toHaveBeenCalled();
+    expect(first.initialize).not.toHaveBeenCalled();
+
+    expect(
+      () => new DisTube({ adapter: new FakeAdapter(), plugins: [new FakeEnginePlugin("one"), new FakeEnginePlugin()] }),
+    ).toThrowError(expect.objectContaining({ message: "Only one engine-capable Plugin is allowed: engine" }));
   });
 
-  it("rolls back initialized plugins in reverse order", () => {
-    const first = new TestSource("first");
-    const second = new TestSource("second");
+  it("prefers an engine Plugin over the Adapter's engine", async () => {
+    const source = new FakeSource("source");
+    source.resolve.mockImplementation(async url => media("source", url));
+    const plugged = new FakeEnginePlugin();
+    const adapter = new FakeAdapter();
+    const distube = new DisTube({ adapter, plugins: [source, plugged] });
+
+    await distube.play(TARGET, "a");
+    await settle();
+
+    expect(plugged.players).toHaveLength(1);
+    expect((adapter.engine as FakeEngine).players).toHaveLength(0);
+  });
+
+  it("rolls back initialized plugins in reverse order and classifies the failure", () => {
+    const first = new FakeSource("first");
+    const second = new FakeSource("second");
     second.initialize.mockImplementation(() => {
       throw new Error("init failed");
     });
-    expect(() => new DisTube({ adapter: { createPlayer: vi.fn() }, plugins: [first, second] })).toThrowError(
+
+    expect(() => new DisTube({ adapter: new FakeAdapter(), plugins: [first, second] })).toThrowError(
       expect.objectContaining({ code: ErrorCode.PLUGIN_FAILED }),
     );
     expect(first.dispose).toHaveBeenCalledTimes(1);
     expect(second.dispose).not.toHaveBeenCalled();
   });
 
-  it("classifies returned asynchronous initialization as PLUGIN_FAILED", () => {
-    const source = new TestSource();
-    source.initialize.mockImplementation((() => Promise.resolve()) as unknown as () => undefined);
-    expect(() => new DisTube({ adapter: { createPlayer: vi.fn() }, plugins: [source] })).toThrowError(
-      expect.objectContaining({ code: ErrorCode.PLUGIN_FAILED }),
-    );
-  });
+  it("reports late initialization and rollback rejections without hiding the construction error", async () => {
+    const initialized = new FakeSource("initialized");
+    const asynchronous = new FakeSource("asynchronous");
+    const diagnostics = vi.fn();
+    initialized.dispose.mockRejectedValueOnce(new Error("rollback failed"));
+    asynchronous.initialize.mockImplementation((() => Promise.reject("late failure")) as unknown as () => undefined);
 
-  it("uses enqueue as the insertion path and publishes committed dotted events", async () => {
-    const { distube, queue } = fixture();
-    const events: string[] = [];
-    distube.on("queue.item.added", event => events.push(`added:${event.item.id}`));
-    distube.on("queue.item.started", event => {
-      expect(queue.state.current).toBe(event.item);
-      events.push(`started:${event.item.id}`);
-    });
-    const [item] = await queue.enqueue("https://provider.test/item");
-    expect(queue.state).toMatchObject({ items: [item], status: "idle" });
-    expect(events).toEqual([`added:${item?.id}`]);
-    await vi.waitFor(() => expect(queue.state).toMatchObject({ current: item, items: [], status: "playing" }));
-    expect(events).toEqual([`added:${item?.id}`, `started:${item?.id}`]);
-  });
+    expect(
+      () =>
+        new DisTube({ adapter: new FakeAdapter(), plugins: [initialized, asynchronous], onDiagnostic: diagnostics }),
+    ).toThrowError(expect.objectContaining({ code: ErrorCode.PLUGIN_FAILED }));
+    await settle();
 
-  it("routes decline then success in configured order", async () => {
-    const first = new TestSource("first");
-    first.resolveImpl = async () => undefined;
-    const second = new TestSource("second");
-    const player = new TestPlayer();
-    const distube = new DisTube({ adapter: { createPlayer: async () => player }, plugins: [first, second] });
-    const queue = distube.createQueue({ guildId: "guild", channelId: "voice" });
-    const [item] = await queue.enqueue("https://provider.test/item");
-    expect(item?.song.source).toBe("second");
-  });
-
-  it("maps accepted source failures once", async () => {
-    const source = new TestSource();
-    const cause = new Error("provider down");
-    source.resolveImpl = async () => {
-      throw cause;
-    };
-    const { queue } = fixture(source);
-    await expect(queue.enqueue("https://provider.test/item")).rejects.toMatchObject({
-      code: ErrorCode.SOURCE_FAILED,
-      cause,
-    });
-  });
-
-  it("remaps an incompatible DisTubeError at the accepting subsystem", async () => {
-    const source = new TestSource();
-    const incompatible = new DisTubeError(ErrorCode.VOICE_FAILED, "wrong subsystem");
-    source.resolveImpl = async () => {
-      throw incompatible;
-    };
-    const { queue } = fixture(source);
-    await expect(queue.enqueue("https://provider.test/item")).rejects.toMatchObject({
-      code: ErrorCode.SOURCE_FAILED,
-      cause: incompatible,
-    });
-  });
-
-  it("invalidates pending resolution when stop is accepted", async () => {
-    const source = new TestSource();
-    let resolve!: (song: Song) => void;
-    source.resolveImpl = () => new Promise<Song>(done => (resolve = done));
-    const { queue } = fixture(source);
-    const enqueue = queue.enqueue("https://provider.test/item");
-    await Promise.resolve();
-    await queue.stop();
-    resolve(source.song);
-    await expect(enqueue).rejects.toMatchObject({ code: ErrorCode.QUEUE_FAILED });
-    expect(queue.state).toBe(IDLE_QUEUE_STATE);
-  });
-
-  it("invalidates pending resolution when the queue is destroyed", async () => {
-    const source = new TestSource();
-    let resolve!: (song: Song) => void;
-    source.resolveImpl = () => new Promise<Song>(done => (resolve = done));
-    const { distube, queue } = fixture(source);
-    const enqueue = queue.enqueue("https://provider.test/item");
-    await Promise.resolve();
-    await distube.destroyQueue(queue.id);
-    resolve(source.song);
-    await expect(enqueue).rejects.toMatchObject({ code: ErrorCode.QUEUE_FAILED });
-  });
-
-  it("recreates a stopped Player while preserving the queue facade", async () => {
-    const source = new TestSource();
-    const firstPlayer = new TestPlayer();
-    const secondPlayer = new TestPlayer();
-    const createPlayer = vi.fn().mockResolvedValueOnce(firstPlayer).mockResolvedValueOnce(secondPlayer);
-    const distube = new DisTube({ adapter: { createPlayer }, plugins: [source] });
-    const queue = distube.createQueue({ guildId: "guild", channelId: "voice" });
-    const [first] = await queue.enqueue(source.song);
-    await vi.waitFor(() => expect(queue.state.current).toBe(first));
-    await queue.stop();
-    expect(firstPlayer.listeners.size).toBe(0);
-    const [second] = await queue.enqueue(source.song);
-    await vi.waitFor(() => expect(queue.state.current).toBe(second));
-    expect(createPlayer).toHaveBeenCalledTimes(2);
-    expect(queue.state.current).toBe(second);
-    firstPlayer.emit({ type: "finished", itemId: first?.id ?? "missing" });
-    expect(queue.state.current).toBe(second);
-  });
-
-  it("recreates the Player after skip and ignores the stopped Player", async () => {
-    const source = new TestSource();
-    const firstPlayer = new TestPlayer();
-    const secondPlayer = new TestPlayer();
-    const createPlayer = vi.fn().mockResolvedValueOnce(firstPlayer).mockResolvedValueOnce(secondPlayer);
-    const distube = new DisTube({ adapter: { createPlayer }, plugins: [source] });
-    const queue = distube.createQueue({ guildId: "guild", channelId: "voice" });
-    const first = (await queue.enqueue(source.song))[0] as QueueItem;
-    await vi.waitFor(() => expect(queue.state.current).toBe(first));
-    const second = (await queue.enqueue(source.song))[0] as QueueItem;
-    await queue.skip();
-    await vi.waitFor(() => expect(queue.state.current).toBe(second));
-    expect(createPlayer).toHaveBeenCalledTimes(2);
-    firstPlayer.emit({ type: "finished", itemId: first.id });
-    expect(queue.state.current).toBe(second);
-  });
-
-  it("progresses through a fresh Player when skip teardown fails", async () => {
-    const source = new TestSource();
-    const firstPlayer = new TestPlayer();
-    firstPlayer.failStop = true;
-    const secondPlayer = new TestPlayer();
-    const createPlayer = vi.fn().mockResolvedValueOnce(firstPlayer).mockResolvedValueOnce(secondPlayer);
-    const distube = new DisTube({ adapter: { createPlayer }, plugins: [source] });
-    const queue = distube.createQueue({ guildId: "guild", channelId: "voice" });
-    const first = (await queue.enqueue(source.song))[0] as QueueItem;
-    await vi.waitFor(() => expect(queue.state.current).toBe(first));
-    const second = (await queue.enqueue(source.song))[0] as QueueItem;
-    await expect(queue.skip()).rejects.toMatchObject({ code: ErrorCode.VOICE_FAILED });
-    await vi.waitFor(() => expect(queue.state.current).toBe(second));
-    expect(createPlayer).toHaveBeenCalledTimes(2);
-  });
-
-  it("makes destruction join cleanup already started by stop", async () => {
-    const source = new TestSource();
-    const player = new TestPlayer();
-    let releaseStop!: () => void;
-    player.stopImpl = () => new Promise<void>(resolve => (releaseStop = resolve));
-    const { distube, queue } = fixture(source, player);
-    await queue.enqueue(source.song);
-    await vi.waitFor(() => expect(queue.state.current).toBeDefined());
-    const stop = queue.stop();
-    const destroy = distube.destroyQueue(queue.id);
-    let destroyed = false;
-    void destroy.then(() => (destroyed = true));
-    await vi.waitFor(() => expect(player.calls.filter(call => call === "stop")).toHaveLength(1));
-    await Promise.resolve();
-    expect(destroyed).toBe(false);
-    releaseStop();
-    await Promise.all([stop, destroy]);
-    expect(player.calls.filter(call => call === "stop")).toHaveLength(1);
-  });
-
-  it("advances after a normalized finish and ignores stale item ids", async () => {
-    const { distube, player, queue, source } = fixture();
-    const other = new Song({
-      id: "other",
-      title: "Other",
-      url: "https://media.test/other",
-      duration: 10,
-      source: source.name,
-    });
-    const first = (await queue.enqueue(source.song))[0] as QueueItem;
-    await vi.waitFor(() => expect(queue.state.current).toBe(first));
-    const second = (await queue.enqueue(other))[0] as QueueItem;
-    player.emit({ type: "finished", itemId: "stale" });
-    expect(queue.state.current).toBe(first);
-    player.emit({ type: "finished", itemId: first.id });
-    await vi.waitFor(() => expect(queue.state.current).toBe(second));
-    expect(player.calls).toContain(`play:${second.id}`);
-    await distube.shutdown();
-  });
-
-  it("uses a fresh Player after an unrecoverable native outcome", async () => {
-    const source = new TestSource();
-    const firstPlayer = new TestPlayer();
-    const secondPlayer = new TestPlayer();
-    const createPlayer = vi.fn().mockResolvedValueOnce(firstPlayer).mockResolvedValueOnce(secondPlayer);
-    const distube = new DisTube({ adapter: { createPlayer }, plugins: [source] });
-    const queue = distube.createQueue({ guildId: "guild", channelId: "voice" });
-    const first = (await queue.enqueue(source.song))[0] as QueueItem;
-    await vi.waitFor(() => expect(queue.state.current).toBe(first));
-    const second = (await queue.enqueue(source.song))[0] as QueueItem;
-    firstPlayer.emit({ type: "failed", itemId: first.id, error: new Error("connection lost"), terminal: true });
-    await vi.waitFor(() => expect(queue.state.current).toBe(second));
-    expect(createPlayer).toHaveBeenCalledTimes(2);
-    expect(firstPlayer.calls.filter(call => call === "stop")).toHaveLength(1);
-  });
-
-  it("publishes failure once and advances after a failed start", async () => {
-    const player = new TestPlayer();
-    player.failPlayCount = 1;
-    const source = new TestSource();
-    const { distube, queue } = fixture(source, player);
-    const failed: string[] = [];
-    distube.on("queue.item.failed", event => failed.push(event.item.song.id));
-    const first = new Song({
-      id: "first",
-      title: "First",
-      url: "https://media.test/first",
-      duration: 10,
-      source: source.name,
-    });
-    const second = new Song({
-      id: "second",
-      title: "Second",
-      url: "https://media.test/second",
-      duration: 10,
-      source: source.name,
-    });
-    source.resolveImpl = async () => [first, second];
-    await queue.enqueue("https://provider.test/playlist");
-    await vi.waitFor(() => expect(queue.state.current?.song.id).toBe("second"));
-    expect(failed).toEqual(["first"]);
-  });
-
-  it("commits controls only after Player success", async () => {
-    const { player, queue } = fixture();
-    const [item] = await queue.enqueue("https://provider.test/item");
-    await vi.waitFor(() => expect(queue.state.current).toBe(item));
-    await queue.pause();
-    expect(queue.state.status).toBe("paused");
-    await queue.resume();
-    await queue.seek(20);
-    expect(player.calls).toEqual(expect.arrayContaining(["pause", "resume", "seek:20"]));
-  });
-
-  it("returns the same shutdown Promise and disposes plugins once", async () => {
-    const { distube, source } = fixture();
-    const first = distube.shutdown();
-    expect(distube.shutdown()).toBe(first);
-    await first;
-    expect(source.dispose).toHaveBeenCalledTimes(1);
-    expect(() => distube.createQueue({ guildId: "other", channelId: "voice" })).toThrowError(
-      expect.objectContaining({ code: ErrorCode.QUEUE_FAILED }),
-    );
-  });
-
-  it("releases the active Player during shutdown and ignores its late outcomes", async () => {
-    const { distube, player, queue, source } = fixture();
-    const [active] = await queue.enqueue(source.song);
-    const failed = vi.fn();
-    distube.on("queue.item.failed", failed);
-    await distube.shutdown();
-    expect(player.calls).toContain("stop");
-    expect(player.listeners.size).toBe(0);
-    player.emit({ type: "failed", itemId: active?.id ?? "missing", error: new Error("late") });
-    expect(failed).not.toHaveBeenCalled();
-  });
-
-  it("attempts every plugin disposal before reporting shutdown failure", async () => {
-    const first = new TestSource("first");
-    const second = new TestSource("second");
-    first.dispose.mockImplementation(() => {
-      throw new Error("first dispose");
-    });
-    second.dispose.mockImplementation(() => {
-      throw new Error("second dispose");
-    });
-    const distube = new DisTube({ adapter: { createPlayer: vi.fn() }, plugins: [first, second] });
-    await expect(distube.shutdown()).rejects.toMatchObject({ code: ErrorCode.PLUGIN_FAILED });
-    expect(first.dispose).toHaveBeenCalledTimes(1);
-    expect(second.dispose).toHaveBeenCalledTimes(1);
-  });
-
-  it("preserves queue and Plugin cleanup failures in one shutdown aggregate", async () => {
-    const source = new TestSource();
-    source.dispose.mockImplementation(() => {
-      throw new Error("plugin dispose failed");
-    });
-    const player = new TestPlayer();
-    player.failStop = true;
-    const { distube, queue } = fixture(source, player);
-    await queue.enqueue(source.song);
-    await vi.waitFor(() => expect(queue.state.current).toBeDefined());
-    let failure: unknown;
-    try {
-      await distube.shutdown();
-    } catch (error: unknown) {
-      failure = error;
-    }
-    expect(failure).toBeInstanceOf(DisTubeError);
-    const shutdownError = failure as DisTubeError;
-    expect(shutdownError.cause).toBeInstanceOf(AggregateError);
-    expect((shutdownError.cause as AggregateError).errors.map(error => (error as Error).message)).toEqual(
-      expect.arrayContaining(["stop failed", "plugin dispose failed"]),
-    );
-  });
-
-  it("captures listener rejection without rolling back state", async () => {
-    const diagnostic = vi.fn();
-    const source = new TestSource();
-    const distube = new DisTube({
-      adapter: { createPlayer: async () => new TestPlayer() },
-      plugins: [source],
-      onDiagnostic: diagnostic,
-    });
-    const queue = distube.createQueue({ guildId: "guild", channelId: "voice" });
-    distube.on("queue.item.added", async () => {
-      throw new Error("listener failed");
-    });
-    await queue.enqueue(source.song);
-    await vi.waitFor(() => expect(diagnostic).toHaveBeenCalled());
-    await vi.waitFor(() => expect(queue.state.current?.song).toBe(source.song));
-  });
-
-  it("delivers structured diagnostics and isolates consumer rejection", async () => {
-    const diagnostics = vi.fn(async () => {
-      throw new Error("diagnostic consumer failed");
-    });
-    const source = new TestSource();
-    const distube = new DisTube({
-      adapter: { createPlayer: async () => new TestPlayer() },
-      plugins: [source],
-      onDiagnostic: diagnostics,
-    });
+    expect(initialized.dispose).toHaveBeenCalledTimes(1);
     expect(diagnostics).toHaveBeenCalledWith(
       expect.objectContaining({
-        severity: "info",
-        stage: "plugin.initialize",
-        plugin: source.name,
-        message: "test-source plugin initialized",
+        stage: "plugin.initialize.late-rejection",
+        plugin: "asynchronous",
+        error: expect.objectContaining({ message: "late failure" }),
       }),
     );
-    const queue = distube.createQueue({ guildId: "guild", channelId: "voice" });
-    distube.on("queue.item.added", () => {
-      throw new Error("listener failed");
-    });
-    const [item] = await queue.enqueue(source.song);
-    await vi.waitFor(() => expect(queue.state.current).toBe(item));
-    await vi.waitFor(() =>
-      expect(diagnostics).toHaveBeenCalledWith(
-        expect.objectContaining({ severity: "error", stage: "event.listener", error: expect.any(Error) }),
-      ),
+    expect(diagnostics).toHaveBeenCalledWith(
+      expect.objectContaining({
+        stage: "plugin.initialize.rollback",
+        plugin: "initialized",
+        error: expect.objectContaining({ message: "rollback failed" }),
+      }),
     );
   });
 });
 
+describe("source routing", () => {
+  it("resolves media without creating queue or voice state and preserves a caller signal", async () => {
+    const harness = playableSetup();
+    const controller = new AbortController();
+
+    await expect(harness.distube.resolve("first")).resolves.toMatchObject({ id: "first" });
+    const generatedSignal = harness.source.resolve.mock.calls[0]?.[1]?.signal;
+    await expect(harness.distube.resolve("second", { signal: controller.signal })).resolves.toMatchObject({
+      id: "second",
+    });
+
+    expect(generatedSignal).toBeInstanceOf(AbortSignal);
+    expect(generatedSignal).not.toBe(controller.signal);
+    expect(harness.source.resolve.mock.calls[1]?.[1]?.signal).toBe(controller.signal);
+    expect(harness.distube.queues.size).toBe(0);
+    expect(harness.distube.voices.size).toBe(0);
+    expect(harness.adapter.createVoiceSession).not.toHaveBeenCalled();
+    expect(harness.engine.createPlayer).not.toHaveBeenCalled();
+  });
+
+  it("passes a declined URL to the next configured source", async () => {
+    const first = new FakeSource("first");
+    const second = new FakeSource("second");
+    second.resolve.mockImplementation(async url => media("second", url));
+    const harness = setup([first, second]);
+
+    const { items } = await harness.distube.play(TARGET, "https://provider.example/item");
+
+    expect(first.resolve).toHaveBeenCalledTimes(1);
+    expect(items[0]?.song.source).toBe("second");
+  });
+
+  it("maps a source failure to SOURCE_FAILED, keeping an incompatible DisTubeError as the cause", async () => {
+    const harness = playableSetup();
+    const cause = new DisTubeError(ErrorCode.VOICE_FAILED, "wrong subsystem");
+    harness.source.resolve.mockRejectedValueOnce(cause);
+
+    await expect(harness.distube.play(TARGET, "https://provider.example/item")).rejects.toMatchObject({
+      code: ErrorCode.SOURCE_FAILED,
+      cause,
+    });
+  });
+});
+
+describe("event facade", () => {
+  it("forwards on, once, and off to the underlying emitter", async () => {
+    const harness = playableSetup();
+    const persistent = vi.fn();
+    const once = vi.fn();
+    harness.distube.on("queue.item.added", persistent).once("queue.item.added", once);
+    harness.distube.off("queue.item.added", persistent);
+
+    const { queue } = await harness.distube.play(TARGET, "a");
+    await queue.enqueue("b");
+
+    expect(persistent).not.toHaveBeenCalled();
+    expect(once).toHaveBeenCalledTimes(1);
+  });
+
+  it("reports a failing listener as a diagnostic without rolling back the transition", async () => {
+    const harness = playableSetup();
+    harness.distube.on("queue.item.added", async () => {
+      throw new Error("listener failed");
+    });
+
+    const { queue } = await harness.distube.play(TARGET, "a");
+    await settle();
+
+    expect(queue.state.current?.song.id).toBe("a");
+    expect(harness.diagnostics).toHaveBeenCalledWith(
+      expect.objectContaining({ severity: "error", stage: "event.listener", error: expect.any(Error) }),
+    );
+  });
+
+  it("isolates a diagnostic consumer that rejects", async () => {
+    const source = new FakeSource("source");
+    source.initialize.mockImplementation(context => {
+      context.diagnostic({ severity: "info", stage: "plugin.initialize", message: "ready" });
+    });
+    const onDiagnostic = vi.fn(async () => {
+      throw new Error("diagnostic consumer failed");
+    });
+
+    expect(() => new DisTube({ adapter: new FakeAdapter(), plugins: [source], onDiagnostic })).not.toThrow();
+    expect(onDiagnostic).toHaveBeenCalledWith(
+      expect.objectContaining({ stage: "plugin.initialize", plugin: "source", message: "ready" }),
+    );
+    await settle();
+  });
+});
+
+describe("shutdown", () => {
+  it("memoizes the shutdown, disposes each Plugin once, and fences later play", async () => {
+    const harness = playableSetup();
+    const first = harness.distube.shutdown();
+
+    expect(harness.distube.shutdown()).toBe(first);
+    await first;
+    expect(harness.source.dispose).toHaveBeenCalledTimes(1);
+    await expect(harness.distube.play(TARGET, "a")).rejects.toMatchObject({ code: ErrorCode.QUEUE_FAILED });
+  });
+
+  it("stops the borrowed Player and ignores the outcomes it publishes afterwards", async () => {
+    const harness = playableSetup();
+    const { queue } = await harness.distube.play(TARGET, "a");
+    await settle();
+    const player = harness.engine.players[0];
+    const item = queue.state.current;
+    const failed = vi.fn();
+    harness.distube.on("queue.item.failed", failed);
+
+    await harness.distube.shutdown();
+
+    expect(player?.stopTrack).toHaveBeenCalled();
+    expect(player?.listeners.size).toBe(0);
+    player?.emit({ type: "failed", itemId: item?.id ?? "missing", error: new Error("late") });
+    expect(failed).not.toHaveBeenCalled();
+  });
+
+  it("classifies a Voice-only cleanup failure", async () => {
+    const harness = playableSetup();
+    await harness.distube.voices.join({ guildId: GUILD, channelId: VOICE_CHANNEL });
+    harness.adapter.sessions[0]?.release.mockRejectedValueOnce(new Error("session release failed"));
+
+    await expect(harness.distube.shutdown()).rejects.toMatchObject({
+      code: ErrorCode.VOICE_FAILED,
+      cause: expect.any(AggregateError),
+    });
+  });
+
+  it("flattens nested Plugin cleanup causes and attempts every disposal", async () => {
+    const first = new FakeSource("first");
+    const second = new FakeSource("second");
+    const third = new FakeSource("third");
+    first.dispose.mockImplementation(() => {
+      throw new Error("raw failure");
+    });
+    second.dispose.mockImplementation(() => {
+      throw new DisTubeError(ErrorCode.PLUGIN_FAILED, "nested failure", {
+        cause: new AggregateError([new Error("nested leaf"), "string leaf"]),
+      });
+    });
+    third.dispose.mockImplementation(() => {
+      throw new DisTubeError(ErrorCode.PLUGIN_FAILED, "missing cause");
+    });
+    const distube = new DisTube({ adapter: new FakeAdapter(), plugins: [first, second, third] });
+
+    const failure = (await capture(distube.shutdown())) as DisTubeError;
+
+    expect(failure.code).toBe(ErrorCode.PLUGIN_FAILED);
+    expect(failure.cause).toBeInstanceOf(AggregateError);
+    expect((failure.cause as AggregateError).errors.map(error => (error as Error).message)).toEqual(
+      expect.arrayContaining(["raw failure", "nested leaf", "string leaf", "missing cause"]),
+    );
+    expect(first.dispose).toHaveBeenCalledTimes(1);
+    expect(second.dispose).toHaveBeenCalledTimes(1);
+    expect(third.dispose).toHaveBeenCalledTimes(1);
+  });
+
+  it("attempts every disposal and preserves each cause in one aggregate", async () => {
+    const harness = playableSetup();
+    const second = new FakeSource("second");
+    harness.source.dispose.mockImplementation(() => {
+      throw new Error("plugin dispose failed");
+    });
+    second.dispose.mockImplementation(() => {
+      throw new Error("second dispose failed");
+    });
+    const distube = new DisTube({ adapter: harness.adapter, plugins: [harness.source, second] });
+    await distube.play(TARGET, "a");
+    await settle();
+    harness.engine.players[0]?.stopTrack.mockRejectedValue(new Error("stop failed"));
+
+    const failure = (await capture(distube.shutdown())) as DisTubeError;
+
+    expect(failure).toBeInstanceOf(DisTubeError);
+    expect(failure.cause).toBeInstanceOf(AggregateError);
+    expect((failure.cause as AggregateError).errors.map(error => (error as Error).message)).toEqual(
+      expect.arrayContaining(["stop failed", "plugin dispose failed", "second dispose failed"]),
+    );
+    expect(second.dispose).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("errors", () => {
-  it("has exactly five public codes", () => {
+  it("has exactly six public codes", () => {
     expect(Object.values(ErrorCode)).toEqual([
       "INVALID_ARGUMENT",
       "SOURCE_FAILED",
       "VOICE_FAILED",
       "PLUGIN_FAILED",
       "QUEUE_FAILED",
+      "UNSUPPORTED",
     ]);
     expect(new DisTubeError(ErrorCode.QUEUE_FAILED, "failed")).toBeInstanceOf(Error);
   });
