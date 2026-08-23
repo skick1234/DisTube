@@ -1,5 +1,5 @@
 import type { Adapter, Diagnostic, Engine, VoiceSession, VoiceTarget } from "../contracts";
-import { asDisTubeError, DisTubeError, ErrorCode } from "../errors";
+import { asDisTubeError, asError, DisTubeError, ErrorCode } from "../errors";
 import type { VoiceDisconnectReason } from "../events";
 import { cleanupFailure } from "../queue/failures";
 import type { QueueTerminalCause } from "../queue/terminal";
@@ -450,8 +450,4 @@ function validateTarget(target: VoiceTarget): void {
   if (typeof target.channelId !== "string" || target.channelId.length === 0) {
     throw new DisTubeError(ErrorCode.INVALID_ARGUMENT, "channelId must be a non-empty string");
   }
-}
-
-function asError(error: unknown): Error {
-  return error instanceof Error ? error : new Error(String(error));
 }

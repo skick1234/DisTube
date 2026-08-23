@@ -1,8 +1,6 @@
-import { DisTubeError, type ErrorCode } from "../errors";
+import { asError, DisTubeError, type ErrorCode } from "../errors";
 
-export function asError(error: unknown): Error {
-  return error instanceof Error ? error : new Error(String(error));
-}
+export { asError };
 
 export function cleanupFailure(
   code: ErrorCode,

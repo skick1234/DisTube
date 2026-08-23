@@ -1,6 +1,44 @@
+import { asError } from "../errors";
+
 interface WorkSlot {
   readonly order: number;
   readonly result: Promise<unknown>;
+}
+
+/**
+ * Settles a collection that can still grow while it is being drained.
+ *
+ * `nextBatch` returns the promises registered since the previous call and advances the caller's cursor.
+ * `hasPending` lets a caller whose owned work can register in its own final microtask retry once before
+ * concluding the collection is drained. Every batch settles concurrently; failures keep registration order.
+ */
+export async function settleGrowing(
+  nextBatch: () => readonly Promise<unknown>[],
+  hasPending?: () => boolean,
+): Promise<Error[]> {
+  const failures: Error[] = [];
+  while (true) {
+    const batch = nextBatch();
+    if (batch.length === 0) {
+      if (!hasPending) break;
+      // A completion can schedule owned work in its final microtask. Let that registration land.
+      await Promise.resolve();
+      if (!hasPending()) break;
+      continue;
+    }
+    const settled = await Promise.all(
+      batch.map(async result => {
+        try {
+          await result;
+          return undefined;
+        } catch (error: unknown) {
+          return asError(error);
+        }
+      }),
+    );
+    for (const failure of settled) if (failure) failures.push(failure);
+  }
+  return failures;
 }
 
 /**
@@ -54,40 +92,21 @@ export class TrackedWork {
 
   async #settle(): Promise<readonly Error[]> {
     this.#settling = true;
-    const failures: Error[] = [];
     let cursor = 0;
-
-    while (true) {
-      const batch = [...this.#slots.values()]
-        .filter(slot => slot.order >= cursor)
-        .sort((left, right) => left.order - right.order);
-      if (batch.length === 0) {
-        // A completion can schedule owned work in its final microtask. Let that registration land.
-        await Promise.resolve();
-        if (![...this.#slots.keys()].some(order => order >= cursor)) break;
-        continue;
-      }
-      const last = batch.at(-1);
-      if (last) cursor = last.order + 1;
-      const results = await Promise.all(
-        batch.map(async slot => {
-          try {
-            await slot.result;
-            return undefined;
-          } catch (error: unknown) {
-            return asError(error);
-          }
-        }),
-      );
-      for (const failure of results) if (failure) failures.push(failure);
-    }
+    const failures = await settleGrowing(
+      () => {
+        const batch = [...this.#slots.values()]
+          .filter(slot => slot.order >= cursor)
+          .sort((left, right) => left.order - right.order);
+        const last = batch.at(-1);
+        if (last) cursor = last.order + 1;
+        return batch.map(slot => slot.result);
+      },
+      () => [...this.#slots.keys()].some(order => order >= cursor),
+    );
 
     this.#slots.clear();
     this.#closed = true;
     return Object.freeze(failures);
   }
-}
-
-function asError(error: unknown): Error {
-  return error instanceof Error ? error : new Error(String(error));
 }

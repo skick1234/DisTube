@@ -8,7 +8,7 @@ import type {
   SourcePlugin,
 } from "./contracts";
 import { isEngine, isSourcePlugin } from "./contracts";
-import { asDisTubeError, DisTubeError, ErrorCode } from "./errors";
+import { asDisTubeError, asError, DisTubeError, ErrorCode } from "./errors";
 import {
   DisTubeEventEmitter,
   type DisTubeEventListener,
@@ -234,10 +234,6 @@ export class DisTube {
 /** Engine capability is structural, so a Plugin that satisfies the Engine members is one. */
 function isEnginePlugin(plugin: Plugin): plugin is Plugin & Engine {
   return isEngine(plugin);
-}
-
-function asError(error: unknown): Error {
-  return error instanceof Error ? error : new Error(String(error));
 }
 
 function cleanupCauses(error: Error): readonly Error[] {

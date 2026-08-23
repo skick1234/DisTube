@@ -1,5 +1,5 @@
 import type { Engine, Player, VoiceGatewayData, VoiceSession, VoiceSessionEvent } from "../contracts";
-import { asDisTubeError, DisTubeError, ErrorCode } from "../errors";
+import { asDisTubeError, asError, DisTubeError, ErrorCode } from "../errors";
 import { cleanupFailure } from "../queue/failures";
 import type {
   LeasedPlayerOutcome,
@@ -9,7 +9,7 @@ import type {
   QueueVoice,
   QueueVoiceLease,
 } from "../queue/voice";
-import { TrackedWork } from "../utils/tracked-work";
+import { settleGrowing, TrackedWork } from "../utils/tracked-work";
 
 /** Public guild voice facade. */
 export type Voice = {
@@ -512,25 +512,13 @@ export class VoiceImpl implements QueueVoice {
     void completion.catch(error => this.#report(asError(error), "voice.player.release"));
   }
 
-  async #joinRetirements(): Promise<Error[]> {
-    const failures: Error[] = [];
+  #joinRetirements(): Promise<Error[]> {
     let cursor = 0;
-    while (cursor < this.#retirements.length) {
+    return settleGrowing(() => {
       const completions = this.#retirements.slice(cursor);
       cursor += completions.length;
-      const settled = await Promise.all(
-        completions.map(async completion => {
-          try {
-            await completion;
-            return undefined;
-          } catch (error: unknown) {
-            return asError(error);
-          }
-        }),
-      );
-      for (const failure of settled) if (failure) failures.push(failure);
-    }
-    return failures;
+      return completions;
+    });
   }
 
   #takeCurrentPlayer(expected?: PlayerRecord): PlayerRecord | undefined {
@@ -580,8 +568,4 @@ export class VoiceImpl implements QueueVoice {
   #terminal(): DisTubeError {
     return new DisTubeError(ErrorCode.VOICE_FAILED, "Voice is no longer connected");
   }
-}
-
-function asError(error: unknown): Error {
-  return error instanceof Error ? error : new Error(String(error));
 }

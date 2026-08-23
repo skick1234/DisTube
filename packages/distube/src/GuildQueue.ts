@@ -129,9 +129,7 @@ export class GuildQueueImpl implements GuildQueue {
   #autoplayLookup?: AbortController;
   #exhausted = false;
   #destroyRequested = false;
-  #destroyed = false;
   #terminalSettled = false;
-  #terminalCause?: QueueTerminalCause;
   /** A provisional queue becomes observable only after QueueManager promotes its first insertion. */
   #published: boolean;
   /** Keeps first-insertion events contiguous when a `queue.created` listener deletes the queue. */
@@ -355,8 +353,6 @@ export class GuildQueueImpl implements GuildQueue {
     // Reentrant terminal callers must join before the first terminal event can invoke listeners.
     this.#terminalPromise = terminal;
     this.#destroyRequested = true;
-    this.#destroyed = true;
-    this.#terminalCause = cause;
     this.#leaseController.abort(this.#stale());
     this.#cancelEnqueues();
     this.#cancelAutoplay();
@@ -370,12 +366,12 @@ export class GuildQueueImpl implements GuildQueue {
     this.#filters = NO_FILTERS;
     this.#unregister(terminal);
 
-    if (this.#terminalCause?.kind === "voice-loss" && active) {
+    if (cause.kind === "voice-loss" && active) {
       this.#emit(
         "queue.item.failed",
         {
           item: active.item,
-          error: asDisTubeError(ErrorCode.VOICE_FAILED, "Voice disconnected terminally", this.#terminalCause.error),
+          error: asDisTubeError(ErrorCode.VOICE_FAILED, "Voice disconnected terminally", cause.error),
         },
         Date.now(),
       );
@@ -1161,7 +1157,7 @@ export class GuildQueueImpl implements GuildQueue {
   }
 
   #assertActive(): void {
-    if (this.#destroyRequested || this.#destroyed) {
+    if (this.#destroyRequested) {
       throw new DisTubeError(ErrorCode.QUEUE_FAILED, "GuildQueue is destroyed");
     }
   }

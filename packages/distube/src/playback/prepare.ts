@@ -1,5 +1,5 @@
 import type { PlaybackPreparation, PlaybackResource, SourcePlugin } from "../contracts";
-import { DisTubeError, ErrorCode } from "../errors";
+import { asError, DisTubeError, ErrorCode } from "../errors";
 import type { Song } from "../media";
 import { disposeOnce } from "../utils/dispose";
 import { requireSongOwner, type SourceCatalog, validateSourceSongs } from "./sources";
@@ -151,8 +151,4 @@ function ownResource(resource: PlaybackResource): OwnedPlaybackResource {
 
 function throwIfAborted(signal: AbortSignal): void {
   if (signal.aborted) throw signal.reason instanceof Error ? signal.reason : new Error("Playback preparation aborted");
-}
-
-function asError(error: unknown): Error {
-  return error instanceof Error ? error : new Error(String(error));
 }
