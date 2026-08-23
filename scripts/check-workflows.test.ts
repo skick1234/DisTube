@@ -37,14 +37,20 @@ jobs:
           test -f .candidate-bundle/.artifacts/release-candidate/manifest.json
       - uses: oven-sh/setup-bun@v2
         with: { bun-version: 1.4.0 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22.12.0, registry-url: "https://registry.npmjs.org" }
       - run: bun run check:runtime
       - run: bun run check:release-inputs
       - run: bun install --frozen-lockfile
       - run: bun run verify
-      - run: bun ./scripts/check-publish-authorization.ts --candidate-dir=../.candidate-bundle/.artifacts/release-candidate --package=distube --archive=${archive("distube")} && npm publish ${archive("distube")} --provenance
-      - run: bun ./scripts/check-publish-authorization.ts --candidate-dir=../.candidate-bundle/.artifacts/release-candidate --package=@distube/discordjs --archive=${archive("distube-discordjs")} && npm publish ${archive("distube-discordjs")} --provenance
-      - run: bun ./scripts/check-publish-authorization.ts --candidate-dir=../.candidate-bundle/.artifacts/release-candidate --package=@distube/oceanic --archive=${archive("distube-oceanic")} && npm publish ${archive("distube-oceanic")} --provenance
-      - run: bun ./scripts/check-publish-authorization.ts --candidate-dir=../.candidate-bundle/.artifacts/release-candidate --package=@distube/eris --archive=${archive("distube-eris")} && npm publish ${archive("distube-eris")} --provenance
+      - env: { NODE_AUTH_TOKEN: token }
+        run: bun ./scripts/check-publish-authorization.ts --candidate-dir=../.candidate-bundle/.artifacts/release-candidate --package=distube --archive=${archive("distube")} && npm publish ${archive("distube")} --provenance
+      - env: { NODE_AUTH_TOKEN: token }
+        run: bun ./scripts/check-publish-authorization.ts --candidate-dir=../.candidate-bundle/.artifacts/release-candidate --package=@distube/discordjs --archive=${archive("distube-discordjs")} && npm publish ${archive("distube-discordjs")} --provenance --access public
+      - env: { NODE_AUTH_TOKEN: token }
+        run: bun ./scripts/check-publish-authorization.ts --candidate-dir=../.candidate-bundle/.artifacts/release-candidate --package=@distube/oceanic --archive=${archive("distube-oceanic")} && npm publish ${archive("distube-oceanic")} --provenance --access public
+      - env: { NODE_AUTH_TOKEN: token }
+        run: bun ./scripts/check-publish-authorization.ts --candidate-dir=../.candidate-bundle/.artifacts/release-candidate --package=@distube/eris --archive=${archive("distube-eris")} && npm publish ${archive("distube-eris")} --provenance --access public
 `;
 
 describe("workflow parity", () => {
@@ -64,6 +70,36 @@ describe("workflow parity", () => {
 
   test("accepts candidate acquisition and direct archive publication", () => {
     expect(inspectWorkflow(validPublishWorkflow, "1.4.0", publishPolicy)).toEqual([]);
+  });
+
+  test("rejects a publish step with no registry credentials", () => {
+    const workflow = validPublishWorkflow.replace(
+      "      - env: { NODE_AUTH_TOKEN: token }\n        run: bun ./scripts/check-publish-authorization.ts --candidate-dir=../.candidate-bundle/.artifacts/release-candidate --package=distube",
+      "      - run: bun ./scripts/check-publish-authorization.ts --candidate-dir=../.candidate-bundle/.artifacts/release-candidate --package=distube",
+    );
+    expect(inspectWorkflow(workflow, "1.4.0", publishPolicy)).toContain(
+      "publish.yml: distube publish step must set NODE_AUTH_TOKEN",
+    );
+  });
+
+  test("rejects publication that never pointed npm at the registry", () => {
+    const workflow = validPublishWorkflow.replace(
+      '      - uses: actions/setup-node@v4\n        with: { node-version: 22.12.0, registry-url: "https://registry.npmjs.org" }\n',
+      "",
+    );
+    expect(inspectWorkflow(workflow, "1.4.0", publishPolicy)).toContain(
+      "publish.yml: distube publish must follow a setup-node step with registry-url",
+    );
+  });
+
+  test("rejects a scoped package published without public access", () => {
+    const workflow = validPublishWorkflow.replace(
+      `npm publish ${archive("distube-eris")} --provenance --access public`,
+      `npm publish ${archive("distube-eris")} --provenance`,
+    );
+    expect(inspectWorkflow(workflow, "1.4.0", publishPolicy)).toContain(
+      "publish.yml: scoped package @distube/eris must publish with --access public",
+    );
   });
 
   test("rejects a missing exact candidate asset acquisition", () => {

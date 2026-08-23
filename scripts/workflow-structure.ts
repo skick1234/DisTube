@@ -3,6 +3,7 @@ export interface WorkflowStep {
   readonly uses?: string;
   readonly run?: string;
   readonly with?: Readonly<Record<string, unknown>>;
+  readonly env?: Readonly<Record<string, unknown>>;
 }
 
 export interface WorkflowJob {
@@ -34,6 +35,18 @@ export function parseWorkflow(content: string): WorkflowDocument {
   }
   if (Object.keys(jobs).length === 0) throw new Error("workflow jobs mapping must not be empty");
   return { jobs };
+}
+
+/** True when some earlier step in the same job matches the predicate. */
+export function stepPrecedes(
+  workflow: WorkflowDocument,
+  jobId: string,
+  stepIndex: number,
+  matches: (step: WorkflowStep) => boolean,
+): boolean {
+  const job = workflow.jobs[jobId];
+  if (!job) return false;
+  return job.steps.slice(0, stepIndex).some(step => matches(step));
 }
 
 export function runContains(step: WorkflowStep, command: string): boolean {

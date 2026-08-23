@@ -1,6 +1,13 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { commandPrecedes, parseWorkflow, runContains, type WorkflowDocument } from "./workflow-structure";
+import {
+  commandPrecedes,
+  parseWorkflow,
+  runContains,
+  stepPrecedes,
+  type WorkflowDocument,
+  type WorkflowStep,
+} from "./workflow-structure";
 
 export interface WorkflowPolicy {
   readonly file: string;
@@ -128,6 +135,13 @@ function inspectCandidateAcquisition(workflow: WorkflowDocument, file: string): 
   return errors;
 }
 
+/** A setup-node step that points npm at the public registry, so NODE_AUTH_TOKEN is honoured. */
+function isRegistrySetup(step: WorkflowStep): boolean {
+  return (
+    typeof step.uses === "string" && step.uses.startsWith("actions/setup-node@") && Boolean(step.with?.["registry-url"])
+  );
+}
+
 function inspectPublicationCommands(
   workflow: WorkflowDocument,
   file: string,
@@ -168,6 +182,18 @@ function inspectPublicationCommands(
         published.add(packageName);
         if (lines[commandIndex - 1] !== authorizationCommand(packageName, archive)) {
           errors.push(`${file}: ${packageName} authorization must run directly before npm publish`);
+        }
+
+        // Authorization proves the archive is the approved one. These prove npm can actually reach the
+        // registry: without them every publish fails with ENEEDAUTH after the whole release verified.
+        if (typeof step.env?.NODE_AUTH_TOKEN !== "string") {
+          errors.push(`${file}: ${packageName} publish step must set NODE_AUTH_TOKEN`);
+        }
+        if (!stepPrecedes(workflow, jobId, stepIndex, isRegistrySetup)) {
+          errors.push(`${file}: ${packageName} publish must follow a setup-node step with registry-url`);
+        }
+        if (packageName.startsWith("@") && !line.includes("--access public")) {
+          errors.push(`${file}: scoped package ${packageName} must publish with --access public`);
         }
       }
     }

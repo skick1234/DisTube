@@ -39,6 +39,12 @@ jobs:
         working-directory: DisTube
         run: bun run check:release-inputs
 
+      - name: Install Node.js v22.12.0
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.12.0
+          registry-url: "https://registry.npmjs.org"
+
       - name: Install dependencies
         working-directory: DisTube
         run: bun install --frozen-lockfile
@@ -51,22 +57,26 @@ jobs:
         working-directory: DisTube
         env:
           AUTHORIZED_RELEASE_CANDIDATE_ID: ${{ secrets.AUTHORIZED_RELEASE_CANDIDATE_ID }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_PUBLISH_TOKEN }}
         run: bun ./scripts/check-publish-authorization.ts --candidate-dir=../.candidate-bundle/.artifacts/release-candidate --package=distube --archive=../.candidate-bundle/.artifacts/release-candidate/core/archives/distube-6.0.0.tgz && npm publish ../.candidate-bundle/.artifacts/release-candidate/core/archives/distube-6.0.0.tgz --provenance
 
       - name: Publish discord.js adapter candidate archive
         working-directory: DisTube
         env:
           AUTHORIZED_RELEASE_CANDIDATE_ID: ${{ secrets.AUTHORIZED_RELEASE_CANDIDATE_ID }}
-        run: bun ./scripts/check-publish-authorization.ts --candidate-dir=../.candidate-bundle/.artifacts/release-candidate --package=@distube/discordjs --archive=../.candidate-bundle/.artifacts/release-candidate/core/archives/distube-discordjs-6.0.0.tgz && npm publish ../.candidate-bundle/.artifacts/release-candidate/core/archives/distube-discordjs-6.0.0.tgz --provenance
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_PUBLISH_TOKEN }}
+        run: bun ./scripts/check-publish-authorization.ts --candidate-dir=../.candidate-bundle/.artifacts/release-candidate --package=@distube/discordjs --archive=../.candidate-bundle/.artifacts/release-candidate/core/archives/distube-discordjs-6.0.0.tgz && npm publish ../.candidate-bundle/.artifacts/release-candidate/core/archives/distube-discordjs-6.0.0.tgz --provenance --access public
 
       - name: Publish Oceanic adapter candidate archive
         working-directory: DisTube
         env:
           AUTHORIZED_RELEASE_CANDIDATE_ID: ${{ secrets.AUTHORIZED_RELEASE_CANDIDATE_ID }}
-        run: bun ./scripts/check-publish-authorization.ts --candidate-dir=../.candidate-bundle/.artifacts/release-candidate --package=@distube/oceanic --archive=../.candidate-bundle/.artifacts/release-candidate/core/archives/distube-oceanic-6.0.0.tgz && npm publish ../.candidate-bundle/.artifacts/release-candidate/core/archives/distube-oceanic-6.0.0.tgz --provenance
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_PUBLISH_TOKEN }}
+        run: bun ./scripts/check-publish-authorization.ts --candidate-dir=../.candidate-bundle/.artifacts/release-candidate --package=@distube/oceanic --archive=../.candidate-bundle/.artifacts/release-candidate/core/archives/distube-oceanic-6.0.0.tgz && npm publish ../.candidate-bundle/.artifacts/release-candidate/core/archives/distube-oceanic-6.0.0.tgz --provenance --access public
 
       - name: Publish Eris adapter candidate archive
         working-directory: DisTube
         env:
           AUTHORIZED_RELEASE_CANDIDATE_ID: ${{ secrets.AUTHORIZED_RELEASE_CANDIDATE_ID }}
-        run: bun ./scripts/check-publish-authorization.ts --candidate-dir=../.candidate-bundle/.artifacts/release-candidate --package=@distube/eris --archive=../.candidate-bundle/.artifacts/release-candidate/core/archives/distube-eris-6.0.0.tgz && npm publish ../.candidate-bundle/.artifacts/release-candidate/core/archives/distube-eris-6.0.0.tgz --provenance
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_PUBLISH_TOKEN }}
+        run: bun ./scripts/check-publish-authorization.ts --candidate-dir=../.candidate-bundle/.artifacts/release-candidate --package=@distube/eris --archive=../.candidate-bundle/.artifacts/release-candidate/core/archives/distube-eris-6.0.0.tgz && npm publish ../.candidate-bundle/.artifacts/release-candidate/core/archives/distube-eris-6.0.0.tgz --provenance --access public
