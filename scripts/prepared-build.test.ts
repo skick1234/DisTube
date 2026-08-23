@@ -30,7 +30,7 @@ async function writeBuildFixture(root: string): Promise<void> {
     const packageRoot = resolve(root, "packages", directory);
     await mkdir(resolve(packageRoot, "src"), { recursive: true });
     await mkdir(resolve(packageRoot, "dist"), { recursive: true });
-    for (const file of ["index.mjs", "index.cjs", "index.d.mts", "index.d.cts"]) {
+    for (const file of ["index.mjs", "index.d.mts"]) {
       await writeFile(resolve(packageRoot, "dist", file), "export {};\n");
     }
     await writeFile(resolve(packageRoot, "package.json"), `{"name":"${directory}"}\n`);

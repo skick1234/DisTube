@@ -54,7 +54,9 @@ function privateReference(content: string): string | undefined {
 }
 
 async function expectedArchiveEntries(packageRoot: string): Promise<ReadonlySet<string>> {
-  const entries = new Set(["package/package.json", "package/README.md"]);
+  // LICENSE is required, not merely permitted: npm renders a package without one as unlicensed no
+  // matter what the manifest's `license` field claims. `missing` below turns its absence into a failure.
+  const entries = new Set(["package/package.json", "package/README.md", "package/LICENSE"]);
   for (const path of await filesBelow(resolve(packageRoot, "dist"))) {
     entries.add(`package/${relative(packageRoot, path).replaceAll("\\", "/")}`);
   }
@@ -85,7 +87,7 @@ async function assertPackedArchive(manifestName: string, packageRoot: string, ar
 
 if (process.argv.includes("--prepared")) await assertPreparedBuild(workspace);
 else await ensurePreparedBuild(workspace);
-for (const declaration of ["index.d.mts", "index.d.cts"]) {
+for (const declaration of ["index.d.mts"]) {
   const content = await readFile(resolve(workspace, "packages/distube/dist", declaration), "utf8");
   if (/\b(?:from\s+["']eris|import\(["']eris)/u.test(content)) {
     throw new Error(`distube: native Eris type leaked into ${declaration}`);

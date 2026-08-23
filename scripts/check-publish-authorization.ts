@@ -181,7 +181,7 @@ function archiveName(name: string, version: string): string {
 
 function declarationPaths(packageName: string): readonly string[] {
   const baseName = packageName.replace(/^@/u, "").replaceAll("/", "-");
-  return [`core/declarations/${baseName}.index.d.mts`, `core/declarations/${baseName}.index.d.cts`];
+  return [`core/declarations/${baseName}.index.d.mts`];
 }
 
 function expectedEvidencePaths(
@@ -203,12 +203,7 @@ function expectedEvidencePaths(
     readme: `DisTube/${item.directory}/README.md`,
     archive: `${artifactOwner}/archives/${archiveName(item.name, version)}`,
     declarations:
-      item.owner === "DisTube"
-        ? declarationPaths(item.name)
-        : [
-            `plugins/declarations/${packageDirectory}.index.d.mts`,
-            `plugins/declarations/${packageDirectory}.index.d.cts`,
-          ],
+      item.owner === "DisTube" ? declarationPaths(item.name) : [`plugins/declarations/${packageDirectory}.index.d.mts`],
   };
 }
 

@@ -26,6 +26,11 @@ try {
   const unpack = await run(["tar", "-xzf", absoluteArchive, "--strip-components=1", "-C", distube], workspace);
   if (unpack.code !== 0) throw new Error(`Unable to unpack packed distube archive\n${unpack.output}`);
   await symlink(resolve(workspace, "node_modules", "typescript"), resolve(modules, "typescript"), "dir");
+  // Without this the fixtures are CJS under NodeNext, and an ESM-only package has nothing to offer them.
+  await Bun.write(
+    resolve(temporary, "package.json"),
+    `${JSON.stringify({ private: true, type: "module" }, null, 2)}\n`,
+  );
 
   const positive = resolve(temporary, "positive.ts");
   await Bun.write(

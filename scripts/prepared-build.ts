@@ -4,7 +4,7 @@ import { inspectRuntimeVersion } from "./check-runtime";
 
 const packageDirectories = ["distube", "discordjs", "oceanic", "eris"] as const;
 const ignoredDirectories = new Set(["coverage", "dist", "node_modules"]);
-const requiredOutputFiles = ["index.mjs", "index.cjs", "index.d.mts", "index.d.cts"] as const;
+const requiredOutputFiles = ["index.mjs", "index.d.mts"] as const;
 
 export interface PreparedBuildStamp {
   readonly schemaVersion: 2;

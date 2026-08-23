@@ -61,7 +61,6 @@ async function createPackage(root: string, name: string): Promise<void> {
   );
   await writeFile(resolve(packageRoot, "README.md"), `# ${name}\n`);
   await writeFile(resolve(packageRoot, "dist/index.d.mts"), `export declare const name: "${name}";\n`);
-  await writeFile(resolve(packageRoot, "dist/index.d.cts"), `export declare const name: "${name}";\n`);
 }
 
 function packages(candidate: Candidate): Candidate[] {
@@ -123,10 +122,8 @@ async function createFixture(): Promise<Fixture> {
       const archivePath = resolve(artifactRoot, artifactOwner, "archives", archiveName(item.name));
       const declarationBase = item.name.replace(/^@/u, "").replaceAll("/", "-");
       const declarationMts = resolve(artifactRoot, artifactOwner, "declarations", `${declarationBase}.index.d.mts`);
-      const declarationCts = resolve(artifactRoot, artifactOwner, "declarations", `${declarationBase}.index.d.cts`);
       await writeFile(archivePath, `${item.name} archive\n`);
       await writeFile(declarationMts, `export declare const packageName: "${item.name}";\n`);
-      await writeFile(declarationCts, `export declare const packageName: "${item.name}";\n`);
       const packageRoot = resolve(root, item.owner, item.directory);
       return {
         name: item.name,
@@ -152,10 +149,6 @@ async function createFixture(): Promise<Fixture> {
           {
             path: `${artifactOwner}/declarations/${declarationBase}.index.d.mts`,
             sha256: await hash(declarationMts),
-          },
-          {
-            path: `${artifactOwner}/declarations/${declarationBase}.index.d.cts`,
-            sha256: await hash(declarationCts),
           },
         ],
         upstreamArchives: {},
