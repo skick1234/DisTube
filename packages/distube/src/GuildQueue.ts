@@ -365,6 +365,7 @@ export class GuildQueueImpl implements GuildQueue {
     this.#state = clearQueue(this.#state);
     this.#filters = NO_FILTERS;
     this.#unregister(terminal);
+    this.#mailbox.close();
 
     if (cause.kind === "voice-loss" && active) {
       this.#emit(
@@ -553,6 +554,8 @@ export class GuildQueueImpl implements GuildQueue {
         }
       }
       operation.resolve(items);
+      // An insertion can move the attempt's item out of the next slot, exactly as an edit can.
+      this.#reconcileAttempt();
       if (firstInsertion || !this.#active) this.#mailbox.post({ type: "start" });
     }
   }
@@ -930,6 +933,7 @@ export class GuildQueueImpl implements GuildQueue {
       }
       await this.#awaitLeaseBootstrap(lease);
       const result = await this.#runLeaseEffect(lease, { kind: "volume", percent: message.percent });
+      this.#commit();
       if (result.error) throw playerFailure("Player failed to set volume", result.error);
       this.#volume = message.percent;
       message.resolve();
@@ -963,6 +967,7 @@ export class GuildQueueImpl implements GuildQueue {
       }
       await this.#awaitLeaseBootstrap(lease);
       const result = await this.#runLeaseEffect(lease, { kind: "filters", entries: filters });
+      this.#commit();
       if (result.error) throw playerFailure("Player failed to render filters", result.error, true);
       this.#filters = filters;
       message.resolve();
@@ -986,6 +991,7 @@ export class GuildQueueImpl implements GuildQueue {
           ? { kind: "seek", authority: active.authority, seconds: decision.seconds as number }
           : { kind: decision.control, authority: active.authority };
       const result = await this.#runLeaseEffect(this.#lease, effect);
+      this.#commit();
       if (result.error) throw playerFailure(`Player failed to ${message.control}`, result.error);
       if (message.control === "pause") this.#state = setStatus(this.#state, QueueStatus.Paused);
       else if (message.control === "resume") this.#state = setStatus(this.#state, QueueStatus.Playing);
@@ -1005,6 +1011,7 @@ export class GuildQueueImpl implements GuildQueue {
         throw new DisTubeError(ErrorCode.INVALID_ARGUMENT, "Cannot advance a queue with no active track");
       }
       const stopped = await this.#runLeaseEffect(lease, { kind: "stop", authority: active.authority });
+      this.#commit();
       const advanced = this.#applyAdvanceState(message.mode, active.item);
       this.#active = undefined;
       this.#state = advanced.state;
@@ -1160,6 +1167,17 @@ export class GuildQueueImpl implements GuildQueue {
     if (this.#destroyRequested) {
       throw new DisTubeError(ErrorCode.QUEUE_FAILED, "GuildQueue is destroyed");
     }
+  }
+
+  /**
+   * Gate every state commit that follows an await.
+   *
+   * Terminal authority is accepted synchronously, so a decision suspended on a Player effect or a
+   * provider call can resume after `queue.deleted` published. Such a decision commits no QueueState,
+   * no history entry, no item outcome, and no event; it settles as superseded instead.
+   */
+  #commit(): void {
+    if (this.#destroyRequested) throw this.#stale();
   }
 
   #stale(): DisTubeError {
