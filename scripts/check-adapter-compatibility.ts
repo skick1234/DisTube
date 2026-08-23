@@ -1,12 +1,8 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
+import { type CompatibilityCase, inspectPeerCoverage, selectPeerBoundaries } from "./peer-boundaries";
 import { assertPreparedBuild, ensurePreparedBuild } from "./prepared-build";
-
-interface CompatibilityCase {
-  readonly name: string;
-  readonly dependencies: Readonly<Record<string, string>>;
-}
 
 type CompatibilityMatrix = Readonly<Record<string, readonly CompatibilityCase[]>>;
 
@@ -45,6 +41,31 @@ const adapterSurfaces: Readonly<Record<string, AdapterSurface>> = {
     factoryAlias: "createErisAdapter",
   },
 };
+
+async function publishedVersions(packageName: string): Promise<string[]> {
+  const response = await fetch(`https://registry.npmjs.org/${encodeURIComponent(packageName)}`);
+  if (!response.ok) throw new Error(`${packageName}: registry returned ${response.status}`);
+  const metadata = (await response.json()) as { versions?: Readonly<Record<string, unknown>> };
+  return Object.keys(metadata.versions ?? {});
+}
+
+async function assertPeerRangesExercised(adapterName: string, cases: readonly CompatibilityCase[]): Promise<void> {
+  const directory = packageDirectories.get(adapterName);
+  if (!directory) throw new Error(`Unknown package ${adapterName}`);
+  const manifest = JSON.parse(await readFile(resolve(workspace, "packages", directory, "package.json"), "utf8")) as {
+    peerDependencies?: Readonly<Record<string, string>>;
+  };
+  // `distube` is supplied by the packed archive under test, not by a matrix pin.
+  const peerRanges = Object.fromEntries(
+    Object.entries(manifest.peerDependencies ?? {}).filter(([name]) => name !== "distube"),
+  );
+  const published = new Map<string, string[]>();
+  for (const peerName of Object.keys(peerRanges)) published.set(peerName, await publishedVersions(peerName));
+  const errors = inspectPeerCoverage(adapterName, peerRanges, cases, (peerName, range) =>
+    selectPeerBoundaries(published.get(peerName) ?? [], range),
+  );
+  if (errors.length > 0) throw new Error(errors.join("\n"));
+}
 
 async function run(command: readonly string[], cwd: string): Promise<string> {
   const child = Bun.spawn([...command], { cwd, stdout: "pipe", stderr: "pipe" });
@@ -130,6 +151,7 @@ try {
   const coreArchive = await pack("distube", temporary);
   for (const [adapterName, cases] of Object.entries(matrix)) {
     if (cases.length < 2) throw new Error(`${adapterName}: expected lower and latest compatibility cases`);
+    await assertPeerRangesExercised(adapterName, cases);
     const adapterArchive = await pack(adapterName, temporary);
     for (const testCase of cases) {
       const testRoot = resolve(temporary, `${packageDirectories.get(adapterName)}-${testCase.name}`);

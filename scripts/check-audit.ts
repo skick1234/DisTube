@@ -1,23 +1,5 @@
 import { join } from "node:path";
-
-type DependencyMap = Readonly<Record<string, string>>;
-
-type PackageManifest = {
-  readonly name?: string;
-  readonly private?: boolean;
-  readonly workspaces?: readonly string[];
-  readonly dependencies?: DependencyMap;
-  readonly optionalDependencies?: DependencyMap;
-};
-
-type LockMetadata = {
-  readonly dependencies?: DependencyMap;
-  readonly optionalDependencies?: DependencyMap;
-};
-
-type Lockfile = {
-  readonly packages?: Readonly<Record<string, readonly unknown[]>>;
-};
+import { type Lockfile, type PackageManifest, reachableProductionPackages } from "./audit-scope";
 
 type AuditAdvisory = {
   readonly id: number;
@@ -42,11 +24,6 @@ type AuditPolicy = {
   readonly dispositions: readonly AuditDisposition[];
 };
 
-type LockEntry = {
-  readonly actualName?: string;
-  readonly dependencies: readonly string[];
-};
-
 type Finding = AuditAdvisory & {
   readonly advisory: string;
   readonly package: string;
@@ -57,27 +34,6 @@ const seriousSeverities = new Set(["high", "critical"]);
 
 function writeLine(message: string): void {
   process.stdout.write(`${message}\n`);
-}
-
-function runtimeDependencies(value: {
-  readonly dependencies?: DependencyMap;
-  readonly optionalDependencies?: DependencyMap;
-}): string[] {
-  return [...Object.keys(value.dependencies ?? {}), ...Object.keys(value.optionalDependencies ?? {})];
-}
-
-function packageNameFromReference(reference: string): string | undefined {
-  const normalized = reference.startsWith("npm:") ? reference.slice(4) : reference;
-  if (normalized.startsWith("file:") || normalized.startsWith("workspace:") || normalized.startsWith("link:")) {
-    return undefined;
-  }
-  if (normalized.startsWith("@")) {
-    const slash = normalized.indexOf("/");
-    const version = normalized.lastIndexOf("@");
-    return version > slash ? normalized.slice(0, version) : normalized;
-  }
-  const version = normalized.indexOf("@");
-  return version > 0 ? normalized.slice(0, version) : normalized;
 }
 
 async function readJson<T>(path: string): Promise<T> {
@@ -95,51 +51,11 @@ async function loadManifests(rootManifest: PackageManifest): Promise<PackageMani
   return Promise.all([...paths].sort().map(path => readJson<PackageManifest>(path)));
 }
 
-function buildLockIndex(lockfile: Lockfile): Map<string, LockEntry[]> {
-  const index = new Map<string, LockEntry[]>();
-  for (const [reference, value] of Object.entries(lockfile.packages ?? {})) {
-    if (!Array.isArray(value)) continue;
-    const dependencyName = packageNameFromReference(reference);
-    const actualName = typeof value[0] === "string" ? packageNameFromReference(value[0]) : undefined;
-    const metadata = (value[2] ?? {}) as LockMetadata;
-    const entry = { actualName, dependencies: runtimeDependencies(metadata) } satisfies LockEntry;
-    for (const name of new Set([dependencyName, actualName])) {
-      if (!name) continue;
-      const entries = index.get(name) ?? [];
-      entries.push(entry);
-      index.set(name, entries);
-    }
-  }
-  return index;
-}
-
 async function productionPackages(): Promise<Set<string>> {
   const rootManifest = await readJson<PackageManifest>(join(root, "package.json"));
   const manifests = await loadManifests(rootManifest);
-  const workspaceDependencies = new Map<string, readonly string[]>();
-  const pending: string[] = [];
-
-  for (const manifest of manifests) {
-    if (manifest.name) workspaceDependencies.set(manifest.name, runtimeDependencies(manifest));
-    if (manifest.private !== true) pending.push(...runtimeDependencies(manifest));
-  }
-
   const lockfile = Bun.JSONC.parse(await Bun.file(join(root, "bun.lock")).text()) as Lockfile;
-  const lockIndex = buildLockIndex(lockfile);
-  const reachable = new Set<string>();
-
-  while (pending.length > 0) {
-    const name = pending.shift();
-    if (!name || reachable.has(name)) continue;
-    reachable.add(name);
-    pending.push(...(workspaceDependencies.get(name) ?? []));
-    for (const entry of lockIndex.get(name) ?? []) {
-      if (entry.actualName && !reachable.has(entry.actualName)) pending.push(entry.actualName);
-      pending.push(...entry.dependencies);
-    }
-  }
-
-  return reachable;
+  return reachableProductionPackages(manifests, lockfile);
 }
 
 async function runAudit(): Promise<AuditResult> {

@@ -27,7 +27,7 @@
       "name": "latest",
       "dependencies": {
         "@discordjs/voice": "0.19.2",
-        "oceanic.js": "1.14.0"
+        "oceanic.js": "1.15.0"
       }
     }
   ],
