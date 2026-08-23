@@ -37,9 +37,14 @@
     "verify": "bun run check:runtime && bun run check && bun run check:dependencies && bun run type && bun run test:release && bun run build && bun run check:prepared-build && bun run check:circular && bun run api-report:prepared && bun run check:packages:prepared && bun run check:local-playback && bun run check:adapter-compatibility:prepared && bun run docs:prepared && bun run check:critical-quality && bun run check:audit && bun run check:workflows",
     "version-packages": "bun run check:runtime && changeset version"
   },
+  "nano-staged": {
+    "*.{ts,mts,cts,js,mjs,cjs,json,jsonc}": "biome check --write --no-errors-on-unmatched"
+  },
   "devDependencies": {
     "@biomejs/biome": "^2.5.4",
     "@changesets/cli": "^2.31.1",
+    "@commitlint/cli": "^21.2.2",
+    "@commitlint/config-conventional": "^21.2.2",
     "@discordjs/voice": "^0.19.2",
     "@distube/voice-core": "workspace:*",
     "@microsoft/api-extractor": "^7.58.11",
@@ -49,6 +54,7 @@
     "discord.js": "^14.27.0",
     "dpdm": "^4.2.0",
     "eris": "^0.18.0",
+    "nano-staged": "^1.0.2",
     "oceanic.js": "^1.14.0",
     "tsdown": "^0.22.9",
     "typescript": "^7.0.2",

@@ -1,4 +1,4 @@
 bun install --frozen-lockfile
-bun run lint
+bun run check
 bun run type
 bun run test
