@@ -63,8 +63,15 @@ declare const client: ConstructorParameters<typeof ErisAdapter>[0];
 const distube = new DisTube({ adapter: new ErisAdapter(client), plugins: [] });
 ```
 
-Eris 0.18 voice playback requires system FFmpeg or `FFMPEG_PATH` plus `opusscript` or `@discordjs/opus`. Eris exposes
-no supported seek operation, so its Player rejects `seek` with `UNSUPPORTED` without changing playback state.
+Eris 0.18 voice playback requires system FFmpeg or `FFMPEG_PATH`, `opusscript` or `@discordjs/opus`, and
+`sodium-native` or `tweetnacl` for voice encryption. Eris exposes no supported seek operation, so its Player rejects
+`seek` with `UNSUPPORTED` without changing playback state.
+
+An `Engine` declares `accepts`, the readonly set of `PlaybackResource` kinds its Players play. Declare it honestly:
+a Player must reject an undeclared kind with `UNSUPPORTED` before native playback starts, and core detects an
+engine-capable Plugin structurally, so a Plugin that omits `accepts` is not adopted as an engine at all. `resolvable`
+carries the same obligation for filter presets: a name you report resolvable must render, and one you report
+unresolvable must reject rather than being silently dropped.
 
 ## Engine-capable Plugins
 

@@ -30,6 +30,19 @@ export interface SourceOperationOptions {
   readonly signal?: AbortSignal;
 }
 
+/**
+ * Bounded pagination for `search`.
+ *
+ * Each SourcePlugin documents its own default and maximum `limit` and rejects a `limit` or `offset`
+ * outside those bounds with `INVALID_ARGUMENT`. A plugin never returns more than the effective limit.
+ */
+export interface SearchOptions extends SourceOperationOptions {
+  /** How many results to return at most. */
+  readonly limit?: number;
+  /** Zero-based index of the first result to return. */
+  readonly offset?: number;
+}
+
 export interface PlaybackContext {
   readonly signal: AbortSignal;
 }
@@ -58,7 +71,8 @@ export type PlaybackPreparation =
   | Readonly<{ kind: "search"; query: string }>;
 
 export interface SourcePlugin extends Plugin {
-  search(query: string, options?: SourceOperationOptions): Promise<readonly Song[]>;
+  /** Provider-ranked results for a query. An empty array declines; it is not an error. */
+  search(query: string, options?: SearchOptions): Promise<readonly Song[]>;
   /** Resolves an input the plugin owns, or declines with `undefined`. */
   resolve(url: string, options?: SourceOperationOptions): Promise<Song | Playlist | undefined>;
   preparePlayback(song: Song, context: PlaybackContext): Promise<PlaybackPreparation>;
@@ -160,9 +174,16 @@ export interface FilterEntry<TPayload = unknown> {
  * The engine owns filter definitions, rendering, and folding; core only names filters and keeps them ordered.
  */
 export interface Engine {
+  /**
+   * The PlaybackResource kinds this engine's Players accept.
+   *
+   * A Player rejects any other kind with `UNSUPPORTED` before native playback starts. Bot code reads this
+   * to know which sources an engine can play without waiting for a track to fail.
+   */
+  readonly accepts: ReadonlySet<PlaybackResource["kind"]>;
   /** Creates the long-lived Player for a connected session. */
   createPlayer(session: VoiceSession): Promise<Player>;
-  /** Whether the engine can render `name` as a preset. */
+  /** Whether the engine can render `name` as a preset. A name reported here renders, or the report is wrong. */
   resolvable(name: string): boolean;
 }
 
@@ -188,7 +209,11 @@ export interface Adapter {
 export function isEngine(value: unknown): value is Engine {
   if (typeof value !== "object" || value === null) return false;
   const record = value as Readonly<Record<PropertyKey, unknown>>;
-  return typeof record.createPlayer === "function" && typeof record.resolvable === "function";
+  return (
+    typeof record.createPlayer === "function" &&
+    typeof record.resolvable === "function" &&
+    record.accepts instanceof Set
+  );
 }
 
 export function isSourcePlugin(plugin: Plugin): plugin is SourcePlugin {

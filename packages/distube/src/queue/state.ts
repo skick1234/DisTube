@@ -1,10 +1,10 @@
-import { QueueStatus } from "../enums";
+import { ErrorReason, QueueStatus } from "../enums";
 import { DisTubeError, ErrorCode } from "../errors";
 import type { QueueItem } from "../media";
 
-export interface QueueState {
-  readonly items: readonly QueueItem[];
-  readonly current?: QueueItem;
+export interface QueueState<Metadata = unknown> {
+  readonly items: readonly QueueItem<Metadata>[];
+  readonly current?: QueueItem<Metadata>;
   readonly status: QueueStatus;
 }
 
@@ -45,7 +45,7 @@ export function finishCurrent(current: QueueState): QueueState {
 /** One waiting occurrence by ID, by zero-based waiting index, or an inclusive zero-based index range. */
 export type RemoveTarget = string | number | Readonly<{ from: number; to: number }>;
 
-/** The next occurrence to play, by ID or by one-based waiting position (`1` is the next item). */
+/** The next occurrence to play, by ID or by zero-based waiting position (`0` is the next item). */
 export type JumpTarget = string | number;
 
 export function removeItem(
@@ -110,9 +110,10 @@ function removalRange(current: QueueState, target: RemoveTarget): readonly [numb
     const index = current.items.findIndex(item => item.id === target);
     if (index < 0) {
       if (current.current?.id === target) {
-        throw new DisTubeError(ErrorCode.INVALID_ARGUMENT, "Cannot remove the current QueueItem");
+        // The ID is real; the state forbids removing what is playing.
+        throw new DisTubeError(ErrorCode.INVALID_ARGUMENT, ErrorReason.State, "Cannot remove the current QueueItem");
       }
-      throw new DisTubeError(ErrorCode.INVALID_ARGUMENT, `Unknown QueueItem: ${target}`);
+      throw new DisTubeError(ErrorCode.INVALID_ARGUMENT, ErrorReason.Argument, `Unknown QueueItem: ${target}`);
     }
     return [index, index];
   }
@@ -121,17 +122,27 @@ function removalRange(current: QueueState, target: RemoveTarget): readonly [numb
     return [index, index];
   }
   if (!target || typeof target !== "object") {
-    throw new DisTubeError(ErrorCode.INVALID_ARGUMENT, "Removal target must be a QueueItem ID, index, or range");
+    throw new DisTubeError(
+      ErrorCode.INVALID_ARGUMENT,
+      ErrorReason.Argument,
+      "Removal target must be a QueueItem ID, index, or range",
+    );
   }
   const from = waitingIndex(current, target.from, "from");
   const to = waitingIndex(current, target.to, "to");
-  if (to < from) throw new DisTubeError(ErrorCode.INVALID_ARGUMENT, "Range `to` must not precede `from`");
+  if (to < from) {
+    throw new DisTubeError(ErrorCode.INVALID_ARGUMENT, ErrorReason.Argument, "Range `to` must not precede `from`");
+  }
   return [from, to];
 }
 
 function waitingIndex(current: QueueState, index: number, label: string): number {
   if (!Number.isInteger(index) || index < 0 || index >= current.items.length) {
-    throw new DisTubeError(ErrorCode.INVALID_ARGUMENT, `Waiting ${label} is out of range: ${index}`);
+    throw new DisTubeError(
+      ErrorCode.INVALID_ARGUMENT,
+      ErrorReason.Argument,
+      `Waiting ${label} is out of range: ${index}`,
+    );
   }
   return index;
 }
@@ -139,11 +150,13 @@ function waitingIndex(current: QueueState, index: number, label: string): number
 function jumpIndex(current: QueueState, target: JumpTarget): number {
   if (typeof target === "string") {
     const index = current.items.findIndex(item => item.id === target);
-    if (index < 0) throw new DisTubeError(ErrorCode.INVALID_ARGUMENT, `Unknown QueueItem: ${target}`);
+    if (index < 0) {
+      throw new DisTubeError(ErrorCode.INVALID_ARGUMENT, ErrorReason.Argument, `Unknown QueueItem: ${target}`);
+    }
     return index;
   }
-  // Positions are one-based so `jump(1)` names the next item rather than the one already playing.
-  return waitingIndex(current, target - 1, "position");
+  // Positions index the waiting items directly, so `jump(0)` names the next item.
+  return waitingIndex(current, target, "position");
 }
 
 export function clearQueue(current: QueueState): QueueState {

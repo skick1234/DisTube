@@ -206,6 +206,7 @@ function createHarness(client: FakeClient): { readonly distube: DisTube; readonl
   const bridge: Adapter = {
     createVoiceSession: target => adapter.createVoiceSession(target),
     engine: {
+      accepts: engine.accepts,
       createPlayer: async session => {
         player = await engine.createPlayer(session);
         return player;

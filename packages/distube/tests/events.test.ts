@@ -20,6 +20,56 @@ describe("event delivery", () => {
     expect(once).toHaveBeenCalledTimes(1);
   });
 
+  it("removes a once listener when off is given the caller's own function", () => {
+    const emitter = new DisTubeEventEmitter(() => undefined);
+    const listener = vi.fn();
+    // `once` registers a self-removing wrapper, so `off` has to match on the original, not the wrapper.
+    emitter.once("queue.created", listener);
+    emitter.off("queue.created", listener);
+    emitter.emit("queue.created", created);
+
+    expect(listener).not.toHaveBeenCalled();
+  });
+
+  it("removes one registration per off call, leaving the other in place", () => {
+    const emitter = new DisTubeEventEmitter(() => undefined);
+    const listener = vi.fn();
+    emitter.once("queue.created", listener).on("queue.created", listener);
+
+    emitter.off("queue.created", listener);
+    emitter.emit("queue.created", created);
+    emitter.emit("queue.created", created);
+
+    expect(listener).toHaveBeenCalledTimes(2);
+  });
+
+  it("drops one event's listeners, then every event's", () => {
+    const emitter = new DisTubeEventEmitter(() => undefined);
+    const onCreated = vi.fn();
+    const onDeleted = vi.fn();
+    emitter.on("queue.created", onCreated).on("queue.deleted", onDeleted);
+
+    emitter.removeAllListeners("queue.created");
+    emitter.emit("queue.created", created);
+    emitter.emit("queue.deleted", created);
+    expect(onCreated).not.toHaveBeenCalled();
+    expect(onDeleted).toHaveBeenCalledTimes(1);
+
+    emitter.removeAllListeners();
+    emitter.emit("queue.deleted", created);
+    expect(onDeleted).toHaveBeenCalledTimes(1);
+  });
+
+  it("delivers an event to the listeners registered when it was emitted", () => {
+    const emitter = new DisTubeEventEmitter(() => undefined);
+    const late = vi.fn();
+    emitter.on("queue.created", () => emitter.on("queue.created", late));
+
+    emitter.emit("queue.created", created);
+
+    expect(late).not.toHaveBeenCalled();
+  });
+
   it("normalizes synchronous and asynchronous listener failures", async () => {
     const diagnostics: Diagnostic[] = [];
     const emitter = new DisTubeEventEmitter(diagnostic => diagnostics.push(diagnostic));

@@ -8,6 +8,7 @@ import {
   flushMicrotasks,
   GUILD,
   media,
+  mediaUrl,
   playableSetup,
   record,
   settle,
@@ -34,7 +35,7 @@ describe("voice presence", () => {
 
     const second = await harness.distube.play(TARGET, "b");
     await settle();
-    expect(second.queue.id).not.toBe(queue.id);
+    expect(second.queue).not.toBe(queue);
     expect(harness.adapter.createVoiceSession).toHaveBeenCalledTimes(1);
     expect(harness.engine.players).toEqual([player]);
     expect(player.playing).toBe(second.items[0]?.id);
@@ -650,27 +651,68 @@ describe("deferred Voice lifetime", () => {
     expect(player.calls).toEqual(["volume:100", "filters", `play:${items[0]?.id}`, "pause", "resume"]);
   });
 
-  it("completes lease bootstrap before a public filter command can render", async () => {
+  it("serializes a filter commit behind the play effect it shares the Player lane with", async () => {
     const harness = playableSetup();
     const player = new FakePlayer();
     harness.engine.createPlayer.mockImplementationOnce(async () => {
       harness.engine.players.push(player);
       return player;
     });
-    const volume = player.gate("volume");
-    const { queue } = await harness.distube.play(TARGET, "first");
-    await volume.entered;
+    // Held from before the borrow, so the play effect still occupies the lane when the commit lands.
+    const playGate = player.gate("play");
+    const started = deferred<void>();
+    harness.distube.once("queue.item.started", () => started.resolve());
+    await harness.distube.play(TARGET, "first");
+    await playGate.entered;
 
-    const applying = queue.filters.apply("bassboost");
+    const applying = harness.distube.voices.get(GUILD)?.filters.apply("bassboost");
     await flushMicrotasks(32);
-    expect(player.setFilters).not.toHaveBeenCalled();
+    // The activation's restore render already ran; the bassboost commit is queued behind the play.
+    expect(player.renders).toEqual([[]]);
 
-    volume.resolve();
+    playGate.resolve();
+    await started.promise;
     await applying;
     await flushMicrotasks(32);
 
-    expect(queue.filters.active).toEqual([{ name: "bassboost" }]);
+    expect(harness.distube.voices.get(GUILD)?.filters.active).toEqual([{ name: "bassboost" }]);
     expect(player.renders).toEqual([[], [{ name: "bassboost" }]]);
+  });
+
+  it("restores committed settings onto a replacement Player once, before its first track", async () => {
+    const harness = playableSetup();
+    const started = deferred<void>();
+    harness.distube.once("queue.item.started", () => started.resolve());
+    const first = await harness.distube.play(TARGET, "first");
+    await started.promise;
+    const voice = harness.distube.voices.get(GUILD);
+    await voice?.setVolume(40);
+    await voice?.filters.apply("nightcore");
+
+    const firstPlayer = harness.engine.players[0] as FakePlayer;
+    firstPlayer.emit({
+      type: "failed",
+      itemId: firstPlayer.playing as string,
+      error: new Error("device lost"),
+      terminal: true,
+    });
+    await settle();
+
+    // A terminal failure deletes the exhausted queue; the next play borrows the replacement Player.
+    await settle();
+    expect(first.queue.state.current).toBeUndefined();
+    const secondStarted = deferred<void>();
+    harness.distube.once("queue.item.started", () => secondStarted.resolve());
+    await harness.distube.play(TARGET, "second");
+    await secondStarted.promise;
+    // The Engine supplies the replacement lazily, so it exists only once the next borrow needs it.
+    const replacement = harness.engine.players[1] as FakePlayer;
+
+    // One restore per Player, not one per lease or per track.
+    expect(replacement.volumes).toEqual([40]);
+    expect(replacement.renders).toEqual([[{ name: "nightcore" }]]);
+    expect(firstPlayer.volumes).toEqual([100, 40]);
+    expect(firstPlayer.renders).toEqual([[], [{ name: "nightcore" }]]);
   });
 
   it("keeps the last committed Voice channel when Adapter movement rejects", async () => {
@@ -688,19 +730,23 @@ describe("deferred Voice lifetime", () => {
     expect(harness.distube.voices.get(GUILD)?.channelId).toBe(VOICE_CHANNEL);
   });
 
-  it("clears the deleted queue's public filter state with its Player reset", async () => {
+  it("keeps the committed filter chain when the queue that set it is deleted", async () => {
     const harness = playableSetup();
     const started = deferred<void>();
     harness.distube.once("queue.item.started", () => started.resolve());
     const { queue } = await harness.distube.play(TARGET, "first");
     await started.promise;
-    await queue.filters.set("custom", { gain: 2 });
+    const voice = harness.distube.voices.get(GUILD);
+    await voice?.filters.set("custom", { gain: 2 });
     const player = harness.engine.players[0] as FakePlayer;
 
     await queue.stop();
 
-    expect(queue.filters.active).toEqual([]);
-    expect(player.renders.at(-1)).toEqual([]);
+    // Deletion leaves the Voice's volume, rendered chain, repeat mode, autoplay, and history untouched.
+    expect(voice?.filters.active).toEqual([{ name: "custom", payload: { gain: 2 } }]);
+    expect(voice?.volume).toBe(100);
+    expect(player.renders.at(-1)).toEqual([{ name: "custom", payload: { gain: 2 } }]);
+    expect(player.release).not.toHaveBeenCalled();
   });
 
   it("keeps a replacement queue behind the old lease cleanup", async () => {
@@ -726,12 +772,12 @@ describe("deferred Voice lifetime", () => {
     });
     const secondStarted = deferred<void>();
     harness.distube.once("queue.item.started", () => secondStarted.resolve());
-    const replacement = harness.distube.play(TARGET, "second");
+    const replacement = harness.distube.play(TARGET, mediaUrl("second"));
     await secondResolved.promise;
     secondResolution.resolve(media("source", "second"));
     const second = await replacement;
 
-    expect(second.queue.id).not.toBe(first.queue.id);
+    expect(second.queue).not.toBe(first.queue);
     expect(player.requests.map(request => request.itemId)).toEqual([first.items[0]?.id]);
     stop.resolve();
     await stopping;
@@ -767,5 +813,29 @@ describe("deferred Voice lifetime", () => {
     expect(await paused).toMatchObject({ code: ErrorCode.QUEUE_FAILED });
     await deleted.promise;
     expect(player.pause).not.toHaveBeenCalled();
+  });
+
+  it("follows an externally moved session without disturbing the queue or the active track", async () => {
+    const harness = playableSetup();
+    const started = deferred<void>();
+    harness.distube.once("queue.item.started", () => started.resolve());
+    const { queue, items } = await harness.distube.play(TARGET, "playing");
+    await started.promise;
+    const player = harness.engine.players[0] as FakePlayer;
+    const outcomes = record(harness.distube, ["queue.item.finished", "queue.item.failed", "queue.deleted"]);
+
+    // The Adapter republishes `connected` for a channel nobody asked us to join.
+    (harness.adapter.sessions[0] as FakeVoiceSession).connect(
+      { sessionId: "session", token: "token", endpoint: "endpoint" },
+      "dragged",
+    );
+    await settle();
+
+    expect(harness.distube.voices.get(GUILD)?.channelId).toBe("dragged");
+    expect(harness.distube.getQueue(GUILD)).toBe(queue);
+    expect(queue.state.current?.id).toBe(items[0]?.id);
+    expect(player.playing).toBe(items[0]?.id);
+    expect(player.stopTrack).not.toHaveBeenCalled();
+    expect(outcomes).toEqual([]);
   });
 });

@@ -7,8 +7,16 @@ upserts the guild's queue, joins or reuses the guild's Voice, and inserts the re
 
 ## How do I search?
 
-Retain the typed source plugin instance and call its `search()` method directly, or pass a query string to `play` —
-each configured SourcePlugin is offered the string in order.
+Pass the query straight to `play` or `queue.enqueue`. Core searches your configured plugins in constructor order and
+enqueues the first candidate the first answering plugin ranked. For a candidate list you present to the user before
+committing to one, retain the typed plugin instance and call its own `search(query, options?)`, which takes a `limit`
+and a zero-based `offset` the plugin documents bounds for.
+
+## Why is my `spotify:track:…` URI treated as a query?
+
+Because core only calls `resolve` for absolute `http:` and `https:` URLs. Any other scheme is indistinguishable from a
+typed query like `artist: song title`, so it goes to search. Use the provider's HTTPS URL, or a plugin that accepts its
+URI scheme in `search`.
 
 ## How do I move voice channels?
 
@@ -17,8 +25,9 @@ unaffected by channel moves.
 
 ## Where are filters, repeat, autoplay, and volume?
 
-On the GuildQueue: `queue.filters` (`apply`/`set`/`remove`/`clear`, rendered by the playback engine),
-`queue.setRepeatMode` with `RepeatMode`, `queue.setAutoplay`, and `queue.setVolume` (persisted on the guild's Player).
+On the Voice, reached with `distube.voices.get(guildId)`: `voice.filters` (`apply`/`set`/`remove`/`clear`, rendered by
+the playback engine), `voice.setRepeatMode` with `RepeatMode`, `voice.setAutoplay`, and `voice.setVolume`. All four are
+guild presence state: they outlive every queue and reset only when the Voice leaves.
 
 ## What deletes a queue?
 
@@ -29,7 +38,8 @@ survives queue stop and exhaustion, but not `leave`, a platform disconnect, or s
 
 ## How does previous-track history work?
 
-`queue.previousSongs` keeps at most 100 finished QueueItem occurrences. `queue.previous()` inserts a fresh occurrence
+`voice.previousSongs` keeps at most 100 finished QueueItem occurrences and belongs to the Voice, so it survives queue
+deletion and `queue.previous()` still works after the final item. `queue.previous()` inserts a fresh occurrence
 for the selected Song, with a new item ID and timestamp while preserving the Song and metadata references. History
 never revives an old QueueItem identity.
 

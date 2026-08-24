@@ -1,6 +1,7 @@
 import {
   DisTubeError,
   ErrorCode,
+  ErrorReason,
   type FilterDefinition,
   type FilterDefinitions,
   type FilterEntry,
@@ -66,7 +67,11 @@ export class FilterRegistry {
   #fragment(entry: FilterEntry): string {
     if (entry.payload !== undefined) {
       if (typeof entry.payload !== "string" || entry.payload.trim().length === 0) {
-        throw new DisTubeError(ErrorCode.INVALID_ARGUMENT, `Filter ${entry.name} payload must be an ffmpeg fragment`);
+        throw new DisTubeError(
+          ErrorCode.INVALID_ARGUMENT,
+          ErrorReason.Argument,
+          `Filter ${entry.name} payload must be an ffmpeg fragment`,
+        );
       }
       return entry.payload.trim();
     }

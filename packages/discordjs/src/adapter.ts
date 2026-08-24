@@ -1,5 +1,6 @@
 import type { DiscordGatewayAdapterCreator } from "@discordjs/voice";
-import { DiscordVoiceEngine, DiscordVoiceSession, type FfmpegFilterDefinitions } from "@distube/voice-core";
+import type { FfmpegFilterDefinitions } from "@distube/voice-core/core";
+import { DiscordVoiceEngine, DiscordVoiceSession, discordPreflight } from "@distube/voice-core/discord";
 import type { Client } from "discord.js";
 import type { Adapter, Engine, VoiceSession, VoiceTarget } from "distube";
 
@@ -20,7 +21,7 @@ export class DiscordJSAdapter implements Adapter {
     if (!Number.isInteger(timeout) || timeout < 1) throw new TypeError("connectionTimeoutMs must be positive");
     this.#client = client;
     this.#timeout = timeout;
-    this.engine = new DiscordVoiceEngine(options.filters);
+    this.engine = new DiscordVoiceEngine(options.filters, discordPreflight("@distube/discordjs"));
   }
 
   async createVoiceSession(target: VoiceTarget): Promise<VoiceSession> {

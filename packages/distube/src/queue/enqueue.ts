@@ -11,9 +11,12 @@ export class EnqueueCoordinator {
     resolve: EnqueueOperation["resolve"],
     reject: EnqueueOperation["reject"],
   ): EnqueueOperation {
+    const controller = new AbortController();
     return {
       sequence: this.#nextSequence++,
-      controller: new AbortController(),
+      controller,
+      // Either side may cancel: the queue aborts on terminal work, the caller aborts on their own signal.
+      signal: options.signal ? AbortSignal.any([controller.signal, options.signal]) : controller.signal,
       options,
       resolve,
       reject,

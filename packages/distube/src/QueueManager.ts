@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
-import type { Engine, ResolvableInput, VoiceTarget } from "./contracts";
-import { DisTubeError, ErrorCode } from "./errors";
+import type { ResolvableInput, VoiceTarget } from "./contracts";
+import { ErrorReason } from "./enums";
+import { abortFailure, DisTubeError, ErrorCode } from "./errors";
 import type { DisTubeEventEmitter } from "./events";
 import { type GuildQueue, GuildQueueImpl } from "./GuildQueue";
 import type { QueueItem } from "./media";
@@ -12,9 +13,9 @@ import type { QueueVoice } from "./queue/voice";
 import { settleAll } from "./utils/dispose";
 
 /** Readonly view over the registered GuildQueues, published as `distube.queues`. */
-export type QueueCollection = Readonly<{
+export type QueueCollection<Metadata = unknown> = Readonly<{
   readonly size: number;
-  [Symbol.iterator](): IterableIterator<GuildQueue>;
+  [Symbol.iterator](): IterableIterator<GuildQueue<Metadata>>;
 }>;
 
 /** Package-private input accepted by QueueManager's ordered play lane. */
@@ -28,6 +29,7 @@ interface QueuePlayOptions {
   readonly position?: number;
   readonly metadata?: unknown;
   readonly skip?: boolean;
+  readonly signal?: AbortSignal;
 }
 
 /** Package-private result returned through the public `DisTube.play` facade. */
@@ -39,6 +41,8 @@ interface QueuePlayResult {
 interface PlayInvocation {
   readonly guildId: string;
   readonly controller: AbortController;
+  /** The controller's signal, joined with the caller's when one was supplied. */
+  readonly signal: AbortSignal;
 }
 
 interface DeletionRecord {
@@ -52,7 +56,6 @@ export class QueueManager {
   readonly #getVoice: (guildId: string) => QueueVoice | undefined;
   readonly #assertVoiceJoinable: (guildId: string) => void;
   readonly #releaseOwnedVoice: (voice: QueueVoice) => Promise<void>;
-  readonly #engine: Engine;
   readonly #sources: SourceCatalog;
   readonly #events: DisTubeEventEmitter;
   readonly #queues = new Map<string, GuildQueueImpl>();
@@ -73,7 +76,6 @@ export class QueueManager {
     getVoice: (guildId: string) => QueueVoice | undefined,
     assertVoiceJoinable: (guildId: string) => void,
     releaseOwnedVoice: (voice: QueueVoice) => Promise<void>,
-    engine: Engine,
     sources: SourceCatalog,
     events: DisTubeEventEmitter,
   ) {
@@ -81,7 +83,6 @@ export class QueueManager {
     this.#getVoice = getVoice;
     this.#assertVoiceJoinable = assertVoiceJoinable;
     this.#releaseOwnedVoice = releaseOwnedVoice;
-    this.#engine = engine;
     this.#sources = sources;
     this.#events = events;
     const queues = this.#queues;
@@ -114,7 +115,7 @@ export class QueueManager {
       metadata: options.metadata,
       skip: options.skip,
     });
-    const invocation: PlayInvocation = { guildId: voiceTarget.guildId, controller: new AbortController() };
+    const invocation = this.#invocation(voiceTarget.guildId, options.signal);
     // Register the invocation before its lane turn. A terminal deletion can then abort a resolution that
     // has not reached the front of the lane yet.
     this.#inFlight.add(invocation);
@@ -200,7 +201,7 @@ export class QueueManager {
     let committed = existing === queue;
 
     try {
-      const media = await resolveInput(input, this.#sources, invocation.controller.signal);
+      const media = await resolveInput(input, this.#sources, invocation.signal);
       this.#assertReady();
       this.#assertInvocation(invocation);
       this.#assertVoiceJoinable(target.guildId);
@@ -231,7 +232,6 @@ export class QueueManager {
     let queue!: GuildQueueImpl;
     queue = new GuildQueueImpl(
       { queueId: randomUUID(), guildId: target.guildId },
-      this.#engine,
       this.#sources,
       this.#events,
       completion => this.#unregister(target.guildId, queue, completion),
@@ -318,6 +318,16 @@ export class QueueManager {
     ] as GuildQueueImpl[];
   }
 
+  /** One invocation whose cancellation the caller and a terminal deletion can both request. */
+  #invocation(guildId: string, signal: AbortSignal | undefined): PlayInvocation {
+    const controller = new AbortController();
+    return {
+      guildId,
+      controller,
+      signal: signal ? AbortSignal.any([controller.signal, signal]) : controller.signal,
+    };
+  }
+
   #abortGuildPlay(guildId: string): void {
     const error = new DisTubeError(ErrorCode.QUEUE_FAILED, "Play operation was superseded by queue deletion");
     for (const invocation of this.#inFlight) {
@@ -326,9 +336,8 @@ export class QueueManager {
   }
 
   #assertInvocation(invocation: PlayInvocation): void {
-    if (!invocation.controller.signal.aborted) return;
-    const reason = invocation.controller.signal.reason;
-    throw reason instanceof Error ? reason : new DisTubeError(ErrorCode.QUEUE_FAILED, "Play operation was superseded");
+    if (!invocation.signal.aborted) return;
+    throw abortFailure(invocation.signal.reason);
   }
 
   #assertReady(): void {
@@ -356,19 +365,23 @@ function sameQueues(left: readonly GuildQueueImpl[], right: readonly GuildQueueI
 
 function toVoiceTarget(target: QueuePlayTarget): VoiceTarget {
   if (!target || typeof target.guildId !== "string" || target.guildId.length === 0) {
-    throw new DisTubeError(ErrorCode.INVALID_ARGUMENT, "guildId must be a non-empty string");
+    throw new DisTubeError(ErrorCode.INVALID_ARGUMENT, ErrorReason.Argument, "guildId must be a non-empty string");
   }
   if (typeof target.voiceChannelId !== "string" || target.voiceChannelId.length === 0) {
-    throw new DisTubeError(ErrorCode.INVALID_ARGUMENT, "voiceChannelId must be a non-empty string");
+    throw new DisTubeError(
+      ErrorCode.INVALID_ARGUMENT,
+      ErrorReason.Argument,
+      "voiceChannelId must be a non-empty string",
+    );
   }
   return Object.freeze({ guildId: target.guildId, channelId: target.voiceChannelId });
 }
 
 function validatePlayOptions(options: QueuePlayOptions): void {
   if (!options || typeof options !== "object") {
-    throw new DisTubeError(ErrorCode.INVALID_ARGUMENT, "play options must be an object");
+    throw new DisTubeError(ErrorCode.INVALID_ARGUMENT, ErrorReason.Argument, "play options must be an object");
   }
   if (options.position !== undefined && (!Number.isInteger(options.position) || options.position < 0)) {
-    throw new DisTubeError(ErrorCode.INVALID_ARGUMENT, "position must be a non-negative integer");
+    throw new DisTubeError(ErrorCode.INVALID_ARGUMENT, ErrorReason.Argument, "position must be a non-negative integer");
   }
 }

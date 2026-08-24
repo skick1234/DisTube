@@ -10,6 +10,7 @@ import {
   type PlaybackContext,
   type PlaybackPreparation,
   type PlaybackRequest,
+  type PlaybackResource,
   type Player,
   type PlayerEvent,
   type Playlist,
@@ -103,12 +104,15 @@ export class FakeSource implements SourcePlugin {
 }
 
 export type FakePlayerOperation =
+  /** Matches the next play or volume effect regardless of its argument; `play:${id}` targets one. */
   | "play"
+  | `play:${string}`
   | "stop"
   | "pause"
   | "resume"
   | "seek"
   | "volume"
+  | `volume:${string}`
   | "filters"
   | "gateway"
   | "release";
@@ -146,11 +150,22 @@ export class FakePlayer implements Player {
   readonly play = vi.fn(async (request: PlaybackRequest): Promise<void> => {
     this.#assertOpen();
     this.requests.push(request);
+    // The bare name matches any play; the keyed name matches only that item.
     await this.#effect("play", `play:${request.itemId}`);
+    const keyed = this.#gates.get(`play:${request.itemId}`)?.shift();
+    if (keyed) {
+      keyed.markEntered();
+      await keyed.promise;
+    }
     this.#currentItem = request.itemId;
   });
   readonly setVolume = vi.fn(async (percent: number): Promise<void> => {
     await this.#effect("volume", `volume:${percent}`);
+    const keyed = this.#gates.get(`volume:${percent}`)?.shift();
+    if (keyed) {
+      keyed.markEntered();
+      await keyed.promise;
+    }
     this.volumes.push(percent);
   });
   readonly setFilters = vi.fn(async (entries: readonly FilterEntry[]): Promise<void> => {
@@ -269,6 +284,7 @@ export class FakeVoiceSession implements VoiceSession {
 }
 
 export class FakeEngine implements Engine {
+  readonly accepts: ReadonlySet<PlaybackResource["kind"]> = new Set(["url" as const]);
   readonly players: FakePlayer[] = [];
   readonly #createGates: Deferred<Player>[] = [];
   readonly createPlayer = vi.fn(async (_session: VoiceSession): Promise<Player> => {
@@ -341,9 +357,25 @@ export function setup(sources: readonly Plugin[], options: HarnessOptions = {}):
   return { adapter, engine, diagnostics, distube };
 }
 
-/** A single-source harness whose plugin resolves every URL into a Song named after it. */
+/** The absolute URL form of a media id, for tests that exercise URL routing rather than query search. */
+export function mediaUrl(id: string, source = "source"): string {
+  return `https://${source}.example/media/${id}`;
+}
+
+/** The id a harness input names, whether it arrived as a bare id or as its `mediaUrl` form. */
+function idOf(input: string): string {
+  return input.startsWith("https://") ? (input.split("/").pop() as string) : input;
+}
+
+/**
+ * A single-source harness whose plugin answers for every input, by URL or by query.
+ *
+ * Core routes an absolute URL to `resolve` and everything else to `search`, so a test picks which path
+ * it exercises by passing `mediaUrl("a")` or plain `"a"`. Both produce the Song named `a`.
+ */
 export function playableSetup(name = "source"): Harness & { readonly source: FakeSource } {
   const source = new FakeSource(name);
-  source.resolve.mockImplementation(async url => media(name, url));
+  source.resolve.mockImplementation(async url => media(name, idOf(url)));
+  source.search.mockImplementation(async query => [media(name, idOf(query))]);
   return { ...setup([source]), source };
 }

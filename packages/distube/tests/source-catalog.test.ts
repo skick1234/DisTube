@@ -45,6 +45,24 @@ describe("private source catalog", () => {
     );
   });
 
+  it("accepts an empty search result as a decline but rejects an empty resolve result", () => {
+    const youtube = source("youtube");
+    expect(validateSourceSongs([], youtube, "search", true)).toEqual([]);
+    expect(() => validateSourceSongs([], youtube, "resolve")).toThrowError(
+      expect.objectContaining({
+        code: ErrorCode.SOURCE_FAILED,
+        message: "youtube returned invalid media from resolve",
+      }),
+    );
+  });
+
+  it("rejects a non-Song entry mixed into an otherwise valid search result", () => {
+    const youtube = source("youtube");
+    expect(() =>
+      validateSourceSongs([song("youtube"), { id: "fake" } as unknown as Song], youtube, "search", true),
+    ).toThrowError(expect.objectContaining({ code: ErrorCode.SOURCE_FAILED }));
+  });
+
   it("preserves configured order without exposing mutable lookup storage", () => {
     const youtube = source("youtube");
     const soundcloud = source("soundcloud");

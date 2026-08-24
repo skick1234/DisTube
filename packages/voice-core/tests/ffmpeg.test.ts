@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { ffmpegFailure, spawnFfmpeg } from "../src/ffmpeg";
+import { ffmpegFailure, finishedFfmpeg, spawnFfmpeg } from "../src/ffmpeg";
 import { latest, resetNative } from "./support/native";
 
 vi.mock("node:child_process", async () => (await import("./support/native")).childProcessModule());
@@ -19,8 +19,30 @@ describe("FFmpeg diagnostics", () => {
     ]);
   });
 
+  it("keeps a spawn error when close follows it", async () => {
+    const stream = spawnFfmpeg("https://stream.example/audio", 0);
+    const failure = new Error("ffmpeg was not found");
+
+    latest.child.emit("error", failure);
+    latest.child.close(1, null);
+
+    await expect(stream.outcome).resolves.toMatchObject({ code: null, signal: null, error: failure });
+  });
+
+  it("reports a signal exit as a decoder failure", async () => {
+    const stream = spawnFfmpeg("https://stream.example/audio", 0);
+
+    latest.child.close(null, "SIGTERM");
+
+    await expect(stream.outcome).resolves.toMatchObject({ code: null, signal: "SIGTERM" });
+    expect(ffmpegFailure({ code: null, signal: "SIGTERM", stderr: "" }).message).toContain(
+      "FFmpeg exited from signal SIGTERM",
+    );
+  });
+
   it("redacts underscore and hyphen credential fields plus signed request headers", () => {
     const secrets = [
+      "url-secret",
       "api-key-secret",
       "access-token-secret",
       "refresh-token-secret",
@@ -33,6 +55,7 @@ describe("FFmpeg diagnostics", () => {
       code: 1,
       signal: null,
       stderr: [
+        "decoder failed at https://stream.example/audio?token=url-secret",
         "api_key=api-key-secret",
         "access-token=access-token-secret",
         "refresh_token=refresh-token-secret",
@@ -59,5 +82,12 @@ describe("FFmpeg diagnostics", () => {
 
     expect(Buffer.byteLength(failure.message, "utf8")).toBeLessThanOrEqual(4096);
     expect(failure.message).not.toContain("secret=y");
+  });
+
+  it("accepts only an ordinary zero exit as a finished decode", () => {
+    expect(finishedFfmpeg({ code: 0, signal: null, stderr: "" })).toBe(true);
+    expect(finishedFfmpeg({ code: 1, signal: null, stderr: "" })).toBe(false);
+    expect(finishedFfmpeg({ code: null, signal: "SIGKILL", stderr: "" })).toBe(false);
+    expect(finishedFfmpeg({ code: null, signal: null, stderr: "", error: new Error("spawn failed") })).toBe(false);
   });
 });

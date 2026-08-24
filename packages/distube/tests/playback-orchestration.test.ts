@@ -8,6 +8,7 @@ import {
   FakeSource,
   GUILD,
   media,
+  mediaUrl,
   playableSetup,
   settle,
   setup,
@@ -46,8 +47,8 @@ describe("enqueue commitment", () => {
     const first = deferred<Song>();
     const second = deferred<Song>();
     harness.source.resolve.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
-    const failed = capture(queue.enqueue("first"));
-    const succeeds = queue.enqueue("second");
+    const failed = capture(queue.enqueue(mediaUrl("first")));
+    const succeeds = queue.enqueue(mediaUrl("second"));
 
     second.resolve(media("source", "second"));
     first.reject(new Error("first failed"));
@@ -200,6 +201,23 @@ describe("explicit fallback", () => {
     ]);
   });
 
+  it("asks for five candidates where query resolution asks for one", async () => {
+    const spotify = new FakeSource("spotify");
+    const youtube = new FakeSource("youtube");
+    spotify.preparePlayback.mockResolvedValueOnce({ kind: "search", query: "fallback query" });
+    spotify.search.mockResolvedValue([media("spotify", "queried")]);
+    youtube.search.mockResolvedValue([media("youtube", "candidate")]);
+    const harness = setup([spotify, youtube]);
+
+    await harness.distube.play(TARGET, media("spotify", "original"));
+    await settle();
+    await harness.distube.getQueue(GUILD)?.enqueue("a query");
+
+    // One shared rule, two callers: the only thing that differs is how many candidates each consumes.
+    expect(youtube.search).toHaveBeenCalledWith("fallback query", expect.objectContaining({ limit: 5 }));
+    expect(spotify.search).toHaveBeenCalledWith("a query", expect.objectContaining({ limit: 1 }));
+  });
+
   it("rejects a candidate whose owner is not the searching source", async () => {
     const spotify = new FakeSource("spotify");
     const youtube = new FakeSource("youtube");
@@ -266,7 +284,8 @@ describe("terminal authority", () => {
     await stopping;
 
     const second = await harness.distube.play(TARGET, "b");
-    expect(second.queue.id).not.toBe(queue.id);
+    // Queues have no public ID; a fresh queue is a different facade object.
+    expect(second.queue).not.toBe(queue);
   });
 
   it("unregisters the guild even when terminal cleanup rejects", async () => {

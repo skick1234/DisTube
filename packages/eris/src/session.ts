@@ -1,6 +1,8 @@
+import { asError, collectCleanupFailures } from "@distube/voice-core/core";
 import type { VoiceGatewayData, VoiceSession, VoiceSessionEvent } from "distube";
 import type { Client, RawPacket, VoiceConnection } from "eris";
-import { collectCleanupFailures, throwCleanupFailures } from "./cleanup";
+// Reporting stays local: the aggregate names this package.
+import { throwCleanupFailures } from "./cleanup";
 import { ensureErisErrorSink } from "./native-playback";
 import { assertGuildVoiceChannel, objectRecord } from "./validation";
 
@@ -28,6 +30,8 @@ export class ErisVoiceSession implements VoiceSession {
   readonly #listeners = new Set<(event: VoiceSessionEvent) => void>();
   #connection?: VoiceConnection;
   #channelId: string;
+  /** The channel the gateway last reported us in, which an external move changes without a join of ours. */
+  #observedChannelId?: string;
   #sessionId?: string;
   #token?: string;
   #endpoint?: string;
@@ -84,7 +88,7 @@ export class ErisVoiceSession implements VoiceSession {
       if (this.#released) throw new Error(`Eris voice session for guild ${this.guildId} was released`);
       this.#assertConnectedChannel(connection, channelId);
       this.#adopt(connection);
-      this.#channelId = channelId;
+      this.#commitChannel(channelId);
       this.#joining = undefined;
       this.#settle();
     } catch (error: unknown) {
@@ -140,7 +144,7 @@ export class ErisVoiceSession implements VoiceSession {
       if (this.#released) throw new Error(`Eris voice session for guild ${this.guildId} was released`);
       this.#assertConnectedChannel(connection, channelId);
       this.#adopt(connection);
-      this.#channelId = channelId;
+      this.#commitChannel(channelId);
       this.#joining = undefined;
       this.#settle();
     } catch (restoreError: unknown) {
@@ -215,7 +219,15 @@ export class ErisVoiceSession implements VoiceSession {
       this.#token = data.token;
       this.#endpoint = data.endpoint;
     } else if (packet.t === "VOICE_STATE_UPDATE") {
-      if (data.user_id !== this.#client.user?.id || typeof data.session_id !== "string") return;
+      if (data.user_id !== this.#client.user?.id) return;
+      // A null channel is Discord removing us from voice, which no rejoin recovers.
+      if (data.channel_id === null) {
+        this.#terminate(new Error(`Discord removed guild ${this.guildId} from its voice channel`));
+        return;
+      }
+      if (typeof data.session_id !== "string") return;
+      // Someone with the permission can drag the bot to another channel. That is a move, not a disconnect.
+      if (typeof data.channel_id === "string") this.#observedChannelId = data.channel_id;
       this.#sessionId = data.session_id;
     } else {
       return;
@@ -223,13 +235,24 @@ export class ErisVoiceSession implements VoiceSession {
     this.#settle();
   };
 
-  /** Records the settled channel and credentials, publishing whenever either changed. */
+  /** Records a channel this session confirmed, whether from a join of ours or the gateway's own report. */
+  #commitChannel(channelId: string): void {
+    this.#channelId = channelId;
+    this.#observedChannelId = channelId;
+  }
+
+  /**
+   * Records the settled channel and credentials, publishing whenever either changed.
+   *
+   * The gateway's report wins over the last committed channel, so an external move republishes `connected`
+   * with the new channel. Core updates its Voice and the active track keeps playing; nothing disconnects.
+   */
   #settle(): void {
     if (this.#released || this.#joining || !this.#sessionId || !this.#token || !this.#endpoint) return;
-    const channelId = this.channelId;
+    const channelId = this.#observedChannelId ?? this.#channelId;
     const gateway: VoiceGatewayData = { sessionId: this.#sessionId, token: this.#token, endpoint: this.#endpoint };
     if (channelId === this.#channelId && this.#gateway && sameGateway(this.#gateway, gateway)) return;
-    this.#channelId = channelId;
+    this.#commitChannel(channelId);
     this.#gateway = gateway;
     for (const listener of this.#listeners) this.#deliver(listener, { type: "connected", channelId, gateway });
   }
@@ -241,10 +264,6 @@ export class ErisVoiceSession implements VoiceSession {
       // Subscriber failures are isolated; the session stays the connection authority.
     }
   }
-}
-
-function asError(error: unknown): Error {
-  return error instanceof Error ? error : new Error(String(error));
 }
 
 function sameGateway(left: VoiceGatewayData, right: VoiceGatewayData): boolean {

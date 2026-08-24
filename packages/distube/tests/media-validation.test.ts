@@ -122,7 +122,8 @@ describe("media value validation", () => {
   it("keeps QueueItem metadata caller-owned while identity stays immutable", () => {
     const song = new Song(valid);
     const requester = { id: "user" };
-    const item = new QueueItem({ song, metadata: requester });
+    // Untyped: the metadata parameter defaults to `unknown`, so the slot takes anything.
+    const item = new QueueItem({ song, metadata: requester as unknown });
     requester.id = "changed";
     expect(item.metadata).toBe(requester);
 

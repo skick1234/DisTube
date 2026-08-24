@@ -41,10 +41,19 @@ async function assertSystemFfmpeg(): Promise<void> {
   }
 }
 
+/** Pure-JavaScript implementations, so `--ignore-scripts` still leaves the consumer able to play. */
+const OPUS_PACKAGE = "opusscript@^0.0.8";
+const ENCRYPTION_PACKAGES = ["@noble/ciphers@^2.0.0", "tweetnacl@^1.0.3"];
+
+interface OptionalPrerequisites {
+  readonly opus: boolean;
+  readonly encryption: boolean;
+}
+
 async function installConsumer(
   root: string,
   archives: ReadonlyMap<string, string>,
-  includeOpus: boolean,
+  optional: OptionalPrerequisites,
 ): Promise<void> {
   await mkdir(root, { recursive: true });
   await writeFile(resolve(root, "package.json"), '{"private":true,"type":"module"}\n');
@@ -62,13 +71,26 @@ async function installConsumer(
       "discord.js@^14.27.0",
       "oceanic.js@^1.14.0",
       "eris@^0.18.0",
-      ...(includeOpus ? ["opusscript@^0.0.8"] : []),
+      ...(optional.opus ? [OPUS_PACKAGE] : []),
+      ...(optional.encryption ? ENCRYPTION_PACKAGES : []),
     ],
     root,
   );
-  if (!includeOpus) {
+  // A transitive copy would defeat the point of the negative case, so the absent group is removed after install.
+  if (!optional.opus) {
     await rm(resolve(root, "node_modules", "@discordjs", "opus"), { recursive: true, force: true });
     await rm(resolve(root, "node_modules", "opusscript"), { recursive: true, force: true });
+  }
+  if (!optional.encryption) {
+    for (const module of [
+      "sodium-native",
+      "libsodium-wrappers",
+      "@stablelib/xchacha20poly1305",
+      "@noble/ciphers",
+      "tweetnacl",
+    ]) {
+      await rm(resolve(root, "node_modules", ...module.split("/")), { recursive: true, force: true });
+    }
   }
   await writeVoiceTransport(resolve(root, "node_modules", "@discordjs", "voice"));
 }
@@ -344,7 +366,8 @@ import { OceanicAdapter } from "@distube/oceanic";
 import { ErisAdapter } from "@distube/eris";
 
 const kind = process.argv[2];
-const capability = kind === "ffmpeg" ? "FFmpeg" : "Opus";
+const capability = { ffmpeg: "FFmpeg", opus: "Opus", encryption: "encryption" }[kind];
+if (!capability) throw new Error("unknown prerequisite kind " + kind);
 const guildId = "guild";
 const channelId = "channel";
 
@@ -420,7 +443,7 @@ try {
   for (const packageName of packageDirectories.keys()) archives.set(packageName, await pack(packageName, temporary));
 
   const consumer = resolve(temporary, "consumer");
-  await installConsumer(consumer, archives, true);
+  await installConsumer(consumer, archives, { opus: true, encryption: true });
   await writeFile(resolve(consumer, "smoke.mjs"), consumerSmoke());
   await run(["node", "smoke.mjs"], consumer);
 
@@ -430,16 +453,20 @@ try {
     FFMPEG_PATH: resolve(temporary, "missing-ffmpeg"),
   });
 
-  const withoutOpus = resolve(temporary, "without-opus");
-  await installConsumer(withoutOpus, archives, false);
-  await writeFile(resolve(withoutOpus, "preflight.mjs"), preflightSmoke());
   const ffmpegProbe = resolve(temporary, "ffmpeg-probe");
   await writeFile(ffmpegProbe, "#!/usr/bin/env node\nprocess.exit(0);\n");
   await chmod(ffmpegProbe, 0o755);
-  await run(["node", "preflight.mjs", "opus"], withoutOpus, {
-    ...process.env,
-    FFMPEG_PATH: ffmpegProbe,
-  });
+
+  // Each optional group gets its own consumer, so the probe reports the one thing that is actually absent.
+  for (const [kind, optional] of [
+    ["opus", { opus: false, encryption: true }],
+    ["encryption", { opus: true, encryption: false }],
+  ] as const) {
+    const root = resolve(temporary, `without-${kind}`);
+    await installConsumer(root, archives, optional);
+    await writeFile(resolve(root, "preflight.mjs"), preflightSmoke());
+    await run(["node", "preflight.mjs", kind], root, { ...process.env, FFMPEG_PATH: ffmpegProbe });
+  }
 } finally {
   await rm(temporary, { recursive: true, force: true });
 }

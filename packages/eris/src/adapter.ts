@@ -1,7 +1,7 @@
+import type { FfmpegFilterDefinitions } from "@distube/voice-core/core";
 import type { Adapter, Engine, VoiceSession, VoiceTarget } from "distube";
 import type { Client } from "eris";
 import { ErisVoiceEngine } from "./engine";
-import type { FfmpegFilterDefinitions } from "./filters";
 import { ErisVoiceSession } from "./session";
 import { assertGuildVoiceChannel, positiveInteger } from "./validation";
 

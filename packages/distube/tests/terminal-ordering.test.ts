@@ -36,7 +36,7 @@ describe("deletion is terminal for queue decisions", () => {
     // Park the advance inside `stopTrack`, exactly where deletion used to interleave.
     const advance = capture(queue.skip());
     await stop.entered;
-    const historyBefore = queue.previousSongs.length;
+    const historyBefore = harness.distube.voices.get(GUILD)?.previousSongs.length ?? 0;
 
     // Terminal authority is accepted synchronously, so `queue.deleted` publishes before the
     // suspended advance can resume. Awaiting stop first would deadlock on the held gate.
@@ -52,7 +52,7 @@ describe("deletion is terminal for queue decisions", () => {
     expect(log.filter(name => name === "queue.item.finished")).toHaveLength(0);
     // `a` started before recording began, and the superseded advance never starts `b`.
     expect(log.filter(name => name === "queue.item.started")).toHaveLength(0);
-    expect(queue.previousSongs.length).toBe(historyBefore);
+    expect(harness.distube.voices.get(GUILD)?.previousSongs.length).toBe(historyBefore);
     expect(((await advance) as DisTubeError).code).toBe(ErrorCode.QUEUE_FAILED);
   });
 
@@ -73,20 +73,36 @@ describe("deletion is terminal for queue decisions", () => {
     expect(((await paused) as DisTubeError).code).toBe(ErrorCode.QUEUE_FAILED);
   });
 
-  it("refuses a volume commit that resumes after deletion", async () => {
-    const { queue, player } = await playing(["a"]);
-    const volume = player.gate("volume");
+  it("commits a voice volume effect that resumes after the queue deleted", async () => {
+    const { harness, queue, player } = await playing(["a"]);
+    const volume = player.gate("volume:42");
 
-    const applied = capture(queue.setVolume(42));
+    const applied = capture(harness.distube.voices.get(GUILD)?.setVolume(42) ?? Promise.reject(new Error("no voice")));
     await volume.entered;
     const stopping = capture(queue.stop());
     volume.resolve();
     await settle();
     await stopping;
 
-    expect(((await applied) as DisTubeError).code).toBe(ErrorCode.QUEUE_FAILED);
-    // The backend recorded the effect, but no queue state was committed behind it.
-    expect(queue.volume).not.toBe(42);
+    expect(await applied).toBeUndefined();
+    // Volume belongs to the Voice now: the effect commits even though the queue deleted mid-flight.
+    expect(harness.distube.voices.get(GUILD)?.volume).toBe(42);
+  });
+
+  it("keeps queue.deleted last when a voice volume effect settles afterwards", async () => {
+    const { harness, queue, player } = await playing(["a"]);
+    const log = record(harness.distube, QUEUE_EVENTS);
+    const volume = player.gate("volume:42");
+
+    const applied = capture(harness.distube.voices.get(GUILD)?.setVolume(42) ?? Promise.reject(new Error("no voice")));
+    await volume.entered;
+    const stopping = capture(queue.stop());
+    volume.resolve();
+    await settle();
+    await stopping;
+
+    expect(log.at(-1)).toBe("queue.deleted");
+    expect(await applied).toBeUndefined();
   });
 
   it("drops queued decisions that were waiting behind terminal authority", async () => {

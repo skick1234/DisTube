@@ -47,10 +47,10 @@ describe("pure QueueState playback transitions", () => {
     expect(removeItem(queued, { from: 0, to: 1 })).toMatchObject({ items: [a, b], state: { items: [c] } });
   });
 
-  it("moves a one-based jump target to the head, dropping or requeueing what it passed", () => {
+  it("moves a zero-based jump target to the head, dropping or requeueing what it passed", () => {
     const [a, b, c] = [item(), item(), item()];
     const queued = insertItems(IDLE_QUEUE_STATE, [a, b, c]);
-    expect(jumpItems(queued, 3, false)).toMatchObject({ passed: [a, b], state: { items: [c] } });
+    expect(jumpItems(queued, 2, false)).toMatchObject({ passed: [a, b], state: { items: [c] } });
     expect(jumpItems(queued, c.id, true)).toMatchObject({ passed: [], state: { items: [c, a, b] } });
   });
 
@@ -121,6 +121,6 @@ describe("pure QueueState playback transitions", () => {
     expect(() => removeItem(waiting, null as never)).toThrow("Removal target must be");
     expect(() => removeItem(waiting, 2)).toThrow("Waiting index is out of range");
     expect(() => jumpItems(waiting, "missing", false)).toThrow("Unknown QueueItem");
-    expect(() => jumpItems(waiting, 0, false)).toThrow("Waiting position is out of range");
+    expect(() => jumpItems(waiting, 2, false)).toThrow("Waiting position is out of range");
   });
 });

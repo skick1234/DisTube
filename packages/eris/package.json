@@ -23,7 +23,7 @@
     "type": "tsc --noEmit",
     "test": "vitest run --coverage=false",
     "test:release": "vitest run --coverage",
-    "build": "tsdown && bun ../../scripts/clean-source-declarations.ts",
+    "build": "tsdown && bun ../../scripts/sanitize-adapter-output.ts && bun ../../scripts/clean-source-declarations.ts",
     "check:circular": "dpdm -T --tree=false --warning=false --exit-code circular:1 --tsconfig tsconfig.json \"src/**/*.ts\"",
     "prepack": "bun run build"
   },

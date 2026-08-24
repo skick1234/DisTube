@@ -29,7 +29,9 @@
       "@distube/discordjs": ["./packages/discordjs/src/index.ts"],
       "@distube/eris": ["./packages/eris/src/index.ts"],
       "@distube/oceanic": ["./packages/oceanic/src/index.ts"],
-      "@distube/voice-core": ["./packages/voice-core/src/index.ts"]
+      "@distube/voice-core": ["./packages/voice-core/src/index.ts"],
+      "@distube/voice-core/core": ["./packages/voice-core/src/index.ts"],
+      "@distube/voice-core/discord": ["./packages/voice-core/src/discord.ts"]
     }
   }
 }

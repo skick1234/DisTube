@@ -1,4 +1,4 @@
-import { QueueStatus } from "../enums";
+import { ErrorReason, QueueStatus } from "../enums";
 import { DisTubeError, ErrorCode } from "../errors";
 import type { ActivePlayback } from "./protocol";
 import type { QueueState } from "./state";
@@ -16,12 +16,12 @@ export function decideControl(
   seconds?: number,
 ): ControlDecision {
   if (!active || state.current?.id !== active.item.id) {
-    throw new DisTubeError(ErrorCode.INVALID_ARGUMENT, "Queue has no current QueueItem");
+    throw new DisTubeError(ErrorCode.INVALID_ARGUMENT, ErrorReason.State, "Queue has no current QueueItem");
   }
   if (control === "pause" && state.status === QueueStatus.Paused) return { kind: "noop" };
   if (control === "resume" && state.status === QueueStatus.Playing) return { kind: "noop" };
   if (control === "seek" && (!Number.isFinite(seconds) || (seconds ?? -1) < 0)) {
-    throw new DisTubeError(ErrorCode.INVALID_ARGUMENT, "Seek seconds must be non-negative");
+    throw new DisTubeError(ErrorCode.INVALID_ARGUMENT, ErrorReason.Argument, "Seek seconds must be non-negative");
   }
   return { kind: "invoke", control, ...(seconds === undefined ? {} : { seconds }) };
 }

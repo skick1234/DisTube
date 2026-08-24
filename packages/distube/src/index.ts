@@ -18,6 +18,7 @@ export type {
   PluginDiagnostic,
   RelatedContext,
   ResolvableInput,
+  SearchOptions,
   SourceOperationOptions,
   SourcePlugin,
   UrlPlaybackResource,
@@ -33,8 +34,8 @@ export {
   type PlayResult,
   type PlayTarget,
 } from "./DisTube";
-export { Events, Filters, QueueStatus, RepeatMode } from "./enums";
-export { asDisTubeError, DisTubeError, ErrorCode } from "./errors";
+export { ErrorReason, Events, Filters, QueueStatus, RepeatMode } from "./enums";
+export { asDisTubeError, DisTubeError, ErrorCode, type FailureCode } from "./errors";
 export type {
   BaseQueueEvent,
   DisTubeEventListener,
@@ -53,8 +54,8 @@ export {
   type SongUploader,
 } from "./media";
 export type { QueueCollection } from "./QueueManager";
-export type { QueueFilters } from "./queue/filters";
 export type { EnqueueOptions } from "./queue/protocol";
 export type { JumpTarget, QueueState, RemoveTarget } from "./queue/state";
+export type { VoiceFilters } from "./voice/filters";
 export type { Voice } from "./voice/Voice";
 export type { VoiceCollection, VoiceManager } from "./voice/VoiceManager";

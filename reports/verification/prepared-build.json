@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 2,
+  "configuredBunVersion": "1.4.0",
+  "bunVersion": "1.4.0",
+  "bunRevision": "1.4.0+34cbb9a40",
+  "inputFingerprint": "d5f6894444b5900ac4b97377fef23195f51c05d36153ce8177567286a83614f8",
+  "outputs": {
+    "packages/distube/dist/index.d.mts": "2f2275614922dd5ade7b2a1f2c80b601b0eb8d6f17e4311e5ce64ad97b791b15",
+    "packages/distube/dist/index.d.mts.map": "3f882a2f1b0b057aa5884d41e759bc7973918c659b70ff328614cdb412d1aa44",
+    "packages/distube/dist/index.mjs": "283a7db956a5b34dcb835758a06cb408bb4a34e1c58fff06860dcb5aa275ba78",
+    "packages/distube/dist/index.mjs.map": "e2d4db7cc1f6c88f7760eadf7feb25f15e3283897dbe65aadfa294542582601c",
+    "packages/discordjs/dist/index.d.mts": "b4b265bfb258aad347eeb37f6e41b131b3741981d62f9de3b136a5a5b6a2b551",
+    "packages/discordjs/dist/index.mjs": "695f8253303ca5142cd372f80815c165680e67372a73a3a79bd9f3ec3bd413df",
+    "packages/oceanic/dist/index.d.mts": "1fed45e9d40d7686e1472d93830c8ee67fd9cfbd980ab49340b1acd2e7aceefb",
+    "packages/oceanic/dist/index.mjs": "79f4c483f3531623e77d61f1cad6d4ebe1d163bfe757a1546f24bbf0983bb56e",
+    "packages/eris/dist/index.d.mts": "35297a49f90be66890c873749e3745c4439aa2e1b9fa640e639e3f9cc4f3216b",
+    "packages/eris/dist/index.mjs": "e4cb373b13e04376438a859e81021df63345388e32489079fa04df2a5b819290"
+  }
+}

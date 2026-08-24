@@ -1,4 +1,5 @@
 import type { Engine, FilterEntry } from "../contracts";
+import { ErrorReason } from "../enums";
 import { DisTubeError, ErrorCode } from "../errors";
 
 /** A change to the ordered filter set, folded onto the committed entries before the engine renders. */
@@ -7,7 +8,7 @@ export type FilterChange =
   | Readonly<{ kind: "remove"; names: readonly string[] }>
   | Readonly<{ kind: "clear" }>;
 
-/** The queue side of the manager: the committed set plus commits serialized through the mailbox. */
+/** The settings side of the manager: the committed set plus commits serialized through the Voice lane. */
 export interface FilterHost {
   entries(): readonly FilterEntry[];
   commit(change: FilterChange): Promise<void>;
@@ -16,12 +17,12 @@ export interface FilterHost {
 export const NO_FILTERS: readonly FilterEntry[] = Object.freeze([]);
 
 /**
- * A queue's ordered named filter set.
+ * A guild Voice's ordered named filter set.
  *
  * Core owns names, order, and opaque payloads; the engine owns definitions, rendering, and folding.
  * A change commits only after the engine renders the resulting set.
  */
-export type QueueFilters = {
+export type VoiceFilters = {
   readonly active: readonly FilterEntry[];
   resolvable(name: string): boolean;
   apply(name: string, value?: number): Promise<void>;
@@ -30,9 +31,9 @@ export type QueueFilters = {
   clear(): Promise<void>;
 };
 
-/** Package-private implementation of the QueueFilters facade. */
-export class QueueFiltersImpl implements QueueFilters {
-  readonly #facade: QueueFilters;
+/** Package-private implementation of the VoiceFilters facade. */
+export class VoiceFiltersImpl implements VoiceFilters {
+  readonly #facade: VoiceFilters;
   readonly #engine: Engine;
   readonly #host: FilterHost;
 
@@ -56,7 +57,7 @@ export class QueueFiltersImpl implements QueueFilters {
   }
 
   /** Package-private public view; the implementation never crosses the package boundary. */
-  get facade(): QueueFilters {
+  get facade(): VoiceFilters {
     return this.#facade;
   }
 
@@ -75,7 +76,7 @@ export class QueueFiltersImpl implements QueueFilters {
     validateFilterName(name);
     validateFilterValue(value);
     if (!this.#engine.resolvable(name)) {
-      throw new DisTubeError(ErrorCode.INVALID_ARGUMENT, `Unknown filter: ${name}`);
+      throw new DisTubeError(ErrorCode.INVALID_ARGUMENT, ErrorReason.Argument, `Unknown filter: ${name}`);
     }
     await this.#host.commit({
       kind: "upsert",
@@ -128,7 +129,7 @@ export function sameFilters(left: readonly FilterEntry[], right: readonly Filter
 
 function validateFilterName(name: string): string {
   if (typeof name !== "string" || name.length === 0) {
-    throw new DisTubeError(ErrorCode.INVALID_ARGUMENT, "filter name must be a non-empty string");
+    throw new DisTubeError(ErrorCode.INVALID_ARGUMENT, ErrorReason.Argument, "filter name must be a non-empty string");
   }
   return name;
 }
@@ -136,6 +137,6 @@ function validateFilterName(name: string): string {
 function validateFilterValue(value: number | undefined): void {
   if (value === undefined) return;
   if (typeof value !== "number" || !Number.isFinite(value)) {
-    throw new DisTubeError(ErrorCode.INVALID_ARGUMENT, "filter value must be a finite number");
+    throw new DisTubeError(ErrorCode.INVALID_ARGUMENT, ErrorReason.Argument, "filter value must be a finite number");
   }
 }

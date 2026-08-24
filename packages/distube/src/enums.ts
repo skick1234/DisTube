@@ -20,6 +20,19 @@ export enum Events {
   VoiceDisconnected = "voice.disconnected",
 }
 
+/**
+ * Why an `INVALID_ARGUMENT` was rejected, so a bot can retry versus reword.
+ *
+ * `Argument` is a value that fails the documented contract: a wrong type, an unknown QueueItem ID, an
+ * out-of-range position. `State` is a well-formed call the current QueueState, Voice, or lifecycle forbids:
+ * pausing when nothing is playing, asking for a previous occurrence with empty history. The five failure codes carry
+ * no reason at all.
+ */
+export enum ErrorReason {
+  Argument = "argument",
+  State = "state",
+}
+
 /** How a naturally finished QueueItem is reconsidered before progression. */
 export enum RepeatMode {
   Off = "off",

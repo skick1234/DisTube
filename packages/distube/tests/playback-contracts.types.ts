@@ -14,13 +14,13 @@ import {
   type PluginContext,
   // @ts-expect-error v6 has no Plugin roles or registry contract
   type PluginRegistry,
-  QueueFilters,
   QueueItem,
   Song,
   type SourceOperationOptions,
   type SourcePlugin,
   type UrlPlaybackResource,
   Voice,
+  VoiceFilters,
   VoiceManager,
   type VoiceSession,
   type VoiceSessionEvent,
@@ -116,14 +116,14 @@ declare const distubeVoices: DisTube["voices"];
 declare const voices: VoiceManager;
 declare const voice: Voice;
 const returnedQueue: GuildQueue = resultQueue;
-const queueFilters: QueueFilters = queue.filters;
+const voiceFilters: VoiceFilters = voice.filters;
 const publicVoices: VoiceManager = distubeVoices;
 const managedVoice: Voice | undefined = voices.get("guild");
 
 // @ts-expect-error GuildQueue is a type-only facade
-new GuildQueue({ queueId: "queue", guildId: "guild" }, {} as never, {} as never, {} as never, {} as never);
-// @ts-expect-error QueueFilters is a type-only facade
-new QueueFilters({} as never, {} as never);
+new GuildQueue({ queueId: "queue", guildId: "guild" }, {} as never, {} as never, {} as never);
+// @ts-expect-error VoiceFilters is a type-only facade
+new VoiceFilters({} as never, {} as never);
 // @ts-expect-error Voice is a type-only facade
 new Voice({} as never, {} as never, {} as never);
 // @ts-expect-error VoiceManager is a type-only facade
@@ -131,8 +131,8 @@ new VoiceManager({} as never, {} as never, {} as never);
 
 // @ts-expect-error GuildQueue has no runtime constructor
 queue instanceof GuildQueue;
-// @ts-expect-error QueueFilters has no runtime constructor
-queue.filters instanceof QueueFilters;
+// @ts-expect-error VoiceFilters has no runtime constructor
+voice.filters instanceof VoiceFilters;
 // @ts-expect-error Voice has no runtime constructor
 voice instanceof Voice;
 // @ts-expect-error VoiceManager has no runtime constructor
@@ -140,6 +140,22 @@ voices instanceof VoiceManager;
 
 // @ts-expect-error GuildQueue has no channel authority
 queue.channelId;
+// @ts-expect-error playback settings live on the guild's Voice
+queue.volume;
+// @ts-expect-error playback settings live on the guild's Voice
+queue.repeatMode;
+// @ts-expect-error playback settings live on the guild's Voice
+queue.autoplay;
+// @ts-expect-error playback settings live on the guild's Voice
+queue.setVolume(50);
+// @ts-expect-error playback settings live on the guild's Voice
+queue.setRepeatMode(0);
+// @ts-expect-error playback settings live on the guild's Voice
+queue.setAutoplay(true);
+// @ts-expect-error playback settings live on the guild's Voice
+queue.filters;
+// @ts-expect-error playback settings live on the guild's Voice
+queue.previousSongs;
 // @ts-expect-error GuildQueue deletion is internal
 queue.destroy();
 // @ts-expect-error Voice release state is internal
@@ -193,6 +209,31 @@ new Song({ id: "leak", title: "Leak", url: "https://provider.example/leak", dura
 // @ts-expect-error QueueItem cannot carry a playback resource
 new QueueItem({ song, resource });
 
+interface Requester {
+  readonly requestedBy: string;
+}
+declare const typed: DisTube<Requester>;
+declare const untyped: DisTube;
+
+// The declared shape reaches every hand-back without a cast, assertion, or narrowing.
+const typedFromPlay: Promise<Requester> = typed
+  .play({ guildId: "guild", voiceChannelId: "voice" }, "query", { metadata: { requestedBy: "skick" } })
+  .then(result => result.items[0]?.metadata ?? { requestedBy: "" });
+const typedFromQueue: string | undefined = typed.getQueue("guild")?.state.current?.metadata.requestedBy;
+const typedFromHistory: string | undefined = typed.voices.get("guild")?.previousSongs[0]?.metadata.requestedBy;
+typed.on("queue.item.added", event => event.item.metadata.requestedBy);
+
+// @ts-expect-error metadata of the wrong shape fails before it can run
+typed.play({ guildId: "guild", voiceChannelId: "voice" }, "query", { metadata: { requester: "skick" } });
+// @ts-expect-error the same contract applies to enqueue
+typed.getQueue("guild")?.enqueue("query", { metadata: {} });
+// @ts-expect-error an omitted type parameter leaves metadata unknown, so a property read needs narrowing
+untyped.getQueue("guild")?.state.current?.metadata.requestedBy;
+// Any value is still accepted when the parameter is omitted.
+untyped.play({ guildId: "guild", voiceChannelId: "voice" }, "query", { metadata: Symbol("anything") });
+
+void [typedFromPlay, typedFromQueue, typedFromHistory];
+
 void [
   request,
   encodedRequest,
@@ -209,7 +250,7 @@ void [
   session,
   engine,
   returnedQueue,
-  queueFilters,
+  voiceFilters,
   publicVoices,
   managedVoice,
   definitions,

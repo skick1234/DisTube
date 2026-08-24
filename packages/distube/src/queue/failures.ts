@@ -1,9 +1,9 @@
-import { asError, DisTubeError, type ErrorCode } from "../errors";
+import { asError, DisTubeError, type FailureCode } from "../errors";
 
 export { asError };
 
 export function cleanupFailure(
-  code: ErrorCode,
+  code: FailureCode,
   message: string,
   failures: readonly Error[],
   aggregateMessage: string,

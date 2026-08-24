@@ -1,8 +1,8 @@
+import { FilterRegistry } from "@distube/voice-core/core";
 import { ErrorCode, type FilterEntry, Filters, type VoiceSession } from "distube";
 import type { Client } from "eris";
 import { describe, expect, it } from "vitest";
 import { ErisAdapter } from "../src";
-import { FilterRegistry } from "../src/filters";
 import { asClient, CHANNEL, FakeClient, GUILD, voiceChannel } from "./support/eris";
 
 const TARGET = { guildId: GUILD, channelId: CHANNEL };

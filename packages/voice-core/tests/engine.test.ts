@@ -1,7 +1,7 @@
 import type { DiscordGatewayAdapterCreator } from "@discordjs/voice";
 import { ErrorCode, Filters, type VoiceSession } from "distube";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { DiscordVoiceEngine, DiscordVoiceSession } from "../src";
+import { DiscordVoiceEngine, DiscordVoiceSession } from "../src/discord";
 import { FilterRegistry } from "../src/filters";
 import { CHANNEL, latest, resetNative } from "./support/native";
 
@@ -19,6 +19,18 @@ const OPTIONS = {
 beforeEach(resetNative);
 
 describe("engine", () => {
+  it("declares url as the only kind its Players accept, and its Players agree", async () => {
+    const engine = new DiscordVoiceEngine();
+    const session = await DiscordVoiceSession.connect(OPTIONS);
+    const player = await engine.createPlayer(session);
+
+    expect([...engine.accepts]).toEqual(["url"]);
+
+    // The declaration is only worth something if the Player enforces it.
+    const encoded = { itemId: "item", resource: { kind: "encoded", encoded: "track", dispose: vi.fn() } };
+    await expect(player.play(encoded as never)).rejects.toMatchObject({ code: ErrorCode.UNSUPPORTED });
+  });
+
   it("creates a Player over its own session's connection", async () => {
     const engine = new DiscordVoiceEngine();
     const session = await DiscordVoiceSession.connect(OPTIONS);

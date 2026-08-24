@@ -1,9 +1,14 @@
 import type { PlaybackPreparation, PlaybackResource, SourcePlugin } from "../contracts";
-import { asError, DisTubeError, ErrorCode } from "../errors";
+import { abortFailure, asError, ErrorCode } from "../errors";
 import type { Song } from "../media";
 import { disposeOnce } from "../utils/dispose";
-import { requireSongOwner, type SourceCatalog, validateSourceSongs } from "./sources";
+import { throwIfAborted } from "./abort";
+import { descend, exhaustedChain, findCandidates, newSearchChain, type SearchChain } from "./search";
+import { requireSongOwner, type SourceCatalog } from "./sources";
 import { validatePlaybackPreparation } from "./validation";
+
+/** How many of a source's ranked candidates an explicit playback search consumes. */
+const FALLBACK_CANDIDATES = 5;
 
 export interface OwnedPlaybackResource {
   readonly resource: PlaybackResource;
@@ -22,72 +27,42 @@ export async function preparePlaybackResource(
   const owner = requireSongOwner(song, sources);
   const initial = await callPreparation(owner, song, signal, dispose);
   if (initial.kind === "resource") return initial.resource;
-  const failures: Error[] = [];
-  const searched = new Set<string>([owner.name]);
-  const resource = await searchSources(
-    initial.query,
-    sources,
-    signal,
-    new Set([owner.name]),
-    searched,
-    failures,
-    report,
-    dispose,
-  );
+  const chain = newSearchChain([owner.name], report);
+  const resource = await substitute(initial.query, sources, signal, chain, dispose);
   if (resource) return resource;
-  throw new DisTubeError(ErrorCode.SOURCE_FAILED, "Explicit playback fallback was exhausted", {
-    cause: new AggregateError(failures, "Playback fallback attempts failed"),
-  });
+  throw exhaustedChain(chain, "Explicit playback fallback was exhausted", "Playback fallback attempts failed");
 }
 
-async function searchSources(
+/**
+ * Plays the explicit search request from another source, following the same ordered chain rule.
+ *
+ * The chain settles on the first eligible source that ranks any candidate and tries at most that
+ * source's first five. It does not move on to a later source when those candidates fail to prepare:
+ * a source that answered the query owns the outcome. A candidate that itself asks for a search opens
+ * a nested chain below it, which every source seen so far is excluded from.
+ */
+async function substitute(
   query: string,
   sources: SourceCatalog,
   signal: AbortSignal,
-  visited: ReadonlySet<string>,
-  searched: Set<string>,
-  failures: Error[],
-  report: (error: Error, stage: string) => void,
+  chain: SearchChain,
   dispose: DisposePlaybackResource,
 ): Promise<OwnedPlaybackResource | undefined> {
-  for (const source of sources.ordered) {
+  const hit = await findCandidates(query, sources, signal, chain, FALLBACK_CANDIDATES);
+  if (!hit) return undefined;
+  const nested = descend(chain, hit.source);
+  for (const candidate of hit.candidates) {
     throwIfAborted(signal);
-    if (visited.has(source.name) || searched.has(source.name)) continue;
-    searched.add(source.name);
-    const branchVisited = new Set(visited).add(source.name);
-    let candidates: readonly Song[];
     try {
-      const result = await source.search(query, { signal });
-      candidates = validateSourceSongs(result, source, "search", true);
+      const preparation = await callPreparation(hit.source, candidate, signal, dispose);
+      if (preparation.kind === "resource") return preparation.resource;
+      const substituted = await substitute(preparation.query, sources, signal, nested, dispose);
+      if (substituted) return substituted;
     } catch (error: unknown) {
       throwIfAborted(signal);
       const failure = asError(error);
-      failures.push(failure);
-      report(failure, `fallback search (${source.name})`);
-      continue;
-    }
-    for (const candidate of candidates.slice(0, 5)) {
-      throwIfAborted(signal);
-      try {
-        const preparation = await callPreparation(source, candidate, signal, dispose);
-        if (preparation.kind === "resource") return preparation.resource;
-        const nested = await searchSources(
-          preparation.query,
-          sources,
-          signal,
-          branchVisited,
-          searched,
-          failures,
-          report,
-          dispose,
-        );
-        if (nested) return nested;
-      } catch (error: unknown) {
-        throwIfAborted(signal);
-        const failure = asError(error);
-        failures.push(failure);
-        report(failure, `fallback candidate (${source.name})`);
-      }
+      chain.failures.push(failure);
+      chain.report?.(failure, `fallback candidate (${hit.source.name})`);
     }
   }
   return undefined;
@@ -121,7 +96,7 @@ async function callPreparation(
     if (signal.aborted) {
       resourceDisposed = true;
       await dispose(owned, "aborted playback preparation");
-      throw signal.reason instanceof Error ? signal.reason : new Error("Playback preparation aborted");
+      throw abortFailure(signal.reason);
     }
     return Object.freeze({ kind: "resource", resource: owned });
   } catch (error: unknown) {
@@ -147,8 +122,4 @@ function capturePossibleResource(value: unknown): OwnedPlaybackResource | undefi
 function ownResource(resource: PlaybackResource): OwnedPlaybackResource {
   const once = disposeOnce(() => resource.dispose());
   return Object.freeze({ resource, dispose: once.dispose });
-}
-
-function throwIfAborted(signal: AbortSignal): void {
-  if (signal.aborted) throw signal.reason instanceof Error ? signal.reason : new Error("Playback preparation aborted");
 }

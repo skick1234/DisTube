@@ -1,4 +1,5 @@
 import type { Adapter, Diagnostic, Engine, VoiceSession, VoiceTarget } from "../contracts";
+import { ErrorReason } from "../enums";
 import { asDisTubeError, asError, DisTubeError, ErrorCode } from "../errors";
 import type { VoiceDisconnectReason } from "../events";
 import { cleanupFailure } from "../queue/failures";
@@ -8,15 +9,15 @@ import { settleAll } from "../utils/dispose";
 import { type Voice, VoiceImpl } from "./Voice";
 
 /** Readonly view over the connected Voices, published as `distube.voices`. */
-export type VoiceCollection = Readonly<{
+export type VoiceCollection<Metadata = unknown> = Readonly<{
   readonly size: number;
-  [Symbol.iterator](): IterableIterator<Voice>;
+  [Symbol.iterator](): IterableIterator<Voice<Metadata>>;
 }>;
 
 /** Public voice manager facade. */
-export type VoiceManager = VoiceCollection & {
-  join(target: VoiceTarget): Promise<Voice>;
-  get(guildId: string): Voice | undefined;
+export type VoiceManager<Metadata = unknown> = VoiceCollection<Metadata> & {
+  join(target: VoiceTarget): Promise<Voice<Metadata>>;
+  get(guildId: string): Voice<Metadata> | undefined;
   has(guildId: string): boolean;
   leave(guildId: string): Promise<void>;
 };
@@ -445,9 +446,9 @@ export class VoiceManagerImpl implements VoiceManager {
 
 function validateTarget(target: VoiceTarget): void {
   if (!target || typeof target.guildId !== "string" || target.guildId.length === 0) {
-    throw new DisTubeError(ErrorCode.INVALID_ARGUMENT, "guildId must be a non-empty string");
+    throw new DisTubeError(ErrorCode.INVALID_ARGUMENT, ErrorReason.Argument, "guildId must be a non-empty string");
   }
   if (typeof target.channelId !== "string" || target.channelId.length === 0) {
-    throw new DisTubeError(ErrorCode.INVALID_ARGUMENT, "channelId must be a non-empty string");
+    throw new DisTubeError(ErrorCode.INVALID_ARGUMENT, ErrorReason.Argument, "channelId must be a non-empty string");
   }
 }

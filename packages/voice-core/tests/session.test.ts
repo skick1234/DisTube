@@ -2,7 +2,7 @@ import type { DiscordGatewayAdapterCreator } from "@discordjs/voice";
 import { VoiceConnectionDisconnectReason, VoiceConnectionStatus } from "@discordjs/voice";
 import type { VoiceSessionEvent } from "distube";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { DiscordVoiceSession } from "../src";
+import { DiscordVoiceSession } from "../src/discord";
 import { CHANNEL, GATEWAY, latest, native, readyState, resetNative, settle } from "./support/native";
 
 vi.mock("@discordjs/voice", async () => (await import("./support/native")).voiceModule());
@@ -114,6 +114,23 @@ describe("disconnect classification", () => {
     await settle();
 
     expect(listener).not.toHaveBeenCalled();
+  });
+
+  it("republishes connected with the new channel once an external move settles", async () => {
+    const session = await DiscordVoiceSession.connect(OPTIONS);
+    const events: VoiceSessionEvent[] = [];
+    session.subscribe(event => events.push(event));
+
+    disconnect(VoiceConnectionDisconnectReason.WebSocketClose, 4014);
+    // `addStatePacket` writes the channel Discord put us in straight onto joinConfig.
+    latest.connection.joinConfig = { channelId: "dragged" };
+    latest.connection.transition(readyState({ endpoint: "moved.example" }, "dragged"));
+    await settle();
+
+    expect(session.channelId).toBe("dragged");
+    expect(events).toEqual([
+      { type: "connected", channelId: "dragged", gateway: { ...GATEWAY, endpoint: "moved.example" } },
+    ]);
   });
 
   const TERMINAL: readonly (readonly [string, VoiceConnectionDisconnectReason, number | undefined, string])[] = [

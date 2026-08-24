@@ -11,6 +11,7 @@ import {
 import {
   DisTubeError,
   ErrorCode,
+  ErrorReason,
   type FilterEntry,
   type PlaybackRequest,
   type Player,
@@ -157,7 +158,7 @@ export class DiscordVoicePlayer implements Player {
   async setVolume(percent: number): Promise<void> {
     this.#assertOpen();
     if (typeof percent !== "number" || !Number.isFinite(percent) || percent < 0) {
-      throw new DisTubeError(ErrorCode.INVALID_ARGUMENT, "volume must be a non-negative number");
+      throw new DisTubeError(ErrorCode.INVALID_ARGUMENT, ErrorReason.Argument, "volume must be a non-negative number");
     }
     this.#volume = percent;
     this.#track?.resource.volume?.setVolume(percent / 100);

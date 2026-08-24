@@ -1,11 +1,13 @@
 {
   "name": "@distube/voice-core",
   "version": "6.0.0",
-  "description": "Private @discordjs/voice implementation shared by @distube/discordjs and @distube/oceanic; bundled into their builds and never published",
+  "description": "Platform-neutral and @discordjs/voice implementations shared by the official adapters; bundled into their builds and never published",
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./core": "./src/index.ts",
+    "./discord": "./src/discord.ts"
   },
   "scripts": {
     "check": "biome check .",

@@ -1,21 +1,23 @@
-import type { FilterEntry, ResolvableInput } from "../contracts";
-import type { RepeatMode } from "../enums";
+import type { ResolvableInput } from "../contracts";
 import type { Playlist, QueueItem, Song } from "../media";
 import type { OwnedPlaybackResource } from "../playback/prepare";
-import type { FilterChange } from "./filters";
 import type { JumpTarget, RemoveTarget } from "./state";
 import type { LeasedPlayerOutcome, QueueItemAuthority, QueueVoiceLease } from "./voice";
 
-export interface EnqueueOptions {
+export interface EnqueueOptions<Metadata = unknown> {
   /** Zero-based slot in the pending list; absent appends, beyond the end clamps. */
   readonly position?: number;
   /** Caller-owned reference stored on every QueueItem the call creates. */
-  readonly metadata?: unknown;
+  readonly metadata?: Metadata;
+  /** Cancels the insertion; the call then rejects with `QUEUE_FAILED` and adds nothing. */
+  readonly signal?: AbortSignal;
 }
 
 export interface EnqueueOperation {
   readonly sequence: number;
   readonly controller: AbortController;
+  /** The controller's signal, joined with the caller's when one was supplied. */
+  readonly signal: AbortSignal;
   readonly options: EnqueueOptions;
   readonly resolve: (items: readonly QueueItem[]) => void;
   readonly reject: (error: unknown) => void;
@@ -40,13 +42,11 @@ export interface ActivePlayback {
   readonly resource: OwnedPlaybackResource;
 }
 
-/** A serialized edit of the waiting list or of a queue-wide setting. */
+/** A serialized edit of the waiting list. */
 export type QueueEdit =
   | Readonly<{ kind: "remove"; target: RemoveTarget }>
   | Readonly<{ kind: "shuffle" }>
-  | Readonly<{ kind: "clear" }>
-  | Readonly<{ kind: "repeat"; mode: RepeatMode }>
-  | Readonly<{ kind: "autoplay"; enabled: boolean }>;
+  | Readonly<{ kind: "clear" }>;
 
 /** How the current occurrence ends and where the queue continues afterwards. */
 export type AdvanceMode =
@@ -85,8 +85,8 @@ export type QueueMessage =
       resolve: (items: readonly QueueItem[]) => void;
       reject: (error: unknown) => void;
     }>
-  | Readonly<{ type: "volume"; percent: number; resolve: () => void; reject: (error: unknown) => void }>
-  | Readonly<{ type: "filters"; change: FilterChange; resolve: () => void; reject: (error: unknown) => void }>
+  /** The Voice committed a `setAutoplay` outside the queue's own decisions. */
+  | Readonly<{ type: "autoplay.changed"; enabled: boolean }>
   | Readonly<{
       type: "control";
       control: "pause" | "resume" | "seek";
@@ -99,5 +99,3 @@ export type QueueMessage =
 export type QueueControl = "pause" | "resume" | "seek";
 
 export type LeaseEffectResult = Readonly<{ error?: unknown }>;
-
-export type FilterEntries = readonly FilterEntry[];

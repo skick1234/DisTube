@@ -1,17 +1,23 @@
+import type { FfmpegStream, FilterRegistry } from "@distube/voice-core/core";
+import {
+  asError,
+  ffmpegFailure,
+  finishedFfmpeg,
+  killFfmpeg,
+  playbackRequest,
+  spawnFfmpeg,
+} from "@distube/voice-core/core";
 import {
   DisTubeError,
   ErrorCode,
+  ErrorReason,
   type FilterEntry,
   type PlaybackRequest,
   type Player,
   type PlayerEvent,
 } from "distube";
 import type { VoiceConnection, VoiceResourceOptions } from "eris";
-import { asError } from "./cleanup";
-import { type FfmpegStream, ffmpegFailure, finishedFfmpeg, killFfmpeg, spawnFfmpeg } from "./ffmpeg";
-import type { FilterRegistry } from "./filters";
 import { ensureErisErrorSink, type NativeCurrent, observeStopPlaying } from "./native-playback";
-import { playbackRequest } from "./validation";
 
 /** How long a decode may go without delivering audio before Eris gives the track up. */
 const VOICE_DATA_TIMEOUT_MS = 15_000;
@@ -54,6 +60,9 @@ export class ErisVoicePlayer implements Player {
   readonly #retiringStreams = new Set<FfmpegStream>();
   #restoreStopPlaying?: () => void;
   #track?: ActiveTrack;
+  /** The only pause authority this Player reads. Eris constructs its connection paused, so the
+   * native flag starts `true` and must never be trusted for playback intent. */
+  #pauseIntent = false;
   #volume = 100;
   #chain?: string;
   #restarting = false;
@@ -110,12 +119,14 @@ export class ErisVoicePlayer implements Player {
   async pause(): Promise<void> {
     this.#assertOpen();
     if (!this.#track) throw new Error("Eris Player has no active playback");
+    this.#pauseIntent = true;
     this.#connection.pause();
   }
 
   async resume(): Promise<void> {
     this.#assertOpen();
     if (!this.#track) throw new Error("Eris Player has no active playback");
+    this.#pauseIntent = false;
     this.#connection.resume();
   }
 
@@ -134,7 +145,7 @@ export class ErisVoicePlayer implements Player {
   async setVolume(percent: number): Promise<void> {
     this.#assertOpen();
     if (typeof percent !== "number" || !Number.isFinite(percent) || percent < 0) {
-      throw new DisTubeError(ErrorCode.INVALID_ARGUMENT, "volume must be a non-negative number");
+      throw new DisTubeError(ErrorCode.INVALID_ARGUMENT, ErrorReason.Argument, "volume must be a non-negative number");
     }
     this.#volume = percent;
     // Eris keeps the level on its encoder, so it survives every later track on this connection.
@@ -156,7 +167,7 @@ export class ErisVoicePlayer implements Player {
     const previousChain = this.#chain;
     const seconds = this.position;
     const previous = track.stream;
-    const paused = this.#connection.paused;
+    const paused = this.#pauseIntent;
     const candidate = this.#decode(track.url, seconds, chain);
     const replacement: Replacement = { track, stream: candidate, handedOff: false };
     this.#replacement = replacement;
@@ -271,7 +282,7 @@ export class ErisVoicePlayer implements Player {
   }
 
   /** Replaces the native PCM stream only after the candidate decoder is ready. */
-  #handOff(stream: FfmpegStream, paused = this.#connection.paused): NativeCurrent {
+  #handOff(stream: FfmpegStream, paused = this.#pauseIntent): NativeCurrent {
     this.#restarting = true;
     try {
       this.#connection.stopPlaying();
@@ -283,7 +294,10 @@ export class ErisVoicePlayer implements Player {
     const current = this.#connection.current;
     if (!current) throw new Error("Eris voice connection did not expose the active stream");
     this.#connection.setVolume(this.#volume / 100);
+    // Eris leaves `paused` set from its connection constructor, so an unpaused intent must actively
+    // clear it or every first track of a session would sit silent.
     if (paused) this.#connection.pause();
+    else this.#connection.resume();
     return current;
   }
 

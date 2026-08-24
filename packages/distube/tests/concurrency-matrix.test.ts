@@ -6,6 +6,7 @@ import {
   FakeSource,
   GUILD,
   media,
+  mediaUrl,
   playableSetup,
   record,
   settle,
@@ -56,7 +57,7 @@ describe("commit races", () => {
     const events = record(harness.distube, ["queue.finished", "queue.deleted"]);
     const resolution = deferred<Song>();
     harness.source.resolve.mockReturnValueOnce(resolution.promise);
-    const late = capture(queue.enqueue("b"));
+    const late = capture(queue.enqueue(mediaUrl("b")));
 
     player?.finish();
     await settle();
@@ -80,7 +81,7 @@ describe("terminal overlaps", () => {
     const resolution = deferred<Song>();
     harness.source.resolve.mockReturnValueOnce(resolution.promise);
     const events = record(harness.distube, ["queue.item.added", "queue.item.started", "queue.deleted"]);
-    const outcome = capture(harness.distube.play(TARGET, "slow"));
+    const outcome = capture(harness.distube.play(TARGET, mediaUrl("slow")));
 
     await Promise.resolve();
     await queue.stop();
@@ -128,7 +129,7 @@ describe("terminal overlaps", () => {
     const owner = new FakeSource("owner");
     const fallback = new FakeSource("fallback");
     const candidate = deferred<PlaybackPreparation>();
-    owner.resolve.mockImplementation(async url => media("owner", url));
+    owner.resolve.mockImplementation(async url => media("owner", url.split("/").pop() as string));
     owner.preparePlayback.mockImplementation(async song =>
       song.id === "a" ? { kind: "search", query: "a" } : owner.resourceFor(song),
     );
@@ -136,9 +137,9 @@ describe("terminal overlaps", () => {
     fallback.preparePlayback.mockReturnValue(candidate.promise);
     const harness = setup([owner, fallback]);
 
-    const { queue } = await harness.distube.play(TARGET, "a");
-    await harness.distube.play(TARGET, "b");
-    await harness.distube.play(TARGET, "c");
+    const { queue } = await harness.distube.play(TARGET, mediaUrl("a", "owner"));
+    await harness.distube.play(TARGET, mediaUrl("b", "owner"));
+    await harness.distube.play(TARGET, mediaUrl("c", "owner"));
     await settle();
     const stuck = queue.state.items[0];
 
@@ -203,7 +204,7 @@ describe("edit overlaps", () => {
 
     expect(await jumped).toBeUndefined();
     expect(queue.state.current?.id).toBe(target?.id);
-    expect(queue.previousSongs.map(item => item.song.id)).toContain("a");
+    expect(harness.distube.voices.get(GUILD)?.previousSongs.map(item => item.song.id)).toContain("a");
   });
 
   it("deletes the guild's queue before releasing the voice it was playing through", async () => {

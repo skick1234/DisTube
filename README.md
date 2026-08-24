@@ -50,10 +50,12 @@ const soundcloud = new SoundCloudPlugin();
 const plugins = [youtube, spotify, soundcloud];
 ```
 
-Official media plugins live in the independent plugins repository. Retain an instance to call typed provider search:
+Official media plugins live in the independent plugins repository. Plugin order is search order, so put the provider
+you want queries answered by first. Retain an instance when you need a candidate list of your own to show the user
+before committing to one; `limit` and `offset` are bounded and each plugin documents its own default and maximum:
 
 ```ts
-const results = await youtube.search("DisTube tutorial");
+const results = await youtube.search("DisTube tutorial", { limit: 5 });
 ```
 
 ## 5. Play
@@ -64,7 +66,16 @@ const { queue, items } = await distube.play(
   "https://youtube.com/watch?v=example",
 );
 console.log(`Committed ${items.length} insertion(s)`);
+
+// A query works the same way: no separate search step.
+await distube.play({ guildId: "guild-id", voiceChannelId: "voice-channel-id" }, "never gonna give you up");
 ```
+
+A string that parses as an absolute `http:` or `https:` URL is resolved by the first plugin that claims it; every
+other non-empty string is a query, searched across your plugins in the order you configured them. The first plugin to
+return a candidate wins, and a plugin whose search throws is skipped rather than failing the call. The same rule
+substitutes a playable stream when a metadata-only source (Spotify, say) hands back a search query instead of a
+resource, so a Spotify link plays through whichever streaming plugin you listed first.
 
 `play` is the only creation-capable entry point. It upserts the guild's queue, joins or reuses the guild's Voice, and
 inserts the resolved media. It resolves after the QueueItems and matching insertion event commit, not after audio
@@ -77,17 +88,21 @@ can also use `queue.enqueue(input)`. Look the queue up anytime with `distube.get
 import { Filters, RepeatMode } from "distube";
 
 await queue.skip();
-await queue.jump(2); // one-based over waiting items
-await queue.setVolume(80);
-await queue.setRepeatMode(RepeatMode.Queue);
-await queue.setAutoplay(true);
-await queue.filters.apply(Filters.Nightcore);
+await queue.jump(1); // zero-based over waiting items, so this is the second one waiting
 await queue.stop(); // deletes the queue; the guild's Voice stays connected
+
+// Volume, repeat, autoplay, filters, and history live on the Voice, not the queue.
+const voice = distube.voices.get("guild-id")!;
+await voice.setVolume(80);
+await voice.setRepeatMode(RepeatMode.Queue);
+await voice.setAutoplay(true);
+await voice.filters.apply(Filters.Nightcore);
 await distube.voices.leave("guild-id"); // releases the Voice (and any live queue)
 ```
 
 Read `queue.state` for readonly waiting items, optional current item, and status. A queue deletes itself when playback
-exhausts (`Events.QueueFinished` then `Events.QueueDeleted`); the Voice remains until asked to leave.
+exhausts (`Events.QueueFinished` then `Events.QueueDeleted`); the Voice remains until asked to leave, and the next
+`play()` inherits its volume, repeat mode, autoplay, filters, and `voice.previousSongs` unchanged.
 
 ## 7. Events
 
@@ -101,7 +116,9 @@ distube.on(Events.QueueItemStarted, ({ guildId, item, timestamp }) => {
 
 The client emits ten string-valued `Events` members: `QueueCreated`, `QueueItemAdded`, `QueuePlaylistAdded`,
 `QueueItemStarted`, `QueueItemFinished`, `QueueItemFailed`, `QueueFinished`, `QueueAutoplayFailed`, `QueueDeleted`,
-and `VoiceDisconnected`. Events describe committed queue actions; bot code owns messages. Explicit Spotify-style
+and `VoiceDisconnected`. `on`, `once`, `off`, and `removeAllListeners(name?)` all return the client; `off` takes the
+function you passed, so it removes a `once` registration too. Name your caller metadata once and every read is typed:
+`new DisTube<{ requestedBy: string }>({ adapter, plugins })` makes `event.item.metadata.requestedBy` compile. Events describe committed queue actions; bot code owns messages. Explicit Spotify-style
 fallback retains the original QueueItem in state and events and exposes no candidate or stream URL.
 
 ## 8. Advanced Extensions

@@ -1,5 +1,7 @@
 import type { Engine, Player, VoiceGatewayData, VoiceSession, VoiceSessionEvent } from "../contracts";
+import type { RepeatMode } from "../enums";
 import { asDisTubeError, asError, DisTubeError, ErrorCode } from "../errors";
+import type { QueueItem } from "../media";
 import { cleanupFailure } from "../queue/failures";
 import type {
   LeasedPlayerOutcome,
@@ -10,11 +12,33 @@ import type {
   QueueVoiceLease,
 } from "../queue/voice";
 import { settleGrowing, TrackedWork } from "../utils/tracked-work";
+import {
+  type FilterChange,
+  foldFilters,
+  NO_FILTERS,
+  sameFilters,
+  type VoiceFilters,
+  VoiceFiltersImpl,
+} from "./filters";
+import { VoiceSettings, validateAutoplay, validateRepeatMode, validateVolume } from "./settings";
 
-/** Public guild voice facade. */
-export type Voice = {
+/** Public guild voice facade. `Metadata` is the client's caller-metadata type. */
+export type Voice<Metadata = unknown> = {
   readonly guildId: string;
   readonly channelId: string;
+  /** The committed playback volume as a percentage. */
+  readonly volume: number;
+  setVolume(percent: number): Promise<void>;
+  /** The committed repeat mode the guild's queues consult at progression. */
+  readonly repeatMode: RepeatMode;
+  setRepeatMode(mode: RepeatMode): Promise<void>;
+  /** Whether queues exhausted by this Voice continue with related media. */
+  readonly autoplay: boolean;
+  setAutoplay(enabled: boolean): Promise<void>;
+  /** The ordered named filter set rendered on this Voice's long-lived Player. */
+  readonly filters: VoiceFilters;
+  /** Finished and skipped occurrences of this guild, oldest first, capped at the newest 100. */
+  readonly previousSongs: readonly QueueItem<Metadata>[];
   join(channelId: string): Promise<void>;
 };
 
@@ -22,7 +46,11 @@ type VoicePhase = "open" | "fenced" | "released";
 
 interface PlayerRecord {
   readonly generation: number;
-  readonly player: Player;
+  player: Player;
+  /** Committed state this backend has rendered; a replacement Player inherits nothing. */
+  applied: Readonly<{ volume?: number; filters: readonly import("../contracts").FilterEntry[] }>;
+  /** Whether committed settings were restored onto this Player at least once. */
+  restored: boolean;
   readonly unsubscribe: () => void;
 }
 
@@ -37,8 +65,6 @@ interface LeaseRecord {
   readonly signal: AbortSignal;
   readonly onOutcome: (outcome: LeasedPlayerOutcome) => void;
   accepting: boolean;
-  volume: number;
-  filters: readonly import("../contracts").FilterEntry[];
   item?: LeaseItem;
   playerGeneration?: number;
   closePromise?: Promise<void>;
@@ -48,8 +74,8 @@ interface LeaseRecord {
 /**
  * One guild's voice presence.
  *
- * Voice owns the session, Player generations, and the only queue lease. GuildQueue owns queue state,
- * item decisions, events, and source resources.
+ * Voice owns the session, Player generations, the only queue lease, and the durable playback
+ * settings. GuildQueue owns queue state, item decisions, events, and source resources.
  */
 export class VoiceImpl implements QueueVoice {
   readonly #facade: Voice;
@@ -62,6 +88,9 @@ export class VoiceImpl implements QueueVoice {
   readonly #work = new TrackedWork();
   /** Retired backend completions remain terminal work even after their ordinary queue slot settles. */
   readonly #retirements: Promise<void>[] = [];
+  readonly #settings = new VoiceSettings();
+  readonly #filtersFacade: VoiceFilters;
+  #autoplayListener?: (enabled: boolean) => void;
   #phase: VoicePhase = "open";
   #channelId: string;
   #playerTail: Promise<void> = Promise.resolve();
@@ -90,6 +119,10 @@ export class VoiceImpl implements QueueVoice {
     this.#report = report;
     this.#sessionUnsubscribe = session.subscribe(event => this.#onSessionEvent(event));
     const self = this;
+    this.#filtersFacade = new VoiceFiltersImpl(engine, {
+      entries: () => self.#settings.entries,
+      commit: change => self.commitFilters(change),
+    }).facade;
     const facade = {
       get guildId(): string {
         return self.guildId;
@@ -97,7 +130,25 @@ export class VoiceImpl implements QueueVoice {
       get channelId(): string {
         return self.channelId;
       },
+      get volume(): number {
+        return self.volume;
+      },
+      get repeatMode(): RepeatMode {
+        return self.repeatMode;
+      },
+      get autoplay(): boolean {
+        return self.autoplay;
+      },
+      get filters(): VoiceFilters {
+        return self.#filtersFacade;
+      },
+      get previousSongs(): readonly QueueItem[] {
+        return self.previousSongs;
+      },
       join: (channelId: string): Promise<void> => self.#requestMove(channelId),
+      setVolume: (percent: number): Promise<void> => self.setVolume(percent),
+      setRepeatMode: (mode: RepeatMode): Promise<void> => self.setRepeatMode(mode),
+      setAutoplay: (enabled: boolean): Promise<void> => self.setAutoplay(enabled),
     };
     Object.freeze(facade);
     this.#facade = facade;
@@ -120,6 +171,109 @@ export class VoiceImpl implements QueueVoice {
 
   get released(): boolean {
     return this.#phase === "released";
+  }
+
+  // Playback settings are read synchronously by GuildQueue decisions through QueueVoice.
+
+  get volume(): number {
+    return this.#settings.volume;
+  }
+
+  get repeatMode(): RepeatMode {
+    return this.#settings.repeatMode;
+  }
+
+  get autoplay(): boolean {
+    return this.#settings.autoplay;
+  }
+
+  get previousSongs(): readonly QueueItem[] {
+    return this.#settings.previousSongs;
+  }
+
+  lastPlayedSong(): QueueItem | undefined {
+    const history = this.previousSongs;
+    return history.at(-1);
+  }
+
+  popPreviousSong(): QueueItem | undefined {
+    return this.#settings.popPrevious();
+  }
+
+  rememberPlayed(items: readonly QueueItem[]): void {
+    this.#settings.remember(items);
+  }
+
+  onAutoplayChanged(listener: (enabled: boolean) => void): void {
+    this.#autoplayListener = listener;
+  }
+
+  detachAutoplayListener(listener: ((enabled: boolean) => void) | undefined): void {
+    if (listener && this.#autoplayListener === listener) this.#autoplayListener = undefined;
+  }
+
+  /** Commits a volume change only after its Player effect succeeds; serialized on the Player lane. */
+  async setVolume(requested: number): Promise<void> {
+    const percent = validateVolume(requested);
+    try {
+      if (this.#player) {
+        // A live Player receives the effect through its own lane, ordered against playback work.
+        await this.#enqueue(async () => {
+          if (this.#phase !== "open") throw this.#terminal();
+          const record = this.#player;
+          if (!record) return;
+          await record.player.setVolume(percent);
+          record.applied = { ...record.applied, volume: percent };
+          this.#settings.setVolume(percent);
+        });
+        return;
+      }
+      // No Player yet: the value is committed state that the next Player restores at activation.
+      this.#settings.setVolume(percent);
+    } catch (error: unknown) {
+      if (!(error instanceof DisTubeError)) {
+        throw asDisTubeError(ErrorCode.VOICE_FAILED, "Player failed to set volume", error);
+      }
+      if (error.code === ErrorCode.QUEUE_FAILED || error.code === ErrorCode.UNSUPPORTED) {
+        throw asDisTubeError(ErrorCode.VOICE_FAILED, "Player failed to set volume", error);
+      }
+      throw error;
+    }
+  }
+
+  /** Repeat mode is pure committed state; queues read it at their own progression points. */
+  async setRepeatMode(mode: RepeatMode): Promise<void> {
+    this.#settings.setRepeatMode(validateRepeatMode(mode));
+  }
+
+  /** Notifies the attached queue in the caller's stack so disabling aborts a pending lookup now. */
+  async setAutoplay(enabled: boolean): Promise<void> {
+    this.#settings.setAutoplay(validateAutoplay(enabled));
+    if (!enabled) this.#autoplayListener?.(false);
+  }
+
+  /** Folds `change` onto the committed entries and renders the result before committing it. */
+  async commitFilters(change: FilterChange): Promise<void> {
+    const entries = foldFilters(this.#settings.entries, change);
+    if (sameFilters(this.#settings.entries, entries)) return;
+    try {
+      if (this.#player) {
+        // A live Player receives the render through its own lane, ordered against playback work.
+        await this.#enqueue(async () => {
+          if (this.#phase !== "open") throw this.#terminal();
+          const record = this.#player;
+          if (!record) return;
+          await record.player.setFilters(entries);
+          record.applied = { ...record.applied, filters: entries };
+          this.#settings.setEntries(entries);
+        });
+        return;
+      }
+      // No Player yet: the folded set is committed state that the next Player restores at activation.
+      this.#settings.setEntries(entries);
+    } catch (error: unknown) {
+      throw playerFiltersFailure(error);
+    }
   }
 
   /** Moves the session only after VoiceManager admits this operation to its slot lane. */
@@ -157,10 +311,7 @@ export class VoiceImpl implements QueueVoice {
         signal: request.signal,
         onOutcome: request.onOutcome,
         accepting: true,
-        volume: 100,
-        filters: Object.freeze([]),
-        // The queue's acquisition effects establish the first Player state. Restoration is only for a
-        // replacement Player after a terminal outcome during this lease.
+        // Committed settings are restored per Player below, not per lease.
         playerGeneration: player.generation,
       };
       const abortListener = (): void => {
@@ -255,7 +406,6 @@ export class VoiceImpl implements QueueVoice {
       this.#assertLease(lease);
       this.#assertEffectAuthority(lease, effect);
       if (this.#player !== record) throw this.#stale();
-      await this.#restoreLeasePlayer(lease, record);
 
       switch (effect.kind) {
         case "play":
@@ -272,14 +422,6 @@ export class VoiceImpl implements QueueVoice {
           return;
         case "seek":
           await record.player.seek(effect.seconds);
-          return;
-        case "volume":
-          await record.player.setVolume(effect.percent);
-          lease.volume = effect.percent;
-          return;
-        case "filters":
-          await record.player.setFilters(effect.entries);
-          lease.filters = Object.freeze([...effect.entries]);
           return;
       }
     });
@@ -300,15 +442,18 @@ export class VoiceImpl implements QueueVoice {
 
   /** Recheck queued item work at execution so a retired authority cannot reach the Player. */
   #assertEffectAuthority(lease: LeaseRecord, effect: QueuePlayerEffect): void {
-    if (effect.kind === "volume" || effect.kind === "filters") return;
     if (!this.#matchesItem(lease, effect.authority)) throw this.#stale();
   }
 
-  async #restoreLeasePlayer(lease: LeaseRecord, record: PlayerRecord): Promise<void> {
-    if (lease.playerGeneration === record.generation) return;
-    await record.player.setVolume(lease.volume);
-    await record.player.setFilters(lease.filters);
-    lease.playerGeneration = record.generation;
+  /** Restores committed settings once per Player, before its first play effect on a new borrow. */
+  async #restoreLeasePlayer(record: PlayerRecord): Promise<void> {
+    if (record.restored) return;
+    // A fresh Player inherits nothing from its predecessor, so committed state is pushed whole.
+    const settings = this.#settings;
+    await record.player.setVolume(settings.volume);
+    await record.player.setFilters(settings.entries);
+    record.applied = { volume: settings.volume, filters: settings.entries };
+    record.restored = true;
   }
 
   async #play(
@@ -318,6 +463,7 @@ export class VoiceImpl implements QueueVoice {
   ): Promise<void> {
     if (!this.#matchesItem(lease, effect.authority)) throw this.#stale();
     try {
+      await this.#restoreLeasePlayer(record);
       await record.player.play(effect.request);
       const item = lease.item;
       if (item && this.#matchesItem(lease, effect.authority)) item.phase = "active";
@@ -358,11 +504,6 @@ export class VoiceImpl implements QueueVoice {
           }
         }
         lease.item = undefined;
-        try {
-          await record.player.setFilters([]);
-        } catch (error: unknown) {
-          failures.push(asError(error));
-        }
       }
       if (failures.length === 1) throw failures[0];
       if (failures.length > 1) throw new AggregateError(failures, "Queue lease cleanup failures");
@@ -384,6 +525,8 @@ export class VoiceImpl implements QueueVoice {
         const record: PlayerRecord = {
           generation: ++this.#playerGeneration,
           player,
+          applied: { filters: NO_FILTERS },
+          restored: false,
           unsubscribe: (): void => unsubscribe(),
         };
         unsubscribe = player.subscribe(event => this.#acceptPlayerOutcome(record, event));
@@ -568,4 +711,17 @@ export class VoiceImpl implements QueueVoice {
   #terminal(): DisTubeError {
     return new DisTubeError(ErrorCode.VOICE_FAILED, "Voice is no longer connected");
   }
+}
+
+/** Maps a backend rejection to the public error a filter render can return, preserving its code. */
+function playerFiltersFailure(error: unknown): DisTubeError {
+  if (
+    error instanceof DisTubeError &&
+    [ErrorCode.VOICE_FAILED, ErrorCode.UNSUPPORTED, ErrorCode.QUEUE_FAILED, ErrorCode.INVALID_ARGUMENT].includes(
+      error.code,
+    )
+  ) {
+    return error;
+  }
+  return asDisTubeError(ErrorCode.VOICE_FAILED, "Player failed to render filters", error);
 }

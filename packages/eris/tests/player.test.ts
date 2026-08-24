@@ -1,7 +1,7 @@
+import { FilterRegistry } from "@distube/voice-core/core";
 import { ErrorCode, Filters, type PlaybackRequest, type PlayerEvent } from "distube";
 import type { VoiceConnection } from "eris";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { FilterRegistry } from "../src/filters";
 import { ErisVoicePlayer } from "../src/player";
 import {
   emitRawEnd,
@@ -113,15 +113,31 @@ describe("controls", () => {
     await expect(player.resume()).rejects.toThrow("no active playback");
 
     await player.play(request());
+    // The hand-off clears the connection's pause state, so a first track is never silently muted.
+    expect(connection.resume).toHaveBeenCalledTimes(1);
+    expect(connection.pause).not.toHaveBeenCalled();
+
     await player.pause();
     await player.resume();
 
     expect(connection.pause).toHaveBeenCalledTimes(1);
-    expect(connection.resume).toHaveBeenCalledTimes(1);
+    expect(connection.resume).toHaveBeenCalledTimes(2);
     await expect(player.seek(30)).rejects.toMatchObject({
       code: ErrorCode.UNSUPPORTED,
       message: "The default voice engine cannot seek",
     });
+  });
+
+  it("plays the first track through a connection Eris left paused", async () => {
+    const { player, connection } = createPlayer();
+    // Eris keeps pause state on the VoiceConnection, not on the stream, so a connection paused before
+    // this Player existed would swallow its first track outright.
+    connection.paused = true;
+
+    await player.play(request());
+
+    expect(connection.resume).toHaveBeenCalledTimes(1);
+    expect(connection.paused).toBe(false);
   });
 
   it("holds the volume level across tracks and rejects an invalid one", async () => {

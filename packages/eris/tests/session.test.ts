@@ -108,6 +108,41 @@ describe("moving", () => {
     });
   });
 
+  it("republishes connected when Discord moves the bot, without a disconnect", async () => {
+    const client = new FakeClient();
+    const { session, events } = await connected(client);
+    announce(client);
+    expect(events).toHaveLength(1);
+
+    // Someone with the permission drags the bot; the new credentials follow the state packet.
+    announceState(client, GATEWAY, GUILD, "dragged");
+    announceServer(client, { ...GATEWAY, endpoint: "moved.example" });
+
+    expect(session.channelId).toBe("dragged");
+    // The new channel is news on its own, and so is the endpoint that follows it.
+    expect(events).toEqual([
+      { type: "connected", channelId: CHANNEL, gateway: GATEWAY },
+      { type: "connected", channelId: "dragged", gateway: GATEWAY },
+      { type: "connected", channelId: "dragged", gateway: { ...GATEWAY, endpoint: "moved.example" } },
+    ]);
+    expect(client.joinVoiceChannel).toHaveBeenCalledTimes(1);
+  });
+
+  it("reports a null channel as the end of the guild's presence", async () => {
+    const client = new FakeClient();
+    const { session, events } = await connected(client);
+    announce(client);
+
+    announceState(client, GATEWAY, GUILD, null);
+    await settle();
+
+    expect(events.at(-1)).toEqual({
+      type: "disconnected",
+      error: expect.objectContaining({ message: expect.stringContaining("removed") }),
+    });
+    expect(session.gateway).toBeUndefined();
+  });
+
   it("restores the committed native channel after a rejected move mutates it", async () => {
     const client = new FakeClient();
     client.channels.set("other", voiceChannel());

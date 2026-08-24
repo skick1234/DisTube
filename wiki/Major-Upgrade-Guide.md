@@ -1,8 +1,8 @@
 # Migrating to DisTube v6
 
 DisTube v6 is intentionally breaking. There are no deprecated aliases, compatibility events, or shims. The surface is
-deliberately v5-shaped: guild-keyed queues, `play` as the single insertion entry point, restored volume/repeat/
-autoplay/filters, and a restored `Playlist`. This guide covers both audiences: v5 users, and adopters of the earlier
+deliberately v5-shaped: guild-keyed queues, `play` as the single insertion entry point, volume/repeat/autoplay/filters
+restored (on `Voice`), and a restored `Playlist`. This guide covers both audiences: v5 users, and adopters of the earlier
 v6 pre-releases that exposed queue-ID facades and a separate queue factory.
 
 ## The three lifetimes
@@ -24,19 +24,25 @@ Every migration question resolves to one of three lifetimes:
 | `distube.getQueue(message \| guildId)` | `distube.getQueue(guildId)` |
 | `distube.voices` (`DisTubeVoiceManager`) | `distube.voices` (`VoiceManager`): `join`, `get`, `has`, `leave`, iterable, `.size` |
 | `queue.songs` (mutable array) | readonly `queue.state.items`; mutate with `enqueue`, `remove`, `jump`, `clear` |
-| `queue.previousSongs` | `queue.previousSongs` (readonly) |
+| `queue.previousSongs` | `voice.previousSongs` (readonly, at most 100 occurrences, outlives the queue) |
 | `queue.skip()`, `queue.previous()` | unchanged in name; both return `Promise<void>` |
-| `queue.jump(position)` | `queue.jump(target, { requeue? })` — one-based over *waiting* items (`jump(1)` is the next track) or an item ID |
-| `queue.setRepeatMode(mode)` (numeric enum) | `queue.setRepeatMode(mode)` with string-valued `RepeatMode.Off \| Song \| Queue` |
-| `queue.toggleAutoplay()` | `queue.setAutoplay(enabled)` |
-| `queue.setVolume(v)` / `queue.volume` | unchanged; percent, default `100`, persisted on the guild's Player |
-| `queue.filters` (`FilterManager`) | `queue.filters` (`QueueFilters`): `active`, `resolvable`, `apply`, `set`, `remove`, `clear` |
+| `queue.jump(position)` | `queue.jump(target, { requeue? })` — zero-based over *waiting* items (`jump(0)` is the next track) or an item ID |
+| `queue.setRepeatMode(mode)` (numeric enum) | `voice.setRepeatMode(mode)` with string-valued `RepeatMode.Off \| Song \| Queue` |
+| `queue.toggleAutoplay()` | `voice.setAutoplay(enabled)` |
+| `queue.setVolume(v)` / `queue.volume` | `voice.setVolume(v)` / `voice.volume`; percent, default `100` |
+| `queue.filters` (`FilterManager`) | `voice.filters` (`VoiceFilters`): `active`, `resolvable`, `apply`, `set`, `remove`, `clear` |
 | `queue.seek(seconds)` / `queue.currentTime` | unchanged in name; `seek` is engine-granularity best-effort |
 | `queue.pause()` / `queue.resume()` / `queue.paused` | `pause`/`resume` unchanged; read `queue.state.status` (`QueueStatus.Idle \| Playing \| Paused`) |
 | `queue.stop()` | `queue.stop()` — now also deletes the queue (voice stays connected) |
 | `queue.shuffle()` | `queue.shuffle()` — shuffles waiting items only |
 | `distube.play` search-string handling | a string is offered to each SourcePlugin in constructor order; all declines reject with `SOURCE_FAILED` |
 | `Playlist` | restored: playlist inputs insert their songs and emit one `queue.playlist.added` |
+| `queue.id` | removed; queues are keyed by guild, so use `guildId` and `distube.getQueue(guildId)` |
+| untyped `metadata` | `new DisTube<Metadata>()` types `options.metadata` and every `metadata` handed back |
+
+`voice` in those rows is `distube.voices.get(guildId)`. Volume, repeat mode, autoplay, filters, and played history are
+guild presence state, so they moved off `GuildQueue` and onto `Voice`: they survive `queue.stop()` and exhaustion, the
+next `play()` inherits them with no re-application, and only `distube.voices.leave(guildId)` discards them.
 
 Events are a string-valued `Events` enum; subscribe with `distube.on(Events.X, listener)`:
 
@@ -70,8 +76,11 @@ Mechanical mapping — every row is a rename or a merge, not a redesign:
 | idle queue after exhaustion | delete-on-exhaustion: `queue.finished` then `queue.deleted`; the Voice stays connected |
 | `Adapter.createPlayer(binding)` | `Adapter.createVoiceSession(target)` + `Adapter.engine.createPlayer(session)` |
 | `Player.stop()` | `Player.stopTrack()`; releasing voice is `VoiceSession.release()` |
-| no volume/repeat/autoplay/filters | restored on GuildQueue (see the v5 table) |
+| no volume/repeat/autoplay/filters | restored on Voice (see the v5 table) |
 | five error codes | six: `UNSUPPORTED` added for engine capabilities an adapter cannot express (e.g. Eris seek) |
+| `INVALID_ARGUMENT` alone | plus `error.reason`: `ErrorReason.Argument` for a bad value, `ErrorReason.State` for a call the queue forbids |
+| `off` could not remove a `once` listener | `off` matches the function you passed either way, and `removeAllListeners(name?)` clears in bulk |
+| one-based `jump` | zero-based everywhere: `enqueue({ position })`, `remove(index)`, `remove({ from, to })`, and `jump(position)` all index the waiting items directly |
 
 ## Adapter and engine authors
 
@@ -79,8 +88,9 @@ Every Adapter supplies the default playback `Engine` alongside `createVoiceSessi
 may replace that default. `Engine` exposes `createPlayer(session)` and `resolvable(name)` for filter names. `Player`
 implements `position`, `play({ itemId, resource })`, `pause`, `resume`, `stopTrack`, `seek`, `setVolume`,
 `setFilters(entries)`, `subscribe`, and terminal `release()`. `VoiceSession` implements `guildId`, `channelId`, optional
-`gateway`, `join(channelId)`, `release()`, and `subscribe`. Volume persists on the Player across queues in the same
-guild; filter state resets on queue deletion.
+`gateway`, `join(channelId)`, `release()`, and `subscribe`. Core applies committed volume and filters to a Player once,
+when it first becomes the guild's playback Player and again only when a value changes or the Engine supplies a
+replacement, so a Player never sees the same effect replayed per track.
 Correlate outcomes to `itemId`, own native resources, and never inspect Song/QueueItem or dispose the borrowed source
 resource. An unsupported effect (such as Eris seek) rejects with `UNSUPPORTED`.
 

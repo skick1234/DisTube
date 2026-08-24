@@ -160,11 +160,21 @@ export function announceServer(client: FakeClient, gateway = GATEWAY, guildId = 
   });
 }
 
-/** The voice-state half, which carries the bot's own session id. */
-export function announceState(client: FakeClient, gateway = GATEWAY, guildId = GUILD): void {
+/**
+ * The voice-state half, which carries the bot's own session id.
+ *
+ * Pass `channelId` to report the channel Discord put the bot in, which is how an external move and a
+ * removal (`null`) both reach the session.
+ */
+export function announceState(client: FakeClient, gateway = GATEWAY, guildId = GUILD, channelId?: string | null): void {
   client.emit("rawWS", {
     t: "VOICE_STATE_UPDATE",
-    d: { guild_id: guildId, user_id: client.user.id, session_id: gateway.sessionId },
+    d: {
+      guild_id: guildId,
+      user_id: client.user.id,
+      session_id: gateway.sessionId,
+      ...(channelId === undefined ? {} : { channel_id: channelId }),
+    },
   });
 }
 

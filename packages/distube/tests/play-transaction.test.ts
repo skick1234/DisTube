@@ -6,6 +6,7 @@ import {
   FakeVoiceSession,
   GUILD,
   media,
+  mediaUrl,
   playableSetup,
   record,
   settle,
@@ -37,6 +38,7 @@ describe("transactional play", () => {
     });
 
     expect(harness.source.resolve).not.toHaveBeenCalled();
+    expect(harness.source.search).not.toHaveBeenCalled();
     expect(harness.adapter.createVoiceSession).not.toHaveBeenCalled();
     expect(harness.distube.queues.size).toBe(0);
     expect(harness.distube.voices.size).toBe(0);
@@ -47,7 +49,7 @@ describe("transactional play", () => {
     const resolution = deferred<Song>();
     harness.source.resolve.mockReturnValueOnce(resolution.promise);
     const events = record(harness.distube, FIRST_PLAY_EVENTS);
-    const result = capture(harness.distube.play(TARGET, "unresolved"));
+    const result = capture(harness.distube.play(TARGET, mediaUrl("unresolved")));
 
     await flush();
     expect(harness.distube.getQueue(GUILD)).toBeUndefined();
@@ -71,7 +73,7 @@ describe("transactional play", () => {
     harness.source.resolve.mockReturnValueOnce(resolution.promise);
     harness.adapter.createVoiceSession.mockReturnValueOnce(creation.promise);
     const events = record(harness.distube, FIRST_PLAY_EVENTS);
-    const result = capture(harness.distube.play(TARGET, "voice-failure"));
+    const result = capture(harness.distube.play(TARGET, mediaUrl("voice-failure")));
 
     resolution.resolve(media("source", "voice-failure"));
     await flush();
@@ -127,8 +129,8 @@ describe("transactional play", () => {
     const firstResolution = deferred<Song>();
     const secondResolution = deferred<Song>();
     harness.source.resolve.mockReturnValueOnce(firstResolution.promise).mockReturnValueOnce(secondResolution.promise);
-    const first = capture(harness.distube.play(TARGET, "first"));
-    const second = harness.distube.play(TARGET, "second");
+    const first = capture(harness.distube.play(TARGET, mediaUrl("first")));
+    const second = harness.distube.play(TARGET, mediaUrl("second"));
 
     await flush();
     expect(harness.source.resolve).toHaveBeenCalledTimes(1);
@@ -186,9 +188,9 @@ describe("transactional play", () => {
   it("publishes queue.created after the committed insertion is registered and before its item event", async () => {
     const harness = playableSetup();
     const order: string[] = [];
-    harness.source.resolve.mockImplementation(async url => {
+    harness.source.resolve.mockImplementation(async () => {
       order.push("resolved");
-      return media("source", url);
+      return media("source", "ordered");
     });
     harness.adapter.createVoiceSession.mockImplementation(async target => {
       order.push("voice");
@@ -205,7 +207,7 @@ describe("transactional play", () => {
     });
     harness.distube.on("queue.item.added", () => order.push("queue.item.added"));
 
-    await harness.distube.play(TARGET, "ordered");
+    await harness.distube.play(TARGET, mediaUrl("ordered"));
 
     expect(order).toEqual(["resolved", "voice", "queue.created", "queue.item.added"]);
   });
@@ -248,7 +250,7 @@ describe("transactional play", () => {
     const session = harness.adapter.sessions[0];
     const resolution = deferred<Song>();
     harness.source.resolve.mockReturnValueOnce(resolution.promise);
-    const result = capture(harness.distube.play(TARGET, "failed-with-existing-voice"));
+    const result = capture(harness.distube.play(TARGET, mediaUrl("failed-with-existing-voice")));
 
     await flush();
     resolution.reject(new Error("source rejected"));
@@ -301,7 +303,7 @@ describe("transactional play", () => {
       },
     });
     harness.source.resolve.mockReturnValueOnce(Promise.resolve(rejectingPlaylist));
-    const result = capture(harness.distube.play(MOVED_TARGET, "rejected"));
+    const result = capture(harness.distube.play(MOVED_TARGET, mediaUrl("rejected")));
 
     await flush();
     expect(harness.distube.voices.get(GUILD)?.channelId).toBe(MOVED_TARGET.voiceChannelId);
@@ -329,7 +331,9 @@ describe("transactional play", () => {
     expect(events).toEqual(["queue.item.added", "queue.item.finished"]);
     expect(moved.queue).toBe(queue);
     expect(moved.items[0]?.song.id).toBe("next");
-    expect(queue.previousSongs.map(item => item.song.id)).toContain(firstItems[0]?.song.id);
+    expect(harness.distube.voices.get(GUILD)?.previousSongs.map(item => item.song.id)).toContain(
+      firstItems[0]?.song.id,
+    );
     expect(queue.state.current?.song.id).toBe("next");
   });
 

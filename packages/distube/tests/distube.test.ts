@@ -1,12 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
-import { DisTube, DisTubeError, ErrorCode, type Plugin, type PluginContext } from "../src";
+import { DisTube, DisTubeError, ErrorCode, type Plugin, type PluginContext, type Song } from "../src";
 import {
   capture,
+  deferred,
   FakeAdapter,
   FakeEngine,
   FakeSource,
   GUILD,
   media,
+  mediaUrl,
   playableSetup,
   settle,
   setup,
@@ -38,6 +40,22 @@ describe("client construction", () => {
     );
   });
 
+  it("does not adopt a Plugin that omits the declared resource kinds an Engine owes", async () => {
+    const source = new FakeSource("source");
+    source.search.mockImplementation(async query => [media("source", query)]);
+    const undeclared = new FakeEnginePlugin("undeclared") as unknown as { accepts?: unknown };
+    // Detection is structural, so a Plugin missing `accepts` is simply not an Engine.
+    delete undeclared.accepts;
+    const adapter = new FakeAdapter();
+    const distube = new DisTube({ adapter, plugins: [source, undeclared as unknown as Plugin] });
+
+    await distube.play(TARGET, "a");
+    await settle();
+
+    expect((undeclared as unknown as FakeEnginePlugin).players).toHaveLength(0);
+    expect((adapter.engine as FakeEngine).players).toHaveLength(1);
+  });
+
   it("rejects a duplicate Plugin and a second engine-capable Plugin before initializing any", () => {
     const first = new FakeSource("duplicate");
     const second = new FakeSource("duplicate");
@@ -53,7 +71,7 @@ describe("client construction", () => {
 
   it("prefers an engine Plugin over the Adapter's engine", async () => {
     const source = new FakeSource("source");
-    source.resolve.mockImplementation(async url => media("source", url));
+    source.search.mockImplementation(async query => [media("source", query)]);
     const plugged = new FakeEnginePlugin();
     const adapter = new FakeAdapter();
     const distube = new DisTube({ adapter, plugins: [source, plugged] });
@@ -115,9 +133,9 @@ describe("source routing", () => {
     const harness = playableSetup();
     const controller = new AbortController();
 
-    await expect(harness.distube.resolve("first")).resolves.toMatchObject({ id: "first" });
+    await expect(harness.distube.resolve(mediaUrl("first"))).resolves.toMatchObject({ id: "first" });
     const generatedSignal = harness.source.resolve.mock.calls[0]?.[1]?.signal;
-    await expect(harness.distube.resolve("second", { signal: controller.signal })).resolves.toMatchObject({
+    await expect(harness.distube.resolve(mediaUrl("second"), { signal: controller.signal })).resolves.toMatchObject({
       id: "second",
     });
 
@@ -167,6 +185,24 @@ describe("event facade", () => {
 
     expect(persistent).not.toHaveBeenCalled();
     expect(once).toHaveBeenCalledTimes(1);
+  });
+
+  it("removes a client once listener through off, and clears the rest through removeAllListeners", async () => {
+    const harness = playableSetup();
+    const once = vi.fn();
+    const persistent = vi.fn();
+    harness.distube.once("queue.item.added", once).on("queue.item.added", persistent);
+    // `off` is given the caller's own function, not the wrapper `once` actually registered.
+    expect(harness.distube.off("queue.item.added", once)).toBe(harness.distube);
+
+    const { queue } = await harness.distube.play(TARGET, "a");
+    expect(once).not.toHaveBeenCalled();
+    expect(persistent).toHaveBeenCalledTimes(1);
+
+    expect(harness.distube.removeAllListeners()).toBe(harness.distube);
+    await queue.enqueue("b");
+    expect(persistent).toHaveBeenCalledTimes(1);
+    await harness.distube.shutdown();
   });
 
   it("reports a failing listener as a diagnostic without rolling back the transition", async () => {
@@ -291,6 +327,44 @@ describe("shutdown", () => {
       expect.arrayContaining(["stop failed", "plugin dispose failed", "second dispose failed"]),
     );
     expect(second.dispose).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("cancellation", () => {
+  it("rejects an aborted enqueue with QUEUE_FAILED, keeping an Error reason as the cause", async () => {
+    const harness = playableSetup();
+    const { queue } = await harness.distube.play(TARGET, "a");
+    await settle();
+    const controller = new AbortController();
+    const reason = new Error("caller went away");
+    const resolution = deferred<Song>();
+    harness.source.resolve.mockImplementationOnce(async () => resolution.promise);
+
+    const enqueueing = capture(queue.enqueue("b", { signal: controller.signal }));
+    controller.abort(reason);
+    resolution.resolve(media("source", "b"));
+    const failure = (await enqueueing) as DisTubeError;
+
+    expect(failure).toBeInstanceOf(DisTubeError);
+    expect(failure).not.toBe(reason);
+    expect(failure.code).toBe(ErrorCode.QUEUE_FAILED);
+    expect(failure.cause).toBe(reason);
+    expect(queue.state.items).toEqual([]);
+    await harness.distube.shutdown();
+  });
+
+  it("produces no cause when the abort reason is not an Error", async () => {
+    const harness = playableSetup();
+    const controller = new AbortController();
+    controller.abort("just a string");
+
+    const failure = (await capture(
+      harness.distube.resolve("https://provider.example/a", { signal: controller.signal }),
+    )) as DisTubeError;
+
+    expect(failure.code).toBe(ErrorCode.QUEUE_FAILED);
+    expect(failure.cause).toBeUndefined();
+    await harness.distube.shutdown();
   });
 });
 
