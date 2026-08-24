@@ -22,7 +22,7 @@ export function captureGateway(): CapturedGateway {
   let captured: DiscordGatewayAdapterLibraryMethods | undefined;
   return {
     payloads,
-    creator: (methods => {
+    creator: ((methods: DiscordGatewayAdapterLibraryMethods) => {
       captured = methods;
       return {
         sendPayload: (payload: unknown) => {

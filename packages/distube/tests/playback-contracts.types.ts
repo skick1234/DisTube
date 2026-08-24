@@ -102,6 +102,7 @@ const session: VoiceSession = {
 };
 
 const engine: Engine = {
+  accepts: new Set(["url" as const]),
   async createPlayer(_session: VoiceSession): Promise<Player> {
     return player;
   },
