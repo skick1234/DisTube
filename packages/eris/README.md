@@ -30,6 +30,6 @@ declares `encoded`.
 
 FFmpeg receives the playable URL as a process argument. Another process running as the same operating-system user may inspect that argument while decoding is active. Public errors and captured decoder output redact the URL, and the engine refuses redirects after source validation.
 
-The default engine checks both requirements before its first URL playback. If either is unavailable, playback rejects
-with DisTube's `VOICE_FAILED` error and names the missing dependency. The verified peer line is Eris 0.18. Seeking is
-not supported and rejects with DisTube's `UNSUPPORTED` error.
+The adapter checks these prerequisites before it starts a native voice join. If one is unavailable, joining or playback
+rejects with DisTube's `VOICE_FAILED` error and names the missing dependency. The verified peer line is Eris 0.18.
+Seeking is not supported and rejects with DisTube's `UNSUPPORTED` error.

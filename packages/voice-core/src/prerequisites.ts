@@ -11,6 +11,7 @@ export const DISCORD_OPUS_MODULES = ["@discordjs/opus", "opusscript"] as const;
 /** Encryption implementations @discordjs/voice probes, in its own preference order. */
 export const DISCORD_ENCRYPTION_MODULES = [
   "sodium-native",
+  "sodium",
   "libsodium-wrappers",
   "@stablelib/xchacha20poly1305",
   "@noble/ciphers",

@@ -110,12 +110,13 @@ export class QueueManager {
       return Promise.reject(error);
     }
 
+    const invocation = this.#invocation(voiceTarget.guildId, options.signal);
     const invocationOptions: QueuePlayOptions = Object.freeze({
       position: options.position,
       metadata: options.metadata,
       skip: options.skip,
+      signal: invocation.signal,
     });
-    const invocation = this.#invocation(voiceTarget.guildId, options.signal);
     // Register the invocation before its lane turn. A terminal deletion can then abort a resolution that
     // has not reached the front of the lane yet.
     this.#inFlight.add(invocation);
@@ -215,10 +216,18 @@ export class QueueManager {
       this.#assertInvocation(invocation);
 
       const currentItemId = queue.state.current?.id;
-      const items = await queue.enqueue(media, { position: options.position, metadata: options.metadata });
+      const items = await queue.enqueue(media, {
+        position: options.position,
+        metadata: options.metadata,
+        signal: options.signal,
+      });
+      this.#assertReady();
+      this.#assertInvocation(invocation);
       committed ||= this.#queues.get(target.guildId) === queue;
       if (options.skip && currentItemId !== undefined && queue.state.current?.id === currentItemId) {
         await queue.skip();
+        this.#assertReady();
+        this.#assertInvocation(invocation);
       }
       return Object.freeze({ queue: queue.facade, items });
     } catch (error: unknown) {

@@ -34,6 +34,27 @@ async function packedManifest(archive: string): Promise<PackedManifest> {
   return JSON.parse(await run(["tar", "-xOf", archive, "package/package.json"], workspace)) as PackedManifest;
 }
 
+/** Returns the runtime-absent symbols marked type-only by a packed declaration entry point. */
+export function packedTypeOnlyExports(declaration: string): readonly string[] {
+  const names = new Set<string>();
+  for (const statement of declaration.matchAll(
+    /export\s+(type\s+)?\{([\s\S]*?)\}(?:\s+from\s+["'][^"']+["'])?\s*;/gu,
+  )) {
+    const statementIsTypeOnly = statement[1] !== undefined;
+    for (const raw of statement[2].split(",")) {
+      const member = raw.trim();
+      if (!member || (!statementIsTypeOnly && !member.startsWith("type "))) continue;
+      const name = member
+        .replace(/^type\s+/u, "")
+        .trim()
+        .split(/\s+as\s+/u)
+        .at(-1);
+      if (name && /^[A-Za-z_$][A-Za-z0-9_$]*$/u.test(name)) names.add(name);
+    }
+  }
+  return [...names].sort((left, right) => left.localeCompare(right));
+}
+
 async function filesBelow(path: string): Promise<string[]> {
   const files: string[] = [];
   for (const entry of await readdir(path, { withFileTypes: true })) {
@@ -85,80 +106,81 @@ async function assertPackedArchive(manifestName: string, packageRoot: string, ar
   }
 }
 
-if (process.argv.includes("--prepared")) await assertPreparedBuild(workspace);
-else await ensurePreparedBuild(workspace);
-for (const declaration of ["index.d.mts"]) {
-  const content = await readFile(resolve(workspace, "packages/distube/dist", declaration), "utf8");
-  if (/\b(?:from\s+["']eris|import\(["']eris)/u.test(content)) {
-    throw new Error(`distube: native Eris type leaked into ${declaration}`);
-  }
-}
-const temporary = await mkdtemp(join(tmpdir(), "distube-v6-packages-"));
-try {
-  const archives = new Map<string, string>();
-  for (const directory of packageDirectories) {
-    const root = resolve(workspace, "packages", directory);
-    const manifest = JSON.parse(await readFile(resolve(root, "package.json"), "utf8")) as {
-      name: string;
-      exports: Record<string, unknown>;
-      engines?: { node?: string };
-    };
-    const packed = await run(["bun", "pm", "pack", "--destination", temporary, "--quiet", "--ignore-scripts"], root);
-    const archive = resolve(temporary, basename(packed.split(/\r?\n/u).at(-1) ?? ""));
-    if (!(await Bun.file(archive).exists())) throw new Error(`${manifest.name}: archive was not created`);
-    archives.set(manifest.name, archive);
-    const entries = await readdir(root);
-    for (const residue of entries.filter(entry => entry.endsWith(".tgz") || entry === ".artifacts")) {
-      throw new Error(`${manifest.name}: package residue ${residue}`);
+if (import.meta.main) {
+  if (process.argv.includes("--prepared")) await assertPreparedBuild(workspace);
+  else await ensurePreparedBuild(workspace);
+  for (const declaration of ["index.d.mts"]) {
+    const content = await readFile(resolve(workspace, "packages/distube/dist", declaration), "utf8");
+    if (/\b(?:from\s+["']eris|import\(["']eris)/u.test(content)) {
+      throw new Error(`distube: native Eris type leaked into ${declaration}`);
     }
-    if (!manifest.exports?.["."]) throw new Error(`${manifest.name}: missing root export`);
-    if ((await packedManifest(archive)).engines?.node !== ">=22.12.0") {
-      throw new Error(`${manifest.name}: packed archive must require Node >=22.12.0`);
-    }
-    await assertPackedArchive(manifest.name, root, archive);
   }
+  const temporary = await mkdtemp(join(tmpdir(), "distube-v6-packages-"));
+  try {
+    const archives = new Map<string, string>();
+    for (const directory of packageDirectories) {
+      const root = resolve(workspace, "packages", directory);
+      const manifest = JSON.parse(await readFile(resolve(root, "package.json"), "utf8")) as {
+        name: string;
+        exports: Record<string, unknown>;
+        engines?: { node?: string };
+      };
+      const packed = await run(["bun", "pm", "pack", "--destination", temporary, "--quiet", "--ignore-scripts"], root);
+      const archive = resolve(temporary, basename(packed.split(/\r?\n/u).at(-1) ?? ""));
+      if (!(await Bun.file(archive).exists())) throw new Error(`${manifest.name}: archive was not created`);
+      archives.set(manifest.name, archive);
+      const entries = await readdir(root);
+      for (const residue of entries.filter(entry => entry.endsWith(".tgz") || entry === ".artifacts")) {
+        throw new Error(`${manifest.name}: package residue ${residue}`);
+      }
+      if (!manifest.exports?.["."]) throw new Error(`${manifest.name}: missing root export`);
+      if ((await packedManifest(archive)).engines?.node !== ">=22.12.0") {
+        throw new Error(`${manifest.name}: packed archive must require Node >=22.12.0`);
+      }
+      await assertPackedArchive(manifest.name, root, archive);
+    }
 
-  const distubeArchive = archives.get("distube");
-  if (!distubeArchive) throw new Error("distube: archive was not created");
-  await run(["bun", "scripts/check-playback-contract.ts"], workspace, {
-    ...process.env,
-    DISTUBE_PLAYBACK_ARCHIVE: distubeArchive,
-  });
+    const distubeArchive = archives.get("distube");
+    if (!distubeArchive) throw new Error("distube: archive was not created");
+    await run(["bun", "scripts/check-playback-contract.ts"], workspace, {
+      ...process.env,
+      DISTUBE_PLAYBACK_ARCHIVE: distubeArchive,
+    });
 
-  const smoke = resolve(temporary, "smoke");
-  await mkdir(smoke, { recursive: true });
-  await Bun.write(
-    resolve(smoke, "package.json"),
-    JSON.stringify({
-      private: true,
-      type: "module",
-      dependencies: Object.fromEntries([...archives].map(([name, archive]) => [name, `file:${archive}`])),
-    }),
-  );
-  for (const [name, archive] of archives) {
-    const target = resolve(smoke, "node_modules", ...name.split("/"));
-    await mkdir(target, { recursive: true });
-    await run(["tar", "-xzf", archive, "--strip-components=1", "-C", target], workspace);
-    if (adapterPackages.has(name)) {
-      const readme = await readFile(resolve(target, "README.md"), "utf8");
-      for (const requirement of adapterReadmeRequirements) {
-        if (!readme.includes(requirement)) throw new Error(`${name}: README omits ${requirement}`);
+    const smoke = resolve(temporary, "smoke");
+    await mkdir(smoke, { recursive: true });
+    await Bun.write(
+      resolve(smoke, "package.json"),
+      JSON.stringify({
+        private: true,
+        type: "module",
+        dependencies: Object.fromEntries([...archives].map(([name, archive]) => [name, `file:${archive}`])),
+      }),
+    );
+    for (const [name, archive] of archives) {
+      const target = resolve(smoke, "node_modules", ...name.split("/"));
+      await mkdir(target, { recursive: true });
+      await run(["tar", "-xzf", archive, "--strip-components=1", "-C", target], workspace);
+      if (adapterPackages.has(name)) {
+        const readme = await readFile(resolve(target, "README.md"), "utf8");
+        for (const requirement of adapterReadmeRequirements) {
+          if (!readme.includes(requirement)) throw new Error(`${name}: README omits ${requirement}`);
+        }
       }
     }
-  }
-  await mkdir(resolve(smoke, "node_modules/@discordjs"), { recursive: true });
-  for (const dependency of ["discord.js", "oceanic.js", "eris"]) {
-    await symlink(resolve(workspace, "node_modules", dependency), resolve(smoke, "node_modules", dependency), "dir");
-  }
-  await symlink(
-    resolve(workspace, "node_modules/@discordjs/voice"),
-    resolve(smoke, "node_modules/@discordjs/voice"),
-    "dir",
-  );
-  await symlink(resolve(workspace, "node_modules/typescript"), resolve(smoke, "node_modules/typescript"), "dir");
-  await writeFile(
-    resolve(smoke, "smoke.mjs"),
-    `import * as core from "distube";
+    await mkdir(resolve(smoke, "node_modules/@discordjs"), { recursive: true });
+    for (const dependency of ["discord.js", "oceanic.js", "eris"]) {
+      await symlink(resolve(workspace, "node_modules", dependency), resolve(smoke, "node_modules", dependency), "dir");
+    }
+    await symlink(
+      resolve(workspace, "node_modules/@discordjs/voice"),
+      resolve(smoke, "node_modules/@discordjs/voice"),
+      "dir",
+    );
+    await symlink(resolve(workspace, "node_modules/typescript"), resolve(smoke, "node_modules/typescript"), "dir");
+    await writeFile(
+      resolve(smoke, "smoke.mjs"),
+      `import * as core from "distube";
 import { DiscordJSAdapter } from "@distube/discordjs";
 import { OceanicAdapter } from "@distube/oceanic";
 import { ErisAdapter } from "@distube/eris";
@@ -173,7 +195,11 @@ const commands = {
 for (const name of restored) {
   if (!core[name]) throw new Error(\`missing public export \${name}\`);
 }
-for (const name of ["GuildQueue", "QueueFilters", "Voice", "VoiceManager"]) {
+const typeOnlyExports = packedTypeOnlyExports(
+  await run(["tar", "-xOf", distubeArchive, "package/dist/index.d.mts"], workspace),
+);
+if (typeOnlyExports.length === 0) throw new Error("distube: packed declaration has no type-only export inventory");
+for (const name of typeOnlyExports) {
   if (name in core) throw new Error(\`\${name} must be type-only\`);
 }
 for (const [owner, members] of Object.entries(commands)) {
@@ -191,11 +217,11 @@ for (const Adapter of [DiscordJSAdapter, OceanicAdapter, ErisAdapter]) {
   if ("createPlayer" in Adapter.prototype) throw new Error(\`\${Adapter.name} still exposes createPlayer\`);
 }
 `,
-  );
-  await run(["node", "smoke.mjs"], smoke);
-  await writeFile(
-    resolve(smoke, "adapter-surface.mjs"),
-    `import * as discord from "@distube/discordjs";
+    );
+    await run(["node", "smoke.mjs"], smoke);
+    await writeFile(
+      resolve(smoke, "adapter-surface.mjs"),
+      `import * as discord from "@distube/discordjs";
 import * as oceanic from "@distube/oceanic";
 import * as eris from "@distube/eris";
 
@@ -219,11 +245,11 @@ for (const adapter of adapters) {
   }
 }
 `,
-  );
-  await run(["node", "adapter-surface.mjs"], smoke);
-  await writeFile(
-    resolve(smoke, "adapter-contract.ts"),
-    `import type { Adapter, VoiceSession } from "distube";
+    );
+    await run(["node", "adapter-surface.mjs"], smoke);
+    await writeFile(
+      resolve(smoke, "adapter-contract.ts"),
+      `import type { Adapter, VoiceSession } from "distube";
 import type { Client as DiscordClient } from "discord.js";
 import type { Client as OceanicClient } from "oceanic.js";
 import type { Client as ErisClient } from "eris";
@@ -253,28 +279,29 @@ new ErisAdapter(eris, { playerFactory: async () => undefined });
 import { ErisVoicePlayer } from "@distube/eris";
 void [releasePlayers, ErisVoicePlayer];
 `,
-  );
-  const compiler = resolve(smoke, "node_modules", "typescript", "bin", "tsc");
-  await run(
-    [
-      process.execPath,
-      compiler,
-      "--ignoreConfig",
-      "--noEmit",
-      "--strict",
-      "--skipLibCheck",
-      "--module",
-      "NodeNext",
-      "--moduleResolution",
-      "NodeNext",
-      "--target",
-      "ESNext",
-      "adapter-contract.ts",
-    ],
-    smoke,
-  );
-} finally {
-  await rm(temporary, { recursive: true, force: true });
-}
+    );
+    const compiler = resolve(smoke, "node_modules", "typescript", "bin", "tsc");
+    await run(
+      [
+        process.execPath,
+        compiler,
+        "--ignoreConfig",
+        "--noEmit",
+        "--strict",
+        "--skipLibCheck",
+        "--module",
+        "NodeNext",
+        "--moduleResolution",
+        "NodeNext",
+        "--target",
+        "ESNext",
+        "adapter-contract.ts",
+      ],
+      smoke,
+    );
+  } finally {
+    await rm(temporary, { recursive: true, force: true });
+  }
 
-process.stdout.write("Packed install smoke passed for all DisTube packages.\n");
+  process.stdout.write("Packed install smoke passed for all DisTube packages.\n");
+}

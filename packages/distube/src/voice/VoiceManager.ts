@@ -53,6 +53,8 @@ interface VoiceSlot {
   creation?: Promise<VoiceImpl>;
   movementTail: Promise<void>;
   pendingOperations: number;
+  publicJoinWaiters: number;
+  publicJoinAdopted: boolean;
   terminal?: SlotTerminal;
   /** The first accepted terminal reason, including shutdown fencing before release begins. */
   terminalReason?: Readonly<{ reason: VoiceDisconnectReason; error?: Error }>;
@@ -113,16 +115,28 @@ export class VoiceManagerImpl implements VoiceManager {
   }
 
   async join(target: VoiceTarget): Promise<Voice> {
-    return (await this.joinInternal(target)).facade;
+    const slot = this.#joinSlot(target);
+    slot.publicJoinWaiters += 1;
+    try {
+      const voice = await this.#enqueueMovement(slot, target.channelId);
+      slot.publicJoinAdopted = true;
+      return voice.facade;
+    } finally {
+      slot.publicJoinWaiters -= 1;
+    }
   }
 
   /** Package-private movement used by QueueManager before it returns its own facade. */
   joinInternal(target: VoiceTarget): Promise<VoiceImpl> {
+    const slot = this.#joinSlot(target);
+    return this.#enqueueMovement(slot, target.channelId);
+  }
+
+  #joinSlot(target: VoiceTarget): VoiceSlot {
     this.#assertReady();
     validateTarget(target);
     this.assertJoinable(target.guildId);
-    const slot = this.#slots.get(target.guildId) ?? this.#createSlot(target);
-    return this.#enqueueMovement(slot, target.channelId);
+    return this.#slots.get(target.guildId) ?? this.#createSlot(target);
   }
 
   /** Rejects work accepted while a guild Voice is terminalizing, even if it would join after slot closure. */
@@ -184,7 +198,8 @@ export class VoiceManagerImpl implements VoiceManager {
     if (!slot || slot.generation !== voice.generation || slot.voice !== voice || slot.phase !== "open") {
       return Promise.resolve();
     }
-    return this.#acceptTerminal(slot, "left", undefined, { kind: "rollback" }, false);
+    if (slot.publicJoinAdopted || slot.publicJoinWaiters > 0) return Promise.resolve();
+    return this.#acceptTerminal(slot, "left", undefined, { kind: "rollback" }, false, false);
   }
 
   #createSlot(target: VoiceTarget): VoiceSlot {
@@ -194,6 +209,8 @@ export class VoiceManagerImpl implements VoiceManager {
       phase: "open",
       movementTail: Promise.resolve(),
       pendingOperations: 0,
+      publicJoinWaiters: 0,
+      publicJoinAdopted: false,
     };
     this.#slots.set(slot.guildId, slot);
     const creation = this.#createVoice(slot, target);
@@ -293,6 +310,7 @@ export class VoiceManagerImpl implements VoiceManager {
     error: Error | undefined,
     cause: QueueTerminalCause,
     announce = true,
+    deleteQueue = true,
   ): Promise<void> {
     if (slot.terminal) return slot.terminal.completion;
     if (slot.phase === "closed") return Promise.reject(this.#staleSlot());
@@ -318,11 +336,16 @@ export class VoiceManagerImpl implements VoiceManager {
     slot.terminal = { reason, ...(error ? { error } : {}), completion, announce };
 
     let deletion: Promise<void>;
-    try {
-      // QueueManager destroys live and provisional queues synchronously before returning this Promise.
-      deletion = this.#context.deleteQueue(slot.guildId, cause);
-    } catch (failure: unknown) {
-      deletion = Promise.reject(failure);
+    if (!deleteQueue) {
+      // QueueManager already removed this first-play queue before it releases the Voice.
+      deletion = Promise.resolve();
+    } else {
+      try {
+        // QueueManager destroys live and provisional queues synchronously before returning this Promise.
+        deletion = this.#context.deleteQueue(slot.guildId, cause);
+      } catch (failure: unknown) {
+        deletion = Promise.reject(failure);
+      }
     }
     void this.#finishTerminal(slot, deletion).then(resolve, reject);
     void completion.finally(() => this.#closeSlot(slot)).catch(() => undefined);

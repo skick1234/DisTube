@@ -3,6 +3,14 @@
 Create the direct objects and play:
 
 ```ts
+import { DiscordJSAdapter } from "@distube/discordjs";
+import { YouTubePlugin } from "@distube/youtube";
+import { DisTube } from "distube";
+
+declare const client: ConstructorParameters<typeof DiscordJSAdapter>[0];
+declare const guildId: string;
+declare const voiceChannelId: string;
+
 const youtube = new YouTubePlugin();
 const distube = new DisTube({ adapter: new DiscordJSAdapter(client), plugins: [youtube] });
 const { queue } = await distube.play({ guildId, voiceChannelId }, "https://youtu.be/example");

@@ -88,11 +88,14 @@ const player: Player = {
   },
 };
 
+const idleTerminal: PlayerEvent = { type: "terminal", error: new Error("backend lost") };
+
 // @ts-expect-error retired Player input cannot receive QueueItem
 player.play(item);
 
 const session: VoiceSession = {
   guildId: "guild",
+  clientUserId: "bot",
   channelId: "voice",
   async join(_channelId: string): Promise<void> {},
   async release(): Promise<void> {},
@@ -248,6 +251,7 @@ void [
   missingEncodedDisposal,
   mixed,
   removedRegistry,
+  idleTerminal,
   session,
   engine,
   returnedQueue,

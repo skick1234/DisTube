@@ -27,6 +27,7 @@ const RECONNECT_ATTEMPTS = 3;
 export interface DiscordVoiceSessionOptions {
   readonly guildId: string;
   readonly channelId: string;
+  readonly clientUserId: string;
   readonly adapterCreator: DiscordGatewayAdapterCreator;
   readonly selfDeaf: boolean;
   readonly selfMute: boolean;
@@ -41,6 +42,7 @@ export interface DiscordVoiceSessionOptions {
  */
 export class DiscordVoiceSession implements VoiceSession {
   readonly guildId: string;
+  readonly clientUserId: string;
   readonly #connection: VoiceConnection;
   readonly #selfDeaf: boolean;
   readonly #selfMute: boolean;
@@ -72,6 +74,7 @@ export class DiscordVoiceSession implements VoiceSession {
 
   constructor(options: DiscordVoiceSessionOptions) {
     this.guildId = options.guildId;
+    this.clientUserId = options.clientUserId;
     this.#channelId = options.channelId;
     this.#selfDeaf = options.selfDeaf;
     this.#selfMute = options.selfMute;

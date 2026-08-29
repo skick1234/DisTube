@@ -130,7 +130,7 @@ export async function childProcessModule(): Promise<unknown> {
 
 /** A voice channel as the adapter's validation reads it: joinable, and owned by a guild. */
 export function voiceChannel(guildId = GUILD): unknown {
-  return { join: () => undefined, guild: { id: guildId } };
+  return { type: 2, join: () => undefined, guild: { id: guildId } };
 }
 
 /** An Eris client holding one guild's voice channel and, once joined, one connection. */

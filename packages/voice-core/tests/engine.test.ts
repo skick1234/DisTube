@@ -10,6 +10,7 @@ vi.mock("@discordjs/voice", async () => (await import("./support/native")).voice
 const OPTIONS = {
   guildId: "guild",
   channelId: CHANNEL,
+  clientUserId: "bot",
   adapterCreator: (() => ({})) as unknown as DiscordGatewayAdapterCreator,
   selfDeaf: true,
   selfMute: false,

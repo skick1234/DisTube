@@ -1,9 +1,8 @@
 import type { FfmpegFilterDefinitions } from "@distube/voice-core/core";
 import type { Adapter, Engine, VoiceSession, VoiceTarget } from "distube";
 import type { Client } from "eris";
-import { ErisVoiceEngine } from "./engine";
+import { ErisVoiceEngine, erisPreflight } from "./engine";
 import { ErisVoiceSession } from "./session";
-import { assertGuildVoiceChannel, positiveInteger } from "./validation";
 
 export interface ErisAdapterOptions {
   readonly connectionTimeoutMs?: number;
@@ -19,6 +18,7 @@ export class ErisAdapter implements Adapter {
   readonly #timeout: number;
   readonly #selfDeaf: boolean;
   readonly #selfMute: boolean;
+  readonly #preflight: () => Promise<void>;
 
   constructor(client: Client, options: ErisAdapterOptions = {}) {
     if (!client) throw new TypeError("ErisAdapter requires an Eris Client");
@@ -32,18 +32,28 @@ export class ErisAdapter implements Adapter {
     }
     this.#selfDeaf = options.selfDeaf ?? true;
     this.#selfMute = options.selfMute ?? false;
-    this.engine = new ErisVoiceEngine(options.filters);
+    this.#preflight = erisPreflight("@distube/eris");
+    this.engine = new ErisVoiceEngine(options.filters, this.#preflight);
   }
 
   async createVoiceSession(target: VoiceTarget): Promise<VoiceSession> {
-    assertGuildVoiceChannel(this.#client, target.guildId, target.channelId);
+    ErisVoiceSession.assertTarget(this.#client, target.guildId, target.channelId);
+    const clientUserId = this.#client.user?.id;
+    if (!clientUserId) throw new Error("Eris client user is unavailable");
+    await this.#preflight();
     return ErisVoiceSession.connect({
       client: this.#client,
       guildId: target.guildId,
       channelId: target.channelId,
+      clientUserId,
       selfDeaf: this.#selfDeaf,
       selfMute: this.#selfMute,
       connectionTimeoutMs: this.#timeout,
     });
   }
+}
+
+function positiveInteger(value: number, name: string): number {
+  if (!Number.isInteger(value) || value < 1) throw new TypeError(`${name} must be a positive integer`);
+  return value;
 }

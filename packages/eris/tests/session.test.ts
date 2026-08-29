@@ -15,7 +15,14 @@ import {
   voiceChannel,
 } from "./support/eris";
 
-const OPTIONS = { guildId: GUILD, channelId: CHANNEL, selfDeaf: true, selfMute: false, connectionTimeoutMs: 50 };
+const OPTIONS = {
+  guildId: GUILD,
+  channelId: CHANNEL,
+  clientUserId: "bot",
+  selfDeaf: true,
+  selfMute: false,
+  connectionTimeoutMs: 50,
+};
 
 function connect(client: FakeClient, overrides: Partial<typeof OPTIONS> = {}): Promise<ErisVoiceSession> {
   return ErisVoiceSession.connect({ client: asClient(client), ...OPTIONS, ...overrides });
@@ -36,6 +43,7 @@ describe("connecting", () => {
 
     expect(client.joinVoiceChannel).toHaveBeenCalledWith(CHANNEL, { selfDeaf: true, selfMute: false });
     expect(session.guildId).toBe(GUILD);
+    expect(session.clientUserId).toBe(client.user.id);
     expect(session.channelId).toBe(CHANNEL);
 
     announceServer(client);

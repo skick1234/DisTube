@@ -193,6 +193,27 @@ describe("autoplay", () => {
   });
 });
 
+describe("queue metadata", () => {
+  it("clears metadata at terminal authority and ignores writes from a stale handle", async () => {
+    const { harness, queue } = await playing(["a"]);
+    const beforeDeletion = { requester: "before" };
+    const afterDeletion = { requester: "after" };
+    const reads: unknown[] = [];
+    queue.metadata = beforeDeletion;
+
+    harness.distube.once("queue.deleted", event => {
+      reads.push(event.queue.metadata);
+      event.queue.metadata = afterDeletion;
+      reads.push(event.queue.metadata);
+    });
+    await queue.stop();
+
+    queue.metadata = afterDeletion;
+    expect(reads).toEqual([undefined, undefined]);
+    expect(queue.metadata).toBeUndefined();
+  });
+});
+
 describe("volume and filters", () => {
   it("exposes live queue state through the public facades and skips a redundant clear", async () => {
     const { harness, queue, voice, player } = await playing(["a"]);

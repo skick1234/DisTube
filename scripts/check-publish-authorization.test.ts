@@ -159,7 +159,7 @@ async function createFixture(): Promise<Fixture> {
   const candidate: Candidate = {
     schemaVersion: 3,
     evidenceGeneration: "candidate-evidence-2026",
-    generatedAt: "2026-08-22T00:00:00.000Z",
+    generatedAt: new Date().toISOString(),
     publishAuthorized: false,
     toolchain: { expectedBun: "1.4.0", observedBun: "1.4.0" },
     repositories: [
@@ -199,7 +199,12 @@ async function createFixture(): Promise<Fixture> {
   return { root, repositoryRoot, candidatePath, candidate };
 }
 
-async function inspect(fixture: Fixture, candidate = fixture.candidate, packageName = "distube"): Promise<string[]> {
+async function inspect(
+  fixture: Fixture,
+  candidate = fixture.candidate,
+  packageName = "distube",
+  now = Date.now(),
+): Promise<string[]> {
   await writeCandidate(fixture.candidatePath, candidate);
   return inspectPublishAuthorization({
     workspaceRoot: fixture.root,
@@ -208,6 +213,7 @@ async function inspect(fixture: Fixture, candidate = fixture.candidate, packageN
     packageName,
     archiveOperand: `../.artifacts/release-candidate/core/archives/${archiveName(packageName)}`,
     authorizedCandidateId: String(candidate.candidateId),
+    now,
   });
 }
 
@@ -300,6 +306,35 @@ describe("candidate-backed publish authorization", () => {
       authorizedCandidateId: String(fresh.candidate.candidateId),
     });
     expectError(errors, "archive operand does not exactly match candidate archive path");
+  });
+
+  test("rejects malformed, stale, and future candidate generation timestamps", async () => {
+    const now = Date.parse("2026-08-29T12:00:00.000Z");
+
+    const missing = await createFixture();
+    delete missing.candidate.generatedAt;
+    expectError(await inspect(missing), "unsupported or malformed release candidate");
+
+    const invalid = await createFixture();
+    invalid.candidate.generatedAt = "not-a-timestamp";
+    expectError(
+      await inspect(invalid, invalid.candidate, "distube", now),
+      "release candidate generatedAt: invalid ISO-8601 timestamp",
+    );
+
+    const stale = await createFixture();
+    stale.candidate.generatedAt = new Date(now - 60 * 60 * 1000 - 1).toISOString();
+    expectError(
+      await inspect(stale, stale.candidate, "distube", now),
+      "release candidate generatedAt: timestamp is stale",
+    );
+
+    const future = await createFixture();
+    future.candidate.generatedAt = new Date(now + 1).toISOString();
+    expectError(
+      await inspect(future, future.candidate, "distube", now),
+      "release candidate generatedAt: timestamp is in the future",
+    );
   });
 
   test("rejects stale candidate fingerprints and publish-authorized candidates", async () => {

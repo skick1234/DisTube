@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { type Lockfile, publishedDependencies, reachableProductionPackages } from "./audit-scope";
+import { undispositionedProductionFindings } from "./check-audit";
 
 /** How the core packages are actually shaped: no dependencies, one peer per Discord library. */
 const adapter = { name: "@distube/discordjs", peerDependencies: { "discord.js": "^14.26.0" } };
@@ -48,5 +49,41 @@ describe("reachableProductionPackages", () => {
   test("follows a workspace sibling into its own peers", () => {
     const consumer = { name: "@distube/eris", dependencies: { "@distube/discordjs": "workspace:*" } };
     expect(reachableProductionPackages([consumer, adapter], lockfile).has("discord.js")).toBe(true);
+  });
+});
+
+describe("undispositioned production advisories", () => {
+  const moderate = {
+    id: 101,
+    url: "https://github.com/advisories/GHSA-moderate",
+    title: "moderate production advisory",
+    severity: "moderate",
+    advisory: "GHSA-moderate",
+    package: "discord.js",
+  };
+
+  test("blocks a moderate advisory without an active disposition", () => {
+    expect(undispositionedProductionFindings([moderate], { version: 1, dispositions: [] }, "2026-08-29")).toEqual([
+      moderate,
+    ]);
+    expect(
+      undispositionedProductionFindings(
+        [moderate],
+        {
+          version: 1,
+          dispositions: [
+            {
+              advisory: "GHSA-moderate",
+              package: "discord.js",
+              expires: "2026-08-30",
+              acceptedBy: "release owner",
+              rationale: "temporary mitigation",
+              evidence: "tracked remediation",
+            },
+          ],
+        },
+        "2026-08-29",
+      ),
+    ).toEqual([]);
   });
 });

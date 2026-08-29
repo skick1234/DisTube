@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { ErrorCode, Playlist, type Song } from "../src";
+import { GuildQueueImpl } from "../src/GuildQueue";
 import {
   capture,
   deferred,
@@ -122,6 +123,91 @@ describe("transactional play", () => {
     expect(harness.distube.getQueue(GUILD)).toBeUndefined();
     expect(harness.engine.players).toEqual([]);
     expect(events).toEqual([]);
+  });
+
+  it("passes caller cancellation into insertion after Voice movement", async () => {
+    const harness = playableSetup();
+    const controller = new AbortController();
+    const reason = new Error("caller cancelled after movement");
+    const session = new FakeVoiceSession(GUILD, "other");
+    let moved = false;
+    let insertionSignal: AbortSignal | undefined;
+    session.join.mockImplementationOnce(async channelId => {
+      moved = true;
+      session.channelId = channelId;
+    });
+    harness.adapter.createVoiceSession.mockImplementationOnce(async () => {
+      harness.adapter.sessions.push(session);
+      return session;
+    });
+    const originalEnqueue = GuildQueueImpl.prototype.enqueue;
+    const enqueue = vi.spyOn(GuildQueueImpl.prototype, "enqueue").mockImplementation(function (
+      this: GuildQueueImpl,
+      input,
+      options,
+    ) {
+      expect(moved).toBe(true);
+      insertionSignal = options?.signal;
+      controller.abort(reason);
+      return originalEnqueue.call(this, input, options);
+    });
+    const events = record(harness.distube, ["queue.created", "queue.item.added"]);
+
+    try {
+      const failure = await capture(harness.distube.play(TARGET, "cancelled", { signal: controller.signal }));
+
+      expect(insertionSignal).toBeInstanceOf(AbortSignal);
+      expect(insertionSignal?.aborted).toBe(true);
+      expect(failure).toMatchObject({ code: ErrorCode.QUEUE_FAILED, cause: reason });
+      expect(failure).not.toBe(reason);
+      expect(session.join).toHaveBeenCalledWith(VOICE_CHANNEL);
+      expect(events).toEqual([]);
+      expect(harness.distube.getQueue(GUILD)).toBeUndefined();
+      expect(session.release).toHaveBeenCalledTimes(1);
+    } finally {
+      enqueue.mockRestore();
+      await harness.distube.shutdown().catch(() => undefined);
+    }
+  });
+
+  it("keeps a Voice a concurrent join is awaiting after first play rolls back", async () => {
+    const harness = playableSetup();
+    const firstMoveStarted = deferred<void>();
+    const finishFirstMove = deferred<void>();
+    const joinedMoveStarted = deferred<void>();
+    const finishJoinedMove = deferred<void>();
+    const session = new FakeVoiceSession(GUILD, "other");
+    let moves = 0;
+    session.join.mockImplementation(async channelId => {
+      moves += 1;
+      if (moves === 1) {
+        firstMoveStarted.resolve();
+        await finishFirstMove.promise;
+      } else {
+        joinedMoveStarted.resolve();
+        await finishJoinedMove.promise;
+      }
+      session.channelId = channelId;
+    });
+    harness.adapter.createVoiceSession.mockImplementationOnce(async () => {
+      harness.adapter.sessions.push(session);
+      return session;
+    });
+    const controller = new AbortController();
+    const first = capture(harness.distube.play(TARGET, "first", { signal: controller.signal }));
+
+    await firstMoveStarted.promise;
+    const joining = harness.distube.voices.join({ guildId: GUILD, channelId: "joined" });
+    controller.abort(new Error("first play failed"));
+    finishFirstMove.resolve();
+    await joinedMoveStarted.promise;
+    finishJoinedMove.resolve();
+
+    expect(await first).toMatchObject({ code: ErrorCode.QUEUE_FAILED });
+    await expect(joining).resolves.toMatchObject({ guildId: GUILD, channelId: "joined" });
+    expect(harness.distube.voices.get(GUILD)?.channelId).toBe("joined");
+    expect(session.release).not.toHaveBeenCalled();
+    await harness.distube.shutdown();
   });
 
   it("serializes concurrent first plays and preserves the second call after the first fails", async () => {

@@ -25,7 +25,7 @@ import { playbackRequest } from "./validation";
 const START_TIMEOUT_MS = 15_000;
 
 /** States in which the audio player holds a resource without consuming it. */
-const PAUSED_STATES: ReadonlySet<AudioPlayerStatus> = new Set([AudioPlayerStatus.Paused, AudioPlayerStatus.AutoPaused]);
+const HELD_STATES: ReadonlySet<AudioPlayerStatus> = new Set([AudioPlayerStatus.Paused, AudioPlayerStatus.AutoPaused]);
 
 /** One track a Player holds, across however many decodes its filters need. */
 interface ActiveTrack {
@@ -80,6 +80,8 @@ export class DiscordVoicePlayer implements Player {
   /** Decoders stopped by ordinary track work still belong to a later terminal release until they close. */
   readonly #retiringStreams = new Set<FfmpegStream>();
   #track?: ActiveTrack;
+  /** Only explicit Player controls carry pause intent. AutoPaused is transport state. */
+  #pauseIntent = false;
   #volume = 100;
   #chain?: string;
   #replacement?: Replacement;
@@ -136,11 +138,13 @@ export class DiscordVoicePlayer implements Player {
   async pause(): Promise<void> {
     this.#assertOpen();
     if (!this.#player.pause(true)) throw new Error("Discord audio player could not pause");
+    this.#pauseIntent = true;
   }
 
   async resume(): Promise<void> {
     this.#assertOpen();
     if (!this.#player.unpause()) throw new Error("Discord audio player could not resume");
+    this.#pauseIntent = false;
   }
 
   /** Ends the active track, leaving the Player and its voice connection ready for the next one. */
@@ -179,7 +183,7 @@ export class DiscordVoicePlayer implements Player {
     const previousChain = this.#chain;
     const seconds = this.position;
     const previous = track.stream;
-    const paused = PAUSED_STATES.has(this.#player.state.status);
+    const paused = this.#pauseIntent;
     const candidate = this.#decode(track.url, seconds, chain);
     const replacement: Replacement = {
       track,
@@ -276,7 +280,7 @@ export class DiscordVoicePlayer implements Player {
   }
 
   /** Hands a decode to the audio player, keeping an explicit pause across a mid-track swap. */
-  #handOff(resource: AudioResource, paused = PAUSED_STATES.has(this.#player.state.status)): void {
+  #handOff(resource: AudioResource, paused = this.#pauseIntent): void {
     this.#player.play(resource);
     if (paused) this.#player.pause(true);
   }
@@ -317,7 +321,7 @@ export class DiscordVoicePlayer implements Player {
 
   /** Resolves once the audio player took a decode, whether it plays it or holds it without a subscriber. */
   async #awaitStart(stream: FfmpegStream, signal?: StartSignal): Promise<void> {
-    if (PAUSED_STATES.has(this.#player.state.status)) return;
+    if (HELD_STATES.has(this.#player.state.status)) return;
     const decodeFailure = stream.outcome.then(outcome => {
       if (!finishedFfmpeg(outcome)) throw ffmpegFailure(outcome);
       // A tiny valid decode can finish while AudioPlayer commits its last frame. Let its state decide
@@ -428,15 +432,16 @@ export class DiscordVoicePlayer implements Player {
   };
 
   readonly #onPlayerError = (error: AudioPlayerError): void => {
+    const failure = audioPlayerFailure(error);
     const replacement = this.#replacement;
     if (replacement?.resource === error.resource) {
-      replacement.start.fail(error);
+      replacement.start.fail(failure);
       return;
     }
     const track = this.#track;
     if (!track || track.resource !== error.resource) return;
-    if (!track.started) track.start.fail(error);
-    this.#fail(track, error);
+    if (!track.started) track.start.fail(failure);
+    this.#fail(track, failure);
   };
 
   readonly #onConnectionStateChange = (_previous: VoiceConnection["state"], next: VoiceConnection["state"]): void => {
@@ -541,6 +546,13 @@ function startSignal(): StartSignal {
 
 function stateResource(state: AudioPlayer["state"]): AudioResource | undefined {
   return "resource" in state ? state.resource : undefined;
+}
+
+/** AudioPlayerError owns a native resource. Copy only the public diagnostic before it reaches core. */
+function audioPlayerFailure(error: AudioPlayerError): Error {
+  const failure = new Error(error.message);
+  failure.name = error.name;
+  return failure;
 }
 
 function filterReplacementFailure(candidate: unknown, rollback: unknown): AggregateError {

@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import { DisTube, DisTubeError, ErrorCode, type Plugin, type PluginContext, type Song } from "../src";
+import { resolveInput } from "../src/playback/resolve";
+import { findCandidates, newSearchChain } from "../src/playback/search";
+import { createSourceCatalog } from "../src/playback/sources";
 import {
   capture,
   deferred,
@@ -97,6 +100,40 @@ describe("client construction", () => {
     expect(second.dispose).not.toHaveBeenCalled();
   });
 
+  it("preserves initialization failure when rollback disposal throws synchronously", () => {
+    const first = new FakeSource("first");
+    const second = new FakeSource("second");
+    const failing = new FakeSource("failing");
+    const initializationFailure = new Error("initialization failed");
+    const disposalFailure = new Error("synchronous rollback disposal failed");
+    const diagnostics = vi.fn();
+    failing.initialize.mockImplementation(() => {
+      throw initializationFailure;
+    });
+    second.dispose.mockImplementation(() => {
+      throw disposalFailure;
+    });
+
+    let failure: unknown;
+    try {
+      new DisTube({ adapter: new FakeAdapter(), plugins: [first, second, failing], onDiagnostic: diagnostics });
+    } catch (error: unknown) {
+      failure = error;
+    }
+
+    expect(failure).toMatchObject({ code: ErrorCode.PLUGIN_FAILED, cause: initializationFailure });
+    expect(second.dispose).toHaveBeenCalledTimes(1);
+    expect(first.dispose).toHaveBeenCalledTimes(1);
+    expect(failing.dispose).not.toHaveBeenCalled();
+    expect(diagnostics).toHaveBeenCalledWith(
+      expect.objectContaining({
+        stage: "plugin.initialize.rollback",
+        plugin: "second",
+        error: disposalFailure,
+      }),
+    );
+  });
+
   it("reports late initialization and rollback rejections without hiding the construction error", async () => {
     const initialized = new FakeSource("initialized");
     const asynchronous = new FakeSource("asynchronous");
@@ -129,7 +166,7 @@ describe("client construction", () => {
 });
 
 describe("source routing", () => {
-  it("resolves media without creating queue or voice state and preserves a caller signal", async () => {
+  it("resolves media without creating queue or voice state and gives sources cancellable signals", async () => {
     const harness = playableSetup();
     const controller = new AbortController();
 
@@ -138,14 +175,88 @@ describe("source routing", () => {
     await expect(harness.distube.resolve(mediaUrl("second"), { signal: controller.signal })).resolves.toMatchObject({
       id: "second",
     });
+    const callerSignal = harness.source.resolve.mock.calls[1]?.[1]?.signal;
 
     expect(generatedSignal).toBeInstanceOf(AbortSignal);
     expect(generatedSignal).not.toBe(controller.signal);
-    expect(harness.source.resolve.mock.calls[1]?.[1]?.signal).toBe(controller.signal);
+    expect(callerSignal).toBeInstanceOf(AbortSignal);
+    expect(callerSignal).not.toBe(controller.signal);
+    expect(callerSignal?.aborted).toBe(false);
     expect(harness.distube.queues.size).toBe(0);
     expect(harness.distube.voices.size).toBe(0);
     expect(harness.adapter.createVoiceSession).not.toHaveBeenCalled();
     expect(harness.engine.createPlayer).not.toHaveBeenCalled();
+  });
+
+  it("aborts an in-flight standalone resolution before it consults another source at shutdown", async () => {
+    const first = new FakeSource("first");
+    const second = new FakeSource("second");
+    const response = deferred<Song | undefined>();
+    first.resolve.mockReturnValueOnce(response.promise);
+    const harness = setup([first, second]);
+    const resolving = capture(harness.distube.resolve(mediaUrl("race")));
+
+    await settle();
+    expect(first.resolve).toHaveBeenCalledTimes(1);
+    const shutdown = harness.distube.shutdown();
+    response.resolve(undefined);
+
+    expect(await resolving).toMatchObject({ code: ErrorCode.QUEUE_FAILED });
+    expect(second.resolve).not.toHaveBeenCalled();
+    await shutdown;
+  });
+
+  it("fences a reentrant resolution started by an aborting source", async () => {
+    const first = new FakeSource("first");
+    const harness = setup([first]);
+    const reentered = deferred<Error>();
+    first.resolve.mockImplementation(
+      (_url, options) =>
+        new Promise(resolve => {
+          options?.signal?.addEventListener(
+            "abort",
+            () => {
+              void harness.distube.resolve(mediaUrl("reentrant")).then(
+                () => reentered.reject(new Error("reentrant resolution unexpectedly succeeded")),
+                error => reentered.resolve(error as Error),
+              );
+              resolve(undefined);
+            },
+            { once: true },
+          );
+        }),
+    );
+    const resolving = capture(harness.distube.resolve(mediaUrl("first")));
+
+    await settle();
+    const shutdown = harness.distube.shutdown();
+
+    expect(await resolving).toMatchObject({ code: ErrorCode.QUEUE_FAILED });
+    await expect(reentered.promise).resolves.toMatchObject({ code: ErrorCode.QUEUE_FAILED });
+    expect(first.resolve).toHaveBeenCalledTimes(1);
+    await shutdown;
+  });
+
+  it("stops pre-aborted URL and search resolution before either source loop", async () => {
+    const source = new FakeSource("source");
+    const catalog = createSourceCatalog([source]);
+    const urlController = new AbortController();
+    urlController.abort(new Error("URL cancelled"));
+
+    await expect(resolveInput(mediaUrl("cancelled"), catalog, urlController.signal)).rejects.toMatchObject({
+      code: ErrorCode.QUEUE_FAILED,
+    });
+
+    const searchController = new AbortController();
+    searchController.abort(new Error("search cancelled"));
+    await expect(
+      findCandidates("cancelled", catalog, searchController.signal, newSearchChain(), 1),
+    ).rejects.toMatchObject({
+      code: ErrorCode.QUEUE_FAILED,
+    });
+
+    expect(source.resolve).not.toHaveBeenCalled();
+    expect(source.search).not.toHaveBeenCalled();
   });
 
   it("passes a declined URL to the next configured source", async () => {
@@ -158,6 +269,31 @@ describe("source routing", () => {
 
     expect(first.resolve).toHaveBeenCalledTimes(1);
     expect(items[0]?.song.source).toBe("second");
+  });
+
+  it("rejects malformed resolve results before standalone resolution or queue insertion", async () => {
+    const harness = playableSetup();
+    const { queue } = await harness.distube.play(TARGET, "seed");
+    await settle();
+    const added = vi.fn();
+    harness.distube.on("queue.item.added", added);
+    const malformed = [[media("source", "array")], null, { id: "object" }, false] as const;
+
+    for (const result of malformed) {
+      harness.source.resolve.mockResolvedValueOnce(result as never);
+      await expect(harness.distube.resolve(mediaUrl("malformed"))).rejects.toMatchObject({
+        code: ErrorCode.PLUGIN_FAILED,
+        message: expect.stringContaining("source"),
+      });
+    }
+
+    harness.source.resolve.mockResolvedValueOnce(malformed[0] as never);
+    await expect(queue.enqueue(mediaUrl("malformed"))).rejects.toMatchObject({
+      code: ErrorCode.PLUGIN_FAILED,
+      message: expect.stringContaining("source"),
+    });
+    expect(added).not.toHaveBeenCalled();
+    expect(queue.state.items).toEqual([]);
   });
 
   it("maps a source failure to SOURCE_FAILED, keeping an incompatible DisTubeError as the cause", async () => {
@@ -350,6 +486,24 @@ describe("cancellation", () => {
     expect(failure.code).toBe(ErrorCode.QUEUE_FAILED);
     expect(failure.cause).toBe(reason);
     expect(queue.state.items).toEqual([]);
+    await harness.distube.shutdown();
+  });
+
+  it("wraps a caller-supplied DisTubeError abort reason in a distinct error", async () => {
+    const harness = playableSetup();
+    const controller = new AbortController();
+    const reason = new DisTubeError(ErrorCode.QUEUE_FAILED, "caller cancelled");
+    controller.abort(reason);
+
+    const failure = (await capture(
+      harness.distube.resolve("https://provider.example/a", { signal: controller.signal }),
+    )) as DisTubeError;
+
+    expect(failure).toBeInstanceOf(DisTubeError);
+    expect(failure).not.toBe(reason);
+    expect(failure.code).toBe(ErrorCode.QUEUE_FAILED);
+    expect(failure.cause).toBe(reason);
+    expect(harness.source.resolve).not.toHaveBeenCalled();
     await harness.distube.shutdown();
   });
 

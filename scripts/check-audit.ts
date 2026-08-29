@@ -1,16 +1,16 @@
 import { join } from "node:path";
 import { type Lockfile, type PackageManifest, reachableProductionPackages } from "./audit-scope";
 
-type AuditAdvisory = {
+export type AuditAdvisory = {
   readonly id: number;
   readonly url: string;
   readonly title: string;
   readonly severity: string;
 };
 
-type AuditResult = Readonly<Record<string, readonly AuditAdvisory[]>>;
+export type AuditResult = Readonly<Record<string, readonly AuditAdvisory[]>>;
 
-type AuditDisposition = {
+export type AuditDisposition = {
   readonly advisory: string;
   readonly package: string;
   readonly expires: string;
@@ -19,19 +19,17 @@ type AuditDisposition = {
   readonly evidence: string;
 };
 
-type AuditPolicy = {
+export type AuditPolicy = {
   readonly version: 1;
   readonly dispositions: readonly AuditDisposition[];
 };
 
-type Finding = AuditAdvisory & {
+export type Finding = AuditAdvisory & {
   readonly advisory: string;
   readonly package: string;
 };
 
 const root = process.cwd();
-const seriousSeverities = new Set(["high", "critical"]);
-
 function writeLine(message: string): void {
   process.stdout.write(`${message}\n`);
 }
@@ -119,14 +117,25 @@ function flatten(result: AuditResult): Finding[] {
     .sort((left, right) => left.package.localeCompare(right.package) || left.advisory.localeCompare(right.advisory));
 }
 
-function activeDisposition(finding: Finding, policy: AuditPolicy): AuditDisposition | undefined {
-  const today = new Date().toISOString().slice(0, 10);
+function activeDisposition(
+  finding: Finding,
+  policy: AuditPolicy,
+  today = new Date().toISOString().slice(0, 10),
+): AuditDisposition | undefined {
   return policy.dispositions.find(
     disposition =>
       disposition.package === finding.package &&
       (disposition.advisory === finding.advisory || disposition.advisory === String(finding.id)) &&
       disposition.expires >= today,
   );
+}
+
+export function undispositionedProductionFindings(
+  findings: readonly Finding[],
+  policy: AuditPolicy,
+  today = new Date().toISOString().slice(0, 10),
+): Finding[] {
+  return findings.filter(finding => !activeDisposition(finding, policy, today));
 }
 
 function printFindings(title: string, findings: readonly Finding[], policy?: AuditPolicy): void {
@@ -147,9 +156,7 @@ async function main(): Promise<void> {
   const findings = flatten(result);
   const productionFindings = findings.filter(finding => production.has(finding.package));
   const toolingFindings = findings.filter(finding => !production.has(finding.package));
-  const blocked = productionFindings.filter(
-    finding => seriousSeverities.has(finding.severity) && !activeDisposition(finding, policy),
-  );
+  const blocked = undispositionedProductionFindings(productionFindings, policy);
 
   writeLine(`Dependency audit classified ${findings.length} finding(s).`);
   printFindings("Production findings", productionFindings, policy);
@@ -157,12 +164,14 @@ async function main(): Promise<void> {
 
   if (blocked.length > 0) {
     throw new Error(
-      `${blocked.length} production high/critical advisory finding(s) require resolution or an accepted unexpired disposition`,
+      `${blocked.length} undispositioned production advisory finding(s) require resolution or an accepted unexpired disposition`,
     );
   }
 }
 
-main().catch((error: unknown) => {
-  process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
-  process.exitCode = 1;
-});
+if (import.meta.main) {
+  main().catch((error: unknown) => {
+    process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+    process.exitCode = 1;
+  });
+}

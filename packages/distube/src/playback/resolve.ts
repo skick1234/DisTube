@@ -4,7 +4,7 @@ import { asDisTubeError, DisTubeError, ErrorCode } from "../errors";
 import { Playlist, Song } from "../media";
 import { throwIfAborted } from "./abort";
 import { exhaustedChain, findCandidates, newSearchChain } from "./search";
-import { requireSongOwner, type SourceCatalog, validateSourceSongs } from "./sources";
+import { requireSongOwner, type SourceCatalog, validateResolvedMedia, validateSourceSongs } from "./sources";
 
 /** How many of a source's ranked candidates query resolution consumes. */
 const QUERY_CANDIDATES = 1;
@@ -22,6 +22,7 @@ export async function resolveInput(
   sources: SourceCatalog,
   signal: AbortSignal,
 ): Promise<Song | Playlist> {
+  throwIfAborted(signal);
   if (input instanceof Song) {
     requireSongOwner(input, sources);
     throwIfAborted(signal);
@@ -55,8 +56,9 @@ function isAbsoluteUrl(input: string): boolean {
 }
 
 async function resolveUrl(url: string, sources: SourceCatalog, signal: AbortSignal): Promise<Song | Playlist> {
+  throwIfAborted(signal);
   for (const plugin of sources.ordered) {
-    let result: Song | Playlist | undefined;
+    let result: unknown;
     try {
       result = await plugin.resolve(url, { signal });
     } catch (error: unknown) {
@@ -64,9 +66,10 @@ async function resolveUrl(url: string, sources: SourceCatalog, signal: AbortSign
       throw asDisTubeError(ErrorCode.SOURCE_FAILED, `${plugin.name} failed to resolve source`, error);
     }
     throwIfAborted(signal);
-    if (!result) continue;
-    validateSourceSongs(result, plugin, "resolve");
-    return result;
+    if (result === undefined) continue;
+    const media = validateResolvedMedia(result, plugin);
+    validateSourceSongs(media, plugin, "resolve");
+    return media;
   }
   throw new DisTubeError(ErrorCode.SOURCE_FAILED, "No SourcePlugin resolved the source");
 }
@@ -75,6 +78,7 @@ async function resolveUrl(url: string, sources: SourceCatalog, signal: AbortSign
 async function resolveQuery(query: string, sources: SourceCatalog, signal: AbortSignal): Promise<Song> {
   const chain = newSearchChain();
   const hit = await findCandidates(query, sources, signal, chain, QUERY_CANDIDATES);
+  throwIfAborted(signal);
   const song = hit?.candidates[0];
   if (!song) throw exhaustedChain(chain, "No SourcePlugin found a result for the query", "Query searches failed");
   return song;

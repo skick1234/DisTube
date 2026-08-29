@@ -212,7 +212,7 @@ export class FakePlayer implements Player {
   /** Publishes a native outcome to whichever queue currently holds the borrow. */
   emit(event: PlayerEvent): void {
     if (this.#terminal) return;
-    if (this.#currentItem === event.itemId) this.#currentItem = undefined;
+    if (event.type !== "terminal" && this.#currentItem === event.itemId) this.#currentItem = undefined;
     for (const listener of [...this.listeners]) listener(event);
   }
 
@@ -239,6 +239,7 @@ export class FakePlayer implements Player {
 
 /** One guild's voice presence: it survives queue deletion and ends only when released or dropped. */
 export class FakeVoiceSession implements VoiceSession {
+  readonly clientUserId = "bot";
   channelId: string;
   gateway?: VoiceGatewayData;
   readonly listeners = new Set<(event: VoiceSessionEvent) => void>();

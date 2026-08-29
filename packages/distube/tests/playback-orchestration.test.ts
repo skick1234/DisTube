@@ -57,6 +57,34 @@ describe("enqueue commitment", () => {
     const [item] = await succeeds;
     expect(queue.state.items[0] ?? queue.state.current).toBe(item);
   });
+
+  it("rejects a ready enqueue after a listener stops the queue", async () => {
+    const harness = playableSetup();
+    const { queue } = await harness.distube.play(TARGET, "seed");
+    await settle();
+    const first = deferred<Song>();
+    const second = deferred<Song>();
+    harness.source.resolve.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+    const events: string[] = [];
+    let stopping: Promise<void> | undefined;
+    harness.distube
+      .on("queue.item.added", event => {
+        events.push(`added:${event.item.song.id}`);
+        if (event.item.song.id === "first") stopping = event.queue.stop();
+      })
+      .on("queue.deleted", () => events.push("deleted"));
+
+    const firstEnqueue = queue.enqueue(mediaUrl("first"));
+    const secondEnqueue = capture(queue.enqueue(mediaUrl("second")));
+    second.resolve(media("source", "second"));
+    first.resolve(media("source", "first"));
+
+    await expect(firstEnqueue).resolves.toHaveLength(1);
+    expect(await secondEnqueue).toMatchObject({ code: ErrorCode.QUEUE_FAILED });
+    expect(stopping).toBeDefined();
+    await stopping;
+    expect(events).toEqual(["added:first", "deleted"]);
+  });
 });
 
 describe("playback preparation", () => {
@@ -124,6 +152,36 @@ describe("playback preparation", () => {
     expect(failed).not.toHaveBeenCalled();
     expect(dispose).toHaveBeenCalledTimes(1);
     expect(harness.diagnostics).toHaveBeenCalled();
+  });
+
+  it("rejects terminal cleanup when stop overlaps an outcome disposal", async () => {
+    const harness = playableSetup();
+    const disposal = deferred<void>();
+    const disposalError = new Error("dispose failed");
+    const dispose = vi.fn(() => disposal.promise);
+    harness.source.preparePlayback.mockResolvedValue({
+      kind: "resource",
+      resource: { kind: "url", url: "https://stream.example/disposal", dispose },
+    });
+    const deleted = vi.fn();
+    harness.distube.on("queue.deleted", deleted);
+    const { queue } = await harness.distube.play(TARGET, "a");
+    await settle();
+
+    (harness.engine.players[0] as FakePlayer).finish();
+    await settle();
+    expect(dispose).toHaveBeenCalledTimes(1);
+
+    let settled = false;
+    const stopping = queue.stop().finally(() => {
+      settled = true;
+    });
+    await settle();
+    expect(settled).toBe(false);
+
+    disposal.reject(disposalError);
+    await expect(stopping).rejects.toMatchObject({ code: ErrorCode.VOICE_FAILED, cause: disposalError });
+    expect(deleted).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -199,6 +257,27 @@ describe("explicit fallback", () => {
       "youtube search",
       ...candidates.slice(0, 5).map(song => `prepare ${song.id}`),
     ]);
+  });
+
+  it("deduplicates repeated Error instances in fallback exhaustion", async () => {
+    const spotify = new FakeSource("spotify");
+    const youtube = new FakeSource("youtube");
+    const soundcloud = new FakeSource("soundcloud");
+    const repeated = new Error("shared provider failure");
+    spotify.preparePlayback.mockResolvedValue({ kind: "search", query: "query" });
+    youtube.search.mockRejectedValue(repeated);
+    soundcloud.search.mockResolvedValue([media("soundcloud", "candidate")]);
+    soundcloud.preparePlayback.mockRejectedValue(repeated);
+    const harness = setup([spotify, youtube, soundcloud]);
+    const failed = vi.fn();
+    harness.distube.on("queue.item.failed", failed);
+
+    await harness.distube.play(TARGET, media("spotify", "original"));
+    await settle();
+
+    const error = failed.mock.calls[0]?.[0].error;
+    expect(error).toMatchObject({ code: ErrorCode.SOURCE_FAILED, cause: expect.any(AggregateError) });
+    expect((error.cause as AggregateError).errors).toEqual([repeated]);
   });
 
   it("asks for five candidates where query resolution asks for one", async () => {

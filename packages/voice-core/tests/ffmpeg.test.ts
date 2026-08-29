@@ -26,7 +26,21 @@ describe("FFmpeg diagnostics", () => {
     latest.child.emit("error", failure);
     latest.child.close(1, null);
 
-    await expect(stream.outcome).resolves.toMatchObject({ code: null, signal: null, error: failure });
+    const outcome = await stream.outcome;
+    expect(outcome).toMatchObject({ code: null, signal: null, error: failure });
+    expect(ffmpegFailure(outcome).cause).toBe(failure);
+  });
+
+  it("keeps the latest bounded stderr tail", async () => {
+    const stream = spawnFfmpeg("https://stream.example/audio", 0);
+    latest.child.stderr.write(`discarded-prefix-${"x".repeat(5_000)}`);
+    latest.child.stderr.write("latest-stderr-tail");
+    latest.child.close(1, null);
+
+    const outcome = await stream.outcome;
+    expect(outcome.stderr).toContain("latest-stderr-tail");
+    expect(outcome.stderr).not.toContain("discarded-prefix");
+    expect(Buffer.byteLength(outcome.stderr, "utf8")).toBeLessThanOrEqual(4096);
   });
 
   it("reports a signal exit as a decoder failure", async () => {

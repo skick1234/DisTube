@@ -48,6 +48,7 @@ export async function findCandidates(
   chain: SearchChain,
   limit: number,
 ): Promise<SearchHit | undefined> {
+  throwIfAborted(signal);
   for (const source of sources.ordered) {
     throwIfAborted(signal);
     if (chain.visited.has(source.name) || chain.searched.has(source.name)) continue;
@@ -71,9 +72,12 @@ export async function findCandidates(
 
 /** The one failure an exhausted chain produces, carrying whatever causes it recorded and nothing more. */
 export function exhaustedChain(chain: SearchChain, message: string, aggregateMessage: string): DisTubeError {
+  // A nested candidate path can expose the same Error object more than once. Preserve first-attempt
+  // order while reporting each distinct cause once.
+  const failures = [...new Set(chain.failures)];
   return new DisTubeError(
     ErrorCode.SOURCE_FAILED,
     message,
-    chain.failures.length > 0 ? { cause: new AggregateError(chain.failures, aggregateMessage) } : undefined,
+    failures.length > 0 ? { cause: new AggregateError(failures, aggregateMessage) } : undefined,
   );
 }

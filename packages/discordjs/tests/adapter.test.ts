@@ -1,22 +1,51 @@
 import { VoiceConnectionStatus } from "@discordjs/voice";
 import type { Client } from "discord.js";
-import { ErrorCode, Filters, type PlaybackRequest, type VoiceSession } from "distube";
+import { DisTubeError, ErrorCode, Filters, type PlaybackRequest, type VoiceSession } from "distube";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { DiscordJSAdapter } from "../src";
 import { CHANNEL, connection, GATEWAY, native, resetNative, settle } from "./support/native";
 
+const { preflight, preflightFactory } = vi.hoisted(() => {
+  const preflight = vi.fn(async (): Promise<void> => undefined);
+  const preflightFactory = vi.fn((_owner: string) => preflight);
+  return { preflight, preflightFactory };
+});
+
 vi.mock("@discordjs/voice", async () => (await import("./support/native")).voiceModule());
+vi.mock("@distube/voice-core/discord", async importOriginal => {
+  const actual = await importOriginal<typeof import("@distube/voice-core/discord")>();
+  return { ...actual, discordPreflight: preflightFactory };
+});
 
 const GUILD = "guild";
 const TARGET = { guildId: GUILD, channelId: CHANNEL };
+const CLIENT_USER_ID = "bot";
 const adapterCreator = () => ({});
 
-/** A client that owns exactly one guild, which is all the adapter reads from it. */
-function client(guilds: Iterable<[string, unknown]> = [[GUILD, { voiceAdapterCreator: adapterCreator }]]): Client {
-  return { guilds: { cache: new Map(guilds) } } as unknown as Client;
+/** A cached Discord channel in the small shape the Adapter needs to validate. */
+function voiceChannel(guildId = GUILD): unknown {
+  return { guildId, isVoiceBased: (): boolean => true };
 }
 
-beforeEach(resetNative);
+function textChannel(guildId = GUILD): unknown {
+  return { guildId, isVoiceBased: (): boolean => false };
+}
+
+function guild(channels: Iterable<[string, unknown]> = [[CHANNEL, voiceChannel()]]): unknown {
+  return { voiceAdapterCreator: adapterCreator, channels: { cache: new Map(channels) } };
+}
+
+/** A client that owns exactly one cached guild, channel, and connected bot identity. */
+function client(guilds: Iterable<[string, unknown]> = [[GUILD, guild()]]): Client {
+  return { user: { id: CLIENT_USER_ID }, guilds: { cache: new Map(guilds) } } as unknown as Client;
+}
+
+beforeEach(() => {
+  resetNative();
+  preflight.mockReset();
+  preflight.mockResolvedValue(undefined);
+  preflightFactory.mockClear();
+});
 
 describe("adapter", () => {
   it("requires a client and a positive connection timeout", () => {
@@ -29,6 +58,30 @@ describe("adapter", () => {
     const adapter = new DiscordJSAdapter(client([]));
 
     await expect(adapter.createVoiceSession(TARGET)).rejects.toThrow(`Discord guild is unavailable: ${GUILD}`);
+    expect(native.joinVoiceChannel).not.toHaveBeenCalled();
+  });
+
+  it("validates missing, text, and cross-guild channels before touching voice", async () => {
+    const cases: readonly [Iterable<[string, unknown]>, string][] = [
+      [[], `Discord voice channel is unavailable: ${CHANNEL}`],
+      [[[CHANNEL, textChannel()]], `Discord channel is not voice-capable: ${CHANNEL}`],
+      [[[CHANNEL, voiceChannel("other-guild")]], `does not belong to guild ${GUILD}`],
+    ];
+
+    for (const [channels, message] of cases) {
+      const adapter = new DiscordJSAdapter(client([[GUILD, guild(channels)]]));
+      await expect(adapter.createVoiceSession(TARGET)).rejects.toThrow(message);
+    }
+
+    expect(native.joinVoiceChannel).not.toHaveBeenCalled();
+  });
+
+  it("runs prerequisite preflight before creating a native voice connection", async () => {
+    const failure = new DisTubeError(ErrorCode.VOICE_FAILED, "@distube/discordjs requires sodium");
+    preflight.mockRejectedValueOnce(failure);
+    const adapter = new DiscordJSAdapter(client());
+
+    await expect(adapter.createVoiceSession(TARGET)).rejects.toBe(failure);
     expect(native.joinVoiceChannel).not.toHaveBeenCalled();
   });
 
@@ -46,6 +99,7 @@ describe("adapter", () => {
     });
     expect(native.entersState).toHaveBeenCalledWith(connection(), VoiceConnectionStatus.Ready, 200);
     expect(session.guildId).toBe(GUILD);
+    expect(session.clientUserId).toBe(CLIENT_USER_ID);
     expect(session.gateway).toEqual(GATEWAY);
   });
 });

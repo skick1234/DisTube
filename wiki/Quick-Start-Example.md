@@ -7,6 +7,10 @@ import { SpotifyPlugin } from "@distube/spotify";
 import { YouTubePlugin } from "@distube/youtube";
 import { DisTube, Events } from "distube";
 
+declare const client: ConstructorParameters<typeof DiscordJSAdapter>[0];
+declare const guildId: string;
+declare const voiceChannelId: string;
+
 const youtube = new YouTubePlugin();
 const spotify = new SpotifyPlugin();
 const soundcloud = new SoundCloudPlugin();

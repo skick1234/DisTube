@@ -84,7 +84,7 @@ export class GuildQueueImpl implements GuildQueue {
   readonly #queueId: string;
   readonly guildId: string;
   /** Caller-owned slot; core never reads, writes, or interprets it. Released when the queue is deleted. */
-  metadata: unknown;
+  #metadata: unknown;
   readonly #sources: SourceCatalog;
   readonly #events: DisTubeEventEmitter;
   /** Frees the guild and hands the registry this deletion's completion so shutdown can join it. */
@@ -195,6 +195,14 @@ export class GuildQueueImpl implements GuildQueue {
     return this.#state;
   }
 
+  get metadata(): unknown {
+    return this.#destroyRequested ? undefined : this.#metadata;
+  }
+
+  set metadata(value: unknown) {
+    if (!this.#destroyRequested) this.#metadata = value;
+  }
+
   /** Elapsed seconds of the current occurrence, or `0` when nothing is playing. */
   get currentTime(): number {
     const active = this.#active;
@@ -275,6 +283,7 @@ export class GuildQueueImpl implements GuildQueue {
     // Reentrant terminal callers must join before the first terminal event can invoke listeners.
     this.#terminalPromise = terminal;
     this.#destroyRequested = true;
+    this.#metadata = undefined;
     this.#detachAutoplayListener();
     this.#leaseController.abort(this.#stale());
     this.#cancelEnqueues();
@@ -319,12 +328,10 @@ export class GuildQueueImpl implements GuildQueue {
       .then(
         () => {
           this.#terminalSettled = true;
-          this.metadata = undefined;
           resolveTerminal();
         },
         (error: unknown) => {
           this.#terminalSettled = true;
-          this.metadata = undefined;
           rejectTerminal(error);
         },
       );
@@ -431,6 +438,11 @@ export class GuildQueueImpl implements GuildQueue {
   #drainEnqueues(completions: readonly EnqueueCompletion[]): void {
     for (const completion of completions) {
       const { operation } = completion;
+      if (this.#destroyRequested) {
+        operation.reject(this.#stale());
+        continue;
+      }
+      this.#enqueues.commit(completion);
       if ("error" in completion) {
         operation.reject(sourceFailure("Source resolution failed", completion.error));
         continue;
@@ -993,16 +1005,15 @@ export class GuildQueueImpl implements GuildQueue {
       try {
         await resource.dispose();
       } catch (error: unknown) {
-        if (propagate) throw error;
+        if (propagate || this.#destroyRequested) throw error;
         this.#report(error, stage);
       }
     });
   }
 
   #disposeThenStart(resource: OwnedPlaybackResource, stage: string): void {
-    void this.#work
-      .start(async () => {
-        await this.#disposeResource(resource, stage);
+    void this.#disposeResource(resource, stage)
+      .then(() => {
         this.#mailbox.post({ type: "start" });
       })
       .catch(error => this.#report(error, stage));
@@ -1068,7 +1079,12 @@ export class GuildQueueImpl implements GuildQueue {
   }
 }
 
-const QUEUE_INPUT_CODES = [ErrorCode.INVALID_ARGUMENT, ErrorCode.SOURCE_FAILED, ErrorCode.QUEUE_FAILED] as const;
+const QUEUE_INPUT_CODES = [
+  ErrorCode.INVALID_ARGUMENT,
+  ErrorCode.SOURCE_FAILED,
+  ErrorCode.PLUGIN_FAILED,
+  ErrorCode.QUEUE_FAILED,
+] as const;
 const PLAYER_CODES = [ErrorCode.VOICE_FAILED, ErrorCode.UNSUPPORTED, ErrorCode.QUEUE_FAILED] as const;
 
 /** Maps source resolution failures to the codes queue input accepts. */

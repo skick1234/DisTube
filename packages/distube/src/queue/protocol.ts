@@ -95,7 +95,3 @@ export type QueueMessage =
       reject: (error: unknown) => void;
     }>
   | Readonly<{ type: "advance"; mode: AdvanceMode; resolve: () => void; reject: (error: unknown) => void }>;
-
-export type QueueControl = "pause" | "resume" | "seek";
-
-export type LeaseEffectResult = Readonly<{ error?: unknown }>;

@@ -11,6 +11,7 @@ const GUILD = "guild";
 const OPTIONS = {
   guildId: GUILD,
   channelId: CHANNEL,
+  clientUserId: "bot",
   adapterCreator: (() => ({})) as unknown as DiscordGatewayAdapterCreator,
   selfDeaf: true,
   selfMute: false,
@@ -33,6 +34,7 @@ describe("session lifecycle", () => {
     );
     expect(native.entersState).toHaveBeenCalledWith(latest.connection, VoiceConnectionStatus.Ready, 50);
     expect(session.guildId).toBe(GUILD);
+    expect(session.clientUserId).toBe("bot");
     expect(session.channelId).toBe(CHANNEL);
     expect(session.gateway).toEqual(GATEWAY);
   });

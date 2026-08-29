@@ -2,7 +2,7 @@ import type { DiscordGatewayAdapterCreator } from "@discordjs/voice";
 import type { FfmpegFilterDefinitions } from "@distube/voice-core/core";
 import { DiscordVoiceEngine, DiscordVoiceSession, discordPreflight } from "@distube/voice-core/discord";
 import type { Adapter, Engine, VoiceSession, VoiceTarget } from "distube";
-import type { Client } from "oceanic.js";
+import { ChannelTypes, type Client } from "oceanic.js";
 
 export interface OceanicAdapterOptions {
   readonly connectionTimeoutMs?: number;
@@ -14,6 +14,7 @@ export class OceanicAdapter implements Adapter {
   readonly engine: Engine;
   readonly #client: Client;
   readonly #timeout: number;
+  readonly #preflight: () => Promise<void>;
 
   constructor(client: Client, options: OceanicAdapterOptions = {}) {
     if (!client) throw new TypeError("OceanicAdapter requires an Oceanic Client");
@@ -21,17 +22,29 @@ export class OceanicAdapter implements Adapter {
     if (!Number.isInteger(timeout) || timeout < 1) throw new TypeError("connectionTimeoutMs must be positive");
     this.#client = client;
     this.#timeout = timeout;
-    this.engine = new DiscordVoiceEngine(options.filters, discordPreflight("@distube/oceanic"));
+    this.#preflight = discordPreflight("@distube/oceanic");
+    this.engine = new DiscordVoiceEngine(options.filters, this.#preflight);
   }
 
   async createVoiceSession(target: VoiceTarget): Promise<VoiceSession> {
     const guild = this.#client.guilds.get(target.guildId);
     if (!guild) throw new Error(`Oceanic guild is unavailable: ${target.guildId}`);
-    const adapterCreator = Reflect.get(guild, "voiceAdapterCreator");
-    if (typeof adapterCreator !== "function") throw new Error("Oceanic guild does not expose a voice adapter creator");
+    const channel = guild.channels.get(target.channelId);
+    if (!channel) throw new Error(`Oceanic voice channel is unavailable: ${target.channelId}`);
+    if (channel.guildID !== target.guildId) {
+      throw new Error(`Oceanic voice channel ${target.channelId} does not belong to guild ${target.guildId}`);
+    }
+    if (channel.type !== ChannelTypes.GUILD_VOICE && channel.type !== ChannelTypes.GUILD_STAGE_VOICE) {
+      throw new Error(`Oceanic channel is not voice-capable: ${target.channelId}`);
+    }
+    const clientUserId = this.#client.user?.id;
+    if (!clientUserId) throw new Error("Oceanic client user is unavailable");
+    const adapterCreator = guild.voiceAdapterCreator;
+    await this.#preflight();
     return DiscordVoiceSession.connect({
       guildId: target.guildId,
       channelId: target.channelId,
+      clientUserId,
       adapterCreator: adapterCreator as DiscordGatewayAdapterCreator,
       selfDeaf: true,
       selfMute: false,

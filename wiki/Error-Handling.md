@@ -28,7 +28,11 @@ That distinction is the one a bot acts on: `Argument` means fix the command pars
 queue is not in a position to do that.
 
 ```ts
-import { ErrorCode, ErrorReason } from "distube";
+import { DisTubeError, ErrorCode, ErrorReason } from "distube";
+import type { GuildQueue } from "distube";
+
+declare const queue: GuildQueue;
+declare const reply: (message: string) => Promise<void>;
 
 try {
   await queue.previous();

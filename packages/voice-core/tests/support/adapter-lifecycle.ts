@@ -13,7 +13,7 @@ import {
 } from "distube";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { DiscordVoiceEngine } from "../../src/engine";
-import { type FakeConnection, latest, native, resetNative, settle } from "./native";
+import { audioPlayerError, type FakeConnection, latest, native, resetNative, settle } from "./native";
 
 const GUILD = "guild";
 const CHANNEL_A = "channel-a";
@@ -115,6 +115,22 @@ export function adapterLifecycleSuite(name: string, createBridge: () => AdapterL
 
       expect(finished).not.toHaveBeenCalled();
     });
+
+    it("does not expose a native AudioResource through queue.item.failed", async () => {
+      const bridge = createBridge();
+      const distube = createDisTube(bridge);
+      const started = waitForStart(distube);
+      const failed = new Promise<Error>(resolve => {
+        distube.once(Events.QueueItemFailed, event => resolve(event.error));
+      });
+      await distube.play({ guildId: GUILD, voiceChannelId: CHANNEL_A }, song("A"));
+      await started;
+      const resource = latest.resource;
+
+      latest.player.emit("error", audioPlayerError(resource, new Error("native audio player failed")));
+
+      expect(causeChainContains(await failed, resource)).toBe(false);
+    });
   });
 }
 
@@ -160,4 +176,14 @@ function waitForStart(distube: DisTube): Promise<void> {
 
 function waitForFailure(distube: DisTube): Promise<void> {
   return new Promise(resolve => distube.once(Events.QueueItemFailed, () => resolve()));
+}
+
+/** The public error chain must never retain the native AudioResource held by AudioPlayerError. */
+function causeChainContains(error: Error, resource: unknown): boolean {
+  let current: Error | undefined = error;
+  while (current) {
+    if (Reflect.get(current, "resource") === resource) return true;
+    current = current.cause instanceof Error ? current.cause : undefined;
+  }
+  return false;
 }

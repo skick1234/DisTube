@@ -53,11 +53,10 @@ export function malformedValue(code: ErrorCode, message: string): DisTubeError {
  * The one public rejection a cancelled operation produces.
  *
  * A platform `DOMException`, an `AbortError`, or a plain string reason is never the thrown value: callers
- * get `QUEUE_FAILED` and read the original through `cause`, which is absent when the reason is not an Error.
- * A `QUEUE_FAILED` reason core aborted with itself passes through, so its own message survives.
+ * get a fresh `QUEUE_FAILED` error and read an Error reason through `cause`, which is absent when the reason is not
+ * an Error. A caller-provided DisTubeError is a cause too, never the rejection itself.
  */
 export function abortFailure(reason: unknown): DisTubeError {
-  if (reason instanceof DisTubeError && reason.code === ErrorCode.QUEUE_FAILED) return reason;
   return new DisTubeError(
     ErrorCode.QUEUE_FAILED,
     "Queue operation was cancelled",

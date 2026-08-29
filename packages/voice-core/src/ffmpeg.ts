@@ -102,21 +102,23 @@ export function ffmpegFailure(outcome: FfmpegOutcome): Error {
     : outcome.signal
       ? `FFmpeg exited from signal ${outcome.signal}`
       : `FFmpeg exited with code ${outcome.code ?? "unknown"}`;
-  return new Error(boundedDiagnostic(outcome.stderr ? `${status}: ${outcome.stderr}` : status));
+  const message = boundedDiagnostic(outcome.stderr ? `${status}: ${outcome.stderr}` : status);
+  return outcome.error ? new Error(message, { cause: outcome.error }) : new Error(message);
 }
 
 /** Captures just enough stderr to explain a failure, then redacts it when the process settles. */
 function captureStderr(stderr: Readable): () => string {
-  const chunks: Buffer[] = [];
-  let size = 0;
+  let tail = Buffer.alloc(0);
   stderr.on("data", (value: string | Buffer) => {
-    if (size >= MAX_STDERR_BYTES) return;
     const chunk = Buffer.isBuffer(value) ? value : Buffer.from(value);
-    const length = Math.min(chunk.length, MAX_STDERR_BYTES - size);
-    chunks.push(chunk.subarray(0, length));
-    size += length;
+    if (chunk.length >= MAX_STDERR_BYTES) {
+      tail = Buffer.from(chunk.subarray(chunk.length - MAX_STDERR_BYTES));
+      return;
+    }
+    const combined = Buffer.concat([tail, chunk]);
+    tail = Buffer.from(combined.subarray(Math.max(0, combined.length - MAX_STDERR_BYTES)));
   });
-  return () => boundedDiagnostic(Buffer.concat(chunks).toString("utf8"));
+  return () => boundedDiagnostic(tail.toString("utf8"));
 }
 
 function boundedDiagnostic(value: string): string {

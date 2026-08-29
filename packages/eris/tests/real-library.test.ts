@@ -43,6 +43,7 @@ describe("real Eris", () => {
       client,
       guildId: GUILD,
       channelId: CHANNEL,
+      clientUserId: "bot",
       selfDeaf: true,
       selfMute: false,
       connectionTimeoutMs: 50,

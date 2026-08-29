@@ -82,13 +82,25 @@ Mechanical mapping — every row is a rename or a merge, not a redesign:
 | `off` could not remove a `once` listener | `off` matches the function you passed either way, and `removeAllListeners(name?)` clears in bulk |
 | one-based `jump` | zero-based everywhere: `enqueue({ position })`, `remove(index)`, `remove({ from, to })`, and `jump(position)` all index the waiting items directly |
 
+## Breaking corrections from the v6 pre-releases
+
+Three contract corrections affect integrations that called provider or adapter APIs directly:
+
+- `SourcePlugin.search` rejects an empty or whitespace-only query with `INVALID_ARGUMENT`. Validate user input or handle
+  that error; an empty result is still the decline response for a valid query.
+- `Engine.accepts` describes the current configuration. Lavalink includes `"url"` only when
+  `trustedUrlLoading: true`; inspect the set before sending a URL resource instead of assuming every engine accepts it.
+- `VoiceSession` now requires the readonly `clientUserId` alongside `guildId` and `channelId`. Custom Adapters must
+  provide the connected bot user's ID so engine Plugins can authenticate without a separate identity option.
+
 ## Adapter and engine authors
 
 Every Adapter supplies the default playback `Engine` alongside `createVoiceSession(target)`. An engine-capable Plugin
 may replace that default. `Engine` exposes `createPlayer(session)` and `resolvable(name)` for filter names. `Player`
 implements `position`, `play({ itemId, resource })`, `pause`, `resume`, `stopTrack`, `seek`, `setVolume`,
-`setFilters(entries)`, `subscribe`, and terminal `release()`. `VoiceSession` implements `guildId`, `channelId`, optional
-`gateway`, `join(channelId)`, `release()`, and `subscribe`. Core applies committed volume and filters to a Player once,
+`setFilters(entries)`, `subscribe`, and terminal `release()`. `VoiceSession` implements `guildId`, the readonly
+`clientUserId`, `channelId`, optional `gateway`, `join(channelId)`, `release()`, and `subscribe`. Core applies committed
+volume and filters to a Player once,
 when it first becomes the guild's playback Player and again only when a value changes or the Engine supplies a
 replacement, so a Player never sees the same effect replayed per track.
 Correlate outcomes to `itemId`, own native resources, and never inspect Song/QueueItem or dispose the borrowed source

@@ -18,6 +18,7 @@ import {
 } from "./events";
 import type { GuildQueue } from "./GuildQueue";
 import type { Playlist, QueueItem, Song } from "./media";
+import { throwIfAborted } from "./playback/abort";
 import { resolveInput } from "./playback/resolve";
 import { createSourceCatalog, type SourceCatalog } from "./playback/sources";
 import { validateSourceName } from "./playback/validation";
@@ -69,6 +70,8 @@ export class DisTube<Metadata = unknown> {
   readonly #voiceManager: VoiceManagerImpl;
   readonly #queues: QueueManager;
   readonly #sources: SourceCatalog;
+  readonly #resolutions = new Set<AbortController>();
+  #shuttingDown = false;
   #shutdownPromise?: Promise<void>;
 
   constructor(options: DisTubeOptions) {
@@ -96,16 +99,22 @@ export class DisTube<Metadata = unknown> {
         initialized.push(plugin);
       }
     } catch (error: unknown) {
-      for (const plugin of initialized.reverse())
-        void Promise.resolve(plugin.dispose()).catch(disposeError =>
-          this.#events.report({
-            severity: "error",
-            stage: "plugin.initialize.rollback",
-            message: `${plugin.name}.dispose failed during initialization rollback`,
-            plugin: plugin.name,
-            error: asError(disposeError),
-          }),
-        );
+      const reportRollbackFailure = (plugin: Plugin, disposeError: unknown): void => {
+        this.#events.report({
+          severity: "error",
+          stage: "plugin.initialize.rollback",
+          message: `${plugin.name}.dispose failed during initialization rollback`,
+          plugin: plugin.name,
+          error: asError(disposeError),
+        });
+      };
+      for (const plugin of initialized.reverse()) {
+        try {
+          void Promise.resolve(plugin.dispose()).catch(disposeError => reportRollbackFailure(plugin, disposeError));
+        } catch (disposeError: unknown) {
+          reportRollbackFailure(plugin, disposeError);
+        }
+      }
       throw asDisTubeError(ErrorCode.PLUGIN_FAILED, "Plugin initialization failed", error);
     }
     this.#plugins = Object.freeze([...options.plugins]);
@@ -143,8 +152,18 @@ export class DisTube<Metadata = unknown> {
    * on their way to `dispose()`, so a resolution begun now would outlive them.
    */
   async resolve(input: ResolvableInput, options: SourceOperationOptions = {}): Promise<Song | Playlist> {
-    if (this.#shutdownPromise) throw new DisTubeError(ErrorCode.QUEUE_FAILED, "DisTube is shutting down");
-    return resolveInput(input, this.#sources, options.signal ?? new AbortController().signal);
+    const controller = new AbortController();
+    const signal = options.signal ? AbortSignal.any([controller.signal, options.signal]) : controller.signal;
+    throwIfAborted(signal);
+    if (this.#shuttingDown) throw this.#shutdownError();
+    this.#resolutions.add(controller);
+    try {
+      const media = await resolveInput(input, this.#sources, signal);
+      throwIfAborted(signal);
+      return media;
+    } finally {
+      this.#resolutions.delete(controller);
+    }
   }
 
   /** The guild's live GuildQueue, or `undefined` once it has been deleted. */
@@ -179,7 +198,11 @@ export class DisTube<Metadata = unknown> {
   }
 
   shutdown(): Promise<void> {
-    this.#shutdownPromise ??= this.#performShutdown();
+    if (!this.#shutdownPromise) {
+      this.#shuttingDown = true;
+      this.#fenceResolutions();
+      this.#shutdownPromise = this.#performShutdown();
+    }
     return this.#shutdownPromise;
   }
 
@@ -205,6 +228,14 @@ export class DisTube<Metadata = unknown> {
         { cause: new AggregateError(failures, "DisTube shutdown cleanup failures") },
       );
     }
+  }
+
+  #fenceResolutions(): void {
+    for (const controller of this.#resolutions) controller.abort(this.#shutdownError());
+  }
+
+  #shutdownError(): DisTubeError {
+    return new DisTubeError(ErrorCode.QUEUE_FAILED, "DisTube is shutting down");
   }
 
   #voiceDisconnected(voice: Voice, reason: VoiceDisconnectReason, error?: Error): void {

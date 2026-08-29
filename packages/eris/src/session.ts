@@ -4,12 +4,12 @@ import type { Client, RawPacket, VoiceConnection } from "eris";
 // Reporting stays local: the aggregate names this package.
 import { throwCleanupFailures } from "./cleanup";
 import { ensureErisErrorSink } from "./native-playback";
-import { assertGuildVoiceChannel, objectRecord } from "./validation";
 
 export interface ErisVoiceSessionOptions {
   readonly client: Client;
   readonly guildId: string;
   readonly channelId: string;
+  readonly clientUserId: string;
   readonly selfDeaf: boolean;
   readonly selfMute: boolean;
   readonly connectionTimeoutMs: number;
@@ -23,6 +23,7 @@ export interface ErisVoiceSessionOptions {
  */
 export class ErisVoiceSession implements VoiceSession {
   readonly guildId: string;
+  readonly clientUserId: string;
   readonly #client: Client;
   readonly #selfDeaf: boolean;
   readonly #selfMute: boolean;
@@ -52,6 +53,18 @@ export class ErisVoiceSession implements VoiceSession {
     return session;
   }
 
+  /** Validates a cached voice channel before a native join or move. */
+  static assertTarget(client: Client, guildId: string, channelId: string): void {
+    const channel = client.getChannel(channelId);
+    if (!channel) throw new Error(`Eris voice channel is unavailable: ${channelId}`);
+    if (channel.type !== 2 && channel.type !== 13) {
+      throw new Error(`Eris channel is not voice-capable: ${channelId}`);
+    }
+    if (channel.guild.id !== guildId) {
+      throw new Error(`Eris voice channel ${channelId} does not belong to guild ${guildId}`);
+    }
+  }
+
   /** @internal The native connection, reachable only from this package's default engine. */
   static connectionOf(session: VoiceSession): VoiceConnection | undefined {
     return session instanceof ErisVoiceSession ? session.#connection : undefined;
@@ -59,6 +72,7 @@ export class ErisVoiceSession implements VoiceSession {
 
   constructor(options: ErisVoiceSessionOptions) {
     this.guildId = options.guildId;
+    this.clientUserId = options.clientUserId;
     this.#client = options.client;
     this.#channelId = options.channelId;
     this.#selfDeaf = options.selfDeaf;
@@ -80,7 +94,7 @@ export class ErisVoiceSession implements VoiceSession {
   async join(channelId: string): Promise<void> {
     if (this.#released) throw new Error(`Eris voice session for guild ${this.guildId} was released`);
     // A move is validated like the first join: Eris would otherwise follow the channel into its own guild.
-    assertGuildVoiceChannel(this.#client, this.guildId, channelId);
+    ErisVoiceSession.assertTarget(this.#client, this.guildId, channelId);
     const previousChannelId = this.#connection ? this.#channelId : undefined;
     this.#joining = channelId;
     try {
@@ -219,7 +233,7 @@ export class ErisVoiceSession implements VoiceSession {
       this.#token = data.token;
       this.#endpoint = data.endpoint;
     } else if (packet.t === "VOICE_STATE_UPDATE") {
-      if (data.user_id !== this.#client.user?.id) return;
+      if (data.user_id !== this.clientUserId) return;
       // A null channel is Discord removing us from voice, which no rejoin recovers.
       if (data.channel_id === null) {
         this.#terminate(new Error(`Discord removed guild ${this.guildId} from its voice channel`));
@@ -268,4 +282,8 @@ export class ErisVoiceSession implements VoiceSession {
 
 function sameGateway(left: VoiceGatewayData, right: VoiceGatewayData): boolean {
   return left.sessionId === right.sessionId && left.token === right.token && left.endpoint === right.endpoint;
+}
+
+function objectRecord(value: unknown): Record<string, unknown> | undefined {
+  return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : undefined;
 }

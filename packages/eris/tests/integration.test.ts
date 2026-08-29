@@ -11,6 +11,13 @@ import {
   type SourcePlugin,
 } from "distube";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const { preflight, preflightFactory } = vi.hoisted(() => {
+  const preflight = vi.fn(async (): Promise<void> => undefined);
+  const preflightFactory = vi.fn((_owner: string) => preflight);
+  return { preflight, preflightFactory };
+});
+
 import { ErisAdapter } from "../src";
 import { ErisVoiceEngine } from "../src/engine";
 import {
@@ -26,12 +33,32 @@ import {
 } from "./support/eris";
 
 vi.mock("node:child_process", async () => (await import("./support/eris")).childProcessModule());
+vi.mock("../src/engine", async importOriginal => {
+  const actual = await importOriginal<typeof import("../src/engine")>();
+  return { ...actual, erisPreflight: preflightFactory };
+});
 
 const OTHER_CHANNEL = "other";
 
-beforeEach(resetNative);
+beforeEach(() => {
+  resetNative();
+  preflight.mockReset();
+  preflight.mockResolvedValue(undefined);
+  preflightFactory.mockClear();
+});
 
 describe("Eris adapter queue lifecycle", () => {
+  it("rejects voices.join before native gateway work when encryption is unavailable", async () => {
+    const client = new FakeClient();
+    preflight.mockRejectedValueOnce(new Error("@distube/eris requires tweetnacl"));
+    const distube = new DisTube({ adapter: new ErisAdapter(asClient(client)), plugins: [] });
+
+    await expect(distube.voices.join({ guildId: GUILD, channelId: CHANNEL })).rejects.toMatchObject({
+      code: "VOICE_FAILED",
+    });
+    expect(client.joinVoiceChannel).not.toHaveBeenCalled();
+  });
+
   it("moves one guild queue through the adapter's live session without ending its active item", async () => {
     const client = new FakeClient();
     client.channels.set(OTHER_CHANNEL, voiceChannel());

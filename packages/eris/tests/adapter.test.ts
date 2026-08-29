@@ -1,9 +1,20 @@
 import { FilterRegistry } from "@distube/voice-core/core";
-import { ErrorCode, type FilterEntry, Filters, type VoiceSession } from "distube";
+import { DisTubeError, ErrorCode, type FilterEntry, Filters, type VoiceSession } from "distube";
 import type { Client } from "eris";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ErisAdapter } from "../src";
 import { asClient, CHANNEL, FakeClient, GUILD, voiceChannel } from "./support/eris";
+
+const { preflight, preflightFactory } = vi.hoisted(() => {
+  const preflight = vi.fn(async (): Promise<void> => undefined);
+  const preflightFactory = vi.fn((_owner: string) => preflight);
+  return { preflight, preflightFactory };
+});
+
+vi.mock("../src/engine", async importOriginal => {
+  const actual = await importOriginal<typeof import("../src/engine")>();
+  return { ...actual, erisPreflight: preflightFactory };
+});
 
 const TARGET = { guildId: GUILD, channelId: CHANNEL };
 
@@ -11,10 +22,18 @@ function adapter(client: FakeClient = new FakeClient(), options = {}): ErisAdapt
   return new ErisAdapter(asClient(client), options);
 }
 
+beforeEach(() => {
+  preflight.mockReset();
+  preflight.mockResolvedValue(undefined);
+  preflightFactory.mockClear();
+});
+
 describe("adapter", () => {
   it("requires a client and well-formed connection options", () => {
     expect(() => new ErisAdapter(undefined as unknown as Client)).toThrow("requires an Eris Client");
-    expect(() => adapter(new FakeClient(), { connectionTimeoutMs: 0 })).toThrow("connectionTimeoutMs must be positive");
+    expect(() => adapter(new FakeClient(), { connectionTimeoutMs: 0 })).toThrow(
+      "connectionTimeoutMs must be a positive integer",
+    );
     expect(() => adapter(new FakeClient(), { selfDeaf: "yes" })).toThrow("selfDeaf must be boolean");
     expect(() => adapter(new FakeClient(), { selfMute: "no" })).toThrow("selfMute must be boolean");
   });
@@ -32,6 +51,15 @@ describe("adapter", () => {
     expect(client.joinVoiceChannel).not.toHaveBeenCalled();
   });
 
+  it("runs prerequisite preflight before creating a native voice connection", async () => {
+    const client = new FakeClient();
+    const failure = new DisTubeError(ErrorCode.VOICE_FAILED, "@distube/eris requires tweetnacl");
+    preflight.mockRejectedValueOnce(failure);
+
+    await expect(adapter(client).createVoiceSession(TARGET)).rejects.toBe(failure);
+    expect(client.joinVoiceChannel).not.toHaveBeenCalled();
+  });
+
   it("connects a session with the presence options it was configured with", async () => {
     const client = new FakeClient();
 
@@ -39,6 +67,7 @@ describe("adapter", () => {
 
     expect(client.joinVoiceChannel).toHaveBeenCalledWith(CHANNEL, { selfDeaf: false, selfMute: true });
     expect(session.guildId).toBe(GUILD);
+    expect(session.clientUserId).toBe(client.user.id);
     expect(session.channelId).toBe(CHANNEL);
   });
 });

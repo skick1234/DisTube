@@ -12,14 +12,7 @@ import type {
   QueueVoiceLease,
 } from "../queue/voice";
 import { settleGrowing, TrackedWork } from "../utils/tracked-work";
-import {
-  type FilterChange,
-  foldFilters,
-  NO_FILTERS,
-  sameFilters,
-  type VoiceFilters,
-  VoiceFiltersImpl,
-} from "./filters";
+import { type FilterChange, foldFilters, sameFilters, type VoiceFilters, VoiceFiltersImpl } from "./filters";
 import { VoiceSettings, validateAutoplay, validateRepeatMode, validateVolume } from "./settings";
 
 /** Public guild voice facade. `Metadata` is the client's caller-metadata type. */
@@ -47,8 +40,6 @@ type VoicePhase = "open" | "fenced" | "released";
 interface PlayerRecord {
   readonly generation: number;
   player: Player;
-  /** Committed state this backend has rendered; a replacement Player inherits nothing. */
-  applied: Readonly<{ volume?: number; filters: readonly import("../contracts").FilterEntry[] }>;
   /** Whether committed settings were restored onto this Player at least once. */
   restored: boolean;
   readonly unsubscribe: () => void;
@@ -221,9 +212,9 @@ export class VoiceImpl implements QueueVoice {
         await this.#enqueue(async () => {
           if (this.#phase !== "open") throw this.#terminal();
           const record = this.#player;
-          if (!record) return;
-          await record.player.setVolume(percent);
-          record.applied = { ...record.applied, volume: percent };
+          // A terminal outcome can retire the Player while this request waits in its lane. The
+          // value still belongs to Voice, so retain it for the Player that eventually succeeds it.
+          if (record) await record.player.setVolume(percent);
           this.#settings.setVolume(percent);
         });
         return;
@@ -254,22 +245,24 @@ export class VoiceImpl implements QueueVoice {
 
   /** Folds `change` onto the committed entries and renders the result before committing it. */
   async commitFilters(change: FilterChange): Promise<void> {
-    const entries = foldFilters(this.#settings.entries, change);
-    if (sameFilters(this.#settings.entries, entries)) return;
     try {
       if (this.#player) {
-        // A live Player receives the render through its own lane, ordered against playback work.
+        // Fold only when this operation reaches the Player lane. Calls made without awaiting one
+        // another then observe the set each earlier call committed.
         await this.#enqueue(async () => {
           if (this.#phase !== "open") throw this.#terminal();
+          const entries = foldFilters(this.#settings.entries, change);
+          if (sameFilters(this.#settings.entries, entries)) return;
           const record = this.#player;
-          if (!record) return;
-          await record.player.setFilters(entries);
-          record.applied = { ...record.applied, filters: entries };
+          // A queued render must still update Voice state if the previous Player retired first.
+          if (record) await record.player.setFilters(entries);
           this.#settings.setEntries(entries);
         });
         return;
       }
       // No Player yet: the folded set is committed state that the next Player restores at activation.
+      const entries = foldFilters(this.#settings.entries, change);
+      if (sameFilters(this.#settings.entries, entries)) return;
       this.#settings.setEntries(entries);
     } catch (error: unknown) {
       throw playerFiltersFailure(error);
@@ -452,7 +445,6 @@ export class VoiceImpl implements QueueVoice {
     const settings = this.#settings;
     await record.player.setVolume(settings.volume);
     await record.player.setFilters(settings.entries);
-    record.applied = { volume: settings.volume, filters: settings.entries };
     record.restored = true;
   }
 
@@ -525,12 +517,12 @@ export class VoiceImpl implements QueueVoice {
         const record: PlayerRecord = {
           generation: ++this.#playerGeneration,
           player,
-          applied: { filters: NO_FILTERS },
           restored: false,
           unsubscribe: (): void => unsubscribe(),
         };
         unsubscribe = player.subscribe(event => this.#acceptPlayerOutcome(record, event));
         this.#player = record;
+        if (this.#lease?.accepting) this.#lease.playerGeneration = record.generation;
         return record;
       } catch (error: unknown) {
         throw asDisTubeError(ErrorCode.VOICE_FAILED, "Engine failed to create Player", error);
@@ -547,6 +539,11 @@ export class VoiceImpl implements QueueVoice {
 
   #acceptPlayerOutcome(record: PlayerRecord, event: import("../contracts").PlayerEvent): void {
     if (this.#phase !== "open" || this.#player !== record) return;
+    if (event.type === "terminal") {
+      // There is no QueueItem to publish, but the terminal Player must not serve a later borrow.
+      this.#retireCurrentPlayer(record);
+      return;
+    }
     const lease = this.#lease;
     const item = lease?.item;
     const active =

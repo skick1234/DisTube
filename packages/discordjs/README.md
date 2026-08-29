@@ -21,8 +21,8 @@ Player before reporting the active item failure.
 
 Use Node 22.12.0 or later. Install FFmpeg and expose `ffmpeg` on `PATH`, or set `FFMPEG_PATH` to its executable.
 Install one Opus encoder: `@discordjs/opus` or `opusscript`.
-Install one voice encryption implementation: `sodium-native`, `libsodium-wrappers`, `@stablelib/xchacha20poly1305`, or
-`@noble/ciphers`.
+Install one voice encryption implementation: `sodium-native`, `sodium`, `libsodium-wrappers`,
+`@stablelib/xchacha20poly1305`, or `@noble/ciphers`.
 
 This adapter's default engine accepts only `url` playback resources (`engine.accepts` is `{"url"}`). A source that
 prepares an `encoded` resource rejects with `UNSUPPORTED` before any audio is decoded; pair it with an engine that
@@ -30,5 +30,5 @@ declares `encoded`.
 
 FFmpeg receives the playable URL as a process argument. Another process running as the same operating-system user may inspect that argument while decoding is active. Public errors and captured decoder output redact the URL, and the engine refuses redirects after source validation.
 
-The default engine checks both requirements before its first URL playback. If either is unavailable, playback rejects
-with DisTube's `VOICE_FAILED` error and names the missing dependency.
+The adapter checks these prerequisites before it starts a native voice join. If one is unavailable, joining or playback
+rejects with DisTube's `VOICE_FAILED` error and names the missing dependency.

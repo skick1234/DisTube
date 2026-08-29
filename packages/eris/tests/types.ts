@@ -14,7 +14,11 @@ erisExports.createErisAdapter;
 const sessionPromise: Promise<VoiceSession> = adapter.createVoiceSession({ guildId: "guild", channelId: "voice" });
 const playerPromise: Promise<Player> = adapter.engine.createPlayer(session);
 const terminal: PlayerEvent = { type: "failed", itemId: "item", error: new Error("retired"), terminal: true };
+const idleTerminal: PlayerEvent = { type: "terminal", error: new Error("backend lost") };
+const clientUserId: string = session.clientUserId;
 
 void sessionPromise;
 void playerPromise;
 void terminal;
+void idleTerminal;
+void clientUserId;

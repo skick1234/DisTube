@@ -38,10 +38,10 @@ survives queue stop and exhaustion, but not `leave`, a platform disconnect, or s
 
 ## How does previous-track history work?
 
-`voice.previousSongs` keeps at most 100 finished QueueItem occurrences and belongs to the Voice, so it survives queue
-deletion and `queue.previous()` still works after the final item. `queue.previous()` inserts a fresh occurrence
-for the selected Song, with a new item ID and timestamp while preserving the Song and metadata references. History
-never revives an old QueueItem identity.
+`distube.voices.get(guildId)?.previousSongs` is the history API. It keeps at most 100 finished QueueItem occurrences
+on the guild's Voice, so the history survives queue deletion while that Voice remains connected. A live queue can call
+`queue.previous()` to replay the newest history entry. It inserts a fresh occurrence for the selected Song, with a new
+item ID and timestamp while preserving the Song and metadata references. History never revives an old QueueItem identity.
 
 ## Which package handles voice?
 

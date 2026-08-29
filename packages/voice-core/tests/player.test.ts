@@ -163,6 +163,18 @@ describe("controls", () => {
     });
   });
 
+  it("keeps caller pause intent when the next track starts", async () => {
+    const { player } = createPlayer();
+    await player.play(request());
+    await player.pause();
+    await player.stopTrack();
+
+    await player.play(request("next"));
+
+    expect(latest.player.pause).toHaveBeenCalledTimes(2);
+    expect(latest.player.state.status).toBe(AudioPlayerStatus.Paused);
+  });
+
   it("holds the volume level across decodes and rejects an invalid one", async () => {
     const { player } = createPlayer();
     await expect(player.setVolume(-1)).rejects.toMatchObject({ code: ErrorCode.INVALID_ARGUMENT });
@@ -218,6 +230,18 @@ describe("filters", () => {
     expect(native.entersState.mock.calls).toHaveLength(calls);
   });
 
+  it("does not turn transport auto-pause into pause intent during a filter hand-off", async () => {
+    const { player } = createPlayer();
+    await player.play(request());
+    const active = latest.resource;
+    latest.player.transition({ status: AudioPlayerStatus.AutoPaused, resource: active });
+
+    await player.setFilters([{ name: Filters.Echo }]);
+
+    expect(latest.player.pause).not.toHaveBeenCalled();
+    expect(latest.player.state.status).toBe(AudioPlayerStatus.Playing);
+  });
+
   it("restores the previous chain and active playback when the candidate fails", async () => {
     const { player, events } = createPlayer();
     await player.play(request());
@@ -235,7 +259,14 @@ describe("filters", () => {
     latest.player.emit("error", audioPlayerError(latest.resource, candidateFailure));
     native.entersState.mockResolvedValue(undefined);
 
-    await expect(replacing).rejects.toBe(candidateFailure);
+    const failure = await replacing.then(
+      () => {
+        throw new Error("Expected filter candidate failure");
+      },
+      error => error as Error,
+    );
+    expect(failure).toMatchObject({ message: candidateFailure.message });
+    expect(failure).not.toBe(candidateFailure);
     expect(latest.spawn).toEqual(expect.arrayContaining(["-af", "aecho=0.8:0.9:1000:0.3"]));
     expect(events).toEqual([]);
 
@@ -280,14 +311,17 @@ describe("filters", () => {
     latest.player.emit("error", audioPlayerError(activeResource, activeFailure));
 
     await expect(replacing).rejects.toBeInstanceOf(Error);
-    expect(events).toEqual([{ type: "failed", itemId: "A", error: activeFailure }]);
+    const failure = events[0] as Extract<PlayerEvent, { type: "failed" }>;
+    expect(failure).toMatchObject({ type: "failed", itemId: "A", error: { message: activeFailure.message } });
+    expect(failure.error).not.toBe(activeFailure);
     expect(latest.player.play).toHaveBeenCalledTimes(1);
 
     latest.player.emit("error", audioPlayerError(candidateResource, new Error("late B native playback failed")));
     candidate.close(0, null);
     await flushMicrotasks();
 
-    expect(events).toEqual([{ type: "failed", itemId: "A", error: activeFailure }]);
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({ type: "failed", itemId: "A", error: { message: activeFailure.message } });
   });
 
   it("reconciles a candidate Idle transition that precedes its filter commit", async () => {
@@ -339,7 +373,10 @@ describe("filters", () => {
     );
 
     expect(failure).toBeInstanceOf(AggregateError);
-    expect((failure as AggregateError).errors).toEqual([candidateFailure, rollbackFailure]);
+    const causes = (failure as AggregateError).errors as Error[];
+    expect(causes.map(error => error.message)).toEqual([candidateFailure.message, rollbackFailure.message]);
+    expect(causes).not.toContain(candidateFailure);
+    expect(causes).not.toContain(rollbackFailure);
     expect(events).toEqual([{ type: "failed", itemId: "item", error: failure, terminal: true }]);
     await expect(player.play(request("next"))).rejects.toThrow("retired");
   });
@@ -456,7 +493,8 @@ describe("outcomes", () => {
     const { player, events } = createPlayer();
     const signed = "https://stream.example/audio?token=top-secret&signature=also-secret";
     await player.play(request("item", signed));
-    latest.child.stderr.write(`decoder failed for ${signed} token=another-secret\n${"x".repeat(6000)}`);
+    latest.child.stderr.write("x".repeat(6000));
+    latest.child.stderr.write(`decoder failed for ${signed} token=another-secret`);
 
     latest.child.emit("close", 1, null);
     await flushMicrotasks();
@@ -499,13 +537,15 @@ describe("outcomes", () => {
     latest.player.transition({ status: AudioPlayerStatus.Idle });
     await player.play(request("second"));
     const error = new Error("decoder failed");
-    latest.player.emit("error", audioPlayerError(latest.resource, error));
+    const resource = latest.resource;
+    latest.player.emit("error", audioPlayerError(resource, error));
     await player.play(request("third"));
 
-    expect(events).toEqual([
-      { type: "finished", itemId: "first" },
-      { type: "failed", itemId: "second", error },
-    ]);
+    expect(events[0]).toEqual({ type: "finished", itemId: "first" });
+    const failure = events[1] as Extract<PlayerEvent, { type: "failed" }>;
+    expect(failure).toMatchObject({ type: "failed", itemId: "second", error: { message: error.message } });
+    expect(failure.error).not.toBe(error);
+    expect(Reflect.has(failure.error, "resource")).toBe(false);
   });
 
   it("ends a track on request without publishing an outcome", async () => {

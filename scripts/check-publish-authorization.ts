@@ -9,6 +9,7 @@ const candidatePattern = /^[a-f0-9]{64}$/u;
 const evidenceGenerationPattern = /^[A-Za-z0-9_-]{16,128}$/u;
 const revisionPattern = /^[a-f0-9]{40}$/u;
 const versionPattern = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/u;
+const candidateFreshnessMs = 60 * 60 * 1000;
 
 export const publicPackages = [
   { name: "distube", owner: "DisTube", directory: "packages/distube" },
@@ -75,6 +76,7 @@ export interface PublishAuthorizationInput {
   readonly releaseCandidateId?: string;
   readonly releaseSourceRevision?: string;
   readonly candidateSourceRevision?: string;
+  readonly now?: number;
 }
 
 interface LocalPackage {
@@ -282,6 +284,8 @@ async function readCandidate(path: string, errors: string[]): Promise<ReleaseCan
       value.schemaVersion !== 3 ||
       typeof value.candidateId !== "string" ||
       typeof value.evidenceGeneration !== "string" ||
+      typeof value.generatedAt !== "string" ||
+      typeof value.publishAuthorized !== "boolean" ||
       !evidenceGenerationPattern.test(value.evidenceGeneration) ||
       !Array.isArray(value.repositories) ||
       !Array.isArray(value.packages) ||
@@ -296,6 +300,15 @@ async function readCandidate(path: string, errors: string[]): Promise<ReleaseCan
     errors.push(`${path}: candidate evidence is required: ${error instanceof Error ? error.message : String(error)}`);
     return undefined;
   }
+}
+
+function candidateTimestampError(value: string, now: number): string | undefined {
+  const parsed = Date.parse(value);
+  if (!Number.isFinite(parsed) || new Date(parsed).toISOString() !== value)
+    return "release candidate generatedAt: invalid ISO-8601 timestamp";
+  if (parsed > now) return "release candidate generatedAt: timestamp is in the future";
+  if (now - parsed > candidateFreshnessMs) return "release candidate generatedAt: timestamp is stale";
+  return undefined;
 }
 
 async function currentRevision(repositoryRoot: string, errors: string[]): Promise<string | undefined> {
@@ -407,6 +420,8 @@ export async function inspectPublishAuthorization(input: PublishAuthorizationInp
   const candidate = await readCandidate(input.candidatePath, errors);
   if (!candidate) return errors;
 
+  const timestampError = candidateTimestampError(candidate.generatedAt, input.now ?? Date.now());
+  if (timestampError) errors.push(timestampError);
   if (candidate.publishAuthorized !== false) {
     errors.push("release candidate must remain unauthorized");
   }

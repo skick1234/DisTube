@@ -149,6 +149,35 @@ describe("default voice engine prerequisites", () => {
 });
 
 describe("voice encryption prerequisite", () => {
+  it("uses @discordjs/voice's encryption provider preference order", () => {
+    expect(DISCORD_ENCRYPTION_MODULES).toEqual([
+      "sodium-native",
+      "sodium",
+      "libsodium-wrappers",
+      "@stablelib/xchacha20poly1305",
+      "@noble/ciphers",
+    ]);
+  });
+
+  it("accepts sodium when it is the only Discord voice encryption provider", async () => {
+    const loadModule = vi.fn((name: string) => {
+      if (name === "@discordjs/opus") return nativeOpus();
+      if (name === "sodium-native") throw new Error("native library unavailable");
+      if (name === "sodium") return {};
+      throw new Error(`unexpected module ${name}`);
+    });
+    const check = createPrerequisiteCheck(
+      discordModules(),
+      runtime(
+        vi.fn(async () => undefined),
+        loadModule,
+      ),
+    );
+
+    await expect(check()).resolves.toBeUndefined();
+    expect(loadModule.mock.calls.map(([name]) => name)).toEqual(["@discordjs/opus", "sodium-native", "sodium"]);
+  });
+
   it("accepts Eris's tweetnacl fallback after sodium-native is missing", async () => {
     const loadModule = vi.fn((name: string) => {
       if (name === "@discordjs/opus") throw new Error("native encoder unavailable");

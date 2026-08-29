@@ -2,13 +2,13 @@ import type { Engine, FilterEntry } from "../contracts";
 import { ErrorReason } from "../enums";
 import { DisTubeError, ErrorCode } from "../errors";
 
-/** A change to the ordered filter set, folded onto the committed entries before the engine renders. */
+/** A change to the ordered filter set, folded when Voice dequeues it in the Player lane. */
 export type FilterChange =
   | Readonly<{ kind: "upsert"; entry: FilterEntry }>
   | Readonly<{ kind: "remove"; names: readonly string[] }>
   | Readonly<{ kind: "clear" }>;
 
-/** The settings side of the manager: the committed set plus commits serialized through the Voice lane. */
+/** The settings side of the manager: the committed set plus changes serialized through the Voice Player lane. */
 export interface FilterHost {
   entries(): readonly FilterEntry[];
   commit(change: FilterChange): Promise<void>;

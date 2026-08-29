@@ -9,6 +9,21 @@ import type { Engine, PlaybackResource, Player, VoiceSession } from "distube";
 import { ErisVoicePlayer } from "./player";
 import { ErisVoiceSession } from "./session";
 
+const preflights = new Map<string, () => Promise<void>>();
+
+/** The process-wide prerequisite probe for an Eris default engine owner. */
+export function erisPreflight(owner: string): () => Promise<void> {
+  const existing = preflights.get(owner);
+  if (existing) return existing;
+  const check = createPrerequisiteCheck({
+    owner,
+    encryption: ERIS_ENCRYPTION_MODULES,
+    opus: ERIS_OPUS_MODULES,
+  });
+  preflights.set(owner, check);
+  return check;
+}
+
 /**
  * The package's default voice engine: one long-lived Player per connected session.
  *
@@ -20,14 +35,7 @@ export class ErisVoiceEngine implements Engine {
   readonly #filters: FilterRegistry;
   readonly #preflight: () => Promise<void>;
 
-  constructor(
-    filters?: FfmpegFilterDefinitions,
-    preflight: () => Promise<void> = createPrerequisiteCheck({
-      owner: "@distube/eris",
-      encryption: ERIS_ENCRYPTION_MODULES,
-      opus: ERIS_OPUS_MODULES,
-    }),
-  ) {
+  constructor(filters?: FfmpegFilterDefinitions, preflight: () => Promise<void> = erisPreflight("@distube/eris")) {
     this.#filters = new FilterRegistry(filters);
     this.#preflight = preflight;
   }

@@ -37,6 +37,26 @@ describe("enqueue coordination", () => {
     expect(reject).toHaveBeenCalledWith(expect.objectContaining({ message: "stale" }));
     expect(enqueues.complete({ operation, media: item("late").song })).toEqual([]);
   });
+
+  it("keeps ready completions cancellable until commit", () => {
+    const enqueues = new EnqueueCoordinator();
+    const firstReject = vi.fn();
+    const secondReject = vi.fn();
+    const first = enqueues.create({}, vi.fn(), firstReject);
+    const second = enqueues.create({}, vi.fn(), secondReject);
+    enqueues.accept(first);
+    enqueues.accept(second);
+    const firstCompletion = { operation: first, media: item("first").song } as const;
+    const secondCompletion = { operation: second, media: item("second").song } as const;
+
+    enqueues.complete(secondCompletion);
+    expect(enqueues.complete(firstCompletion)).toEqual([firstCompletion, secondCompletion]);
+    enqueues.commit(firstCompletion);
+    enqueues.cancel(() => new Error("stale"));
+
+    expect(firstReject).not.toHaveBeenCalled();
+    expect(secondReject).toHaveBeenCalledWith(expect.objectContaining({ message: "stale" }));
+  });
 });
 
 describe("playback attempt decisions", () => {

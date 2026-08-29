@@ -20,6 +20,11 @@ passed, which means it removes a `once` registration too. Each `off` call remove
 added twice needs two calls. `removeAllListeners(name)` clears one event; with no argument it clears every event.
 
 ```ts
+import type { DisTube, DisTubeEventMap } from "distube";
+
+declare const distube: DisTube;
+declare const log: (message: string) => void;
+
 const onStarted = (event: DisTubeEventMap["queue.item.started"]) => log(event.item.song.title);
 
 distube.once("queue.item.started", onStarted).off("queue.item.started", onStarted); // never fires
@@ -36,6 +41,16 @@ it stood when `emit` ran.
 GuildQueue, Voice, and event payload the client hands back, so the reads below need no cast:
 
 ```ts
+import { DisTube } from "distube";
+import type { Adapter, PlayTarget, Plugin } from "distube";
+
+declare const adapter: Adapter;
+declare const plugins: readonly Plugin[];
+declare const target: PlayTarget;
+declare const url: string;
+declare const user: Readonly<{ id: string }>;
+declare const log: (message: string) => void;
+
 const distube = new DisTube<{ requestedBy: string }>({ adapter, plugins });
 
 distube.on("queue.item.added", event => log(event.item.metadata.requestedBy));

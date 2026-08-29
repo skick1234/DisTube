@@ -82,7 +82,9 @@ export interface SourcePlugin extends Plugin {
 
 export type PlayerEvent =
   | Readonly<{ type: "finished"; itemId: string }>
-  | Readonly<{ type: "failed"; itemId: string; error: Error; terminal?: true }>;
+  | Readonly<{ type: "failed"; itemId: string; error: Error; terminal?: true }>
+  /** A terminal backend loss between tracks. It deliberately has no QueueItem outcome. */
+  | Readonly<{ type: "terminal"; error: Error }>;
 
 export interface PlaybackRequest {
   readonly itemId: string;
@@ -92,7 +94,7 @@ export interface PlaybackRequest {
 /**
  * The long-lived playback backend for one connected VoiceSession.
  *
- * A Player outlives the tracks it plays and the queues that borrow it: only the engine retires it.
+ * A Player outlives the tracks it plays and the queues that borrow it. Voice owns its terminal release.
  *
  * A capability the backend does not perform — seek or an `encoded` resource on a voice engine, a
  * filter it cannot render — SHALL reject with `DisTubeError(ErrorCode.UNSUPPORTED)`; every other
@@ -142,6 +144,8 @@ export type VoiceSessionEvent =
  */
 export interface VoiceSession {
   readonly guildId: string;
+  /** The connected client's Discord user ID, for Engines that authenticate a backend session. */
+  readonly clientUserId: string;
   /** The channel the session currently occupies. */
   readonly channelId: string;
   /** Current credentials, or `undefined` until the first connection settles. */
@@ -199,7 +203,10 @@ export interface VoiceTarget {
 }
 
 export interface Adapter {
-  /** Creates the guild's voice session, already joined to `target.channelId`. */
+  /**
+   * Validates `target` and completes Adapter-owned prerequisite preflight before native gateway work,
+   * then creates the guild's session already joined to `target.channelId`.
+   */
   createVoiceSession(target: VoiceTarget): Promise<VoiceSession>;
   /** The engine used unless an engine-capable Plugin is configured. */
   readonly engine: Engine;

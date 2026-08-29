@@ -36,12 +36,17 @@ export class EnqueueCoordinator {
     while (true) {
       const next = this.#completions.get(this.#nextCommit);
       if (!next) break;
-      this.#completions.delete(next.operation.sequence);
-      this.#operations.delete(next.operation.sequence);
       this.#nextCommit += 1;
       ready.push(next);
     }
     return ready;
+  }
+
+  commit(completion: EnqueueCompletion): void {
+    const { operation } = completion;
+    if (this.#operations.get(operation.sequence) !== operation) return;
+    this.#completions.delete(operation.sequence);
+    this.#operations.delete(operation.sequence);
   }
 
   cancel(error: () => Error): void {
