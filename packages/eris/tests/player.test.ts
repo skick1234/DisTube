@@ -1,5 +1,5 @@
 import { FilterRegistry } from "@distube/voice-core/core";
-import { ErrorCode, Filters, type PlaybackRequest, type PlayerEvent } from "distube";
+import type { PlaybackRequest, PlayerEvent } from "distube/integrations";
 import type { VoiceConnection } from "eris";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ErisVoicePlayer } from "../src/player";
@@ -100,7 +100,7 @@ describe("playback", () => {
     const encoded = { itemId: "item", resource: { kind: "encoded", data: "track", dispose: vi.fn() } };
 
     await expect(player.play(encoded as unknown as PlaybackRequest)).rejects.toMatchObject({
-      code: ErrorCode.UNSUPPORTED,
+      code: "UNSUPPORTED",
       message: "The default voice engine cannot play encoded resources",
     });
   });
@@ -123,7 +123,7 @@ describe("controls", () => {
     expect(connection.pause).toHaveBeenCalledTimes(1);
     expect(connection.resume).toHaveBeenCalledTimes(2);
     await expect(player.seek(30)).rejects.toMatchObject({
-      code: ErrorCode.UNSUPPORTED,
+      code: "UNSUPPORTED",
       message: "The default voice engine cannot seek",
     });
   });
@@ -142,7 +142,7 @@ describe("controls", () => {
 
   it("holds the volume level across tracks and rejects an invalid one", async () => {
     const { player, connection } = createPlayer();
-    await expect(player.setVolume(-1)).rejects.toMatchObject({ code: ErrorCode.INVALID_ARGUMENT });
+    await expect(player.setVolume(-1)).rejects.toMatchObject({ code: "INVALID_ARGUMENT" });
 
     await player.setVolume(50);
     expect(connection.setVolume).toHaveBeenLastCalledWith(0.5);
@@ -159,7 +159,7 @@ describe("filters", () => {
     (connection.current as { playTime: number }).playTime = 6000;
 
     await player.setFilters([
-      { name: Filters.Bassboost, value: 5 },
+      { name: "bassboost", value: 5 },
       { name: "custom", payload: "volume=2" },
     ]);
 
@@ -168,7 +168,7 @@ describe("filters", () => {
 
     // An unchanged chain leaves the running decode alone.
     await player.setFilters([
-      { name: Filters.Bassboost, value: 5 },
+      { name: "bassboost", value: 5 },
       { name: "custom", payload: "volume=2" },
     ]);
     expect(connection.play).toHaveBeenCalledTimes(2);
@@ -179,7 +179,7 @@ describe("filters", () => {
     await player.play(request());
     await player.pause();
 
-    await player.setFilters([{ name: Filters.Echo }]);
+    await player.setFilters([{ name: "echo" }]);
 
     expect(connection.pause).toHaveBeenCalledTimes(2);
   });
@@ -187,11 +187,11 @@ describe("filters", () => {
   it("restores the previous chain and active playback when the candidate fails", async () => {
     const { player, connection, events } = createPlayer();
     await player.play(request());
-    await player.setFilters([{ name: Filters.Echo }]);
+    await player.setFilters([{ name: "echo" }]);
     (connection.current as { playTime: number }).playTime = 6000;
     connection.play.mockImplementationOnce(() => undefined);
 
-    await expect(player.setFilters([{ name: Filters.Nightcore }])).rejects.toThrow("could not start the track");
+    await expect(player.setFilters([{ name: "nightcore" }])).rejects.toThrow("could not start the track");
 
     expect(latest.spawn).toEqual(expect.arrayContaining(["-ss", "6", "-af", "aecho=0.8:0.9:1000:0.3"]));
     expect(events).toEqual([]);
@@ -209,7 +209,7 @@ describe("filters", () => {
     const handoffs = connection.play.mock.calls.length;
     native.autoAudio = false;
 
-    const replacing = player.setFilters([{ name: Filters.Nightcore }]);
+    const replacing = player.setFilters([{ name: "nightcore" }]);
     await settle();
     const candidate = latest.child;
 
@@ -235,7 +235,7 @@ describe("filters", () => {
       throw rollbackFailure;
     });
 
-    const failure = await player.setFilters([{ name: Filters.Nightcore }]).then(
+    const failure = await player.setFilters([{ name: "nightcore" }]).then(
       () => undefined,
       error => error,
     );
@@ -248,7 +248,7 @@ describe("filters", () => {
 
   it("stores a chain committed with no active track for the next one", async () => {
     const { player } = createPlayer();
-    await player.setFilters([{ name: Filters.Vaporwave }]);
+    await player.setFilters([{ name: "vaporwave" }]);
 
     await player.play(request());
 

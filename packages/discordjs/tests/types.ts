@@ -1,5 +1,5 @@
 import type { Client } from "discord.js";
-import type { VoiceSession } from "distube";
+import type { VoiceSession } from "distube/integrations";
 import * as discordjsExports from "../src";
 
 declare const client: Client;

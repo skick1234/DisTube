@@ -83,6 +83,7 @@ interface LocalPackage {
   readonly name: string;
   readonly version: string;
   readonly private: boolean;
+  readonly declarationTargets: readonly string[];
 }
 
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
@@ -181,14 +182,40 @@ function archiveName(name: string, version: string): string {
   return `${name.replace(/^@/u, "").replaceAll("/", "-")}-${version}.tgz`;
 }
 
-function declarationPaths(packageName: string): readonly string[] {
-  const baseName = packageName.replace(/^@/u, "").replaceAll("/", "-");
-  return [`core/declarations/${baseName}.index.d.mts`];
+function declarationPaths(packageName: string, targets: readonly string[]): readonly string[] {
+  return targets.map(target => `core/declarations/${encodeURIComponent(packageName)}/${target}`);
+}
+
+/** Declaration ownership comes from manifest targets, including conditional export branches. */
+export function manifestDeclarationTargets(manifest: Readonly<Record<string, unknown>>): readonly string[] {
+  const targets = new Set<string>();
+  function visit(value: unknown, declaration = false): void {
+    if (typeof value === "string") {
+      if (!declaration && !/\.d\.(?:ts|mts|cts)$/u.test(value)) return;
+      const path = value.replace(/^\.\//u, "");
+      const error = pathError(path, "declaration target");
+      if (error || !/\.d\.(?:ts|mts|cts)$/u.test(path)) {
+        throw new Error(error ?? `invalid declaration target: ${value}`);
+      }
+      targets.add(path);
+    } else if (Array.isArray(value)) {
+      for (const entry of value) visit(entry, declaration);
+    } else if (isRecord(value)) {
+      for (const [condition, entry] of Object.entries(value)) visit(entry, declaration || condition === "types");
+    } else if (declaration && value !== undefined && value !== null) {
+      throw new Error("declaration target must be a path or conditional target");
+    }
+  }
+  visit(manifest.types, true);
+  visit(manifest.exports);
+  if (targets.size === 0) throw new Error("package manifest has no declaration targets");
+  return [...targets].sort();
 }
 
 function expectedEvidencePaths(
   item: (typeof publicPackages)[number],
   version: string,
+  declarationTargets: readonly string[],
 ): {
   readonly manifest: string;
   readonly lockfile: string;
@@ -205,7 +232,9 @@ function expectedEvidencePaths(
     readme: `DisTube/${item.directory}/README.md`,
     archive: `${artifactOwner}/archives/${archiveName(item.name, version)}`,
     declarations:
-      item.owner === "DisTube" ? declarationPaths(item.name) : [`plugins/declarations/${packageDirectory}.index.d.mts`],
+      item.owner === "DisTube"
+        ? declarationPaths(item.name, declarationTargets)
+        : [`plugins/declarations/${encodeURIComponent(item.name)}/dist/index.d.mts`],
   };
 }
 
@@ -331,7 +360,12 @@ async function localPackages(repositoryRoot: string, errors: string[]): Promise<
         errors.push(`${item.name}: local package manifest is malformed`);
         continue;
       }
-      const local = { name: manifest.name, version: manifest.version, private: manifest.private === true };
+      const local = {
+        name: manifest.name,
+        version: manifest.version,
+        private: manifest.private === true,
+        declarationTargets: manifestDeclarationTargets(manifest),
+      };
       if (discovered.has(local.name)) errors.push(`local public package inventory duplicates ${local.name}`);
       discovered.set(local.name, local);
     } catch (error) {
@@ -463,7 +497,7 @@ export async function inspectPublishAuthorization(input: PublishAuthorizationInp
     }
   }
 
-  const expectedPaths = expectedEvidencePaths(expected, selected.version);
+  const expectedPaths = expectedEvidencePaths(expected, selected.version, localPackage?.declarationTargets ?? []);
   expectPath(selected.manifest.path, expectedPaths.manifest, `${selected.name}: manifest`, errors);
   expectPath(selected.lockfile.path, expectedPaths.lockfile, `${selected.name}: lockfile`, errors);
   expectPath(selected.readme.path, expectedPaths.readme, `${selected.name}: README`, errors);

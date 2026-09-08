@@ -18,6 +18,7 @@ interface AdapterSurface {
   readonly className: string;
   readonly client: string;
   readonly clientType: string;
+  readonly channelType: string;
   readonly factoryAlias: string;
 }
 
@@ -26,18 +27,21 @@ const adapterSurfaces: Readonly<Record<string, AdapterSurface>> = {
     className: "DiscordJSAdapter",
     client: "{ guilds: { cache: new Map() } }",
     clientType: 'import("discord.js").Client',
+    channelType: 'import("discord.js").VoiceBasedChannel',
     factoryAlias: "createDiscordJSAdapter",
   },
   "@distube/oceanic": {
     className: "OceanicAdapter",
     client: "{ guilds: new Map() }",
     clientType: 'import("oceanic.js").Client',
+    channelType: 'import("oceanic.js").VoiceChannel',
     factoryAlias: "createOceanicAdapter",
   },
   "@distube/eris": {
     className: "ErisAdapter",
     client: "{}",
     clientType: 'import("eris").Client',
+    channelType: 'import("eris").VoiceChannel',
     factoryAlias: "createErisAdapter",
   },
 };
@@ -119,13 +123,18 @@ try {
 }
 
 function declarationSmoke(adapterName: string, surface: AdapterSurface): string {
-  return `import type { Adapter, VoiceSession } from "distube";
+  return `import type { Adapter, VoiceSession } from "distube/integrations";
+import { DisTube } from "distube";
 import { ${surface.className} } from ${JSON.stringify(adapterName)};
 // @ts-expect-error Legacy adapter factory aliases remain removed.
 import { ${surface.factoryAlias} } from ${JSON.stringify(adapterName)};
 
 declare const client: ${surface.clientType};
 declare const session: VoiceSession;
+declare const channel: ${surface.channelType};
+const music = new DisTube<{ requestedBy: string }>({ adapter: new ${surface.className}(client), sources: [] });
+void music.play(channel, "song", { metadata: { requestedBy: "user" } });
+void music.voices.join(channel);
 const adapter: Adapter = new ${surface.className}(client, { connectionTimeoutMs: 1, filters: { house: "volume=2" } });
 async function createAndRelease(): Promise<void> {
   await (await adapter.engine.createPlayer(session)).release();

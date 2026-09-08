@@ -1,4 +1,4 @@
-import type { VoiceSession } from "distube";
+import type { VoiceSession } from "distube/integrations";
 import type { Client } from "oceanic.js";
 import * as oceanicExports from "../src";
 

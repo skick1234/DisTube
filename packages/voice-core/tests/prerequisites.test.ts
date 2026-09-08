@@ -1,4 +1,3 @@
-import { ErrorCode } from "distube";
 import { describe, expect, it, vi } from "vitest";
 import {
   createPrerequisiteCheck,
@@ -81,7 +80,7 @@ describe("default voice engine prerequisites", () => {
       )(),
     );
 
-    expect(failure).toMatchObject({ code: ErrorCode.VOICE_FAILED });
+    expect(failure).toMatchObject({ code: "VOICE_FAILED" });
     expect(loadModule.mock.calls.map(([name]) => name)).toEqual(DISCORD_OPUS_MODULES);
   });
 
@@ -124,7 +123,7 @@ describe("default voice engine prerequisites", () => {
     const loadModule = vi.fn(() => ({}));
     const failure = await rejected(createPrerequisiteCheck(discordModules(), runtime(probeFfmpeg, loadModule))());
 
-    expect(failure).toMatchObject({ code: ErrorCode.VOICE_FAILED });
+    expect(failure).toMatchObject({ code: "VOICE_FAILED" });
     expect(failure.message).toContain("requires FFmpeg");
     expect(failure.message).not.toContain(signed);
     expect(failure.message).not.toContain("top-secret");
@@ -138,7 +137,7 @@ describe("default voice engine prerequisites", () => {
     });
     const failure = await rejected(createPrerequisiteCheck(discordModules(), runtime(probeFfmpeg, loadModule))());
 
-    expect(failure).toMatchObject({ code: ErrorCode.VOICE_FAILED });
+    expect(failure).toMatchObject({ code: "VOICE_FAILED" });
     expect(failure.message).toContain("Opus implementation");
     // The message names the owning package and its own configured list, not a hardcoded pair.
     expect(failure.message).toContain("@distube/discordjs requires an Opus implementation");
@@ -212,7 +211,7 @@ describe("voice encryption prerequisite", () => {
       )(),
     );
 
-    expect(failure).toMatchObject({ code: ErrorCode.VOICE_FAILED });
+    expect(failure).toMatchObject({ code: "VOICE_FAILED" });
     expect(failure.message).toContain("@distube/eris");
     expect(failure.message).toContain("tweetnacl");
     expect(loadModule.mock.calls.map(([name]) => name)).toEqual(["@discordjs/opus", "sodium-native", "tweetnacl"]);

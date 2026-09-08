@@ -1,5 +1,5 @@
 import { AudioPlayerStatus, type VoiceConnection, VoiceConnectionStatus } from "@discordjs/voice";
-import { ErrorCode, Filters, type PlaybackRequest, type PlayerEvent } from "distube";
+import type { PlaybackRequest, PlayerEvent } from "distube/integrations";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { FilterRegistry } from "../src/filters";
 import { DiscordVoicePlayer } from "../src/player";
@@ -139,7 +139,7 @@ describe("playback", () => {
     const encoded = { itemId: "item", resource: { kind: "encoded", data: "track", dispose: vi.fn() } };
 
     await expect(player.play(encoded as unknown as PlaybackRequest)).rejects.toMatchObject({
-      code: ErrorCode.UNSUPPORTED,
+      code: "UNSUPPORTED",
       message: "The default voice engine cannot play encoded resources",
     });
   });
@@ -158,7 +158,7 @@ describe("controls", () => {
     await expect(player.resume()).resolves.toBeUndefined();
 
     await expect(player.seek(30)).rejects.toMatchObject({
-      code: ErrorCode.UNSUPPORTED,
+      code: "UNSUPPORTED",
       message: "The default voice engine cannot seek",
     });
   });
@@ -177,7 +177,7 @@ describe("controls", () => {
 
   it("holds the volume level across decodes and rejects an invalid one", async () => {
     const { player } = createPlayer();
-    await expect(player.setVolume(-1)).rejects.toMatchObject({ code: ErrorCode.INVALID_ARGUMENT });
+    await expect(player.setVolume(-1)).rejects.toMatchObject({ code: "INVALID_ARGUMENT" });
 
     await player.setVolume(50);
     await player.play(request());
@@ -196,7 +196,7 @@ describe("filters", () => {
     latest.resource.playbackDuration = 6000;
 
     await player.setFilters([
-      { name: Filters.Bassboost, value: 5 },
+      { name: "bassboost", value: 5 },
       { name: "custom", payload: "volume=2" },
     ]);
 
@@ -210,7 +210,7 @@ describe("filters", () => {
 
     // An unchanged chain leaves the running decode alone.
     await player.setFilters([
-      { name: Filters.Bassboost, value: 5 },
+      { name: "bassboost", value: 5 },
       { name: "custom", payload: "volume=2" },
     ]);
     expect(native.children).toHaveLength(2);
@@ -222,7 +222,7 @@ describe("filters", () => {
     await player.pause();
     const calls = native.entersState.mock.calls.length;
 
-    await player.setFilters([{ name: Filters.Echo }]);
+    await player.setFilters([{ name: "echo" }]);
 
     expect(latest.player.play).toHaveBeenCalledTimes(2);
     expect(latest.player.pause).toHaveBeenCalledTimes(2);
@@ -236,7 +236,7 @@ describe("filters", () => {
     const active = latest.resource;
     latest.player.transition({ status: AudioPlayerStatus.AutoPaused, resource: active });
 
-    await player.setFilters([{ name: Filters.Echo }]);
+    await player.setFilters([{ name: "echo" }]);
 
     expect(latest.player.pause).not.toHaveBeenCalled();
     expect(latest.player.state.status).toBe(AudioPlayerStatus.Playing);
@@ -245,11 +245,11 @@ describe("filters", () => {
   it("restores the previous chain and active playback when the candidate fails", async () => {
     const { player, events } = createPlayer();
     await player.play(request());
-    await player.setFilters([{ name: Filters.Echo }]);
+    await player.setFilters([{ name: "echo" }]);
     const previousResource = latest.resource;
     native.entersState.mockImplementation(() => new Promise<undefined>(() => undefined));
 
-    const replacing = player.setFilters([{ name: Filters.Nightcore }]);
+    const replacing = player.setFilters([{ name: "nightcore" }]);
     latest.player.emit(
       "stateChange",
       { status: AudioPlayerStatus.Playing, resource: previousResource },
@@ -283,7 +283,7 @@ describe("filters", () => {
     const stops = latest.player.stop.mock.calls.length;
     native.autoAudio = false;
 
-    const replacing = player.setFilters([{ name: Filters.Nightcore }]);
+    const replacing = player.setFilters([{ name: "nightcore" }]);
     await flushMicrotasks();
     const candidate = latest.child;
 
@@ -303,7 +303,7 @@ describe("filters", () => {
     const activeResource = latest.resource;
     native.autoAudio = false;
 
-    const replacing = player.setFilters([{ name: Filters.Nightcore }]);
+    const replacing = player.setFilters([{ name: "nightcore" }]);
     await flushMicrotasks();
     const candidate = latest.child;
     const candidateResource = latest.resource;
@@ -329,7 +329,7 @@ describe("filters", () => {
     await player.play(request());
     native.entersState.mockImplementation(() => new Promise<undefined>(() => undefined));
 
-    const replacing = player.setFilters([{ name: Filters.Echo }]);
+    const replacing = player.setFilters([{ name: "echo" }]);
     await flushMicrotasks();
     const candidate = latest.child;
     const resource = latest.resource;
@@ -351,7 +351,7 @@ describe("filters", () => {
     native.autoAudio = false;
     native.entersState.mockImplementation(() => new Promise<undefined>(() => undefined));
 
-    const replacing = player.setFilters([{ name: Filters.Nightcore }]);
+    const replacing = player.setFilters([{ name: "nightcore" }]);
     const candidate = latest.child;
     const candidateResource = latest.resource;
     candidate.stdout.write(Buffer.from([0]));
@@ -383,7 +383,7 @@ describe("filters", () => {
 
   it("stores a chain committed with no active track for the next one", async () => {
     const { player } = createPlayer();
-    await player.setFilters([{ name: Filters.Vaporwave }]);
+    await player.setFilters([{ name: "vaporwave" }]);
 
     await player.play(request());
 

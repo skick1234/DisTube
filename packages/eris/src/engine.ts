@@ -5,7 +5,7 @@ import {
   ERIS_OPUS_MODULES,
   FilterRegistry,
 } from "@distube/voice-core/core";
-import type { Engine, PlaybackResource, Player, VoiceSession } from "distube";
+import type { Engine, PlaybackResource, Player, VoiceSession } from "distube/integrations";
 import { ErisVoicePlayer } from "./player";
 import { ErisVoiceSession } from "./session";
 

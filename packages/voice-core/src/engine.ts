@@ -1,4 +1,4 @@
-import type { Engine, PlaybackResource, Player, VoiceSession } from "distube";
+import type { Engine, PlaybackResource, Player, VoiceSession } from "distube/integrations";
 import { type FfmpegFilterDefinitions, FilterRegistry } from "./filters";
 import { DiscordVoicePlayer } from "./player";
 import { createPrerequisiteCheck, DISCORD_ENCRYPTION_MODULES, DISCORD_OPUS_MODULES } from "./prerequisites";

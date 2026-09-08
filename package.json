@@ -1,7 +1,7 @@
 {
   "name": "distube-workspace",
   "private": true,
-  "packageManager": "bun@1.4.0",
+  "packageManager": "bun@1.4.2",
   "workspaces": [
     "packages/*"
   ],

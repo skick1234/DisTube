@@ -1,6 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
-import { ErrorCode, Playlist, type Song } from "../src";
-import { GuildQueueImpl } from "../src/GuildQueue";
+import { describe, expect, it } from "vitest";
+import { Playlist, type Song } from "../src";
 import {
   capture,
   deferred,
@@ -10,12 +9,11 @@ import {
   mediaUrl,
   playableSetup,
   record,
-  settle,
   VOICE_CHANNEL,
 } from "./support/harness";
 
-const TARGET = { guildId: GUILD, voiceChannelId: VOICE_CHANNEL };
-const MOVED_TARGET = { guildId: GUILD, voiceChannelId: "moved" };
+const TARGET = { guildId: GUILD, id: VOICE_CHANNEL };
+const MOVED_TARGET = { guildId: GUILD, id: "moved" };
 const FIRST_PLAY_EVENTS = ["queue.created", "queue.item.added", "queue.item.started", "queue.deleted"] as const;
 
 /** Flushes only queued microtasks. Each test controls all asynchronous boundaries with deferred Promises. */
@@ -26,16 +24,16 @@ async function flush(rounds = 12): Promise<void> {
 describe("transactional play", () => {
   it.each([
     [null, "input", undefined],
-    [{ guildId: "", voiceChannelId: VOICE_CHANNEL }, "input", undefined],
-    [{ guildId: GUILD, voiceChannelId: "" }, "input", undefined],
+    [{ guildId: "", id: VOICE_CHANNEL }, "input", undefined],
+    [{ guildId: GUILD, id: "" }, "input", undefined],
     [TARGET, "input", null],
-    [TARGET, "input", { position: -1 }],
-    [TARGET, "input", { position: 1.5 }],
+    [TARGET, "", undefined],
+    [TARGET, "input", { signal: {} }],
   ] as const)("rejects malformed play input %# before starting owned work", async (target, input, options) => {
     const harness = playableSetup();
 
     await expect(harness.distube.play(target as never, input, options as never)).rejects.toMatchObject({
-      code: ErrorCode.INVALID_ARGUMENT,
+      code: "INVALID_ARGUMENT",
     });
 
     expect(harness.source.resolve).not.toHaveBeenCalled();
@@ -45,7 +43,7 @@ describe("transactional play", () => {
     expect(harness.distube.voices.size).toBe(0);
   });
 
-  it("keeps a failing first resolution provisional and never starts playback", async () => {
+  it("registers before resolution and deletes a failed first reservation without playback", async () => {
     const harness = playableSetup();
     const resolution = deferred<Song>();
     harness.source.resolve.mockReturnValueOnce(resolution.promise);
@@ -53,21 +51,21 @@ describe("transactional play", () => {
     const result = capture(harness.distube.play(TARGET, mediaUrl("unresolved")));
 
     await flush();
-    expect(harness.distube.getQueue(GUILD)).toBeUndefined();
+    expect(harness.distube.getQueue(GUILD)?.state).toEqual({ current: undefined, upcoming: [], status: "idle" });
     expect(harness.distube.voices.has(GUILD)).toBe(false);
     expect(harness.adapter.createVoiceSession).not.toHaveBeenCalled();
 
     resolution.reject(new Error("source rejected"));
-    expect(await result).toMatchObject({ code: ErrorCode.SOURCE_FAILED });
+    expect(await result).toMatchObject({ code: "SOURCE_FAILED" });
     await flush();
 
     expect(harness.distube.getQueue(GUILD)).toBeUndefined();
     expect(harness.distube.voices.has(GUILD)).toBe(false);
     expect(harness.engine.players).toEqual([]);
-    expect(events).toEqual([]);
+    expect(events).toEqual(["queue.created", "queue.deleted"]);
   });
 
-  it("rolls back a first Voice acquisition failure without exposing a queue", async () => {
+  it("deletes the registered queue after first voice acquisition fails", async () => {
     const harness = playableSetup();
     const resolution = deferred<Song>();
     const creation = deferred<never>();
@@ -79,19 +77,19 @@ describe("transactional play", () => {
     resolution.resolve(media("source", "voice-failure"));
     await flush();
     expect(harness.adapter.createVoiceSession).toHaveBeenCalledTimes(1);
-    expect(harness.distube.getQueue(GUILD)).toBeUndefined();
+    expect(harness.distube.getQueue(GUILD)).toBeDefined();
 
     creation.reject(new Error("gateway rejected"));
-    expect(await result).toMatchObject({ code: ErrorCode.VOICE_FAILED });
+    expect(await result).toMatchObject({ code: "VOICE_FAILED" });
     await flush();
 
     expect(harness.distube.getQueue(GUILD)).toBeUndefined();
     expect(harness.distube.voices.has(GUILD)).toBe(false);
     expect(harness.engine.players).toEqual([]);
-    expect(events).toEqual([]);
+    expect(events).toEqual(["queue.created", "queue.deleted"]);
   });
 
-  it("releases a Voice created solely by a first call rejected before commit", async () => {
+  it("releases a DisTubeVoice created solely by a first call rejected before commit", async () => {
     const harness = playableSetup();
     const joined = deferred<void>();
     const continuePlay = deferred<void>();
@@ -110,67 +108,46 @@ describe("transactional play", () => {
 
     await joined.promise;
     expect(harness.distube.voices.has(GUILD)).toBe(true);
-    expect(harness.distube.getQueue(GUILD)).toBeUndefined();
-    const shutdown = harness.distube.shutdown();
+    expect(harness.distube.getQueue(GUILD)).toBeDefined();
+    const shutdown = harness.distube.dispose();
     await flush();
     expect(harness.adapter.sessions[0]?.release).not.toHaveBeenCalled();
     continuePlay.resolve();
     await shutdown;
-    expect(await result).toMatchObject({ code: ErrorCode.QUEUE_FAILED });
+    expect(await result).toMatchObject({ code: "INVALID_STATE" });
 
     expect(harness.adapter.sessions[0]?.release).toHaveBeenCalledTimes(1);
     expect(harness.distube.voices.has(GUILD)).toBe(false);
     expect(harness.distube.getQueue(GUILD)).toBeUndefined();
     expect(harness.engine.players).toEqual([]);
-    expect(events).toEqual([]);
+    expect(events).toEqual(["queue.created", "queue.deleted"]);
   });
 
-  it("passes caller cancellation into insertion after Voice movement", async () => {
+  it("observes caller cancellation after movement before inserting", async () => {
     const harness = playableSetup();
     const controller = new AbortController();
     const reason = new Error("caller cancelled after movement");
     const session = new FakeVoiceSession(GUILD, "other");
-    let moved = false;
-    let insertionSignal: AbortSignal | undefined;
     session.join.mockImplementationOnce(async channelId => {
-      moved = true;
       session.channelId = channelId;
+      controller.abort(reason);
     });
     harness.adapter.createVoiceSession.mockImplementationOnce(async () => {
       harness.adapter.sessions.push(session);
       return session;
     });
-    const originalEnqueue = GuildQueueImpl.prototype.enqueue;
-    const enqueue = vi.spyOn(GuildQueueImpl.prototype, "enqueue").mockImplementation(function (
-      this: GuildQueueImpl,
-      input,
-      options,
-    ) {
-      expect(moved).toBe(true);
-      insertionSignal = options?.signal;
-      controller.abort(reason);
-      return originalEnqueue.call(this, input, options);
-    });
-    const events = record(harness.distube, ["queue.created", "queue.item.added"]);
-
-    try {
-      const failure = await capture(harness.distube.play(TARGET, "cancelled", { signal: controller.signal }));
-
-      expect(insertionSignal).toBeInstanceOf(AbortSignal);
-      expect(insertionSignal?.aborted).toBe(true);
-      expect(failure).toMatchObject({ code: ErrorCode.QUEUE_FAILED, cause: reason });
-      expect(failure).not.toBe(reason);
-      expect(session.join).toHaveBeenCalledWith(VOICE_CHANNEL);
-      expect(events).toEqual([]);
-      expect(harness.distube.getQueue(GUILD)).toBeUndefined();
-      expect(session.release).toHaveBeenCalledTimes(1);
-    } finally {
-      enqueue.mockRestore();
-      await harness.distube.shutdown().catch(() => undefined);
-    }
+    const events = record(harness.distube, FIRST_PLAY_EVENTS);
+    const failure = await capture(harness.distube.play(TARGET, "cancelled", { signal: controller.signal }));
+    expect(failure).toMatchObject({ code: "ABORTED", cause: reason });
+    expect(failure).not.toBe(reason);
+    expect(session.join).toHaveBeenCalledWith(VOICE_CHANNEL);
+    expect(events).toEqual(["queue.created", "queue.deleted"]);
+    expect(harness.distube.getQueue(GUILD)).toBeUndefined();
+    expect(session.release).toHaveBeenCalledTimes(1);
+    await harness.distube.dispose();
   });
 
-  it("keeps a Voice a concurrent join is awaiting after first play rolls back", async () => {
+  it("keeps a DisTubeVoice a concurrent join is awaiting after first play rolls back", async () => {
     const harness = playableSetup();
     const firstMoveStarted = deferred<void>();
     const finishFirstMove = deferred<void>();
@@ -197,17 +174,17 @@ describe("transactional play", () => {
     const first = capture(harness.distube.play(TARGET, "first", { signal: controller.signal }));
 
     await firstMoveStarted.promise;
-    const joining = harness.distube.voices.join({ guildId: GUILD, channelId: "joined" });
+    const joining = harness.distube.voices.join({ guildId: GUILD, id: "joined" });
     controller.abort(new Error("first play failed"));
     finishFirstMove.resolve();
     await joinedMoveStarted.promise;
     finishJoinedMove.resolve();
 
-    expect(await first).toMatchObject({ code: ErrorCode.QUEUE_FAILED });
+    expect(await first).toMatchObject({ code: "ABORTED" });
     await expect(joining).resolves.toMatchObject({ guildId: GUILD, channelId: "joined" });
     expect(harness.distube.voices.get(GUILD)?.channelId).toBe("joined");
     expect(session.release).not.toHaveBeenCalled();
-    await harness.distube.shutdown();
+    await harness.distube.dispose();
   });
 
   it("serializes concurrent first plays and preserves the second call after the first fails", async () => {
@@ -221,7 +198,7 @@ describe("transactional play", () => {
     await flush();
     expect(harness.source.resolve).toHaveBeenCalledTimes(1);
     firstResolution.reject(new Error("first rejected"));
-    expect(await first).toMatchObject({ code: ErrorCode.SOURCE_FAILED });
+    expect(await first).toMatchObject({ code: "SOURCE_FAILED" });
 
     await flush();
     expect(harness.source.resolve).toHaveBeenCalledTimes(2);
@@ -239,7 +216,7 @@ describe("transactional play", () => {
   it("orders same-guild movement and insertion by play invocation", async () => {
     const harness = playableSetup();
     const started = deferred<void>();
-    harness.distube.once("queue.item.started", () => started.resolve());
+    harness.distube.on("queue.item.started", () => started.resolve());
     const { queue } = await harness.distube.play(TARGET, "active");
     await started.promise;
     const firstMove = deferred<void>();
@@ -256,63 +233,50 @@ describe("transactional play", () => {
       session.channelId = channelId;
     });
     const toB = harness.distube.play(MOVED_TARGET, "b");
-    const toC = harness.distube.play({ guildId: GUILD, voiceChannelId: "final" }, "c");
+    const toC = harness.distube.play({ guildId: GUILD, id: "final" }, "c");
 
     await flush();
-    expect(moves).toEqual([MOVED_TARGET.voiceChannelId]);
+    expect(moves).toEqual([MOVED_TARGET.id]);
     firstMove.resolve();
     await toB;
     await toC;
     await flush();
 
-    expect(moves).toEqual([MOVED_TARGET.voiceChannelId, "final"]);
+    expect(moves).toEqual([MOVED_TARGET.id, "final"]);
     expect(harness.distube.voices.get(GUILD)?.channelId).toBe("final");
     expect(queue.state.current?.song.id).toBe("active");
-    expect(queue.state.items.map(item => item.song.id)).toEqual(["b", "c"]);
+    expect(queue.state.upcoming.map(item => item.song.id)).toEqual(["b", "c"]);
   });
 
-  it("publishes queue.created after the committed insertion is registered and before its item event", async () => {
+  it("publishes the registered empty queue before resolution and insertion", async () => {
     const harness = playableSetup();
     const order: string[] = [];
+    const resolution = deferred<Song>();
     harness.source.resolve.mockImplementation(async () => {
-      order.push("resolved");
-      return media("source", "ordered");
-    });
-    harness.adapter.createVoiceSession.mockImplementation(async target => {
-      order.push("voice");
-      const session = new FakeVoiceSession(target.guildId, target.channelId);
-      harness.adapter.sessions.push(session);
-      return session;
+      order.push("resolve");
+      return resolution.promise;
     });
     harness.distube.on("queue.created", event => {
       order.push("queue.created");
       expect(harness.distube.getQueue(GUILD)).toBe(event.queue);
-      expect(event.queue.state.items).toEqual([
-        expect.objectContaining({ song: expect.objectContaining({ id: "ordered" }) }),
-      ]);
+      expect(event.state).toEqual({ current: undefined, upcoming: [], status: "idle" });
     });
     harness.distube.on("queue.item.added", () => order.push("queue.item.added"));
-
-    await harness.distube.play(TARGET, mediaUrl("ordered"));
-
-    expect(order).toEqual(["resolved", "voice", "queue.created", "queue.item.added"]);
+    const playing = harness.distube.play(TARGET, mediaUrl("ordered"));
+    const registered = harness.distube.getQueue(GUILD);
+    expect(registered).toBeDefined();
+    expect(registered?.state.upcoming).toEqual([]);
+    expect(harness.source.resolve).not.toHaveBeenCalled();
+    await flush();
+    expect(order).toContain("queue.created");
+    expect(order).not.toContain("queue.item.added");
+    resolution.resolve(media("source", "ordered"));
+    expect((await playing).queue).toBe(registered);
+    await flush();
+    expect(order.indexOf("queue.created")).toBeLessThan(order.indexOf("queue.item.added"));
   });
 
-  it("treats skip on the first play as a no-op and starts the item once", async () => {
-    const harness = playableSetup();
-    const started = vi.fn();
-    harness.distube.on("queue.item.started", started);
-
-    const result = await harness.distube.play(TARGET, "first", { skip: true });
-    await settle();
-
-    expect(started).toHaveBeenCalledTimes(1);
-    expect(harness.engine.players).toHaveLength(1);
-    expect(harness.engine.players[0]?.requests).toHaveLength(1);
-    expect(result.queue.state.current?.id).toBe(result.items[0]?.id);
-  });
-
-  it("commits the first insertion event before a reentrant queue stop", async () => {
+  it("fences insertion when queue.created stops the early queue", async () => {
     const harness = playableSetup();
     const order: string[] = [];
     let stopping: Promise<void> | undefined;
@@ -323,16 +287,16 @@ describe("transactional play", () => {
     harness.distube.on("queue.deleted", () => order.push("queue.deleted"));
     harness.distube.on("queue.item.added", () => order.push("queue.item.added"));
 
-    await harness.distube.play(TARGET, "reentrant");
+    await expect(harness.distube.play(TARGET, "reentrant")).rejects.toMatchObject({ code: "INVALID_STATE" });
     await stopping;
     await flush();
 
-    expect(order).toEqual(["queue.created", "queue.item.added", "queue.deleted"]);
+    expect(order).toEqual(["queue.created", "queue.deleted"]);
   });
 
-  it("leaves a Voice that predates a failed first play under its existing owner", async () => {
+  it("leaves a DisTubeVoice that predates a failed first play under its existing owner", async () => {
     const harness = playableSetup();
-    const voice = await harness.distube.voices.join({ guildId: GUILD, channelId: VOICE_CHANNEL });
+    const voice = await harness.distube.voices.join({ guildId: GUILD, id: VOICE_CHANNEL });
     const session = harness.adapter.sessions[0];
     const resolution = deferred<Song>();
     harness.source.resolve.mockReturnValueOnce(resolution.promise);
@@ -340,7 +304,7 @@ describe("transactional play", () => {
 
     await flush();
     resolution.reject(new Error("source rejected"));
-    expect(await result).toMatchObject({ code: ErrorCode.SOURCE_FAILED });
+    expect(await result).toMatchObject({ code: "SOURCE_FAILED" });
     await flush();
 
     expect(harness.distube.getQueue(GUILD)).toBeUndefined();
@@ -348,10 +312,10 @@ describe("transactional play", () => {
     expect(session?.release).not.toHaveBeenCalled();
   });
 
-  it("moves the existing Voice, retains the active item, and removes queue channel authority", async () => {
+  it("moves the existing DisTubeVoice, retains the active item, and removes queue channel authority", async () => {
     const harness = playableSetup();
     const started = deferred<void>();
-    harness.distube.once("queue.item.started", () => started.resolve());
+    harness.distube.on("queue.item.started", () => started.resolve());
     const first = await harness.distube.play(TARGET, "active");
     await started.promise;
     const outcomes = record(harness.distube, ["queue.item.finished", "queue.item.failed"]);
@@ -361,9 +325,9 @@ describe("transactional play", () => {
 
     expect(moved.queue).toBe(first.queue);
     expect(harness.adapter.createVoiceSession).toHaveBeenCalledTimes(1);
-    expect(harness.distube.voices.get(GUILD)?.channelId).toBe(MOVED_TARGET.voiceChannelId);
+    expect(harness.distube.voices.get(GUILD)?.channelId).toBe(MOVED_TARGET.id);
     expect(first.queue.state.current?.song.id).toBe("active");
-    expect(first.queue.state.items.map(item => item.song.id)).toEqual(["waiting"]);
+    expect(first.queue.state.upcoming.map(item => item.song.id)).toEqual(["waiting"]);
     expect(outcomes).toEqual([]);
     expect("channelId" in first.queue).toBe(false);
   });
@@ -371,7 +335,7 @@ describe("transactional play", () => {
   it("keeps a successful move when the later insertion rejects", async () => {
     const harness = playableSetup();
     const started = deferred<void>();
-    harness.distube.once("queue.item.started", () => started.resolve());
+    harness.distube.on("queue.item.started", () => started.resolve());
     const { queue } = await harness.distube.play(TARGET, "active");
     await started.promise;
     const playlist = new Playlist({
@@ -381,10 +345,16 @@ describe("transactional play", () => {
       source: "source",
       songs: [media("source", "rejected")],
     });
-    let songReads = 0;
+    let moved = false;
+    const session = harness.adapter.sessions[0];
+    if (!session) throw new Error("Expected an active VoiceSession");
+    session.join.mockImplementationOnce(async channelId => {
+      session.channelId = channelId;
+      moved = true;
+    });
     const rejectingPlaylist = new Proxy(playlist, {
       get(target, property, receiver) {
-        if (property === "songs" && ++songReads > 1) throw new Error("insertion rejected");
+        if (property === "songs" && moved) throw new Error("insertion rejected");
         return Reflect.get(target, property, receiver);
       },
     });
@@ -392,50 +362,27 @@ describe("transactional play", () => {
     const result = capture(harness.distube.play(MOVED_TARGET, mediaUrl("rejected")));
 
     await flush();
-    expect(harness.distube.voices.get(GUILD)?.channelId).toBe(MOVED_TARGET.voiceChannelId);
+    expect(harness.distube.voices.get(GUILD)?.channelId).toBe(MOVED_TARGET.id);
     expect(await result).toEqual(expect.any(Error));
 
     expect(harness.distube.getQueue(GUILD)).toBe(queue);
-    expect(harness.distube.voices.get(GUILD)?.channelId).toBe(MOVED_TARGET.voiceChannelId);
+    expect(harness.distube.voices.get(GUILD)?.channelId).toBe(MOVED_TARGET.id);
     expect(queue.state.current?.song.id).toBe("active");
-  });
-
-  it("applies skip after a moved insertion commits", async () => {
-    const harness = playableSetup();
-    const firstStarted = deferred<void>();
-    harness.distube.once("queue.item.started", () => firstStarted.resolve());
-    const { queue, items: firstItems } = await harness.distube.play(TARGET, "active");
-    await firstStarted.promise;
-    const events = record(harness.distube, ["queue.item.added", "queue.item.finished"]);
-    const nextStarted = deferred<void>();
-    harness.distube.once("queue.item.started", () => nextStarted.resolve());
-
-    const moved = await harness.distube.play(MOVED_TARGET, "next", { skip: true });
-    await nextStarted.promise;
-
-    expect(harness.distube.voices.get(GUILD)?.channelId).toBe(MOVED_TARGET.voiceChannelId);
-    expect(events).toEqual(["queue.item.added", "queue.item.finished"]);
-    expect(moved.queue).toBe(queue);
-    expect(moved.items[0]?.song.id).toBe("next");
-    expect(harness.distube.voices.get(GUILD)?.previousSongs.map(item => item.song.id)).toContain(
-      firstItems[0]?.song.id,
-    );
-    expect(queue.state.current?.song.id).toBe("next");
   });
 
   it("keeps the previous channel when movement itself fails", async () => {
     const harness = playableSetup();
     const started = deferred<void>();
-    harness.distube.once("queue.item.started", () => started.resolve());
+    harness.distube.on("queue.item.started", () => started.resolve());
     const { queue } = await harness.distube.play(TARGET, "active");
     await started.promise;
     harness.adapter.sessions[0]?.join.mockRejectedValueOnce(new Error("cannot move"));
 
-    await expect(harness.distube.play(MOVED_TARGET, "waiting")).rejects.toMatchObject({ code: ErrorCode.VOICE_FAILED });
+    await expect(harness.distube.play(MOVED_TARGET, "waiting")).rejects.toMatchObject({ code: "VOICE_FAILED" });
 
     expect(harness.distube.getQueue(GUILD)).toBe(queue);
     expect(harness.distube.voices.get(GUILD)?.channelId).toBe(VOICE_CHANNEL);
     expect(queue.state.current?.song.id).toBe("active");
-    expect(queue.state.items).toEqual([]);
+    expect(queue.state.upcoming).toEqual([]);
   });
 });

@@ -24,7 +24,7 @@ import type {
   SearchOptions,
   SourceOperationOptions,
   SourcePlugin,
-} from "distube";
+} from "distube/integrations";
 import { Song } from "distube";
 
 class ExampleSource implements SourcePlugin {
@@ -52,7 +52,7 @@ how you decline a query, and it is not an error.
 
 Core searches its configured sources in constructor order, skips any it already visited on the current chain, calls
 `search` at most once per source, and stops at the first source that returns anything. A search that throws is recorded
-and the chain moves on, so a failing provider costs the user nothing as long as a later one answers. Two callers share
+and the chain moves on, so a later source can answer after an earlier failure. Two callers share
 that rule and differ only in how many of your candidates they consume: resolving a typed query takes one, and
 substituting a stream for a metadata-only source tries up to five.
 
@@ -66,11 +66,11 @@ metadata-only source returns one trimmed non-empty provider-derived search query
 explicit bounded fallback, keeps the original QueueItem public, and owns exactly-once source-resource disposal. The
 Player only borrows the resource.
 
-Populate the typed display fields `thumbnail`, `uploader`, `isLive`, and `views` on every Song, and `thumbnail` on
-every Playlist, wherever the provider payload supplies the value. A field reads `undefined` only when the payload omits
-it or it fails validation, and absence never affects playback eligibility. Do not fabricate a value to fill a field:
-a live video reporting no length keeps `duration` at `0` alongside `isLive` true, and a provider that reports no play
-count leaves `views` absent rather than guessing.
+Song exposes fixed source, id, name and canonical URL fields, plus optional duration, thumbnail and artist.
+Artist is a string. Playlist exposes source, id, name, canonical URL, optional thumbnail and readonly Songs.
+Omit absent or invalid optional values rather than fabricating data. Unknown duration stays absent. Keep
+provider-specific payloads, live flags, counts and temporary playback details private with a bounded lifetime.
+Caller metadata belongs to QueueItem as an optional readonly binding; core never freezes or clones its contents.
 
 Expand a collection to a documented bound, in provider order, and say what that bound is in the package README. Check
 the supplied `AbortSignal` between pages so a cancelled expansion issues no further request, and drop an entry the
@@ -84,3 +84,8 @@ An official package may expose a typed provider constructor option. Injected pro
 not unvalidated shortcuts: they must honor AbortSignals and lifecycle disposal, return correctly owned Songs and safe
 playback outcomes, and pass the same shape, pagination, destination/redirect/body/final-URL, and redaction validation
 as the default provider.
+
+Import author interfaces with import type from distube/integrations and runtime Song/Playlist/DisTubeError values
+from distube. Sources are fixed at construction; there is no runtime registry. A dual-role source/engine must be
+supplied explicitly in both fields. Core orders lifecycle ownership as configured sources followed by the selected
+engine, deduplicates by identity, and disposes hooked instances once in reverse order. No integration instance may be owned by two live clients.

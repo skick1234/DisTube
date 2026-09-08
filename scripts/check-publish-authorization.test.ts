@@ -3,7 +3,12 @@ import { execFileSync } from "node:child_process";
 import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { relative, resolve } from "node:path";
-import { candidateIdentity, inspectPublishAuthorization, publicPackages } from "./check-publish-authorization";
+import {
+  candidateIdentity,
+  inspectPublishAuthorization,
+  manifestDeclarationTargets,
+  publicPackages,
+} from "./check-publish-authorization";
 
 const temporaryRoots: string[] = [];
 afterEach(async () => Promise.all(temporaryRoots.splice(0).map(path => rm(path, { recursive: true, force: true }))));
@@ -57,7 +62,7 @@ async function createPackage(root: string, name: string): Promise<void> {
   await mkdir(resolve(packageRoot, "dist"), { recursive: true });
   await writeFile(
     resolve(packageRoot, "package.json"),
-    `${JSON.stringify({ name, version: "6.0.0", private: false })}\n`,
+    `${JSON.stringify({ name, version: "6.0.0", private: false, types: "./dist/index.d.mts", exports: { ".": { types: "./dist/index.d.mts" }, ...(name === "distube" ? { "./integrations": { types: "./dist/integrations.d.mts" } } : {}) } })}\n`,
   );
   await writeFile(resolve(packageRoot, "README.md"), `# ${name}\n`);
   await writeFile(resolve(packageRoot, "dist/index.d.mts"), `export declare const name: "${name}";\n`);
@@ -120,10 +125,24 @@ async function createFixture(): Promise<Fixture> {
       const directory = item.directory.split("/").at(-1);
       if (!directory) throw new Error("fixture package directory is missing");
       const archivePath = resolve(artifactRoot, artifactOwner, "archives", archiveName(item.name));
-      const declarationBase = item.name.replace(/^@/u, "").replaceAll("/", "-");
-      const declarationMts = resolve(artifactRoot, artifactOwner, "declarations", `${declarationBase}.index.d.mts`);
+      const declarationBase = encodeURIComponent(item.name);
+      const declarationMts = resolve(
+        artifactRoot,
+        artifactOwner,
+        "declarations",
+        `${declarationBase}/dist/index.d.mts`,
+      );
       await writeFile(archivePath, `${item.name} archive\n`);
+      await mkdir(resolve(declarationMts, ".."), { recursive: true });
       await writeFile(declarationMts, `export declare const packageName: "${item.name}";\n`);
+      const integrationMts = resolve(
+        artifactRoot,
+        artifactOwner,
+        "declarations",
+        declarationBase,
+        "dist/integrations.d.mts",
+      );
+      if (item.name === "distube") await writeFile(integrationMts, "export type Adapter = object;\n");
       const packageRoot = resolve(root, item.owner, item.directory);
       return {
         name: item.name,
@@ -146,8 +165,16 @@ async function createFixture(): Promise<Fixture> {
           sha256: await hash(archivePath),
         },
         declarations: [
+          ...(item.name === "distube"
+            ? [
+                {
+                  path: `${artifactOwner}/declarations/${declarationBase}/dist/integrations.d.mts`,
+                  sha256: await hash(integrationMts),
+                },
+              ]
+            : []),
           {
-            path: `${artifactOwner}/declarations/${declarationBase}.index.d.mts`,
+            path: `${artifactOwner}/declarations/${declarationBase}/dist/index.d.mts`,
             sha256: await hash(declarationMts),
           },
         ],
@@ -155,13 +182,13 @@ async function createFixture(): Promise<Fixture> {
       };
     }),
   );
-  const gates = [{ repository: "workspace", command: "fixture", status: "passed", bunVersion: "1.4.0", warnings: [] }];
+  const gates = [{ repository: "workspace", command: "fixture", status: "passed", bunVersion: "1.4.2", warnings: [] }];
   const candidate: Candidate = {
     schemaVersion: 3,
     evidenceGeneration: "candidate-evidence-2026",
     generatedAt: new Date().toISOString(),
     publishAuthorized: false,
-    toolchain: { expectedBun: "1.4.0", observedBun: "1.4.0" },
+    toolchain: { expectedBun: "1.4.2", observedBun: "1.4.2" },
     repositories: [
       {
         name: "DisTube",
@@ -221,6 +248,22 @@ function expectError(errors: readonly string[], fragment: string): void {
   expect(errors.some(error => error.includes(fragment))).toBe(true);
 }
 
+test("manifest declaration targets include conditional branches and deduplicate aliases", () => {
+  expect(
+    manifestDeclarationTargets({
+      types: "./dist/index.d.mts",
+      exports: {
+        ".": {
+          import: { types: "./dist/index.d.mts", default: "./dist/index.mjs" },
+          require: { types: "./dist/index.d.cts" },
+        },
+        "./integrations": { types: { import: "./dist/integrations.d.mts", require: "./dist/integrations.d.cts" } },
+      },
+    }),
+  ).toEqual(["dist/index.d.cts", "dist/index.d.mts", "dist/integrations.d.cts", "dist/integrations.d.mts"]);
+  expect(() => manifestDeclarationTargets({ types: "../outside.d.mts" })).toThrow("canonical and relative");
+});
+
 describe("candidate-backed publish authorization", () => {
   test("accepts only fresh candidate-backed archive evidence", async () => {
     const fixture = await createFixture();
@@ -239,6 +282,17 @@ describe("candidate-backed publish authorization", () => {
   test("accepts package-name-based adapter declaration evidence", async () => {
     const fixture = await createFixture();
     expect(await inspect(fixture, fixture.candidate, "@distube/discordjs")).toEqual([]);
+  });
+
+  test("requires every public declaration subpath and rejects the flattened layout", async () => {
+    const fixture = await createFixture();
+    const core = packages(fixture.candidate).find(item => item.name === "distube");
+    if (!core) throw new Error("missing core fixture");
+    const declarations = core.declarations as Candidate[];
+    core.declarations = declarations.filter(item => !String(item.path).endsWith("integrations.d.mts"));
+    expectError(await inspect(fixture), "declaration evidence omits core/declarations/distube/dist/integrations.d.mts");
+    core.declarations = declarations.map(item => ({ ...item, path: "core/declarations/distube.index.d.mts" }));
+    expectError(await inspect(fixture), "declaration path is not canonical");
   });
 
   test("rejects an absent package and anything other than the exact eight public packages", async () => {
@@ -280,7 +334,7 @@ describe("candidate-backed publish authorization", () => {
       "DisTube/packages/distube/package.json",
       "DisTube/bun.lock",
       "DisTube/packages/distube/README.md",
-      ".artifacts/release-candidate/core/declarations/distube.index.d.mts",
+      ".artifacts/release-candidate/core/declarations/distube/dist/index.d.mts",
       ".artifacts/release-candidate/core/archives/distube-6.0.0.tgz",
     ];
     for (const path of paths) {

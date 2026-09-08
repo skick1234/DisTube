@@ -1,15 +1,13 @@
-import {
-  type Adapter,
-  DisTube,
-  Events,
-  type PlaybackContext,
-  type PlaybackPreparation,
-  type Player,
-  type PluginContext,
-  Song,
-  type SourceOperationOptions,
-  type SourcePlugin,
-} from "distube";
+import { DisTube, Song } from "distube";
+import type {
+  Adapter,
+  PlaybackContext,
+  PlaybackPreparation,
+  Player,
+  PluginContext,
+  SourceOperationOptions,
+  SourcePlugin,
+} from "distube/integrations";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { preflight, preflightFactory } = vi.hoisted(() => {
@@ -51,9 +49,9 @@ describe("Eris adapter queue lifecycle", () => {
   it("rejects voices.join before native gateway work when encryption is unavailable", async () => {
     const client = new FakeClient();
     preflight.mockRejectedValueOnce(new Error("@distube/eris requires tweetnacl"));
-    const distube = new DisTube({ adapter: new ErisAdapter(asClient(client)), plugins: [] });
+    const distube = new DisTube({ adapter: new ErisAdapter(asClient(client)), sources: [] });
 
-    await expect(distube.voices.join({ guildId: GUILD, channelId: CHANNEL })).rejects.toMatchObject({
+    await expect(distube.voices.join({ guildId: GUILD, id: CHANNEL })).rejects.toMatchObject({
       code: "VOICE_FAILED",
     });
     expect(client.joinVoiceChannel).not.toHaveBeenCalled();
@@ -65,15 +63,15 @@ describe("Eris adapter queue lifecycle", () => {
     const distube = createDisTube(client);
     const finished = vi.fn();
     const failed = vi.fn();
-    distube.on(Events.QueueItemFinished, finished);
-    distube.on(Events.QueueItemFailed, failed);
+    distube.on("queue.item.finished", finished);
+    distube.on("queue.item.failed", failed);
 
     const started = waitForStart(distube);
-    const first = await distube.play({ guildId: GUILD, voiceChannelId: CHANNEL }, song("A"));
+    const first = await distube.play({ guildId: GUILD, id: CHANNEL }, song("A"));
     await started;
     const activeId = first.queue.state.current?.id;
 
-    const second = await distube.play({ guildId: GUILD, voiceChannelId: OTHER_CHANNEL }, song("B"));
+    const second = await distube.play({ guildId: GUILD, id: OTHER_CHANNEL }, song("B"));
 
     expect(second.queue).toBe(first.queue);
     expect(distube.queues.size).toBe(1);
@@ -89,7 +87,7 @@ describe("Eris adapter queue lifecycle", () => {
     client.channels.set(OTHER_CHANNEL, voiceChannel());
     const distube = createDisTube(client);
     const started = waitForStart(distube);
-    await distube.play({ guildId: GUILD, voiceChannelId: CHANNEL }, song("A"));
+    await distube.play({ guildId: GUILD, id: CHANNEL }, song("A"));
     await started;
     const failure = new Error("move failed");
     client.join = async channelId => {
@@ -98,14 +96,14 @@ describe("Eris adapter queue lifecycle", () => {
       return client.connection;
     };
 
-    await expect(distube.play({ guildId: GUILD, voiceChannelId: OTHER_CHANNEL }, song("B"))).rejects.toMatchObject({
+    await expect(distube.play({ guildId: GUILD, id: OTHER_CHANNEL }, song("B"))).rejects.toMatchObject({
       code: "VOICE_FAILED",
       cause: failure,
     });
 
     expect(distube.voices.get(GUILD)?.channelId).toBe(CHANNEL);
     expect(client.connection.channelID).toBe(CHANNEL);
-    const later = await distube.play({ guildId: GUILD, voiceChannelId: CHANNEL }, song("C"));
+    const later = await distube.play({ guildId: GUILD, id: CHANNEL }, song("C"));
 
     expect(later.queue.state.current?.song.id).toBe("A");
     expect(client.joinVoiceChannel).toHaveBeenCalledTimes(3);
@@ -116,9 +114,9 @@ describe("Eris adapter queue lifecycle", () => {
     const distube = createDisTube(client);
     const started = waitForStart(distube);
     const outcomes = vi.fn();
-    distube.on(Events.QueueItemFinished, outcomes);
-    distube.on(Events.QueueItemFailed, outcomes);
-    await distube.play({ guildId: GUILD, voiceChannelId: CHANNEL }, song("A"));
+    distube.on("queue.item.finished", outcomes);
+    distube.on("queue.item.failed", outcomes);
+    await distube.play({ guildId: GUILD, id: CHANNEL }, song("A"));
     await started;
     const child = latest.child;
 
@@ -143,8 +141,8 @@ describe("Eris adapter queue lifecycle", () => {
     const started = waitForStart(distube);
     const failed = waitForFailure(distube);
     const finished = vi.fn();
-    distube.on(Events.QueueItemFinished, finished);
-    await distube.play({ guildId: GUILD, voiceChannelId: CHANNEL }, song("A"));
+    distube.on("queue.item.finished", finished);
+    await distube.play({ guildId: GUILD, id: CHANNEL }, song("A"));
     await started;
 
     latest.child.close(1, null);
@@ -159,8 +157,8 @@ describe("Eris adapter queue lifecycle", () => {
     const distube = createDisTube(client);
     const started = waitForStart(distube);
     const disconnected = vi.fn();
-    distube.on(Events.VoiceDisconnected, disconnected);
-    await distube.play({ guildId: GUILD, voiceChannelId: CHANNEL }, song("A"));
+    distube.on("voice.disconnected", disconnected);
+    await distube.play({ guildId: GUILD, id: CHANNEL }, song("A"));
     await started;
     const child = latest.child;
 
@@ -179,30 +177,30 @@ describe("Eris adapter queue lifecycle", () => {
     const started: string[] = [];
     let failedItem = "";
     const failed = new Promise<void>(resolve => {
-      harness.distube.on(Events.QueueItemFailed, event => {
+      harness.distube.on("queue.item.failed", event => {
         order.push("failed");
         failedItem = event.item.song.id;
         resolve();
       });
     });
     const deleted = new Promise<void>(resolve => {
-      harness.distube.on(Events.QueueDeleted, () => {
+      harness.distube.on("queue.deleted", () => {
         order.push("deleted");
         resolve();
       });
     });
     const disconnected = new Promise<void>(resolve => {
-      harness.distube.on(Events.VoiceDisconnected, () => {
+      harness.distube.on("voice.disconnected", () => {
         order.push("disconnected");
         resolve();
       });
     });
-    harness.distube.on(Events.QueueItemStarted, event => started.push(event.item.song.id));
+    harness.distube.on("queue.item.started", event => started.push(event.item.song.id));
 
     const firstStarted = waitForStart(harness.distube);
-    await harness.distube.play({ guildId: GUILD, voiceChannelId: CHANNEL }, song("A"));
+    await harness.distube.play({ guildId: GUILD, id: CHANNEL }, song("A"));
     await firstStarted;
-    await harness.distube.play({ guildId: GUILD, voiceChannelId: CHANNEL }, song("B"));
+    await harness.distube.play({ guildId: GUILD, id: CHANNEL }, song("B"));
     const child = latest.child;
 
     client.connection.emit("disconnect", new Error("connection lost"));
@@ -242,7 +240,7 @@ function createHarness(client: FakeClient): { readonly distube: DisTube; readonl
     },
   };
   return {
-    distube: new DisTube({ adapter: bridge, plugins: [localSource()] }),
+    distube: new DisTube({ adapter: bridge, sources: [localSource()] }),
     player: () => {
       if (!player) throw new Error("Expected playback to create an Eris Player");
       return player;
@@ -271,7 +269,7 @@ function localSource(): SourcePlugin {
 function song(id: string): Song {
   return new Song({
     id,
-    title: id,
+    name: id,
     url: `https://provider.example/${id}`,
     duration: 60,
     source: "local",
@@ -279,9 +277,19 @@ function song(id: string): Song {
 }
 
 function waitForStart(distube: DisTube): Promise<void> {
-  return new Promise(resolve => distube.once(Events.QueueItemStarted, () => resolve()));
+  return new Promise(resolve => {
+    const unsubscribe = distube.on("queue.item.started", () => {
+      unsubscribe();
+      resolve();
+    });
+  });
 }
 
 function waitForFailure(distube: DisTube): Promise<void> {
-  return new Promise(resolve => distube.once(Events.QueueItemFailed, () => resolve()));
+  return new Promise(resolve => {
+    const unsubscribe = distube.on("queue.item.failed", () => {
+      unsubscribe();
+      resolve();
+    });
+  });
 }

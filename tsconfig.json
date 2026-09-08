@@ -31,7 +31,8 @@
       "@distube/oceanic": ["./packages/oceanic/src/index.ts"],
       "@distube/voice-core": ["./packages/voice-core/src/index.ts"],
       "@distube/voice-core/core": ["./packages/voice-core/src/index.ts"],
-      "@distube/voice-core/discord": ["./packages/voice-core/src/discord.ts"]
+      "@distube/voice-core/discord": ["./packages/voice-core/src/discord.ts"],
+      "distube/integrations": ["./packages/distube/src/integrations.ts"]
     }
   }
 }

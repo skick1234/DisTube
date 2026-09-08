@@ -1,5 +1,5 @@
 import type { DiscordGatewayAdapterCreator } from "@discordjs/voice";
-import { ErrorCode, Filters, type VoiceSession } from "distube";
+import type { VoiceSession } from "distube/integrations";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { DiscordVoiceEngine, DiscordVoiceSession } from "../src/discord";
 import { FilterRegistry } from "../src/filters";
@@ -29,7 +29,7 @@ describe("engine", () => {
 
     // The declaration is only worth something if the Player enforces it.
     const encoded = { itemId: "item", resource: { kind: "encoded", encoded: "track", dispose: vi.fn() } };
-    await expect(player.play(encoded as never)).rejects.toMatchObject({ code: ErrorCode.UNSUPPORTED });
+    await expect(player.play(encoded as never)).rejects.toMatchObject({ code: "UNSUPPORTED" });
   });
 
   it("creates a Player over its own session's connection", async () => {
@@ -52,7 +52,7 @@ describe("engine", () => {
   it("resolves the names its registry defines", () => {
     const engine = new DiscordVoiceEngine({ house: "volume=2" });
 
-    expect(engine.resolvable(Filters.Nightcore)).toBe(true);
+    expect(engine.resolvable("nightcore")).toBe(true);
     expect(engine.resolvable("house")).toBe(true);
     expect(engine.resolvable("unknown")).toBe(false);
   });
@@ -63,7 +63,7 @@ describe("filter registry", () => {
     const registry = new FilterRegistry();
 
     expect(registry.render([])).toBeUndefined();
-    expect(registry.render([{ name: Filters.Echo }, { name: Filters.Karaoke }])).toBe(
+    expect(registry.render([{ name: "echo" }, { name: "karaoke" }])).toBe(
       "aecho=0.8:0.9:1000:0.3,stereotools=mlev=0.03",
     );
   });
@@ -71,14 +71,14 @@ describe("filter registry", () => {
   it("renders a calculated preset from its value, falling back to the preset default", () => {
     const registry = new FilterRegistry();
 
-    expect(registry.render([{ name: Filters.Bassboost, value: 20 }])).toBe("bass=g=20");
-    expect(registry.render([{ name: Filters.Bassboost }])).toBe("bass=g=10");
+    expect(registry.render([{ name: "bassboost", value: 20 }])).toBe("bass=g=20");
+    expect(registry.render([{ name: "bassboost" }])).toBe("bass=g=10");
   });
 
   it("overrides a built-in preset and adds new ones", () => {
-    const registry = new FilterRegistry({ [Filters.Echo]: "aecho=1", house: (value = 2) => `volume=${value}` });
+    const registry = new FilterRegistry({ echo: "aecho=1", house: (value = 2) => `volume=${value}` });
 
-    expect(registry.render([{ name: Filters.Echo }, { name: "house", value: 3 }])).toBe("aecho=1,volume=3");
+    expect(registry.render([{ name: "echo" }, { name: "house", value: 3 }])).toBe("aecho=1,volume=3");
   });
 
   it("renders an ad hoc payload as written, without a definition", () => {
@@ -86,14 +86,14 @@ describe("filter registry", () => {
 
     expect(registry.render([{ name: "adhoc", payload: " volume=2 " }])).toBe("volume=2");
     expect(() => registry.render([{ name: "adhoc", payload: " " }])).toThrowError(
-      expect.objectContaining({ code: ErrorCode.INVALID_ARGUMENT }),
+      expect.objectContaining({ code: "INVALID_ARGUMENT" }),
     );
   });
 
   it("rejects a name it cannot render and a definition it cannot use", () => {
     expect(() => new FilterRegistry({ broken: 1 as unknown as string })).toThrow(TypeError);
     expect(() => new FilterRegistry().render([{ name: "unknown" }])).toThrowError(
-      expect.objectContaining({ code: ErrorCode.UNSUPPORTED, message: "Filter unknown is not defined by this engine" }),
+      expect.objectContaining({ code: "UNSUPPORTED", message: "Filter unknown is not defined by this engine" }),
     );
   });
 });

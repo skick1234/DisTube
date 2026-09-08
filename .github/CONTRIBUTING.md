@@ -49,7 +49,7 @@ We welcome contributions via pull requests!
 ## ⚙️ Development Environment
 
 - **Runtime**: Node.js >= 22.12.0
-- **Package Manager**: Bun 1.4.0 (the version pinned by the repository toolchain)
+- **Package Manager**: Bun 1.4.2 (the version pinned by the repository toolchain)
 - **Linter/Formatter**: [Biome](https://biomejs.dev/)
 
 ## 📂 Directory Structure

@@ -1,130 +1,123 @@
 # DisTube v6
 
-DisTube manages queues and playback, adapters connect platforms and supply the playback engine, plugins add media
-providers, and examples teach usage.
+DisTube coordinates music queues and voice playback. Choose a platform adapter and media sources, then pass the
+voice channel you already have to `play`.
 
-## 1. Install
+## Install
 
 ```bash
 bun add distube @distube/discordjs @distube/youtube discord.js @discordjs/voice
 ```
 
-## 2. Create DisTube
+Use `OceanicAdapter` from `@distube/oceanic` for oceanic.js or `ErisAdapter` from `@distube/eris` for Eris 0.18.
+Local playback needs FFmpeg, an Opus implementation and a supported encryption implementation. See
+[Installation](wiki/Installation.md) for platform requirements. Eris rejects seeking with `UNSUPPORTED`.
 
-<!-- verify-ts -->
-```ts
-import { type Adapter, DisTube, type Plugin } from "distube";
-
-declare const adapter: Adapter;
-declare const plugins: readonly Plugin[];
-
-const distube = new DisTube({ adapter, plugins });
-```
-
-Construction validates the adapter and initializes plugin instances synchronously. Call `await distube.shutdown()`
-when the bot stops.
-
-## 3. Configure an Adapter
+## Create and play
 
 ```ts
 import { DiscordJSAdapter } from "@distube/discordjs";
-
-const adapter = new DiscordJSAdapter(client);
-```
-
-Use `OceanicAdapter` from `@distube/oceanic` for oceanic.js or `ErisAdapter` from `@distube/eris` for Eris 0.18.
-Eris voice playback needs an Opus implementation and FFmpeg for non-Opus inputs; its Player rejects seek with
-`UNSUPPORTED`. An Adapter owns platform connections and supplies the playback engine that creates Players; core sees
-only guild and channel IDs.
-
-## 4. Add Plugins
-
-```ts
-import { SoundCloudPlugin } from "@distube/soundcloud";
-import { SpotifyPlugin } from "@distube/spotify";
 import { YouTubePlugin } from "@distube/youtube";
+import type { Client, VoiceChannel } from "discord.js";
+import { DisTube } from "distube";
+
+declare const client: Client;
+declare const voiceChannel: VoiceChannel;
 
 const youtube = new YouTubePlugin();
-const spotify = new SpotifyPlugin();
-const soundcloud = new SoundCloudPlugin();
-const plugins = [youtube, spotify, soundcloud];
+const distube = new DisTube<{ requestedBy: string }>({
+  adapter: new DiscordJSAdapter(client),
+  sources: [youtube],
+});
+
+const unsubscribe = distube.on("queue.item.started", ({ item }) => {
+  console.log(item.song.name, item.metadata?.requestedBy);
+});
+
+const pending = distube.play(voiceChannel, "never gonna give you up", {
+  metadata: { requestedBy: "user-id" },
+});
+const registeredQueue = distube.getQueue(voiceChannel.guildId); // Already registered.
+const { queue, items } = await pending;
+console.log(queue === registeredQueue, items.length);
+
+// During application teardown:
+unsubscribe();
+await distube.dispose();
 ```
 
-Official media plugins live in the independent plugins repository. Plugin order is search order, so put the provider
-you want queries answered by first. Retain an instance when you need a candidate list of your own to show the user
-before committing to one; `limit` and `offset` are bounded and each plugin documents its own default and maximum:
+Construction validates local configuration and initializes sources synchronously without provider requests or voice
+joins. `play` copies channel identity, validates shallow input and registers its queue before returning the promise.
+The queue is immediately readable as idle with no items while resolution runs. `queue.created` means registration;
+it does not mean insertion or playback succeeded.
+
+`play` resolves with `{ queue, items }` after insertion commits. Listen for `queue.item.started` or
+`queue.item.failed` for the later playback outcome. Each call keeps its original queue identity. If failed initial
+work leaves no item or pending insertion, that queue is deleted without a fabricated `queue.finished` event.
+Another call's queue or adopted voice is preserved.
+
+## Resolve and choose sources
+
+Absolute HTTP(S) URLs go to source resolution; other non-empty strings are queries. Sources run in configured order.
+A URL is never retried as a query. Query search can continue to a later source when an earlier source fails.
+`distube.resolve(input, { signal })` returns a `Song` or `Playlist` without creating a queue or joining voice.
+Pass that media to `play` later, or use `queue.enqueue(input, options)` on an existing connected queue.
+
+For a candidate list to show the user, retain the source instance and call its bounded search API:
 
 ```ts
 const results = await youtube.search("DisTube tutorial", { limit: 5 });
 ```
 
-## 5. Play
+Spotify can return an explicit fallback query for playback through another configured source. The original Song and
+QueueItem remain public; signed playback URLs and candidate resources remain private.
+
+The adapter supplies the default engine. For a remote engine such as Lavalink, pass the same instance explicitly in
+`sources` and `engine`. It initializes and disposes once. See [Adapter authoring](wiki/Adapter-Authoring.md).
+
+## Control queue and voice
 
 ```ts
-const { queue, items } = await distube.play(
-  { guildId: "guild-id", voiceChannelId: "voice-channel-id" },
-  "https://youtube.com/watch?v=example",
-);
-console.log(`Committed ${items.length} insertion(s)`);
-
-// A query works the same way: no separate search step.
-await distube.play({ guildId: "guild-id", voiceChannelId: "voice-channel-id" }, "never gonna give you up");
-```
-
-A string that parses as an absolute `http:` or `https:` URL is resolved by the first plugin that claims it; every
-other non-empty string is a query, searched across your plugins in the order you configured them. The first plugin to
-return a candidate wins, and a plugin whose search throws is skipped rather than failing the call. The same rule
-substitutes a playable stream when a metadata-only source (Spotify, say) hands back a search query instead of a
-resource, so a Spotify link plays through whichever streaming plugin you listed first.
-
-`play` is the only creation-capable entry point. It upserts the guild's queue, joins or reuses the guild's Voice, and
-inserts the resolved media. It resolves after the QueueItems and matching insertion event commit, not after audio
-starts. A Song publishes `Events.QueueItemAdded`; a Playlist publishes `Events.QueuePlaylistAdded`. Later insertions
-can also use `queue.enqueue(input)`. Look the queue up anytime with `distube.getQueue(guildId)`.
-
-## 6. Control the Queue
-
-```ts
-import { Filters, RepeatMode } from "distube";
-
+await queue.pause();
+await queue.resume();
+await queue.seek(30);
+const next = queue.state.upcoming[0];
+if (next) await queue.move(next.id); // Move this waiting occurrence to the tail.
 await queue.skip();
-await queue.jump(1); // zero-based over waiting items, so this is the second one waiting
-await queue.stop(); // deletes the queue; the guild's Voice stays connected
 
-// Volume, repeat, autoplay, filters, and history live on the Voice, not the queue.
-const voice = distube.voices.get("guild-id")!;
+const voice = distube.voices.get(voiceChannel.guildId)!;
 await voice.setVolume(80);
-await voice.setRepeatMode(RepeatMode.Queue);
+await voice.setRepeat("queue");
 await voice.setAutoplay(true);
-await voice.filters.apply(Filters.Nightcore);
-await distube.voices.leave("guild-id"); // releases the Voice (and any live queue)
+await voice.setFilters(["nightcore"]);
+await queue.stop();
+await distube.voices.leave(voiceChannel.guildId);
 ```
 
-Read `queue.state` for readonly waiting items, optional current item, and status. A queue deletes itself when playback
-exhausts (`Events.QueueFinished` then `Events.QueueDeleted`); the Voice remains until asked to leave, and the next
-`play()` inherits its volume, repeat mode, autoplay, filters, and `voice.previousSongs` unchanged.
+`DisTubeGuild` owns `state.current`, `state.upcoming`, `state.status` and queue controls. Edit waiting occurrences
+with `remove(itemId)` and `move(itemId, beforeItemId?)`. Each insertion has its own ID even for the same Song.
+`DisTubeVoice` owns the connection, live `channelId` and readonly `settings`. It can exist without a queue through
+`distube.voices.join(channel)` and move with `voice.move(channel)`.
 
-## 7. Events
+Stop and natural exhaustion delete the queue but retain voice, volume, repeat and autoplay. Successful deletion
+cleanup clears both selected filters and backend rendering. A failed reset reports the cleanup error and preserves
+last acknowledged filter state. A later queue waits for old cleanup before backend effects begin. Leaving voice
+releases the connection; the next voice starts with default settings.
 
-```ts
-import { Events } from "distube";
+## Events and errors
 
-distube.on(Events.QueueItemStarted, ({ guildId, item, timestamp }) => {
-  console.log(guildId, item.song.title, timestamp);
-});
-```
+Subscribe with dotted event names such as `"queue.item.added"`, `"queue.playlist.added"` and
+`"queue.item.started"`. `on` returns an unsubscribe function. Queue events include their originating queue, captured
+state, guild ID and commit timestamp. Listener failures go to safe diagnostics; application code owns bot replies.
 
-The client emits ten string-valued `Events` members: `QueueCreated`, `QueueItemAdded`, `QueuePlaylistAdded`,
-`QueueItemStarted`, `QueueItemFinished`, `QueueItemFailed`, `QueueFinished`, `QueueAutoplayFailed`, `QueueDeleted`,
-and `VoiceDisconnected`. `on`, `once`, `off`, and `removeAllListeners(name?)` all return the client; `off` takes the
-function you passed, so it removes a `once` registration too. Name your caller metadata once and every read is typed:
-`new DisTube<{ requestedBy: string }>({ adapter, plugins })` makes `event.item.metadata.requestedBy` compile. Events describe committed queue actions; bot code owns messages. Explicit Spotify-style
-fallback retains the original QueueItem in state and events and exposes no candidate or stream URL.
+All public failures are `DisTubeError`. Compare its literal `code`: `INVALID_ARGUMENT`, `INVALID_STATE`, `ABORTED`,
+`SOURCE_FAILED`, `VOICE_FAILED`, `PLUGIN_FAILED`, `QUEUE_FAILED` or `UNSUPPORTED`.
+See [Events and timing](wiki/Events-and-Timing.md) and [Error handling](wiki/Error-Handling.md).
 
-## 8. Advanced Extensions
+## Author extensions
 
-Implement `Adapter` (voice sessions plus an `Engine`) to connect another platform or playback backend. Implement
-`SourcePlugin` to add a media provider. SourcePlugins implement cancellable search/resolve plus `preparePlayback` and
-optional `related` for autoplay; Players accept only `{ itemId, resource }`. Extensions import public `distube`
-contracts, keep `Song.url` canonical, own package-local tests and provider/platform cleanup policy, and verify packed
-public entry points. See the authoring guides and breaking migration guide in `wiki/`.
+Import application values and method-facing types from `distube`. Import `Adapter`, `Engine`, `Player`,
+`VoiceSession`, `SourcePlugin` and playback resource contracts with `import type` from `distube/integrations`.
+Integrations own provider/platform policy, native resources and package-local tests. Core owns queue state and
+exactly-once source-resource disposal. See the [authoring guide](wiki/Plugin-Authoring.md) and
+[breaking migration guide](wiki/Major-Upgrade-Guide.md).

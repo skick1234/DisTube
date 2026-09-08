@@ -1,33 +1,34 @@
 import type { Adapter, Diagnostic, Engine, VoiceSession, VoiceTarget } from "../contracts";
-import { ErrorReason } from "../enums";
 import { asDisTubeError, asError, DisTubeError, ErrorCode } from "../errors";
 import type { VoiceDisconnectReason } from "../events";
 import { cleanupFailure } from "../queue/failures";
 import type { QueueTerminalCause } from "../queue/terminal";
 import type { QueueVoice } from "../queue/voice";
 import { settleAll } from "../utils/dispose";
-import { type Voice, VoiceImpl } from "./Voice";
+import { type DisTubeVoice, VoiceImpl } from "./DisTubeVoice";
+import { normalizeChannel, type VoiceChannelTarget } from "./target";
 
 /** Readonly view over the connected Voices, published as `distube.voices`. */
-export type VoiceCollection<Metadata = unknown> = Readonly<{
+export type VoiceCollection = Readonly<{
   readonly size: number;
-  [Symbol.iterator](): IterableIterator<Voice<Metadata>>;
+  [Symbol.iterator](): IterableIterator<DisTubeVoice>;
 }>;
 
 /** Public voice manager facade. */
-export type VoiceManager<Metadata = unknown> = VoiceCollection<Metadata> & {
-  join(target: VoiceTarget): Promise<Voice<Metadata>>;
-  get(guildId: string): Voice<Metadata> | undefined;
+export type VoiceManager = VoiceCollection & {
+  join(target: VoiceChannelTarget): Promise<DisTubeVoice>;
+  get(guildId: string): DisTubeVoice | undefined;
   has(guildId: string): boolean;
   leave(guildId: string): Promise<void>;
 };
 
 /** Hooks the VoiceManager needs from the client without depending on the queue registry. */
 export interface VoiceManagerContext {
+  order<Value>(guildId: string, work: () => Promise<Value>): Promise<Value>;
   /** Deletes the guild's live or provisional queue before the connection goes away. */
   deleteQueue(guildId: string, cause: QueueTerminalCause): Promise<void>;
   /** Publishes the guild's terminal disconnect, once, after its queue deletion. */
-  onDisconnected(voice: Voice, reason: VoiceDisconnectReason, error?: Error): void;
+  onDisconnected(voice: DisTubeVoice, reason: VoiceDisconnectReason, error?: Error): void;
   /** Reports a failure that has no pending terminal caller to reject. */
   report(diagnostic: Diagnostic): void;
 }
@@ -45,9 +46,9 @@ interface VoiceSlot {
   readonly guildId: string;
   readonly generation: number;
   phase: SlotPhase;
-  /** Set as soon as Adapter creation succeeds, before Voice construction can fail. */
+  /** Set as soon as Adapter creation succeeds, before DisTubeVoice construction can fail. */
   session?: VoiceSession;
-  /** One raw-session cleanup for a Voice that could not be constructed. */
+  /** One raw-session cleanup for a DisTubeVoice that could not be constructed. */
   sessionRelease?: Promise<void>;
   voice?: VoiceImpl;
   creation?: Promise<VoiceImpl>;
@@ -63,10 +64,10 @@ interface VoiceSlot {
 }
 
 /**
- * Guild Voice presence with one private slot per guild.
+ * Guild DisTubeVoice presence with one private slot per guild.
  *
  * A slot starts synchronously with session creation and remains in the map until all terminal work,
- * including late session creation, settles. Public reads expose only open slots with a live Voice.
+ * including late session creation, settles. Public reads expose only open slots with a live DisTubeVoice.
  */
 export class VoiceManagerImpl implements VoiceManager {
   readonly #facade: VoiceManager;
@@ -74,6 +75,8 @@ export class VoiceManagerImpl implements VoiceManager {
   readonly #engine: Engine;
   readonly #context: VoiceManagerContext;
   readonly #slots = new Map<string, VoiceSlot>();
+  readonly #publicJoins = new Map<string, number>();
+  readonly #epochs = new Map<string, number>();
   #nextGeneration = 0;
   #fenced = false;
 
@@ -108,21 +111,30 @@ export class VoiceManagerImpl implements VoiceManager {
     return size;
   }
 
-  *[Symbol.iterator](): IterableIterator<Voice> {
+  *[Symbol.iterator](): IterableIterator<DisTubeVoice> {
     for (const slot of this.#slots.values()) {
       if (slot.phase === "open" && slot.voice) yield slot.voice.facade;
     }
   }
 
-  async join(target: VoiceTarget): Promise<Voice> {
-    const slot = this.#joinSlot(target);
-    slot.publicJoinWaiters += 1;
+  async join(channel: VoiceChannelTarget): Promise<DisTubeVoice> {
+    this.#assertReady();
+    const target = normalizeChannel(channel);
+    this.assertJoinable(target.guildId);
+    const epoch = this.#epochs.get(target.guildId) ?? 0;
+    this.#publicJoins.set(target.guildId, (this.#publicJoins.get(target.guildId) ?? 0) + 1);
     try {
-      const voice = await this.#enqueueMovement(slot, target.channelId);
-      slot.publicJoinAdopted = true;
-      return voice.facade;
+      return await this.#context.order(target.guildId, async () => {
+        if ((this.#epochs.get(target.guildId) ?? 0) !== epoch) throw this.#staleSlot();
+        const slot = this.#joinSlot(target);
+        const voice = await this.#enqueueMovement(slot, target.channelId);
+        slot.publicJoinAdopted = true;
+        return voice.facade;
+      });
     } finally {
-      slot.publicJoinWaiters -= 1;
+      const remaining = (this.#publicJoins.get(target.guildId) ?? 1) - 1;
+      if (remaining === 0) this.#publicJoins.delete(target.guildId);
+      else this.#publicJoins.set(target.guildId, remaining);
     }
   }
 
@@ -139,20 +151,20 @@ export class VoiceManagerImpl implements VoiceManager {
     return this.#slots.get(target.guildId) ?? this.#createSlot(target);
   }
 
-  /** Rejects work accepted while a guild Voice is terminalizing, even if it would join after slot closure. */
+  /** Rejects work accepted while a guild DisTubeVoice is terminalizing, even if it would join after slot closure. */
   assertJoinable(guildId: string): void {
     this.#assertReady();
     const slot = this.#slots.get(guildId);
     if (slot && slot.phase !== "open") throw slot.shutdownError ?? this.#staleSlot();
   }
 
-  /** Package-private lookup used by QueueManager to bind the exact Voice generation to a queue. */
+  /** Package-private lookup used by QueueManager to bind the exact DisTubeVoice generation to a queue. */
   getInternal(guildId: string): QueueVoice | undefined {
     const slot = this.#slots.get(guildId);
     return slot?.phase === "open" ? slot.voice : undefined;
   }
 
-  get(guildId: string): Voice | undefined {
+  get(guildId: string): DisTubeVoice | undefined {
     const slot = this.#slots.get(guildId);
     return slot?.phase === "open" ? slot.voice?.facade : undefined;
   }
@@ -165,7 +177,8 @@ export class VoiceManagerImpl implements VoiceManager {
   leave(guildId: string): Promise<void> {
     this.#assertReady();
     const slot = this.#slots.get(guildId);
-    if (!slot) return Promise.resolve();
+    this.#epochs.set(guildId, (this.#epochs.get(guildId) ?? 0) + 1);
+    if (!slot) return this.#context.deleteQueue(guildId, { kind: "leave" });
     return this.#acceptTerminal(slot, "left", undefined, { kind: "leave" });
   }
 
@@ -192,13 +205,13 @@ export class VoiceManagerImpl implements VoiceManager {
     return settleAll(completions.map(completion => () => completion));
   }
 
-  /** Releases a Voice created solely by a rejected first-play transaction without announcing a public disconnect. */
+  /** Releases a DisTubeVoice created solely by a rejected first-play transaction without announcing a public disconnect. */
   releaseOwned(voice: QueueVoice): Promise<void> {
     const slot = this.#slots.get(voice.guildId);
     if (!slot || slot.generation !== voice.generation || slot.voice !== voice || slot.phase !== "open") {
       return Promise.resolve();
     }
-    if (slot.publicJoinAdopted || slot.publicJoinWaiters > 0) return Promise.resolve();
+    if (slot.publicJoinAdopted || (this.#publicJoins.get(slot.guildId) ?? 0) > 0) return Promise.resolve();
     return this.#acceptTerminal(slot, "left", undefined, { kind: "rollback" }, false, false);
   }
 
@@ -247,7 +260,7 @@ export class VoiceManagerImpl implements VoiceManager {
           this.#context.report({
             severity: "error",
             stage,
-            message: `Voice ${slot.guildId} background operation failed`,
+            message: `DisTubeVoice ${slot.guildId} background operation failed`,
             error,
             detail: Object.freeze({ guildId: slot.guildId, slotGeneration: slot.generation }),
           }),
@@ -256,14 +269,14 @@ export class VoiceManagerImpl implements VoiceManager {
       if (slot.phase !== "open") voice.fence();
       return voice;
     } catch (error: unknown) {
-      const constructionFailure = asDisTubeError(ErrorCode.VOICE_FAILED, "Voice construction failed", error);
+      const constructionFailure = asDisTubeError(ErrorCode.VOICE_FAILED, "DisTubeVoice construction failed", error);
       try {
         await this.#releaseRawSession(slot);
       } catch (releaseError: unknown) {
-        throw new DisTubeError(ErrorCode.VOICE_FAILED, "Voice construction cleanup failed", {
+        throw new DisTubeError(ErrorCode.VOICE_FAILED, "DisTubeVoice construction cleanup failed", {
           cause: new AggregateError(
             [constructionFailure, asError(releaseError)],
-            "Voice construction cleanup failures",
+            "DisTubeVoice construction cleanup failures",
           ),
         });
       }
@@ -275,7 +288,7 @@ export class VoiceManagerImpl implements VoiceManager {
     if (this.#slots.get(slot.guildId) !== slot || slot.phase !== "open" || !slot.voice) {
       return Promise.reject(this.#staleSlot());
     }
-    return this.#enqueueMovement(slot, channelId).then(() => undefined);
+    return this.#context.order(slot.guildId, () => this.#enqueueMovement(slot, channelId)).then(() => undefined);
   }
 
   #enqueueMovement(slot: VoiceSlot, channelId: string): Promise<VoiceImpl> {
@@ -337,7 +350,7 @@ export class VoiceManagerImpl implements VoiceManager {
 
     let deletion: Promise<void>;
     if (!deleteQueue) {
-      // QueueManager already removed this first-play queue before it releases the Voice.
+      // QueueManager already removed this first-play queue before it releases the DisTubeVoice.
       deletion = Promise.resolve();
     } else {
       try {
@@ -399,14 +412,14 @@ export class VoiceManagerImpl implements VoiceManager {
     }
     const failure = cleanupFailure(
       ErrorCode.VOICE_FAILED,
-      "Voice terminal cleanup failed",
+      "DisTubeVoice terminal cleanup failed",
       failures,
-      "Voice terminal cleanup failures",
+      "DisTubeVoice terminal cleanup failures",
     );
     if (failure) throw failure;
   }
 
-  /** Releases a session whose Voice facade could not be constructed, sharing cleanup with terminal callers. */
+  /** Releases a session whose DisTubeVoice facade could not be constructed, sharing cleanup with terminal callers. */
   #releaseRawSession(slot: VoiceSlot): Promise<void> {
     const session = slot.session;
     if (!session) return Promise.resolve();
@@ -428,7 +441,7 @@ export class VoiceManagerImpl implements VoiceManager {
       this.#context.report({
         severity: "error",
         stage: "voice.disconnect",
-        message: "Voice cleanup failed after a platform disconnect",
+        message: "DisTubeVoice cleanup failed after a platform disconnect",
         error: asError(cause),
         detail: Object.freeze({ guildId: slot.guildId, slotGeneration: slot.generation }),
       });
@@ -459,19 +472,19 @@ export class VoiceManagerImpl implements VoiceManager {
   }
 
   #shutdownError(): DisTubeError {
-    return new DisTubeError(ErrorCode.QUEUE_FAILED, "DisTube is shutting down");
+    return new DisTubeError("INVALID_STATE", "DisTube is disposed");
   }
 
   #staleSlot(): DisTubeError {
-    return new DisTubeError(ErrorCode.QUEUE_FAILED, "Voice operation was superseded");
+    return new DisTubeError("INVALID_STATE", "DisTubeVoice operation was superseded");
   }
 }
 
 function validateTarget(target: VoiceTarget): void {
   if (!target || typeof target.guildId !== "string" || target.guildId.length === 0) {
-    throw new DisTubeError(ErrorCode.INVALID_ARGUMENT, ErrorReason.Argument, "guildId must be a non-empty string");
+    throw new DisTubeError("INVALID_ARGUMENT", "guildId must be a non-empty string");
   }
   if (typeof target.channelId !== "string" || target.channelId.length === 0) {
-    throw new DisTubeError(ErrorCode.INVALID_ARGUMENT, ErrorReason.Argument, "channelId must be a non-empty string");
+    throw new DisTubeError("INVALID_ARGUMENT", "channelId must be a non-empty string");
   }
 }

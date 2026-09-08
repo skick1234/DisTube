@@ -35,27 +35,24 @@ try {
   const positive = resolve(temporary, "positive.ts");
   await Bun.write(
     positive,
-    `import type { Adapter, DisTube, Engine, FilterEntry, GuildQueue, PlaybackContext, PlaybackPreparation, PlaybackRequest, PlayResult, Player, PlayerEvent, PluginContext, RelatedContext, SourceOperationOptions, SourcePlugin, UrlPlaybackResource, Voice, VoiceFilters, VoiceManager, VoiceSession, VoiceTarget } from "distube";
-import { Events, Filters, Playlist, QueueStatus, RepeatMode, Song } from "distube";
-const song = new Song({ id: "song", title: "Song", url: "https://provider.example/song", duration: 1, source: "source", isLive: false });
+    `import type { Adapter, Engine, FilterEntry, PlaybackContext, PlaybackPreparation, PlaybackRequest, Player, PlayerEvent, PluginContext, RelatedContext, SourceOperationOptions, SourcePlugin, UrlPlaybackResource, VoiceSession, VoiceTarget } from "distube/integrations";
+import { DisTube, Playlist, Song, type DisTubeGuild, type DisTubeVoice, type PlayResult } from "distube";
+const song = new Song({ id: "song", name: "Song", url: "https://provider.example/song", duration: 1, source: "source" });
 const playlist = new Playlist({ id: "playlist", name: "Playlist", url: "https://provider.example/playlist", source: "source", songs: [song] });
 const resource: UrlPlaybackResource = { kind: "url", url: "https://stream.example/audio", dispose() {} };
 const source: SourcePlugin = { name: "source", initialize(_context: PluginContext) {}, dispose() {}, async search(_query: string, _options?: SourceOperationOptions) { return [song]; }, async resolve(_url: string, _options?: SourceOperationOptions) { return playlist; }, async preparePlayback(_song: Song, _context: PlaybackContext): Promise<PlaybackPreparation> { return { kind: "resource", resource }; }, async related(_song: Song, _context: RelatedContext) { return song; } };
 const player: Player = { position: 0, async play(_request: PlaybackRequest) {}, async pause() {}, async resume() {}, async stopTrack() {}, async seek(_seconds: number) {}, async setVolume(_percent: number) {}, async setFilters(_entries: readonly FilterEntry[]) {}, async release() {}, subscribe(_listener: (event: PlayerEvent) => void) { return () => undefined; } };
 declare const session: VoiceSession;
-const engine: Engine = { accepts: new Set(["url" as const]), async createPlayer(_session: VoiceSession) { return player; }, resolvable(name: string) { return name === Filters.Nightcore; } };
+const engine: Engine = { accepts: new Set(["url" as const]), async createPlayer(_session: VoiceSession) { return player; }, resolvable(name: string) { return name === "nightcore"; } };
 const adapter: Adapter = { async createVoiceSession(_target: VoiceTarget) { return session; }, engine };
-declare const resultQueue: PlayResult["queue"];
-declare const queue: GuildQueue;
-declare const distubeVoices: DisTube["voices"];
-declare const voices: VoiceManager;
-const returnedQueue: GuildQueue = resultQueue;
-declare const managedVoiceFilters: Voice;
-const voiceFilters: VoiceFilters = managedVoiceFilters.filters;
-const publicVoices: VoiceManager = distubeVoices;
-const managedVoice: Voice | undefined = voices.get("guild");
-const vocabulary: string[] = [Events.QueueDeleted, RepeatMode.Queue, QueueStatus.Idle];
-void [source, adapter, returnedQueue, voiceFilters, publicVoices, managedVoice, vocabulary];
+const music = new DisTube<{ requestedBy: string }>({ adapter, sources: [source], engine });
+const pending: Promise<PlayResult<{ requestedBy: string }>> = music.play({ id: "voice", guild: { id: "guild" } }, song, { metadata: { requestedBy: "user" } });
+const queue: DisTubeGuild<{ requestedBy: string }> | undefined = music.getQueue("guild");
+const voice: DisTubeVoice | undefined = music.voices.get("guild");
+if (queue) { void queue.state.current?.metadata?.requestedBy; void queue.state.upcoming; void queue.position; void queue.remove("item"); void queue.move("item", "next"); }
+if (voice) { void voice.setFilters(["nightcore"]); void voice.setRepeat("queue"); void voice.settings.volume; }
+const unsubscribe: () => void = music.on("queue.created", event => { const same: DisTubeGuild<{ requestedBy: string }> = event.queue; void same; });
+unsubscribe(); void pending; void music.dispose();
 `,
   );
 
@@ -78,122 +75,62 @@ void [source, adapter, returnedQueue, voiceFilters, publicVoices, managedVoice, 
   if (passed.code !== 0) throw new Error(`New playback contract fixture failed\n${passed.output}`);
 
   const negativeFixtures = new Map([
+    ["root-author-contract", `import type { Adapter } from "distube"; declare const adapter: Adapter; void adapter;`],
     [
-      "retired-player",
-      `import type { Player, QueueItem } from "distube"; declare const player: Player; declare const item: QueueItem; player.play(item);`,
+      "player-media",
+      `import type { Player } from "distube/integrations"; import type { QueueItem } from "distube"; declare const player: Player; declare const item: QueueItem; player.play(item);`,
     ],
     [
       "missing-preparation",
-      `import type { SourcePlugin } from "distube"; const source: SourcePlugin = { name: "legacy", initialize() {}, dispose() {}, async search() { return []; }, async resolve() { return undefined; } }; void source;`,
+      `import type { SourcePlugin } from "distube/integrations"; const source: SourcePlugin = { name: "bad", async search() { return []; }, async resolve() { return undefined; } }; void source;`,
     ],
     [
       "malformed-resource",
-      `import type { UrlPlaybackResource } from "distube"; const resource: UrlPlaybackResource = { kind: "stream", url: "/relative" }; void resource;`,
+      `import type { UrlPlaybackResource } from "distube/integrations"; const resource: UrlPlaybackResource = { kind: "stream", url: "/relative" }; void resource;`,
+    ],
+    ["guild-constructor", `import { DisTubeGuild } from "distube"; new DisTubeGuild();`],
+    ["voice-constructor", `import { DisTubeVoice } from "distube"; new DisTubeVoice();`],
+    ["queue-item-constructor", `import { QueueItem } from "distube"; new QueueItem();`],
+    [
+      "queue-native-channel",
+      `import type { DisTubeGuild } from "distube"; declare const queue: DisTubeGuild; queue.channelId;`,
     ],
     [
-      "missing-player-release",
-      `import type { FilterEntry, PlaybackRequest, Player, PlayerEvent } from "distube"; const player: Player = { position: 0, async play(_request: PlaybackRequest) {}, async pause() {}, async resume() {}, async stopTrack() {}, async seek(_seconds: number) {}, async setVolume(_percent: number) {}, async setFilters(_entries: readonly FilterEntry[]) {}, subscribe(_listener: (event: PlayerEvent) => void) { return () => undefined; } }; void player;`,
+      "queue-settings",
+      `import type { DisTubeGuild } from "distube"; declare const queue: DisTubeGuild; queue.setVolume(50);`,
     ],
     [
-      "retired-adapter",
-      `import type { Adapter, Engine, Player, VoiceSession } from "distube"; declare const engine: Engine; declare const session: VoiceSession; declare const player: Player; const adapter: Adapter = { async createPlayer(_binding: { queueId: string }) { return player; }, engine }; void [adapter, session];`,
+      "queue-retirement",
+      `import type { DisTubeGuild } from "distube"; declare const queue: DisTubeGuild; queue.destroy();`,
+    ],
+    ["voice-player", `import type { DisTubeVoice } from "distube"; declare const voice: DisTubeVoice; voice.player();`],
+    [
+      "voice-release",
+      `import type { DisTubeVoice } from "distube"; declare const voice: DisTubeVoice; voice.release();`,
     ],
     [
-      "engine-without-declared-kinds",
-      `import type { Engine, Player, VoiceSession } from "distube"; declare const player: Player; const engine: Engine = { async createPlayer(_session: VoiceSession) { return player; }, resolvable(_name: string) { return false; } }; void engine;`,
+      "manager-borrow",
+      `import type { DisTube } from "distube"; declare const music: DisTube; music.voices.borrow({ guildId: "g", channelId: "v" });`,
     ],
     [
-      "unowned-filter-payload",
-      `import type { FilterEntry } from "distube"; const entry: FilterEntry = { name: "bassboost", render: () => "bass=g=5" }; void entry;`,
+      "queue-registry-mutation",
+      `import type { DisTube } from "distube"; declare const music: DisTube; music.queues.delete("g");`,
     ],
     [
-      "guild-queue-constructor",
-      `import { GuildQueue } from "distube"; new GuildQueue({ queueId: "queue", guildId: "guild" }, {} as never, {} as never, {} as never, {} as never);`,
+      "metadata-type",
+      `import type { DisTube } from "distube"; declare const music: DisTube<{ requestedBy: string }>; music.play({id:"v",guildId:"g"}, "song", {metadata:{requestedBy: 12}});`,
     ],
     [
-      "voice-filters-constructor",
-      `import { VoiceFilters } from "distube"; new VoiceFilters({} as never, {} as never);`,
-    ],
-    ["voice-constructor", `import { Voice } from "distube"; new Voice({} as never, {} as never, {} as never);`],
-    [
-      "voice-manager-constructor",
-      `import { VoiceManager } from "distube"; new VoiceManager({} as never, {} as never, {} as never);`,
+      "native-shape",
+      `import type { DisTube } from "distube"; declare const music: DisTube; music.play({channelId:"v",guildId:"g"}, "song");`,
     ],
     [
-      "guild-queue-instanceof",
-      `import { GuildQueue } from "distube"; declare const queue: object; queue instanceof GuildQueue;`,
+      "provider-metadata",
+      `import { Song } from "distube"; new Song({source:"s",id:"i",name:"n",url:"https://example.org",metadata:{}});`,
     ],
     [
-      "voice-filters-instanceof",
-      `import { VoiceFilters } from "distube"; declare const filters: object; filters instanceof VoiceFilters;`,
-    ],
-    ["voice-instanceof", `import { Voice } from "distube"; declare const voice: object; voice instanceof Voice;`],
-    [
-      "voice-manager-instanceof",
-      `import { VoiceManager } from "distube"; declare const manager: object; manager instanceof VoiceManager;`,
-    ],
-    [
-      "facade-declaration-merge",
-      `declare module "distube" {
-  interface GuildQueue { destroy(): Promise<void>; }
-  interface VoiceFilters { releaseAll(): Promise<void>; }
-  interface Voice { player(): Promise<unknown>; retire(player: never): void; release(): Promise<void>; }
-  interface VoiceManager {
-    borrow(target: { guildId: string; channelId: string }): Promise<unknown>;
-    fence(): void;
-    releaseAll(): Promise<readonly Error[]>;
-  }
-}
-import type { GuildQueue, Voice, VoiceFilters, VoiceManager } from "distube";
-declare const queue: GuildQueue;
-declare const filters: VoiceFilters;
-declare const voice: Voice;
-declare const manager: VoiceManager;
-queue.destroy(); filters.releaseAll(); voice.player(); voice.retire(undefined as never); voice.release(); manager.borrow({ guildId: "guild", channelId: "voice" }); manager.fence(); manager.releaseAll();`,
-    ],
-    [
-      "guild-queue-channel-id",
-      `import type { GuildQueue } from "distube"; declare const queue: GuildQueue; queue.channelId;`,
-    ],
-    [
-      "guild-queue-destroy",
-      `import type { GuildQueue } from "distube"; declare const queue: GuildQueue; queue.destroy();`,
-    ],
-    // The five values ADR 0050 moved to Voice must not be reachable through a queue in the packed archive.
-    [
-      "guild-queue-settings",
-      `import type { GuildQueue } from "distube"; declare const queue: GuildQueue; void [queue.volume, queue.repeatMode, queue.autoplay, queue.filters, queue.previousSongs];`,
-    ],
-    [
-      "guild-queue-set-volume",
-      `import type { GuildQueue } from "distube"; declare const queue: GuildQueue; queue.setVolume(50);`,
-    ],
-    [
-      "guild-queue-set-repeat-mode",
-      `import type { GuildQueue, RepeatMode } from "distube"; declare const queue: GuildQueue; declare const mode: RepeatMode; queue.setRepeatMode(mode);`,
-    ],
-    [
-      "guild-queue-set-autoplay",
-      `import type { GuildQueue } from "distube"; declare const queue: GuildQueue; queue.setAutoplay(true);`,
-    ],
-    ["voice-released", `import type { Voice } from "distube"; declare const voice: Voice; voice.released;`],
-    ["voice-player", `import type { Voice } from "distube"; declare const voice: Voice; voice.player();`],
-    [
-      "voice-retire",
-      `import type { Player, Voice } from "distube"; declare const player: Player; declare const voice: Voice; voice.retire(player);`,
-    ],
-    ["voice-release", `import type { Voice } from "distube"; declare const voice: Voice; voice.release();`],
-    [
-      "voice-manager-borrow",
-      `import type { VoiceManager } from "distube"; declare const manager: VoiceManager; manager.borrow({ guildId: "guild", channelId: "voice" });`,
-    ],
-    [
-      "voice-manager-fence",
-      `import type { VoiceManager } from "distube"; declare const manager: VoiceManager; manager.fence();`,
-    ],
-    [
-      "voice-manager-release-all",
-      `import type { VoiceManager } from "distube"; declare const manager: VoiceManager; manager.releaseAll();`,
+      "mixed-plugins",
+      `import type { Adapter } from "distube/integrations"; import { DisTube } from "distube"; declare const adapter: Adapter; new DisTube({adapter, plugins:[]});`,
     ],
   ]);
   for (const [name, source] of negativeFixtures) {
@@ -210,7 +147,7 @@ queue.destroy(); filters.releaseAll(); voice.player(); voice.retire(undefined as
       "-e",
       `const api = await import("distube");
 if (!api.DisTube || !api.Song) throw new Error("missing runtime exports");
-for (const name of ["GuildQueueImpl", "VoiceFiltersImpl", "VoiceImpl", "VoiceManagerImpl", "GuildQueue", "VoiceFilters", "Voice", "VoiceManager"]) {
+for (const name of ["DisTubeGuild", "DisTubeVoice", "QueueItem", "VoiceManager", "ErrorCode", "Events", "Filters", "RepeatMode", "asDisTubeError"]) {
   if (name in api) throw new Error("unexpected runtime export: " + name);
 }
 function assertFacade(value, forbidden, label) {
@@ -220,7 +157,7 @@ function assertFacade(value, forbidden, label) {
   }
   for (const name of forbidden) if (name in value) throw new Error(label + " leaks " + name);
 }
-const song = new api.Song({ id: "song", title: "Song", url: "https://provider.example/song", duration: 1, source: "source", isLive: false });
+const song = new api.Song({ id: "song", name: "Song", url: "https://provider.example/song", duration: 1, source: "source" });
 let channelId = "voice";
 const listeners = new Set();
 const session = {
@@ -230,6 +167,7 @@ const session = {
   async release() {},
   subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },
 };
+let renderedFilters = [];
 const player = {
   position: 0,
   async play() {},
@@ -238,7 +176,7 @@ const player = {
   async stopTrack() {},
   async seek() {},
   async setVolume() {},
-  async setFilters() {},
+  async setFilters(entries) { renderedFilters = [...entries]; },
   async release() {},
   subscribe() { return () => {}; },
 };
@@ -252,23 +190,28 @@ const source = {
   async resolve() { return song; },
   async preparePlayback() { return { kind: "resource", resource }; },
 };
-const client = new api.DisTube({ adapter: { async createVoiceSession() { return session; }, engine }, plugins: [source] });
+const client = new api.DisTube({ adapter: { async createVoiceSession() { return session; }, engine }, sources: [source] });
 const created = [];
-client.on(api.Events.QueueCreated, event => created.push(event.queue));
+client.on("queue.created", event => created.push(event.queue));
 const voices = client.voices;
 assertFacade(voices, ["borrow", "fence", "releaseAll"], "VoiceManager");
-const voice = await voices.join({ guildId: "guild", channelId: "voice" });
+const voice = await voices.join({ guildId: "guild", id: "voice" });
 assertFacade(voice, ["player", "retire", "release", "released"], "Voice");
 if (voices.get("guild") !== voice || [...voices][0] !== voice) throw new Error("Voice collections do not carry the facade");
-const queue = (await client.play({ guildId: "guild", voiceChannelId: "voice" }, song)).queue;
+const queue = (await client.play({ guildId: "guild", id: "voice" }, song)).queue;
 if (client.getQueue("guild") !== queue || [...client.queues][0] !== queue) throw new Error("Queue collections do not carry the facade");
 if (created.length !== 1 || created[0] !== queue) throw new Error("queue.created does not carry the facade");
-assertFacade(queue, ["destroy", "player", "retire", "release", "volume", "setVolume", "repeatMode", "setRepeatMode", "autoplay", "setAutoplay", "filters", "previousSongs"], "GuildQueue");
-const filters = voice.filters;
-assertFacade(filters, ["engine", "host", "releaseAll"], "VoiceFilters");
-if (voice.filters !== filters) throw new Error("Voice.filters is not stable");
+assertFacade(queue, ["destroy", "player", "retire", "release", "volume", "setVolume", "repeatMode", "setRepeatMode", "autoplay", "setAutoplay", "filters", "previousSongs"], "DisTubeGuild");
+await voice.setVolume(60);
+await voice.setRepeat("queue");
+await voice.setAutoplay(true);
+await voice.setFilters(["nightcore"]);
+if (renderedFilters[0]?.name !== "nightcore") throw new Error("filters not rendered");
+if (voice.settings.filters[0] !== "nightcore") throw new Error("selected filters missing");
 await queue.stop();
-await client.shutdown();
+if (voice.settings.filters.length || renderedFilters.length) throw new Error("queue stop retained selected or rendered filters");
+if (voice.settings.volume !== 60 || voice.settings.repeat !== "queue" || !voice.settings.autoplay) throw new Error("queue stop discarded voice settings");
+await client.dispose();
 `,
     ],
     temporary,

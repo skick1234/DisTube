@@ -3,15 +3,27 @@
 Direct discord.js Adapter for DisTube.
 
 Its Player accepts the public `{ itemId, resource }` playback request, creates native audio only from the prepared
-HTTP(S) resource URL, and terminalizes before connection teardown. Core—not this Adapter—disposes the source resource.
+HTTP(S) resource URL, and terminalizes before connection teardown. Core disposes the source resource.
 
 ```ts
+import { DisTube } from "distube";
+import type { SourcePlugin } from "distube/integrations";
 import { DiscordJSAdapter } from "@distube/discordjs";
 
 declare const client: ConstructorParameters<typeof DiscordJSAdapter>[0];
+declare const source: SourcePlugin;
+declare const voiceChannel: import("discord.js").VoiceBasedChannel;
 
-const adapter = new DiscordJSAdapter(client);
+const music = new DisTube({ adapter: new DiscordJSAdapter(client), sources: [source] });
+const { queue } = await music.play(voiceChannel, "a song title");
+await queue.pause();
+await queue.resume();
 ```
+
+Pass the native channel directly. The adapter checks voice capability and guild membership before joining.
+Author contracts live in `distube/integrations`; the root entry contains application types and values.
+`queue.stop()` deletes the queue and clears selected and rendered filters. Volume, repeat and autoplay
+remain on the voice until `music.voices.leave(guildId)`. Call `music.dispose()` for terminal cleanup.
 
 Construct the class directly; there is no create-adapter alias or public `playerFactory` option. Concurrent stop calls
 join one terminal teardown, every native cleanup unit is attempted once, and unrecoverable disconnects retire the

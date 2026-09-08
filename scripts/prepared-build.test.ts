@@ -11,16 +11,16 @@ import {
 
 const valid: PreparedBuildStamp = {
   schemaVersion: 2,
-  configuredBunVersion: "1.4.0",
-  bunVersion: "1.4.0",
-  bunRevision: "1.4.0+stable",
+  configuredBunVersion: "1.4.2",
+  bunVersion: "1.4.2",
+  bunRevision: "1.4.2+stable",
   inputFingerprint: "input",
   outputs: { "packages/distube/dist/index.mjs": "output" },
 };
 
 async function writeBuildFixture(root: string): Promise<void> {
   await mkdir(resolve(root, "scripts"), { recursive: true });
-  await writeFile(resolve(root, "package.json"), '{"packageManager":"bun@1.4.0"}\n');
+  await writeFile(resolve(root, "package.json"), '{"packageManager":"bun@1.4.2"}\n');
   await writeFile(resolve(root, "bun.lock"), "lock\n");
   await writeFile(resolve(root, "tsconfig.json"), '{"compilerOptions":{}}\n');
   await writeFile(resolve(root, "tsconfig.build.json"), '{"extends":"./tsconfig.json"}\n');
@@ -47,24 +47,24 @@ async function writeBuildFixture(root: string): Promise<void> {
 
 describe("prepared build evidence", () => {
   test("accepts exact input, runtime, and output fingerprints", () => {
-    expect(inspectPreparedBuild(valid, "input", "1.4.0", { "packages/distube/dist/index.mjs": "output" })).toEqual([]);
+    expect(inspectPreparedBuild(valid, "input", "1.4.2", { "packages/distube/dist/index.mjs": "output" })).toEqual([]);
   });
 
   test("rejects missing, stale, wrong-runtime, canary, and incomplete evidence", () => {
-    expect(inspectPreparedBuild(undefined, "input", "1.4.0", {})).toEqual(["prepared build stamp is missing"]);
+    expect(inspectPreparedBuild(undefined, "input", "1.4.2", {})).toEqual(["prepared build stamp is missing"]);
     expect(
-      inspectPreparedBuild({ ...valid, bunVersion: "1.3.14", inputFingerprint: "old" }, "input", "1.4.0", {
+      inspectPreparedBuild({ ...valid, bunVersion: "1.3.14", inputFingerprint: "old" }, "input", "1.4.2", {
         "packages/distube/dist/index.mjs": "changed",
       }),
     ).toEqual([
-      "prepared build expected Bun 1.4.0, observed 1.3.14",
+      "prepared build expected Bun 1.4.2, observed 1.3.14",
       "prepared build inputs are stale",
       "prepared build output is stale: packages/distube/dist/index.mjs",
     ]);
     expect(
-      inspectPreparedBuild({ ...valid, bunRevision: "1.4.0-canary.1+32e87032b" }, "input", "1.4.0", valid.outputs),
-    ).toEqual(["prepared build expected stable Bun 1.4.0, observed canary revision 1.4.0-canary.1+32e87032b"]);
-    expect(inspectPreparedBuild(valid, "input", "1.4.0", {})).toEqual([
+      inspectPreparedBuild({ ...valid, bunRevision: "1.4.2-canary.1+32e87032b" }, "input", "1.4.2", valid.outputs),
+    ).toEqual(["prepared build expected stable Bun 1.4.2, observed canary revision 1.4.2-canary.1+32e87032b"]);
+    expect(inspectPreparedBuild(valid, "input", "1.4.2", {})).toEqual([
       "prepared build output is missing: packages/distube/dist/index.mjs",
     ]);
   });
@@ -78,7 +78,7 @@ describe("prepared build evidence", () => {
       const after = await preparedBuildInputFingerprint(root);
 
       expect(after).not.toBe(before);
-      expect(inspectPreparedBuild({ ...valid, inputFingerprint: before }, after, "1.4.0", valid.outputs)).toContain(
+      expect(inspectPreparedBuild({ ...valid, inputFingerprint: before }, after, "1.4.2", valid.outputs)).toContain(
         "prepared build inputs are stale",
       );
     } finally {
@@ -98,7 +98,7 @@ describe("prepared build evidence", () => {
       const after = await preparedBuildInputFingerprint(root);
 
       expect(after).not.toBe(before);
-      expect(inspectPreparedBuild({ ...valid, inputFingerprint: before }, after, "1.4.0", valid.outputs)).toContain(
+      expect(inspectPreparedBuild({ ...valid, inputFingerprint: before }, after, "1.4.2", valid.outputs)).toContain(
         "prepared build inputs are stale",
       );
     } finally {
@@ -117,7 +117,7 @@ describe("prepared build evidence", () => {
       const after = await preparedBuildOutputFingerprints(root);
 
       expect(after[output]).toBeDefined();
-      expect(inspectPreparedBuild({ ...valid, outputs: before }, "input", "1.4.0", after)).toContain(
+      expect(inspectPreparedBuild({ ...valid, outputs: before }, "input", "1.4.2", after)).toContain(
         `prepared build output is stale: ${output}`,
       );
     } finally {

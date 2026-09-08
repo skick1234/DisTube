@@ -1,30 +1,25 @@
 import { vi } from "vitest";
-import {
-  type Adapter,
-  type Diagnostic,
-  DisTube,
-  type DisTubeEventName,
-  type Engine,
-  type FilterEntry,
-  Filters,
-  type PlaybackContext,
-  type PlaybackPreparation,
-  type PlaybackRequest,
-  type PlaybackResource,
-  type Player,
-  type PlayerEvent,
-  type Playlist,
-  type Plugin,
-  type PluginContext,
-  type RelatedContext,
-  Song,
-  type SourceOperationOptions,
-  type SourcePlugin,
-  type VoiceGatewayData,
-  type VoiceSession,
-  type VoiceSessionEvent,
-  type VoiceTarget,
-} from "../../src";
+import { type Diagnostic, DisTube, type DisTubeEventName, type Playlist, Song } from "../../src";
+import { Filters } from "../../src/enums";
+import type {
+  Adapter,
+  Engine,
+  FilterEntry,
+  PlaybackContext,
+  PlaybackPreparation,
+  PlaybackRequest,
+  PlaybackResource,
+  Player,
+  PlayerEvent,
+  PluginContext,
+  RelatedContext,
+  SourceOperationOptions,
+  SourcePlugin,
+  VoiceGatewayData,
+  VoiceSession,
+  VoiceSessionEvent,
+  VoiceTarget,
+} from "../../src/integrations";
 
 export interface Deferred<Value> {
   readonly promise: Promise<Value>;
@@ -68,7 +63,7 @@ export function record(distube: DisTube, names: readonly DisTubeEventName[]): st
 }
 
 export function media(source: string, id = `${source}-song`): Song {
-  return new Song({ id, title: `Title ${id}`, url: `https://${source}.example/media/${id}`, duration: 60, source });
+  return new Song({ id, name: `Title ${id}`, url: `https://${source}.example/media/${id}`, duration: 60, source });
 }
 
 /** A SourcePlugin whose every operation is a spy; tests override only what they exercise. */
@@ -340,19 +335,19 @@ export interface Harness {
 }
 
 export interface HarnessOptions {
-  readonly plugins?: readonly Plugin[];
+  readonly sources?: readonly SourcePlugin[];
   readonly engine?: FakeEngine;
   /** Adapter override for tests that fail or defer session creation. */
   readonly adapter?: FakeAdapter;
 }
 
-export function setup(sources: readonly Plugin[], options: HarnessOptions = {}): Harness {
+export function setup(sources: readonly SourcePlugin[], options: HarnessOptions = {}): Harness {
   const engine = options.engine ?? new FakeEngine();
   const adapter = options.adapter ?? new FakeAdapter(engine);
   const diagnostics = vi.fn<(diagnostic: Diagnostic) => void>();
   const distube = new DisTube({
     adapter,
-    plugins: [...sources, ...(options.plugins ?? [])],
+    sources: [...sources, ...(options.sources ?? [])],
     onDiagnostic: diagnostics,
   });
   return { adapter, engine, diagnostics, distube };
@@ -379,4 +374,23 @@ export function playableSetup(name = "source"): Harness & { readonly source: Fak
   source.resolve.mockImplementation(async url => media(name, idOf(url)));
   source.search.mockImplementation(async query => [media(name, idOf(query))]);
   return { ...setup([source]), source };
+}
+
+/** A listener that unregisters its own exact registration before invoking the test callback. */
+export function once<Name extends DisTubeEventName>(
+  distube: DisTube,
+  name: Name,
+  listener: import("../../src").DisTubeEventListener<Name>,
+): () => void {
+  const unsubscribe = distube.on(name, event => {
+    unsubscribe();
+    return listener(event);
+  });
+  return unsubscribe;
+}
+
+/** Fails a fixture at the missing value, preserving its narrowed type for the assertions below. */
+export function required<Value>(value: Value | undefined): Value {
+  if (value === undefined) throw new Error("Expected fixture value");
+  return value;
 }

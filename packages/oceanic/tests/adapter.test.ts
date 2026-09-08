@@ -1,5 +1,6 @@
 import { VoiceConnectionStatus } from "@discordjs/voice";
-import { DisTubeError, ErrorCode, Filters, type PlaybackRequest, type VoiceSession } from "distube";
+import { DisTubeError } from "distube";
+import type { PlaybackRequest, VoiceSession } from "distube/integrations";
 import { ChannelTypes, type Client } from "oceanic.js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { OceanicAdapter } from "../src";
@@ -77,7 +78,7 @@ describe("adapter", () => {
   });
 
   it("runs prerequisite preflight before creating a native voice connection", async () => {
-    const failure = new DisTubeError(ErrorCode.VOICE_FAILED, "@distube/oceanic requires sodium");
+    const failure = new DisTubeError("VOICE_FAILED", "@distube/oceanic requires sodium");
     preflight.mockRejectedValueOnce(failure);
     const adapter = new OceanicAdapter(client());
 
@@ -181,15 +182,15 @@ describe("engine", () => {
 
     const encoded = { itemId: "item", resource: { kind: "encoded", data: "track", dispose: vi.fn() } };
     await expect(player.play(encoded as unknown as PlaybackRequest)).rejects.toMatchObject({
-      code: ErrorCode.UNSUPPORTED,
+      code: "UNSUPPORTED",
     });
-    await expect(player.seek(10)).rejects.toMatchObject({ code: ErrorCode.UNSUPPORTED });
+    await expect(player.seek(10)).rejects.toMatchObject({ code: "UNSUPPORTED" });
   });
 
   it("resolves its built-in filters alongside the presets it was configured with", () => {
     const adapter = new OceanicAdapter(client(), { filters: { house: "volume=2" } });
 
-    expect(adapter.engine.resolvable(Filters.Nightcore)).toBe(true);
+    expect(adapter.engine.resolvable("nightcore")).toBe(true);
     expect(adapter.engine.resolvable("house")).toBe(true);
     expect(adapter.engine.resolvable("unknown")).toBe(false);
   });

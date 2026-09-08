@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { ErrorCode, Song, type SourcePlugin } from "../src";
+import { Song } from "../src";
+import type { SourcePlugin } from "../src/integrations";
 import { createSourceCatalog, requireSongOwner, validateSourceSongs } from "../src/playback/sources";
 
 function source(name: string): SourcePlugin {
@@ -16,7 +17,7 @@ function source(name: string): SourcePlugin {
 function song(owner: string): Song {
   return new Song({
     id: `song-${owner}`,
-    title: "Song",
+    name: "Song",
     url: "https://provider.example/song",
     duration: 1,
     source: owner,
@@ -34,14 +35,14 @@ describe("private source catalog", () => {
 
   it("rejects an unconfigured direct Song owner", () => {
     expect(() => requireSongOwner(song("spotify"), createSourceCatalog([source("youtube")]))).toThrowError(
-      expect.objectContaining({ code: ErrorCode.SOURCE_FAILED }),
+      expect.objectContaining({ code: "SOURCE_FAILED" }),
     );
   });
 
   it.each(["resolve", "search"] as const)("rejects %s results with mismatched provenance", operation => {
     const youtube = source("youtube");
     expect(() => validateSourceSongs([song("spotify")], youtube, operation)).toThrowError(
-      expect.objectContaining({ code: ErrorCode.SOURCE_FAILED }),
+      expect.objectContaining({ code: "SOURCE_FAILED" }),
     );
   });
 
@@ -50,7 +51,7 @@ describe("private source catalog", () => {
     expect(validateSourceSongs([], youtube, "search", true)).toEqual([]);
     expect(() => validateSourceSongs([], youtube, "resolve")).toThrowError(
       expect.objectContaining({
-        code: ErrorCode.SOURCE_FAILED,
+        code: "SOURCE_FAILED",
         message: "youtube returned invalid media from resolve",
       }),
     );
@@ -60,7 +61,7 @@ describe("private source catalog", () => {
     const youtube = source("youtube");
     expect(() =>
       validateSourceSongs([song("youtube"), { id: "fake" } as unknown as Song], youtube, "search", true),
-    ).toThrowError(expect.objectContaining({ code: ErrorCode.SOURCE_FAILED }));
+    ).toThrowError(expect.objectContaining({ code: "SOURCE_FAILED" }));
   });
 
   it("preserves configured order without exposing mutable lookup storage", () => {

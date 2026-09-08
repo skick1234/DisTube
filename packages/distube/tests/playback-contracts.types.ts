@@ -1,30 +1,22 @@
-import {
-  type DisTube,
-  type EncodedPlaybackResource,
-  type Engine,
-  type FilterDefinitions,
-  type FilterEntry,
-  GuildQueue,
-  type PlaybackContext,
-  type PlaybackPreparation,
-  type PlaybackRequest,
-  type Player,
-  type PlayerEvent,
-  type PlayResult,
-  type PluginContext,
-  // @ts-expect-error v6 has no Plugin roles or registry contract
-  type PluginRegistry,
-  QueueItem,
-  Song,
-  type SourceOperationOptions,
-  type SourcePlugin,
-  type UrlPlaybackResource,
-  Voice,
-  VoiceFilters,
-  VoiceManager,
-  type VoiceSession,
-  type VoiceSessionEvent,
-} from "../src";
+import type { DisTube, DisTubeGuild, DisTubeVoice, PlayResult, QueueItem, VoiceManager } from "../src";
+import { Song } from "../src";
+import type {
+  EncodedPlaybackResource,
+  Engine,
+  FilterDefinitions,
+  FilterEntry,
+  PlaybackContext,
+  PlaybackPreparation,
+  PlaybackRequest,
+  Player,
+  PlayerEvent,
+  PluginContext,
+  SourceOperationOptions,
+  SourcePlugin,
+  UrlPlaybackResource,
+  VoiceSession,
+  VoiceSessionEvent,
+} from "../src/integrations";
 
 const resource: UrlPlaybackResource = {
   kind: "url",
@@ -42,21 +34,19 @@ const options: SourceOperationOptions = { signal: new AbortController().signal }
 const context: PlaybackContext = { signal: new AbortController().signal };
 const direct: PlaybackPreparation = { kind: "resource", resource };
 const fallback: PlaybackPreparation = { kind: "search", query: "title artist" };
-type RemovedRegistry = PluginRegistry;
-const removedRegistry: RemovedRegistry | undefined = undefined;
 
 const song = new Song({
   id: "song",
-  title: "Song",
+  name: "Song",
   url: "https://provider.example/song",
   duration: 1,
   source: "source",
 });
-const item = new QueueItem({ song });
+declare const item: QueueItem;
 // @ts-expect-error QueueItem identity is core-owned
-new QueueItem({ song, id: "caller-owned" });
+queue.enqueue(song, { id: "caller-owned" });
 // @ts-expect-error QueueItem insertion time is core-owned
-new QueueItem({ song, addedAt: new Date(0) });
+queue.enqueue(song, { addedAt: new Date(0) });
 
 const source: SourcePlugin = {
   name: "source",
@@ -115,60 +105,56 @@ const engine: Engine = {
 };
 
 declare const resultQueue: PlayResult["queue"];
-declare const queue: GuildQueue;
+declare const queue: DisTubeGuild;
 declare const distubeVoices: DisTube["voices"];
 declare const voices: VoiceManager;
-declare const voice: Voice;
-const returnedQueue: GuildQueue = resultQueue;
-const voiceFilters: VoiceFilters = voice.filters;
+declare const voice: DisTubeVoice;
+const returnedQueue: DisTubeGuild = resultQueue;
+const voiceFilters = voice.settings.filters;
 const publicVoices: VoiceManager = distubeVoices;
-const managedVoice: Voice | undefined = voices.get("guild");
+const managedVoice: DisTubeVoice | undefined = voices.get("guild");
 
-// @ts-expect-error GuildQueue is a type-only facade
-new GuildQueue({ queueId: "queue", guildId: "guild" }, {} as never, {} as never, {} as never);
-// @ts-expect-error VoiceFilters is a type-only facade
-new VoiceFilters({} as never, {} as never);
-// @ts-expect-error Voice is a type-only facade
-new Voice({} as never, {} as never, {} as never);
+// @ts-expect-error DisTubeGuild is a type-only facade
+new DisTubeGuild({ queueId: "queue", guildId: "guild" }, {} as never, {} as never, {} as never);
+// @ts-expect-error DisTubeVoice is a type-only facade
+new DisTubeVoice({} as never, {} as never, {} as never);
 // @ts-expect-error VoiceManager is a type-only facade
 new VoiceManager({} as never, {} as never, {} as never);
 
-// @ts-expect-error GuildQueue has no runtime constructor
-queue instanceof GuildQueue;
-// @ts-expect-error VoiceFilters has no runtime constructor
-voice.filters instanceof VoiceFilters;
-// @ts-expect-error Voice has no runtime constructor
-voice instanceof Voice;
+// @ts-expect-error DisTubeGuild has no runtime constructor
+queue instanceof DisTubeGuild;
+// @ts-expect-error DisTubeVoice has no runtime constructor
+voice instanceof DisTubeVoice;
 // @ts-expect-error VoiceManager has no runtime constructor
 voices instanceof VoiceManager;
 
-// @ts-expect-error GuildQueue has no channel authority
+// @ts-expect-error DisTubeGuild has no channel authority
 queue.channelId;
-// @ts-expect-error playback settings live on the guild's Voice
+// @ts-expect-error playback settings live on the guild's DisTubeVoice
 queue.volume;
-// @ts-expect-error playback settings live on the guild's Voice
+// @ts-expect-error playback settings live on the guild's DisTubeVoice
 queue.repeatMode;
-// @ts-expect-error playback settings live on the guild's Voice
+// @ts-expect-error playback settings live on the guild's DisTubeVoice
 queue.autoplay;
-// @ts-expect-error playback settings live on the guild's Voice
+// @ts-expect-error playback settings live on the guild's DisTubeVoice
 queue.setVolume(50);
-// @ts-expect-error playback settings live on the guild's Voice
+// @ts-expect-error playback settings live on the guild's DisTubeVoice
 queue.setRepeatMode(0);
-// @ts-expect-error playback settings live on the guild's Voice
+// @ts-expect-error playback settings live on the guild's DisTubeVoice
 queue.setAutoplay(true);
-// @ts-expect-error playback settings live on the guild's Voice
+// @ts-expect-error playback settings live on the guild's DisTubeVoice
 queue.filters;
-// @ts-expect-error playback settings live on the guild's Voice
+// @ts-expect-error playback settings live on the guild's DisTubeVoice
 queue.previousSongs;
-// @ts-expect-error GuildQueue deletion is internal
+// @ts-expect-error DisTubeGuild deletion is internal
 queue.destroy();
-// @ts-expect-error Voice release state is internal
+// @ts-expect-error DisTubeVoice release state is internal
 voice.released;
-// @ts-expect-error Voice Player access is internal
+// @ts-expect-error DisTubeVoice Player access is internal
 voice.player();
-// @ts-expect-error Voice Player retirement is internal
+// @ts-expect-error DisTubeVoice Player retirement is internal
 voice.retire(player);
-// @ts-expect-error Voice release is internal
+// @ts-expect-error DisTubeVoice release is internal
 voice.release();
 // @ts-expect-error VoiceManager borrowing is internal
 voices.borrow({ guildId: "guild", channelId: "voice" });
@@ -209,9 +195,9 @@ const missingEncodedDisposal: EncodedPlaybackResource = { kind: "encoded", encod
 // @ts-expect-error a playback resource carries exactly one payload discriminant
 const mixed: EncodedPlaybackResource = { kind: "encoded", encoded: "x", url: "https://a.example", dispose() {} };
 // @ts-expect-error Song cannot carry a playback resource
-new Song({ id: "leak", title: "Leak", url: "https://provider.example/leak", duration: 1, source: "source", resource });
+new Song({ id: "leak", name: "Leak", url: "https://provider.example/leak", duration: 1, source: "source", resource });
 // @ts-expect-error QueueItem cannot carry a playback resource
-new QueueItem({ song, resource });
+queue.enqueue(song, { resource });
 
 interface Requester {
   readonly requestedBy: string;
@@ -221,22 +207,21 @@ declare const untyped: DisTube;
 
 // The declared shape reaches every hand-back without a cast, assertion, or narrowing.
 const typedFromPlay: Promise<Requester> = typed
-  .play({ guildId: "guild", voiceChannelId: "voice" }, "query", { metadata: { requestedBy: "skick" } })
+  .play({ guildId: "guild", id: "voice" }, "query", { metadata: { requestedBy: "skick" } })
   .then(result => result.items[0]?.metadata ?? { requestedBy: "" });
-const typedFromQueue: string | undefined = typed.getQueue("guild")?.state.current?.metadata.requestedBy;
-const typedFromHistory: string | undefined = typed.voices.get("guild")?.previousSongs[0]?.metadata.requestedBy;
-typed.on("queue.item.added", event => event.item.metadata.requestedBy);
+const typedFromQueue: string | undefined = typed.getQueue("guild")?.state.current?.metadata?.requestedBy;
+typed.on("queue.item.added", event => event.item.metadata?.requestedBy);
 
 // @ts-expect-error metadata of the wrong shape fails before it can run
-typed.play({ guildId: "guild", voiceChannelId: "voice" }, "query", { metadata: { requester: "skick" } });
+typed.play({ guildId: "guild", id: "voice" }, "query", { metadata: { requester: "skick" } });
 // @ts-expect-error the same contract applies to enqueue
 typed.getQueue("guild")?.enqueue("query", { metadata: {} });
 // @ts-expect-error an omitted type parameter leaves metadata unknown, so a property read needs narrowing
-untyped.getQueue("guild")?.state.current?.metadata.requestedBy;
+untyped.getQueue("guild")?.state.current?.metadata?.requestedBy;
 // Any value is still accepted when the parameter is omitted.
-untyped.play({ guildId: "guild", voiceChannelId: "voice" }, "query", { metadata: Symbol("anything") });
+untyped.play({ guildId: "guild", id: "voice" }, "query", { metadata: Symbol("anything") });
 
-void [typedFromPlay, typedFromQueue, typedFromHistory];
+void [typedFromPlay, typedFromQueue];
 
 void [
   request,
@@ -250,7 +235,6 @@ void [
   malformedResource,
   missingEncodedDisposal,
   mixed,
-  removedRegistry,
   idleTerminal,
   session,
   engine,
@@ -261,3 +245,16 @@ void [
   definitions,
   entries,
 ];
+
+// @ts-expect-error caller metadata binding is readonly
+item.metadata = {};
+// @ts-expect-error native voice channels identify their channel with id
+untyped.play({ guildId: "guild", voiceChannelId: "voice" }, "query");
+// @ts-expect-error playback URLs belong to integration resources, not Songs
+song.resource;
+// @ts-expect-error provider-specific metadata remains source-owned
+song.metadata;
+// @ts-expect-error queue state exposes upcoming occurrences, not a mutable internal list
+queue.state.items;
+// @ts-expect-error enqueue targets are occurrence IDs, not positions
+queue.remove(0);

@@ -1,25 +1,22 @@
 import type { FilterEntry } from "../contracts";
-import { ErrorReason, RepeatMode } from "../enums";
-import { DisTubeError, ErrorCode } from "../errors";
+import { RepeatMode } from "../enums";
+import { DisTubeError } from "../errors";
 import type { QueueItem } from "../media";
-import { NO_FILTERS } from "./filters";
 
-/** How many played occurrences the Voice keeps before dropping the oldest. */
-export const HISTORY_LIMIT = 100;
 const DEFAULT_VOLUME = 100;
 
 /**
- * Durable playback settings for one guild Voice.
+ * Durable playback settings for one guild DisTubeVoice.
  *
- * The instance lives exactly as long as its Voice: queue creation, stop, exhaustion, deletion, and
- * channel movement never touch it, and building a fresh Voice on the next join restores defaults.
+ * The instance follows the voice lifetime. Volume, repeat and autoplay survive queue deletion;
+ * filters reset through terminal cleanup. Leaving discards all settings.
  */
 export class VoiceSettings {
   #volume = DEFAULT_VOLUME;
   #repeatMode: RepeatMode = RepeatMode.Off;
   #autoplay = false;
-  #entries: readonly FilterEntry[] = NO_FILTERS;
-  readonly #history: QueueItem[] = [];
+  #entries: readonly FilterEntry[] = Object.freeze([]);
+  #lastPlayed?: QueueItem;
 
   get volume(): number {
     return this.#volume;
@@ -54,45 +51,33 @@ export class VoiceSettings {
     this.#entries = entries;
   }
 
-  /** Played occurrences, oldest first, capped at the newest {@link HISTORY_LIMIT}. */
-  get previousSongs(): readonly QueueItem[] {
-    return Object.freeze([...this.#history]);
+  get lastPlayed(): QueueItem | undefined {
+    return this.#lastPlayed;
   }
 
-  /** Appends played occurrences, dropping the oldest once the history outgrows its cap. */
   remember(items: readonly QueueItem[]): void {
-    if (items.length === 0) return;
-    this.#history.push(...items);
-    if (this.#history.length > HISTORY_LIMIT) this.#history.splice(0, this.#history.length - HISTORY_LIMIT);
-  }
-
-  /** Removes and returns the newest played occurrence, for `previous()` replay. */
-  popPrevious(): QueueItem | undefined {
-    return this.#history.pop();
+    const latest = items.at(-1);
+    if (latest) this.#lastPlayed = latest;
   }
 }
 
 export function validateVolume(percent: number): number {
-  if (typeof percent !== "number" || !Number.isFinite(percent) || percent < 0) {
-    throw new DisTubeError(
-      ErrorCode.INVALID_ARGUMENT,
-      ErrorReason.Argument,
-      "volume must be a non-negative finite number",
-    );
+  if (typeof percent !== "number" || !Number.isFinite(percent) || percent < 0 || percent > 100) {
+    throw new DisTubeError("INVALID_ARGUMENT", "volume must be finite between 0 and 100");
   }
   return percent;
 }
 
 export function validateRepeatMode(mode: RepeatMode): RepeatMode {
   if (!Object.values(RepeatMode).includes(mode)) {
-    throw new DisTubeError(ErrorCode.INVALID_ARGUMENT, ErrorReason.Argument, `Unknown repeat mode: ${String(mode)}`);
+    throw new DisTubeError("INVALID_ARGUMENT", `Unknown repeat mode: ${String(mode)}`);
   }
   return mode;
 }
 
 export function validateAutoplay(enabled: boolean): boolean {
   if (typeof enabled !== "boolean") {
-    throw new DisTubeError(ErrorCode.INVALID_ARGUMENT, ErrorReason.Argument, "autoplay must be a boolean");
+    throw new DisTubeError("INVALID_ARGUMENT", "autoplay must be a boolean");
   }
   return enabled;
 }

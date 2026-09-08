@@ -94,7 +94,7 @@ export interface PlaybackRequest {
 /**
  * The long-lived playback backend for one connected VoiceSession.
  *
- * A Player outlives the tracks it plays and the queues that borrow it. Voice owns its terminal release.
+ * A Player outlives the tracks it plays and the queues that borrow it. DisTubeVoice owns its terminal release.
  *
  * A capability the backend does not perform — seek or an `encoded` resource on a voice engine, a
  * filter it cannot render — SHALL reject with `DisTubeError(ErrorCode.UNSUPPORTED)`; every other
@@ -178,6 +178,11 @@ export interface FilterEntry<TPayload = unknown> {
  * The engine owns filter definitions, rendering, and folding; core only names filters and keeps them ordered.
  */
 export interface Engine {
+  /** Optional lifecycle hooks must be supplied together. Core initializes and disposes each configured identity once, including dual source/engine objects. */
+  readonly name?: string;
+  initialize?(context: PluginContext): void;
+  dispose?(): void | Promise<void>;
+
   /**
    * The PlaybackResource kinds this engine's Players accept.
    *
@@ -196,7 +201,7 @@ export interface QueueBinding {
   readonly guildId: string;
 }
 
-/** The guild and voice channel a Voice occupies, in platform-neutral IDs. */
+/** The guild and voice channel a DisTubeVoice occupies, in platform-neutral IDs. */
 export interface VoiceTarget {
   readonly guildId: string;
   readonly channelId: string;

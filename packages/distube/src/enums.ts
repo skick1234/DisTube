@@ -1,51 +1,41 @@
-/**
- * Canonical public vocabulary.
- *
- * Every member is a string-valued enum member, so `Events.QueueItemStarted` and
- * `"queue.item.started"` are interchangeable at call sites keyed by literal strings,
- * and serialized values stay readable in logs and JSON.
- */
+/** Internal spelling tables for the public literal vocabulary. */
 
 /** The complete public event surface. */
-export enum Events {
-  QueueCreated = "queue.created",
-  QueueItemAdded = "queue.item.added",
-  QueuePlaylistAdded = "queue.playlist.added",
-  QueueItemStarted = "queue.item.started",
-  QueueItemFinished = "queue.item.finished",
-  QueueItemFailed = "queue.item.failed",
-  QueueFinished = "queue.finished",
-  QueueAutoplayFailed = "queue.autoplay.failed",
-  QueueDeleted = "queue.deleted",
-  VoiceDisconnected = "voice.disconnected",
-}
+export const Events = {
+  QueueCreated: "queue.created",
+  QueueItemAdded: "queue.item.added",
+  QueuePlaylistAdded: "queue.playlist.added",
+  QueueItemStarted: "queue.item.started",
+  QueueItemFinished: "queue.item.finished",
+  QueueItemFailed: "queue.item.failed",
+  QueueFinished: "queue.finished",
+  QueueAutoplayFailed: "queue.autoplay.failed",
+  QueueDeleted: "queue.deleted",
+  VoiceDisconnected: "voice.disconnected",
+} as const;
+export type Events = (typeof Events)[keyof typeof Events];
 
-/**
- * Why an `INVALID_ARGUMENT` was rejected, so a bot can retry versus reword.
- *
- * `Argument` is a value that fails the documented contract: a wrong type, an unknown QueueItem ID, an
- * out-of-range position. `State` is a well-formed call the current QueueState, Voice, or lifecycle forbids:
- * pausing when nothing is playing, asking for a previous occurrence with empty history. The five failure codes carry
- * no reason at all.
- */
-export enum ErrorReason {
-  Argument = "argument",
-  State = "state",
-}
+export const ErrorReason = {
+  Argument: "argument",
+  State: "state",
+} as const;
+export type ErrorReason = (typeof ErrorReason)[keyof typeof ErrorReason];
 
 /** How a naturally finished QueueItem is reconsidered before progression. */
-export enum RepeatMode {
-  Off = "off",
-  Song = "song",
-  Queue = "queue",
-}
+export const RepeatMode = {
+  Off: "off",
+  Song: "song",
+  Queue: "queue",
+} as const;
+export type RepeatMode = (typeof RepeatMode)[keyof typeof RepeatMode];
 
-/** Committed playback status of a GuildQueue. */
-export enum QueueStatus {
-  Idle = "idle",
-  Playing = "playing",
-  Paused = "paused",
-}
+/** Committed playback status of a DisTubeGuild. */
+export const QueueStatus = {
+  Idle: "idle",
+  Playing: "playing",
+  Paused: "paused",
+} as const;
+export type QueueStatus = (typeof QueueStatus)[keyof typeof QueueStatus];
 
 /**
  * Conventional filter names every engine ships a default definition for.
@@ -53,20 +43,21 @@ export enum QueueStatus {
  * Core treats these as plain names; each engine owns the rendered payload, so the
  * same application call renders natively on every backend.
  */
-export enum Filters {
-  ThreeD = "3d",
-  Bassboost = "bassboost",
-  Earwax = "earwax",
-  Echo = "echo",
-  Flanger = "flanger",
-  Gate = "gate",
-  Haas = "haas",
-  Karaoke = "karaoke",
-  Mcompand = "mcompand",
-  Nightcore = "nightcore",
-  Phaser = "phaser",
-  Reverse = "reverse",
-  Surround = "surround",
-  Tremolo = "tremolo",
-  Vaporwave = "vaporwave",
-}
+export const Filters = {
+  ThreeD: "3d",
+  Bassboost: "bassboost",
+  Earwax: "earwax",
+  Echo: "echo",
+  Flanger: "flanger",
+  Gate: "gate",
+  Haas: "haas",
+  Karaoke: "karaoke",
+  Mcompand: "mcompand",
+  Nightcore: "nightcore",
+  Phaser: "phaser",
+  Reverse: "reverse",
+  Surround: "surround",
+  Tremolo: "tremolo",
+  Vaporwave: "vaporwave",
+} as const;
+export type Filters = (typeof Filters)[keyof typeof Filters];

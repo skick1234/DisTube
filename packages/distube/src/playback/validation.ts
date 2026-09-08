@@ -1,5 +1,4 @@
 import type { PlaybackPreparation, PlaybackRequest, PlaybackResource } from "../contracts";
-import { ErrorReason } from "../enums";
 import { DisTubeError, ErrorCode, malformedValue } from "../errors";
 
 const URL_RESOURCE_KEYS = new Set(["kind", "url", "dispose"]);
@@ -10,11 +9,7 @@ const SEARCH_PREPARATION_KEYS = new Set(["kind", "query"]);
 
 export function validateSourceName(value: unknown, label = "SourcePlugin name"): string {
   if (typeof value !== "string" || value.length === 0 || value !== value.trim()) {
-    throw new DisTubeError(
-      ErrorCode.INVALID_ARGUMENT,
-      ErrorReason.Argument,
-      `${label} must be a trimmed non-empty string`,
-    );
+    throw new DisTubeError("INVALID_ARGUMENT", `${label} must be a trimmed non-empty string`);
   }
   return value;
 }
@@ -66,11 +61,7 @@ export function validatePlaybackRequest(value: unknown): PlaybackRequest {
   const record = asRecord(value, "Playback request must be an object", ErrorCode.INVALID_ARGUMENT);
   assertExactKeys(record, REQUEST_KEYS, "Playback request", ErrorCode.INVALID_ARGUMENT);
   if (typeof record.itemId !== "string" || record.itemId.length === 0 || record.itemId !== record.itemId.trim()) {
-    throw new DisTubeError(
-      ErrorCode.INVALID_ARGUMENT,
-      ErrorReason.Argument,
-      "Playback request itemId must be a trimmed non-empty string",
-    );
+    throw new DisTubeError("INVALID_ARGUMENT", "Playback request itemId must be a trimmed non-empty string");
   }
   return Object.freeze({ itemId: record.itemId, resource: validatePlaybackResource(record.resource) });
 }

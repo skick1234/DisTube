@@ -1,53 +1,39 @@
 import type { ResolvableInput } from "./contracts";
-import { ErrorReason, QueueStatus, RepeatMode } from "./enums";
+import { QueueStatus, RepeatMode } from "./enums";
 import { asDisTubeError, DisTubeError, ErrorCode, type FailureCode } from "./errors";
 import type { BaseQueueEvent, DisTubeEventEmitter, DisTubeEventMap, DisTubeEventName } from "./events";
 import { Playlist, QueueItem, type Song } from "./media";
 import { type OwnedPlaybackResource, preparePlaybackResource } from "./playback/prepare";
 import { relatedSong } from "./playback/related";
-import { resolveInput } from "./playback/resolve";
 import { type SourceCatalog, songsOf } from "./playback/sources";
 import { validatePlaybackRequest } from "./playback/validation";
 import { cancelPlaybackAttempt, createPlaybackAttempt, isCurrentPlaybackAttempt } from "./queue/attempt";
 import { decideControl, type QueueControl } from "./queue/control";
-import { EnqueueCoordinator } from "./queue/enqueue";
 import { asError, cleanupFailure } from "./queue/failures";
 import { Mailbox } from "./queue/mailbox";
 import type {
   ActivePlayback,
   AdvanceMode,
-  EnqueueCompletion,
-  EnqueueOperation,
   EnqueueOptions,
   PlaybackAttempt,
   QueueEdit,
   QueueMessage,
 } from "./queue/protocol";
 import {
-  clearItems,
   clearQueue,
   failFirst,
   finishCurrent,
   frontItems,
   IDLE_QUEUE_STATE,
   insertItems,
-  type JumpTarget,
-  jumpItems,
   type QueueState,
-  type RemoveTarget,
   removeItem,
   setStatus,
-  shuffleItems,
   startFirst,
 } from "./queue/state";
 import type { QueueTerminalCause } from "./queue/terminal";
 import type { LeasedPlayerOutcome, QueuePlayerEffect, QueueVoice, QueueVoiceLease } from "./queue/voice";
 import { TrackedWork } from "./utils/tracked-work";
-
-export interface JumpOptions {
-  /** Moves the passed-over items to the tail instead of dropping them into history. */
-  readonly requeue?: boolean;
-}
 
 /** The events a queue publishes itself; `queue.created` belongs to the registry that made it. */
 type QueueOwnedEvent = Exclude<DisTubeEventName, "queue.created" | "voice.disconnected">;
@@ -59,18 +45,20 @@ const NO_ITEMS: readonly QueueItem[] = Object.freeze([]);
  *
  * `Metadata` is the client's caller-metadata type, threaded so a read of `item.metadata` needs no cast.
  */
-export type GuildQueue<Metadata = unknown> = {
+export interface GuildState<Metadata = unknown> {
+  readonly current: QueueItem<Metadata> | undefined;
+  readonly upcoming: readonly QueueItem<Metadata>[];
+  readonly status: "idle" | "playing" | "paused";
+}
+
+export type DisTubeGuild<Metadata = unknown> = {
   readonly guildId: string;
-  metadata: Metadata;
-  readonly state: QueueState<Metadata>;
-  readonly currentTime: number;
+  readonly state: GuildState<Metadata>;
+  readonly position: number;
   enqueue(input: ResolvableInput, options?: EnqueueOptions<Metadata>): Promise<readonly QueueItem<Metadata>[]>;
-  remove(target: RemoveTarget): Promise<readonly QueueItem<Metadata>[]>;
-  shuffle(): Promise<void>;
-  clear(): Promise<void>;
+  remove(itemId: string): Promise<void>;
+  move(itemId: string, beforeItemId?: string): Promise<void>;
   skip(): Promise<void>;
-  jump(target: JumpTarget, options?: JumpOptions): Promise<void>;
-  previous(): Promise<void>;
   pause(): Promise<void>;
   resume(): Promise<void>;
   seek(seconds: number): Promise<void>;
@@ -78,21 +66,16 @@ export type GuildQueue<Metadata = unknown> = {
 };
 
 /** Package-private implementation of the GuildQueue facade. */
-export class GuildQueueImpl implements GuildQueue {
-  readonly #facade: GuildQueue;
+export class GuildQueueImpl {
+  readonly #facade: DisTubeGuild;
   /** Internal identity for lease and authority matching; never public, since queues are keyed by guild. */
   readonly #queueId: string;
   readonly guildId: string;
-  /** Caller-owned slot; core never reads, writes, or interprets it. Released when the queue is deleted. */
-  #metadata: unknown;
   readonly #sources: SourceCatalog;
   readonly #events: DisTubeEventEmitter;
   /** Frees the guild and hands the registry this deletion's completion so shutdown can join it. */
   readonly #unregister: (completion: Promise<void>) => void;
-  /** Promotes a provisional queue immediately after its first QueueState insertion commits. */
-  readonly #promote?: () => void;
   readonly #mailbox: Mailbox<QueueMessage>;
-  readonly #enqueues = new EnqueueCoordinator();
   readonly #work = new TrackedWork();
   readonly #leaseController = new AbortController();
   #voice?: QueueVoice;
@@ -108,12 +91,10 @@ export class GuildQueueImpl implements GuildQueue {
   #autoplayLookup?: AbortController;
   #exhausted = false;
   #destroyRequested = false;
-  #terminalSettled = false;
-  /** A provisional queue becomes observable only after QueueManager promotes its first insertion. */
-  #published: boolean;
-  /** Keeps first-insertion events contiguous when a `queue.created` listener deletes the queue. */
-  #publishingFirstInsertion = false;
-  #deletionEventPending = false;
+  #published = false;
+  #reservations = 0;
+  #inserted = false;
+  readonly #reservationController = new AbortController();
   #destroyEventEmitted = false;
   #terminalPromise?: Promise<void>;
 
@@ -123,12 +104,12 @@ export class GuildQueueImpl implements GuildQueue {
     sources: SourceCatalog,
     events: DisTubeEventEmitter,
     unregister: (completion: Promise<void>) => void = () => undefined,
-    promote?: () => void,
+    enqueue: (input: ResolvableInput, options?: EnqueueOptions) => Promise<readonly QueueItem[]> = () =>
+      Promise.reject(new DisTubeError("INVALID_STATE", "Queue is not registered")),
+    stop: () => Promise<void> = () => this.destroy(),
   ) {
     this.#queueId = binding.queueId;
     this.guildId = binding.guildId;
-    this.#promote = promote;
-    this.#published = promote === undefined;
     this.#sources = sources;
     this.#events = events;
     this.#unregister = unregister;
@@ -138,36 +119,29 @@ export class GuildQueueImpl implements GuildQueue {
       get guildId(): string {
         return self.guildId;
       },
-      get metadata(): unknown {
-        return self.metadata;
+      get state(): GuildState {
+        return self.snapshot();
       },
-      set metadata(value: unknown) {
-        self.metadata = value;
-      },
-      get state(): QueueState {
-        return self.state;
-      },
-      get currentTime(): number {
+      get position(): number {
         return self.currentTime;
       },
-      enqueue: this.enqueue.bind(this),
-      remove: this.remove.bind(this),
-      shuffle: this.shuffle.bind(this),
-      clear: this.clear.bind(this),
+      enqueue,
+      remove: async (itemId: string): Promise<void> => {
+        await self.remove(itemId);
+      },
+      move: (itemId: string, beforeItemId?: string): Promise<void> => self.move(itemId, beforeItemId),
       skip: this.skip.bind(this),
-      jump: this.jump.bind(this),
-      previous: this.previous.bind(this),
       pause: this.pause.bind(this),
       resume: this.resume.bind(this),
       seek: this.seek.bind(this),
-      stop: this.stop.bind(this),
+      stop,
     };
     Object.freeze(facade);
     this.#facade = facade;
   }
 
   /** Package-private public view; the implementation never crosses the package boundary. */
-  get facade(): GuildQueue {
+  get facade(): DisTubeGuild {
     return this.#facade;
   }
 
@@ -195,12 +169,53 @@ export class GuildQueueImpl implements GuildQueue {
     return this.#state;
   }
 
-  get metadata(): unknown {
-    return this.#destroyRequested ? undefined : this.#metadata;
+  snapshot(): GuildState {
+    return Object.freeze({ current: this.#state.current, upcoming: this.#state.items, status: this.#state.status });
   }
 
-  set metadata(value: unknown) {
-    if (!this.#destroyRequested) this.#metadata = value;
+  get empty(): boolean {
+    return (
+      this.#reservations === 0 &&
+      !this.#active &&
+      !this.#attempt &&
+      !this.#state.current &&
+      this.#state.items.length === 0
+    );
+  }
+
+  get terminal(): boolean {
+    return this.#destroyRequested;
+  }
+
+  reserve(caller?: AbortSignal): { readonly signal: AbortSignal; readonly release: () => void } {
+    this.#assertActive();
+    this.#reservations += 1;
+    this.#cancelAutoplay();
+    let released = false;
+    return {
+      signal: caller
+        ? AbortSignal.any([caller, this.#reservationController.signal])
+        : this.#reservationController.signal,
+      release: () => {
+        if (released) return;
+        released = true;
+        this.#reservations -= 1;
+        if (this.empty && this.#inserted && !this.#destroyRequested) this.#exhaust();
+      },
+    };
+  }
+
+  fenceReservations(): void {
+    this.#reservationController.abort(this.#stale());
+  }
+
+  publishCreated(): void {
+    if (this.#published) return;
+    this.#published = true;
+    this.#events.emit(
+      "queue.created",
+      Object.freeze({ guildId: this.guildId, queue: this.#facade, state: this.snapshot(), timestamp: Date.now() }),
+    );
   }
 
   /** Elapsed seconds of the current occurrence, or `0` when nothing is playing. */
@@ -210,47 +225,29 @@ export class GuildQueueImpl implements GuildQueue {
     return active && lease ? lease.position(active.authority) : 0;
   }
 
-  enqueue(input: ResolvableInput, options: EnqueueOptions = {}): Promise<readonly QueueItem[]> {
+  insert(media: Song | Playlist, options: EnqueueOptions = {}): Promise<readonly QueueItem[]> {
     try {
       this.#assertActive();
-      validatePosition(options.position);
     } catch (error: unknown) {
       return Promise.reject(error);
     }
-    return new Promise((resolve, reject) => {
-      const operation = this.#enqueues.create(options, resolve, reject);
-      this.#mailbox.post({ type: "enqueue", source: input, operation });
-    });
+    return new Promise((resolve, reject) => this.#mailbox.post({ type: "insert", media, options, resolve, reject }));
+  }
+
+  async move(itemId: string, beforeItemId?: string): Promise<void> {
+    await this.#edit({ kind: "move", itemId, beforeItemId });
   }
 
   /** Removes waiting occurrences by ID, by zero-based index, or by inclusive index range. */
-  remove(target: RemoveTarget): Promise<readonly QueueItem[]> {
+  remove(target: string): Promise<readonly QueueItem[]> {
+    if (typeof target !== "string" || target.length === 0)
+      return Promise.reject(new DisTubeError("INVALID_ARGUMENT", "Occurrence ID must be a non-empty string"));
     return this.#edit({ kind: "remove", target });
-  }
-
-  /** Randomly reorders the waiting occurrences; the current one keeps playing. */
-  async shuffle(): Promise<void> {
-    await this.#edit({ kind: "shuffle" });
-  }
-
-  /** Drops every waiting occurrence; the current one keeps playing. */
-  async clear(): Promise<void> {
-    await this.#edit({ kind: "clear" });
   }
 
   /** Ends the current occurrence and plays the next waiting one. */
   skip(): Promise<void> {
     return this.#advance({ kind: "skip" });
-  }
-
-  /** Ends the current occurrence and continues from `target`, by ID or zero-based waiting position. */
-  jump(target: JumpTarget, options: JumpOptions = {}): Promise<void> {
-    return this.#advance({ kind: "jump", target, requeue: options.requeue === true });
-  }
-
-  /** Ends the current occurrence and replays the newest played Song, re-queueing the interrupted one. */
-  previous(): Promise<void> {
-    return this.#advance({ kind: "previous" });
   }
 
   pause(): Promise<void> {
@@ -272,7 +269,7 @@ export class GuildQueueImpl implements GuildQueue {
 
   /** @internal */
   destroy(cause: QueueTerminalCause = { kind: "stop" }): Promise<void> {
-    if (this.#terminalPromise) return this.#terminalSettled ? Promise.reject(this.#stale()) : this.#terminalPromise;
+    if (this.#terminalPromise) return this.#terminalPromise;
 
     let resolveTerminal!: () => void;
     let rejectTerminal!: (error: unknown) => void;
@@ -283,10 +280,9 @@ export class GuildQueueImpl implements GuildQueue {
     // Reentrant terminal callers must join before the first terminal event can invoke listeners.
     this.#terminalPromise = terminal;
     this.#destroyRequested = true;
-    this.#metadata = undefined;
+    this.fenceReservations();
     this.#detachAutoplayListener();
     this.#leaseController.abort(this.#stale());
-    this.#cancelEnqueues();
     this.#cancelAutoplay();
     const attempt = cancelPlaybackAttempt(this.#attempt, this.#stale());
     this.#attempt = undefined;
@@ -311,6 +307,8 @@ export class GuildQueueImpl implements GuildQueue {
 
     // Calling close fences the lease in this stack, before another queue can acquire the Voice.
     const close = this.#closeLease();
+    const reset = this.#voice?.resetQueueFilters();
+    if (reset) void this.#work.start(() => reset).catch(() => undefined);
     const resources = [...new Set([attempt?.resource, active?.resource].filter(Boolean))] as OwnedPlaybackResource[];
     for (const resource of resources) this.#scheduleTerminalDisposal(resource, close);
 
@@ -327,11 +325,9 @@ export class GuildQueueImpl implements GuildQueue {
       })
       .then(
         () => {
-          this.#terminalSettled = true;
           resolveTerminal();
         },
         (error: unknown) => {
-          this.#terminalSettled = true;
           rejectTerminal(error);
         },
       );
@@ -375,11 +371,8 @@ export class GuildQueueImpl implements GuildQueue {
 
   #handle(message: QueueMessage): void | Promise<void> {
     switch (message.type) {
-      case "enqueue":
-        this.#acceptEnqueue(message.source, message.operation);
-        return;
-      case "enqueue.completed":
-        this.#completeEnqueue(message.completion);
+      case "insert":
+        this.#insert(message);
         return;
       case "start":
         this.#startNext();
@@ -412,79 +405,24 @@ export class GuildQueueImpl implements GuildQueue {
     }
   }
 
-  #acceptEnqueue(source: ResolvableInput, operation: EnqueueOperation): void {
+  #insert(message: Extract<QueueMessage, { type: "insert" }>): void {
     try {
       this.#assertActive();
-      this.#enqueues.accept(operation);
-      void this.#work
-        .start(async () => {
-          try {
-            const media = await resolveInput(source, this.#sources, operation.signal);
-            this.#mailbox.post({ type: "enqueue.completed", completion: { operation, media } });
-          } catch (error: unknown) {
-            this.#mailbox.post({ type: "enqueue.completed", completion: { operation, error } });
-          }
-        })
-        .catch(error => this.#report(error, "queue.enqueue"));
-    } catch (error: unknown) {
-      operation.reject(error);
-    }
-  }
-
-  #completeEnqueue(completion: EnqueueCompletion): void {
-    this.#drainEnqueues(this.#enqueues.complete(completion));
-  }
-
-  #drainEnqueues(completions: readonly EnqueueCompletion[]): void {
-    for (const completion of completions) {
-      const { operation } = completion;
-      if (this.#destroyRequested) {
-        operation.reject(this.#stale());
-        continue;
-      }
-      this.#enqueues.commit(completion);
-      if ("error" in completion) {
-        operation.reject(sourceFailure("Source resolution failed", completion.error));
-        continue;
-      }
-      const { media } = completion;
+      if (message.options.signal?.aborted) throw new DisTubeError("ABORTED", "Queue insertion was cancelled");
+      const { media } = message;
       const items = Object.freeze(
-        songsOf(media).map(song => new QueueItem({ song, metadata: operation.options.metadata })),
+        songsOf(media).map(song => new QueueItem({ song, metadata: message.options.metadata })),
       );
-      const previousState = this.#state;
-      this.#state = insertItems(previousState, items, operation.options.position);
-      let firstInsertion = false;
-      try {
-        if (!this.#published) {
-          // `queue.created` is observable before the insertion event. A reentrant stop still needs
-          // terminal authority immediately, but cannot split this committed event pair.
-          this.#publishingFirstInsertion = true;
-          this.#promote?.();
-          this.#published = true;
-          firstInsertion = true;
-        }
-      } catch (error: unknown) {
-        this.#publishingFirstInsertion = false;
-        this.#deletionEventPending = false;
-        this.#state = previousState;
-        operation.reject(asDisTubeError(ErrorCode.QUEUE_FAILED, "Queue registration failed", error));
-        continue;
-      }
+      this.#state = insertItems(this.#state, items);
+      this.#inserted = true;
       this.#cancelAutoplay();
       const timestamp = Date.now();
       if (media instanceof Playlist) this.#emit("queue.playlist.added", { playlist: media, items }, timestamp);
       else for (const item of items) this.#emit("queue.item.added", { item }, timestamp);
-      if (firstInsertion) {
-        this.#publishingFirstInsertion = false;
-        if (this.#deletionEventPending) {
-          this.#deletionEventPending = false;
-          this.#emitDeletion();
-        }
-      }
-      operation.resolve(items);
-      // An insertion can move the attempt's item out of the next slot, exactly as an edit can.
-      this.#reconcileAttempt();
-      if (firstInsertion || !this.#active) this.#mailbox.post({ type: "start" });
+      message.resolve(items);
+      this.#mailbox.post({ type: "start" });
+    } catch (error: unknown) {
+      message.reject(error);
     }
   }
 
@@ -726,7 +664,7 @@ export class GuildQueueImpl implements GuildQueue {
 
   /** Nothing is playing and nothing is waiting: try autoplay, otherwise exhaust. */
   #exhaust(): void {
-    if (this.#destroyRequested || this.#autoplayLookup) return;
+    if (this.#destroyRequested || this.#autoplayLookup || this.#reservations > 0) return;
     const seed = this.#voice?.lastPlayedSong()?.song;
     if (seed && this.#voice?.autoplay) this.#runAutoplay(seed);
     else this.#finish();
@@ -800,19 +738,35 @@ export class GuildQueueImpl implements GuildQueue {
       const { edit } = message;
       switch (edit.kind) {
         case "remove": {
+          if (!this.#state.items.some(item => item.id === edit.target))
+            throw new DisTubeError("INVALID_STATE", "Occurrence is not upcoming in this queue");
           const removal = removeItem(this.#state, edit.target);
           this.#state = removal.state;
           message.resolve(removal.items);
           break;
         }
-        case "shuffle":
-          this.#state = shuffleItems(this.#state);
+        case "move": {
+          const { itemId, beforeItemId } = edit;
+          if (
+            typeof itemId !== "string" ||
+            !itemId ||
+            (beforeItemId !== undefined && (typeof beforeItemId !== "string" || !beforeItemId))
+          ) {
+            throw new DisTubeError("INVALID_ARGUMENT", "Occurrence IDs must be non-empty strings");
+          }
+          const item = this.#state.items.find(item => item.id === itemId);
+          if (!item || (beforeItemId !== undefined && !this.#state.items.some(item => item.id === beforeItemId))) {
+            throw new DisTubeError("INVALID_STATE", "Occurrence is not upcoming in this queue");
+          }
+          if (itemId !== beforeItemId) {
+            const upcoming = this.#state.items.filter(entry => entry !== item);
+            const index =
+              beforeItemId === undefined ? upcoming.length : upcoming.findIndex(entry => entry.id === beforeItemId);
+            this.#state = Object.freeze({ ...this.#state, items: Object.freeze(upcoming.toSpliced(index, 0, item)) });
+          }
           message.resolve(NO_ITEMS);
           break;
-        case "clear":
-          this.#state = clearItems(this.#state);
-          message.resolve(NO_ITEMS);
-          break;
+        }
       }
       this.#reconcileAttempt();
     } catch (error: unknown) {
@@ -853,7 +807,7 @@ export class GuildQueueImpl implements GuildQueue {
         return;
       }
       if (!active || !this.#lease) {
-        throw new DisTubeError(ErrorCode.INVALID_ARGUMENT, ErrorReason.State, "Queue has no current QueueItem");
+        throw new DisTubeError("INVALID_STATE", "Queue has no current QueueItem");
       }
       const effect: QueuePlayerEffect =
         decision.control === "seek"
@@ -873,22 +827,16 @@ export class GuildQueueImpl implements GuildQueue {
   async #applyAdvance(message: Extract<QueueMessage, { type: "advance" }>): Promise<void> {
     try {
       this.#assertActive();
-      this.#previewAdvance(message.mode);
       const active = this.#active;
       const lease = this.#lease;
       if (!active || !lease || this.#state.current?.id !== active.item.id) {
-        throw new DisTubeError(
-          ErrorCode.INVALID_ARGUMENT,
-          ErrorReason.State,
-          "Cannot advance a queue with no active track",
-        );
+        throw new DisTubeError("INVALID_STATE", "Cannot advance a queue with no active track");
       }
       const stopped = await this.#runLeaseEffect(lease, { kind: "stop", authority: active.authority });
       this.#commit();
-      const advanced = this.#applyAdvanceState(message.mode, active.item);
       this.#active = undefined;
-      this.#state = advanced.state;
-      this.#remember(advanced.played);
+      this.#state = finishCurrent(this.#state);
+      this.#remember([active.item]);
       this.#emit("queue.item.finished", { item: active.item }, Date.now());
       const disposal = await this.#disposeResource(active.resource, "resource cleanup after queue advance", true).then(
         () => undefined,
@@ -912,33 +860,6 @@ export class GuildQueueImpl implements GuildQueue {
     }
   }
 
-  #previewAdvance(mode: AdvanceMode): void {
-    if (mode.kind === "jump") jumpItems(this.#state, mode.target, mode.requeue);
-    else if (mode.kind === "previous" && !this.#voice?.lastPlayedSong()) {
-      throw new DisTubeError(ErrorCode.INVALID_ARGUMENT, ErrorReason.State, "No previous Song to play");
-    }
-  }
-
-  /** The queue after the current occurrence ends, plus the occurrences that entered history. */
-  #applyAdvanceState(
-    mode: AdvanceMode,
-    item: QueueItem,
-  ): { readonly state: QueueState; readonly played: readonly QueueItem[] } {
-    if (mode.kind === "previous") {
-      const historical = this.#voice?.popPreviousSong();
-      if (!historical) {
-        throw new DisTubeError(ErrorCode.INVALID_ARGUMENT, ErrorReason.State, "No previous Song to play");
-      }
-      const replay = new QueueItem({ song: historical.song, metadata: historical.metadata });
-      return { state: frontItems(finishCurrent(this.#state), [replay, item]), played: [] };
-    }
-    if (mode.kind === "jump") {
-      const jumped = jumpItems(finishCurrent(this.#state), mode.target, mode.requeue);
-      return { state: jumped.state, played: [item, ...jumped.passed] };
-    }
-    return { state: finishCurrent(this.#state), played: [item] };
-  }
-
   #failWaitingAttempt(attempt: PlaybackAttempt, error: DisTubeError): void {
     if (this.#attempt !== attempt) return;
     this.#attempt = undefined;
@@ -956,10 +877,6 @@ export class GuildQueueImpl implements GuildQueue {
 
   #isCurrentAttempt(attempt: PlaybackAttempt): boolean {
     return this.#currentAttempt(attempt) === attempt;
-  }
-
-  #cancelEnqueues(): void {
-    this.#enqueues.cancel(() => this.#stale());
   }
 
   #detachAutoplayListener(): void {
@@ -1021,10 +938,6 @@ export class GuildQueueImpl implements GuildQueue {
 
   #emitDeletion(): void {
     if (this.#destroyEventEmitted) return;
-    if (this.#publishingFirstInsertion) {
-      this.#deletionEventPending = true;
-      return;
-    }
     if (!this.#published) return;
     this.#destroyEventEmitted = true;
     this.#emit("queue.deleted", {}, Date.now());
@@ -1037,7 +950,7 @@ export class GuildQueueImpl implements GuildQueue {
 
   #assertActive(): void {
     if (this.#destroyRequested) {
-      throw new DisTubeError(ErrorCode.QUEUE_FAILED, "GuildQueue is destroyed");
+      throw new DisTubeError("INVALID_STATE", "DisTubeGuild is destroyed");
     }
   }
 
@@ -1053,7 +966,7 @@ export class GuildQueueImpl implements GuildQueue {
   }
 
   #stale(): DisTubeError {
-    return new DisTubeError(ErrorCode.QUEUE_FAILED, "Queue operation was superseded");
+    return new DisTubeError("INVALID_STATE", "Queue operation was superseded");
   }
 
   #report(error: unknown, stage: string): void {
@@ -1074,23 +987,18 @@ export class GuildQueueImpl implements GuildQueue {
   ): void {
     this.#events.emit(
       name,
-      Object.freeze({ guildId: this.guildId, queue: this.#facade, timestamp, ...detail }) as never,
+      Object.freeze({
+        guildId: this.guildId,
+        queue: this.#facade,
+        state: this.snapshot(),
+        timestamp,
+        ...detail,
+      }) as never,
     );
   }
 }
 
-const QUEUE_INPUT_CODES = [
-  ErrorCode.INVALID_ARGUMENT,
-  ErrorCode.SOURCE_FAILED,
-  ErrorCode.PLUGIN_FAILED,
-  ErrorCode.QUEUE_FAILED,
-] as const;
-const PLAYER_CODES = [ErrorCode.VOICE_FAILED, ErrorCode.UNSUPPORTED, ErrorCode.QUEUE_FAILED] as const;
-
-/** Maps source resolution failures to the codes queue input accepts. */
-function sourceFailure(message: string, error: unknown): DisTubeError {
-  return compatibleFailure(ErrorCode.SOURCE_FAILED, message, error, QUEUE_INPUT_CODES);
-}
+const PLAYER_CODES = [ErrorCode.VOICE_FAILED, ErrorCode.UNSUPPORTED, ErrorCode.INVALID_STATE] as const;
 
 /** Maps a backend rejection to the public error the accepted Player effect can return. */
 function playerFailure(message: string, error: unknown, allowInvalidArgument = false): DisTubeError {
@@ -1110,11 +1018,4 @@ function compatibleFailure(
 ): DisTubeError {
   if (error instanceof DisTubeError && accepted.includes(error.code)) return error;
   return asDisTubeError(code, message, error);
-}
-
-function validatePosition(position: number | undefined): void {
-  if (position === undefined) return;
-  if (!Number.isInteger(position) || position < 0) {
-    throw new DisTubeError(ErrorCode.INVALID_ARGUMENT, ErrorReason.Argument, "position must be a non-negative integer");
-  }
 }

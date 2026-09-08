@@ -1,41 +1,8 @@
-export type {
-  Adapter,
-  Diagnostic,
-  DiagnosticSeverity,
-  EncodedPlaybackResource,
-  Engine,
-  FilterDefinition,
-  FilterDefinitions,
-  FilterEntry,
-  PlaybackContext,
-  PlaybackPreparation,
-  PlaybackRequest,
-  PlaybackResource,
-  Player,
-  PlayerEvent,
-  Plugin,
-  PluginContext,
-  PluginDiagnostic,
-  RelatedContext,
-  ResolvableInput,
-  SearchOptions,
-  SourceOperationOptions,
-  SourcePlugin,
-  UrlPlaybackResource,
-  VoiceGatewayData,
-  VoiceSession,
-  VoiceSessionEvent,
-  VoiceTarget,
-} from "./contracts";
-export {
-  DisTube,
-  type DisTubeOptions,
-  type PlayOptions,
-  type PlayResult,
-  type PlayTarget,
-} from "./DisTube";
-export { ErrorReason, Events, Filters, QueueStatus, RepeatMode } from "./enums";
-export { asDisTubeError, DisTubeError, ErrorCode, type FailureCode } from "./errors";
+export type { Diagnostic, DiagnosticSeverity, ResolvableInput as PlayInput } from "./contracts";
+export { DisTube, type DisTubeOptions, type PlayOptions, type PlayResult } from "./DisTube";
+export type { DisTubeGuild, GuildState } from "./DisTubeGuild";
+export type { QueueStatus as PlaybackStatus, RepeatMode } from "./enums";
+export { DisTubeError, type ErrorCode } from "./errors";
 export type {
   BaseQueueEvent,
   DisTubeEventListener,
@@ -43,19 +10,9 @@ export type {
   DisTubeEventName,
   VoiceDisconnectReason,
 } from "./events";
-export type { GuildQueue, JumpOptions } from "./GuildQueue";
-export {
-  Playlist,
-  type PlaylistData,
-  QueueItem,
-  type QueueItemData,
-  Song,
-  type SongData,
-  type SongUploader,
-} from "./media";
+export { Playlist, type PlaylistData, type QueueItem, Song, type SongData } from "./media";
 export type { QueueCollection } from "./QueueManager";
 export type { EnqueueOptions } from "./queue/protocol";
-export type { JumpTarget, QueueState, RemoveTarget } from "./queue/state";
-export type { VoiceFilters } from "./voice/filters";
-export type { Voice } from "./voice/Voice";
+export type { DisTubeVoice, VoiceSettings } from "./voice/DisTubeVoice";
+export type { VoiceChannelTarget } from "./voice/target";
 export type { VoiceCollection, VoiceManager } from "./voice/VoiceManager";

@@ -1,23 +1,22 @@
 import { describe, expect, it } from "vitest";
-import { QueueItem, QueueStatus, Song } from "../src";
+import { Song } from "../src";
+import { QueueStatus } from "../src/enums";
+import { QueueItem } from "../src/media";
 import {
-  clearItems,
   clearQueue,
   failFirst,
   finishCurrent,
   frontItems,
   IDLE_QUEUE_STATE,
   insertItems,
-  jumpItems,
   removeItem,
   setStatus,
-  shuffleItems,
   startFirst,
 } from "../src/queue/state";
 
 const song = new Song({
   id: "song",
-  title: "Song",
+  name: "Song",
   url: "https://provider.example/song",
   duration: 1,
   source: "source",
@@ -32,35 +31,28 @@ describe("pure QueueState playback transitions", () => {
     expect(IDLE_QUEUE_STATE).toEqual({ items: [], status: "idle" });
   });
 
-  it("inserts at a position and clamps beyond the end", () => {
+  it("appends new occurrences in order without mutating the waiting list", () => {
     const [a, b, c] = [item(), item(), item()];
-    const queued = insertItems(insertItems(IDLE_QUEUE_STATE, [a, b]), [c], 1);
-    expect(queued.items).toEqual([a, c, b]);
-    expect(insertItems(queued, [item()], 99).items).toHaveLength(4);
+    const original = insertItems(IDLE_QUEUE_STATE, [a, b]);
+    expect(insertItems(original, [c]).items).toEqual([a, b, c]);
+    expect(original.items).toEqual([a, b]);
   });
 
-  it("removes waiting occurrences by ID, index, and inclusive range", () => {
+  it("removes exactly one upcoming occurrence by ID and preserves the current item", () => {
     const [a, b, c] = [item(), item(), item()];
-    const queued = insertItems(IDLE_QUEUE_STATE, [a, b, c]);
-    expect(removeItem(queued, a.id)).toMatchObject({ items: [a], state: { items: [b, c], status: "idle" } });
-    expect(removeItem(queued, 1)).toMatchObject({ items: [b], state: { items: [a, c] } });
-    expect(removeItem(queued, { from: 0, to: 1 })).toMatchObject({ items: [a, b], state: { items: [c] } });
+    const playing = startFirst(insertItems(IDLE_QUEUE_STATE, [a, b, c]))?.state ?? IDLE_QUEUE_STATE;
+    expect(removeItem(playing, b.id)).toMatchObject({
+      items: [b],
+      state: { current: a, items: [c], status: "playing" },
+    });
+    expect(playing.items).toEqual([b, c]);
   });
 
-  it("moves a zero-based jump target to the head, dropping or requeueing what it passed", () => {
-    const [a, b, c] = [item(), item(), item()];
-    const queued = insertItems(IDLE_QUEUE_STATE, [a, b, c]);
-    expect(jumpItems(queued, 2, false)).toMatchObject({ passed: [a, b], state: { items: [c] } });
-    expect(jumpItems(queued, c.id, true)).toMatchObject({ passed: [], state: { items: [c, a, b] } });
-  });
-
-  it("shuffles, clears, and fronts waiting items without touching the current one", () => {
+  it("fronts a repeated occurrence without changing the current item", () => {
     const [a, b] = [item(), item()];
     const playing = startFirst(insertItems(IDLE_QUEUE_STATE, [a, b]))?.state ?? IDLE_QUEUE_STATE;
-    expect(shuffleItems(playing)).toMatchObject({ items: [b], current: a });
-    expect(clearItems(playing)).toMatchObject({ items: [], current: a });
-    const replay = item();
-    expect(frontItems(playing, [replay]).items).toEqual([replay, b]);
+    const repeated = item();
+    expect(frontItems(playing, [repeated])).toMatchObject({ current: a, items: [repeated, b] });
   });
 
   it("commits start only from the earliest waiting item", () => {
@@ -112,15 +104,10 @@ describe("pure QueueState playback transitions", () => {
     expect(setStatus(IDLE_QUEUE_STATE, QueueStatus.Idle)).toBe(IDLE_QUEUE_STATE);
     const started = startFirst(insertItems(IDLE_QUEUE_STATE, [a]))?.state ?? IDLE_QUEUE_STATE;
     expect(startFirst(started)).toBeUndefined();
-    expect(clearItems(IDLE_QUEUE_STATE)).toBe(IDLE_QUEUE_STATE);
     expect(frontItems(IDLE_QUEUE_STATE, [])).toBe(IDLE_QUEUE_STATE);
-    expect(() => removeItem(started, a.id)).toThrow("Cannot remove the current QueueItem");
-    expect(() => removeItem(IDLE_QUEUE_STATE, "missing")).toThrow("Unknown QueueItem");
-    const waiting = insertItems(started, [item(), item()]);
-    expect(() => removeItem(waiting, { from: 1, to: 0 })).toThrow("Range `to` must not precede `from`");
-    expect(() => removeItem(waiting, null as never)).toThrow("Removal target must be");
-    expect(() => removeItem(waiting, 2)).toThrow("Waiting index is out of range");
-    expect(() => jumpItems(waiting, "missing", false)).toThrow("Unknown QueueItem");
-    expect(() => jumpItems(waiting, 2, false)).toThrow("Waiting position is out of range");
+    expect(() => removeItem(started, a.id)).toThrow(expect.objectContaining({ code: "INVALID_STATE" }));
+    expect(() => removeItem(IDLE_QUEUE_STATE, "missing")).toThrow(expect.objectContaining({ code: "INVALID_STATE" }));
+    expect(() => removeItem(started, "")).toThrow(expect.objectContaining({ code: "INVALID_ARGUMENT" }));
+    expect(() => removeItem(started, null as never)).toThrow(expect.objectContaining({ code: "INVALID_ARGUMENT" }));
   });
 });

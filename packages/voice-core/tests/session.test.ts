@@ -1,6 +1,6 @@
 import type { DiscordGatewayAdapterCreator } from "@discordjs/voice";
 import { VoiceConnectionDisconnectReason, VoiceConnectionStatus } from "@discordjs/voice";
-import type { VoiceSessionEvent } from "distube";
+import type { VoiceSessionEvent } from "distube/integrations";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { DiscordVoiceSession } from "../src/discord";
 import { CHANNEL, GATEWAY, latest, native, readyState, resetNative, settle } from "./support/native";

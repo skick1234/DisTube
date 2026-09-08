@@ -14,7 +14,7 @@ recorded packed core fingerprint and rerun their independent gates before their 
 
 `dependency-policy.json` freezes the selected manifest ranges, Bun lock format, intentional prereleases, peer
 evidence, and warning dispositions. Run `bun run check:dependencies` before release; expired upstream dispositions or
-manifest/lock drift fail closed. Regenerate `bun.lock` only with Bun 1.4.0.
+manifest/lock drift fail closed. Regenerate `bun.lock` only with Bun 1.4.2.
 
 The documentation gate builds declarations with TypeScript 7, generates the API model with API Extractor 7.58,
 creates the API reference, and builds VitePress 2 alpha without publishing. TypeDoc is not part of the release

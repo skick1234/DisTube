@@ -32,10 +32,10 @@ const retiredTerms: readonly (readonly [RegExp, string])[] = [
   [/\bPluginClass\b|\bPluginDefinition\b/u, "Plugin"],
   [/\bSessionRegistry\b|\bGuildSession\b|\bSession ?Coordinator\b/u, "Voice and VoiceSession"],
   [/\bQueueAggregate\b|\bVoiceRuntime\b|\bPlaybackRuntime\b|\bFilterRuntime\b/u, "GuildQueue, Voice, and Engine"],
-  [/\bEvent Journal\b|\bsnapshot\b/iu, "the live queue reference carried by every event"],
+  [/\bEvent Journal\b/iu, "the live queue reference carried by every event"],
   [/\bStreamLease\b/u, "PlaybackPreparation and PlaybackResource"],
-  [/\bidle queue\b/iu, "delete-on-exhaustion language"],
-  [/\bcreateQueue\b|\bdestroyQueue\b|\bqueue\.destroyed\b/u, "distube.play, queue.stop(), and queue.deleted"],
+  [/\bidle queue is reused\b/iu, "delete-on-exhaustion language"],
+  [/\bqueue\.destroyed\b/u, "distube.play, queue.stop(), and queue.deleted"],
   [/\btestkit\b|\bplugin-sdk\b/iu, "the published packages"],
 ];
 
@@ -80,7 +80,6 @@ const privateExports = [
   "GuildSession",
   "SessionCoordinator",
   "Snapshot",
-  // `Filters` is public vocabulary; only the rejected runtime term stays banned.
   "FilterRuntime",
   "VoicePlugin",
   "SourceCatalog",
@@ -104,16 +103,41 @@ function assertPublicEntry(source: string, path: string): void {
 
 assertPublicEntry(entry, "distube public entry");
 
-/**
- * The whole reshaped `distube` surface, in export order.
- *
- * The allowlist is exact: a restored symbol that goes missing and a private one that leaks both fail
- * here, so removed surface (`createQueue`, `destroyQueue`, `QueueBinding`) cannot come back unnoticed.
- */
+/** Exact ownership of every application and integration export. */
 const publicSurface: readonly string[] = [
-  "Adapter",
+  "DisTube",
+  "DisTubeError",
+  "Song",
+  "Playlist",
+  "DisTubeGuild",
+  "DisTubeVoice",
+  "DisTubeOptions",
+  "PlayOptions",
+  "PlayResult",
+  "PlayInput",
+  "VoiceChannelTarget",
+  "GuildState",
+  "VoiceSettings",
+  "RepeatMode",
+  "PlaybackStatus",
+  "ErrorCode",
   "Diagnostic",
   "DiagnosticSeverity",
+  "SongData",
+  "PlaylistData",
+  "QueueItem",
+  "QueueCollection",
+  "VoiceCollection",
+  "VoiceManager",
+  "EnqueueOptions",
+  "BaseQueueEvent",
+  "DisTubeEventMap",
+  "DisTubeEventName",
+  "DisTubeEventListener",
+  "VoiceDisconnectReason",
+];
+const integrationSurface: readonly string[] = [
+  "Adapter",
   "EncodedPlaybackResource",
   "Engine",
   "FilterDefinition",
@@ -125,11 +149,9 @@ const publicSurface: readonly string[] = [
   "PlaybackResource",
   "Player",
   "PlayerEvent",
-  "Plugin",
   "PluginContext",
   "PluginDiagnostic",
   "RelatedContext",
-  "ResolvableInput",
   "SearchOptions",
   "SourceOperationOptions",
   "SourcePlugin",
@@ -138,43 +160,6 @@ const publicSurface: readonly string[] = [
   "VoiceSession",
   "VoiceSessionEvent",
   "VoiceTarget",
-  "DisTube",
-  "DisTubeOptions",
-  "PlayOptions",
-  "PlayResult",
-  "PlayTarget",
-  "Events",
-  "Filters",
-  "QueueStatus",
-  "RepeatMode",
-  "asDisTubeError",
-  "DisTubeError",
-  "ErrorCode",
-  "ErrorReason",
-  "FailureCode",
-  "BaseQueueEvent",
-  "DisTubeEventListener",
-  "DisTubeEventMap",
-  "DisTubeEventName",
-  "VoiceDisconnectReason",
-  "GuildQueue",
-  "JumpOptions",
-  "Playlist",
-  "PlaylistData",
-  "QueueItem",
-  "QueueItemData",
-  "Song",
-  "SongData",
-  "SongUploader",
-  "QueueCollection",
-  "EnqueueOptions",
-  "JumpTarget",
-  "QueueState",
-  "RemoveTarget",
-  "Voice",
-  "VoiceCollection",
-  "VoiceFilters",
-  "VoiceManager",
 ];
 
 function assertPublicSurface(source: string, path: string): void {
@@ -188,6 +173,17 @@ function assertPublicSurface(source: string, path: string): void {
 }
 
 assertPublicSurface(entry, "distube public entry");
+const integrationEntry = await Bun.file("packages/distube/src/integrations.ts").text();
+const integrationNames = collectExportedNames(integrationEntry, "distube/integrations");
+for (const name of integrationSurface) {
+  if (!integrationNames.has(name)) throw new Error(`distube/integrations is missing ${name}`);
+}
+for (const name of integrationNames) {
+  if (!integrationSurface.includes(name)) throw new Error(`distube/integrations exports unlisted ${name}`);
+}
+if (/export\s+(?!type\b)/u.test(integrationEntry)) {
+  throw new Error("distube/integrations must export only types");
+}
 
 for (const adapterRoot of [
   "packages/discordjs/src",

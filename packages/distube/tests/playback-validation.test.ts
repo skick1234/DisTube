@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { ErrorCode } from "../src";
+import { DisTubeError } from "../src";
+import { abortFailure, asDisTubeError } from "../src/errors";
 import {
   validatePlaybackPreparation,
   validatePlaybackRequest,
@@ -15,7 +16,7 @@ const resource = () => ({
 
 describe("playback contract validation", () => {
   it.each(["", " source", "source ", "\t"])("rejects a non-exact source name without reflecting it", value => {
-    expect(() => validateSourceName(value)).toThrowError(expect.objectContaining({ code: ErrorCode.INVALID_ARGUMENT }));
+    expect(() => validateSourceName(value)).toThrowError(expect.objectContaining({ code: "INVALID_ARGUMENT" }));
   });
 
   it("normalizes a non-empty search preparation", () => {
@@ -33,7 +34,7 @@ describe("playback contract validation", () => {
     { kind: "search", query: "query", resource: resource() },
   ])("rejects malformed preparation %#", value => {
     expect(() => validatePlaybackPreparation(value)).toThrowError(
-      expect.objectContaining({ code: ErrorCode.INVALID_ARGUMENT }),
+      expect.objectContaining({ code: "INVALID_ARGUMENT" }),
     );
   });
 
@@ -47,7 +48,7 @@ describe("playback contract validation", () => {
       validatePlaybackResource(value);
       throw new Error("expected resource validation to fail");
     } catch (error: unknown) {
-      expect(error).toMatchObject({ code: ErrorCode.INVALID_ARGUMENT });
+      expect(error).toMatchObject({ code: "INVALID_ARGUMENT" });
       expect((error as Error).message).not.toContain(String(value.url));
     }
   });
@@ -60,9 +61,7 @@ describe("playback contract validation", () => {
       { kind: "encoded", encoded: "track", url: "https://stream.example/audio", dispose: vi.fn() },
       { kind: "encoded", encoded: "track" },
     ]) {
-      expect(() => validatePlaybackResource(value)).toThrowError(
-        expect.objectContaining({ code: ErrorCode.INVALID_ARGUMENT }),
-      );
+      expect(() => validatePlaybackResource(value)).toThrowError(expect.objectContaining({ code: "INVALID_ARGUMENT" }));
     }
   });
 
@@ -73,7 +72,7 @@ describe("playback contract validation", () => {
       resource: valid,
     });
     expect(() => validatePlaybackRequest({ itemId: "item-1", resource: valid, song: {} })).toThrowError(
-      expect.objectContaining({ code: ErrorCode.INVALID_ARGUMENT }),
+      expect.objectContaining({ code: "INVALID_ARGUMENT" }),
     );
   });
 
@@ -82,5 +81,23 @@ describe("playback contract validation", () => {
     expect(() => validatePlaybackResource({ kind: "url", url: secret, dispose: "no" })).toThrowError(
       expect.not.objectContaining({ message: expect.stringContaining(secret) }),
     );
+  });
+});
+
+describe("error boundaries", () => {
+  it("preserves Error cancellation reasons and omits arbitrary caller data", () => {
+    const reason = new DisTubeError("INVALID_STATE", "Caller reason");
+    expect(abortFailure(reason)).toMatchObject({ code: "ABORTED", cause: reason });
+    expect(abortFailure("https://example.test/?secret=token").cause).toBeUndefined();
+  });
+
+  it("preserves normalized failures once, including aggregates", () => {
+    const failures = [new Error("first"), new Error("second")];
+    const cause = new AggregateError(failures, "Cleanup failed");
+    const error = asDisTubeError("SOURCE_FAILED", "Source cleanup failed", cause);
+    expect(error.cause).toBe(cause);
+    expect(asDisTubeError("SOURCE_FAILED", "Source failed", error)).toBe(error);
+    expect(asDisTubeError("VOICE_FAILED", "Voice failed", error).cause).toBe(error);
+    expect(cause.errors).toEqual(failures);
   });
 });

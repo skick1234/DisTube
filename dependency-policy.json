@@ -1,6 +1,6 @@
 {
   "selectedAt": "2026-07-18T23:43:09Z",
-  "packageManager": "bun@1.4.0",
+  "packageManager": "bun@1.4.2",
   "lockfileVersion": 1,
   "manifests": {
     "package.json": {

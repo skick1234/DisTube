@@ -7,12 +7,24 @@ and gives Eris PCM. It owns native listeners and connection teardown; core retai
 source resource.
 
 ```ts
+import { DisTube } from "distube";
+import type { SourcePlugin } from "distube/integrations";
 import { ErisAdapter } from "@distube/eris";
 
 declare const client: ConstructorParameters<typeof ErisAdapter>[0];
+declare const source: SourcePlugin;
+declare const voiceChannel: import("eris").VoiceChannel;
 
-const adapter = new ErisAdapter(client);
+const music = new DisTube({ adapter: new ErisAdapter(client), sources: [source] });
+const { queue } = await music.play(voiceChannel, "a song title");
+await queue.pause();
+await queue.resume();
 ```
+
+Pass the native channel directly. The adapter checks voice capability and guild membership before joining.
+Author contracts live in `distube/integrations`; the root entry contains application types and values.
+`queue.stop()` deletes the queue and clears selected and rendered filters. Volume, repeat and autoplay
+remain on the voice until `music.voices.leave(guildId)`. Call `music.dispose()` for terminal cleanup.
 
 Construct the class directly; there is no create-adapter alias or public `playerFactory` option. Concurrent stop calls
 join one terminal teardown, every native cleanup unit is attempted once, and unrecoverable disconnects retire the

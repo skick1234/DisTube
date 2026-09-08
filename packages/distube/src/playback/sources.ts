@@ -16,7 +16,7 @@ export function createSourceCatalog(sources: readonly SourcePlugin[]): SourceCat
 /** Validates a non-declined result returned by SourcePlugin.resolve. */
 export function validateResolvedMedia(value: unknown, source: SourcePlugin): Song | Playlist {
   if (value instanceof Song || value instanceof Playlist) return value;
-  throw new DisTubeError(ErrorCode.PLUGIN_FAILED, `${source.name} returned an invalid resolve result`);
+  throw new DisTubeError(ErrorCode.SOURCE_FAILED, `${source.name} returned an invalid resolve result`);
 }
 
 /** Flattens a resolution or search result into the ordered Songs core enqueues. */

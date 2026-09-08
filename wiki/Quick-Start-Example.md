@@ -5,38 +5,39 @@ import { DiscordJSAdapter } from "@distube/discordjs";
 import { SoundCloudPlugin } from "@distube/soundcloud";
 import { SpotifyPlugin } from "@distube/spotify";
 import { YouTubePlugin } from "@distube/youtube";
-import { DisTube, Events } from "distube";
+import type { Client, VoiceChannel } from "discord.js";
+import { DisTube } from "distube";
 
-declare const client: ConstructorParameters<typeof DiscordJSAdapter>[0];
-declare const guildId: string;
-declare const voiceChannelId: string;
+declare const client: Client;
+declare const voiceChannel: VoiceChannel;
 
-const youtube = new YouTubePlugin();
-const spotify = new SpotifyPlugin();
-const soundcloud = new SoundCloudPlugin();
-const distube = new DisTube({
+const distube = new DisTube<{ requestedBy: string }>({
   adapter: new DiscordJSAdapter(client),
-  // Configured order is URL-routing order and explicit fallback preference.
-  plugins: [youtube, spotify, soundcloud],
+  sources: [new YouTubePlugin(), new SpotifyPlugin(), new SoundCloudPlugin()],
 });
-distube.on(Events.QueueItemStarted, ({ item }) => console.log(item.song.title));
-distube.on(Events.QueueItemFailed, ({ item, error }) => console.error(item.song.title, error.code));
+const stopLogging = distube.on("queue.item.started", ({ item }) => console.log(item.song.name));
+const stopErrors = distube.on("queue.item.failed", ({ item, error }) => console.error(item.song.name, error.code));
 
-const { queue, items } = await distube.play(
-  { guildId, voiceChannelId },
-  "https://open.spotify.com/track/example",
-);
-console.log(`Insertion committed: ${items[0]?.id}`);
+const pending = distube.play(voiceChannel, "https://open.spotify.com/track/example", {
+  metadata: { requestedBy: "user-id" },
+});
+const registered = distube.getQueue(voiceChannel.guildId);
+const { queue, items } = await pending;
+console.log(queue === registered, items[0]?.metadata?.requestedBy);
+
+// When the bot stops:
+stopLogging();
+stopErrors();
+await distube.dispose();
 ```
 
-`play()` upserts the guild's queue, joins or reuses the guild's Voice, and resolves after insertion and
-`Events.QueueItemAdded`, before playback preparation may finish. Observe `Events.QueueItemStarted` or
-`Events.QueueItemFailed` for the later outcome. A Spotify Song keeps its canonical Spotify URL and identity while core
-privately searches YouTube, then SoundCloud; no fallback candidate or stream URL enters events.
+`play` registers its queue before returning, then resolves media and joins or reuses voice. A registration event is
+not an insertion acknowledgement. The returned promise settles after insertion; playback starts or fails later.
+Failed initial work deletes its empty queue only when no other reservation or playback owns it.
 
-The runnable example repository shows Discord interaction replies, guild queue lookup, all events, all error codes,
-and shutdown using packed public packages.
+A Spotify Song keeps its canonical Spotify URL and identity while core privately searches YouTube, then SoundCloud
+for playback. No fallback candidate or signed stream URL enters public state or events.
 
-For Eris, replace the Adapter construction with `new ErisAdapter(client)` from `@distube/eris`; queue and event code
-stays platform-neutral. Eris 0.18 requires an Opus implementation for voice, and `queue.seek()` rejects with
-`UNSUPPORTED`.
+The runnable example repository handles Discord interaction replies, queue lookup, events and errors using public
+packages. Eris bots use `new ErisAdapter(client)` from `@distube/eris` and pass their native voice channel to `play`.
+Eris 0.18 requires an Opus implementation for voice; `queue.seek()` rejects with `UNSUPPORTED`.

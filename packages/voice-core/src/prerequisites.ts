@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
-import { DisTubeError, ErrorCode } from "distube";
+import { DisTubeError } from "distube";
+
 import { ffmpegCommand } from "./ffmpeg";
 
 const require = createRequire(import.meta.url);
@@ -59,7 +60,7 @@ async function verifyPrerequisites(modules: PrerequisiteModules, runtime: Prereq
     await runtime.probeFfmpeg(ffmpegCommand(), ["-version"]);
   } catch {
     throw new DisTubeError(
-      ErrorCode.VOICE_FAILED,
+      "VOICE_FAILED",
       `${modules.owner} requires FFmpeg. Install FFmpeg, expose it as ffmpeg, or set FFMPEG_PATH.`,
     );
   }
@@ -76,7 +77,7 @@ async function verifyPrerequisites(modules: PrerequisiteModules, runtime: Prereq
   }
   if (!opus) {
     throw new DisTubeError(
-      ErrorCode.VOICE_FAILED,
+      "VOICE_FAILED",
       `${modules.owner} requires an Opus implementation. Install one of: ${modules.opus.join(", ")}.`,
     );
   }
@@ -90,7 +91,7 @@ async function verifyPrerequisites(modules: PrerequisiteModules, runtime: Prereq
     }
   }
   throw new DisTubeError(
-    ErrorCode.VOICE_FAILED,
+    "VOICE_FAILED",
     `${modules.owner} requires a voice encryption implementation. Install one of: ${modules.encryption.join(", ")}.`,
   );
 }

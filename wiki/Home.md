@@ -1,15 +1,9 @@
 # DisTube v6 documentation
 
-Start with the numbered beginner path in the repository README:
+Start with the repository README to install packages, configure an adapter and ordered sources, and call
+`distube.play(voiceChannel, input)`. The client supplies `DisTubeGuild` for queue controls and `DisTubeVoice` for
+connection and settings controls.
 
-1. install;
-2. create DisTube;
-3. configure an Adapter;
-4. add Plugins;
-5. play;
-6. control the queue;
-7. handle events;
-8. author advanced extensions.
-
-Use the Quick Start for a complete snippet, Error Handling for the closed error table, and Major Upgrade Guide for
-the intentionally breaking migration. Runtime internals are not prerequisites for using the library.
+Use Quick Start for a complete snippet, Events and Timing for registration versus insertion, Error Handling for
+literal error codes, and Major Upgrade Guide for breaking API changes. Extension authors use the type-only
+`distube/integrations` entry point and the Adapter and SourcePlugin authoring guides.

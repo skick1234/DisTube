@@ -1,4 +1,5 @@
-import { DisTube, DisTubeError, ErrorCode } from "distube";
+import { DisTube, DisTubeError } from "distube";
+
 import { ChannelTypes, type Client } from "oceanic.js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { type AdapterLifecycleBridge, adapterLifecycleSuite } from "../../voice-core/tests/support/adapter-lifecycle";
@@ -59,11 +60,11 @@ adapterLifecycleSuite("OceanicAdapter", (): AdapterLifecycleBridge => {
 
 describe("OceanicAdapter prerequisite preflight", () => {
   it("rejects voices.join before native gateway work when encryption is unavailable", async () => {
-    preflight.mockRejectedValueOnce(new DisTubeError(ErrorCode.VOICE_FAILED, "@distube/oceanic requires sodium"));
-    const distube = new DisTube({ adapter: new OceanicAdapter(client()), plugins: [] });
+    preflight.mockRejectedValueOnce(new DisTubeError("VOICE_FAILED", "@distube/oceanic requires sodium"));
+    const distube = new DisTube({ adapter: new OceanicAdapter(client()), sources: [] });
 
-    await expect(distube.voices.join({ guildId: GUILD, channelId: CHANNEL_A })).rejects.toMatchObject({
-      code: ErrorCode.VOICE_FAILED,
+    await expect(distube.voices.join({ guildId: GUILD, id: CHANNEL_A })).rejects.toMatchObject({
+      code: "VOICE_FAILED",
     });
     expect(native.joinVoiceChannel).not.toHaveBeenCalled();
   });

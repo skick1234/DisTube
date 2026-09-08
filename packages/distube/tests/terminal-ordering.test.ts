@@ -1,8 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { type DisTubeError, ErrorCode, type GuildQueue } from "../src";
-import { capture, type FakePlayer, GUILD, playableSetup, record, settle, VOICE_CHANNEL } from "./support/harness";
+import type { DisTubeError, DisTubeGuild } from "../src";
+import {
+  capture,
+  type FakePlayer,
+  GUILD,
+  playableSetup,
+  record,
+  required,
+  settle,
+  VOICE_CHANNEL,
+} from "./support/harness";
 
-const TARGET = { guildId: GUILD, voiceChannelId: VOICE_CHANNEL };
+const TARGET = { guildId: GUILD, id: VOICE_CHANNEL };
 
 /** Every queue event, so a test can assert what published after `queue.deleted`. */
 const QUEUE_EVENTS = [
@@ -25,7 +34,7 @@ async function playing(ids: readonly string[]) {
   return { harness, queue, player: harness.engine.players[0] as FakePlayer };
 }
 
-const waiting = (queue: GuildQueue): string[] => queue.state.items.map(item => item.song.id);
+const waiting = (queue: DisTubeGuild): string[] => queue.state.upcoming.map(item => item.song.id);
 
 describe("deletion is terminal for queue decisions", () => {
   it("commits nothing from an advance suspended on a Player effect", async () => {
@@ -36,11 +45,12 @@ describe("deletion is terminal for queue decisions", () => {
     // Park the advance inside `stopTrack`, exactly where deletion used to interleave.
     const advance = capture(queue.skip());
     await stop.entered;
-    const historyBefore = harness.distube.voices.get(GUILD)?.previousSongs.length ?? 0;
 
     // Terminal authority is accepted synchronously, so `queue.deleted` publishes before the
     // suspended advance can resume. Awaiting stop first would deadlock on the held gate.
     const stopping = capture(queue.stop());
+    expect(harness.distube.getQueue(GUILD)).toBeUndefined();
+    await Promise.resolve();
     expect(log.at(-1)).toBe("queue.deleted");
 
     // Releasing the backend resumes the suspended advance, which must commit nothing.
@@ -52,8 +62,7 @@ describe("deletion is terminal for queue decisions", () => {
     expect(log.filter(name => name === "queue.item.finished")).toHaveLength(0);
     // `a` started before recording began, and the superseded advance never starts `b`.
     expect(log.filter(name => name === "queue.item.started")).toHaveLength(0);
-    expect(harness.distube.voices.get(GUILD)?.previousSongs.length).toBe(historyBefore);
-    expect(((await advance) as DisTubeError).code).toBe(ErrorCode.QUEUE_FAILED);
+    expect(((await advance) as DisTubeError).code).toBe("INVALID_STATE");
   });
 
   it("keeps queue.deleted last when a paused control settles afterwards", async () => {
@@ -70,7 +79,7 @@ describe("deletion is terminal for queue decisions", () => {
     await stopping;
 
     expect(log.at(-1)).toBe("queue.deleted");
-    expect(((await paused) as DisTubeError).code).toBe(ErrorCode.QUEUE_FAILED);
+    expect(((await paused) as DisTubeError).code).toBe("INVALID_STATE");
   });
 
   it("commits a voice volume effect that resumes after the queue deleted", async () => {
@@ -85,8 +94,8 @@ describe("deletion is terminal for queue decisions", () => {
     await stopping;
 
     expect(await applied).toBeUndefined();
-    // Volume belongs to the Voice now: the effect commits even though the queue deleted mid-flight.
-    expect(harness.distube.voices.get(GUILD)?.volume).toBe(42);
+    // Volume belongs to the DisTubeVoice now: the effect commits even though the queue deleted mid-flight.
+    expect(harness.distube.voices.get(GUILD)?.settings.volume).toBe(42);
   });
 
   it("keeps queue.deleted last when a voice volume effect settles afterwards", async () => {
@@ -120,8 +129,8 @@ describe("deletion is terminal for queue decisions", () => {
     await settle();
     await stopping;
 
-    expect(((await first) as DisTubeError).code).toBe(ErrorCode.QUEUE_FAILED);
-    expect(((await second) as DisTubeError).code).toBe(ErrorCode.QUEUE_FAILED);
+    expect(((await first) as DisTubeError).code).toBe("INVALID_STATE");
+    expect(((await second) as DisTubeError).code).toBe("INVALID_STATE");
     expect(log.at(-1)).toBe("queue.deleted");
   });
 });
@@ -137,7 +146,8 @@ describe("insertion reconciles the in-flight attempt", () => {
     await queue.skip().catch(() => undefined);
     await play.entered;
 
-    await queue.enqueue("c", { position: 0 });
+    const [inserted] = await queue.enqueue("c");
+    await queue.move(required(inserted).id, required(queue.state.upcoming[0]).id);
     play.resolve();
     await settle();
     await enqueued;

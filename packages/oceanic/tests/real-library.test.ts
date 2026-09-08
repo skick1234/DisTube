@@ -1,7 +1,7 @@
 import { joinVoiceChannel, VoiceConnectionStatus } from "@discordjs/voice";
 import { DISCORD_ENCRYPTION_MODULES, DISCORD_OPUS_MODULES, FilterRegistry } from "@distube/voice-core/core";
 import { discordPreflight } from "@distube/voice-core/discord";
-import { ErrorCode } from "distube";
+
 import { Client } from "oceanic.js";
 import { afterAll, describe, expect, it } from "vitest";
 // The Player is package-internal; a real session cannot reach Ready without a Discord socket, so the
@@ -92,7 +92,7 @@ describe("real oceanic.js and @discordjs/voice", () => {
     );
     if (!failure) return;
 
-    expect(failure.code).toBe(ErrorCode.VOICE_FAILED);
+    expect(failure.code).toBe("VOICE_FAILED");
     expect(failure.message).toContain("@distube/oceanic");
     const named = [...DISCORD_ENCRYPTION_MODULES, ...DISCORD_OPUS_MODULES];
     expect(named.some(module => failure.message?.includes(module))).toBe(true);

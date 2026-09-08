@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { ErrorCode, type PlaybackPreparation, type PlaybackRequest, type Player, type Song } from "../src";
+import type { ErrorCode, Song } from "../src";
+import type { PlaybackPreparation, PlaybackRequest, Player } from "../src/integrations";
 import {
   capture,
   deferred,
@@ -15,7 +16,7 @@ import {
   VOICE_CHANNEL,
 } from "./support/harness";
 
-const TARGET = { guildId: GUILD, voiceChannelId: VOICE_CHANNEL };
+const TARGET = { guildId: GUILD, id: VOICE_CHANNEL };
 
 /** Installs the next Player the engine hands out, so a test controls it before the first activation. */
 function armPlayer(engine: FakeEngine, arm: (player: FakePlayer) => void): FakePlayer {
@@ -53,9 +54,9 @@ describe("enqueue commitment", () => {
     second.resolve(media("source", "second"));
     first.reject(new Error("first failed"));
 
-    expect(await failed).toMatchObject({ code: ErrorCode.SOURCE_FAILED });
+    expect(await failed).toMatchObject({ code: "SOURCE_FAILED" });
     const [item] = await succeeds;
-    expect(queue.state.items[0] ?? queue.state.current).toBe(item);
+    expect(queue.state.upcoming[0] ?? queue.state.current).toBe(item);
   });
 
   it("rejects a ready enqueue after a listener stops the queue", async () => {
@@ -67,12 +68,11 @@ describe("enqueue commitment", () => {
     harness.source.resolve.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
     const events: string[] = [];
     let stopping: Promise<void> | undefined;
-    harness.distube
-      .on("queue.item.added", event => {
-        events.push(`added:${event.item.song.id}`);
-        if (event.item.song.id === "first") stopping = event.queue.stop();
-      })
-      .on("queue.deleted", () => events.push("deleted"));
+    harness.distube.on("queue.item.added", event => {
+      events.push(`added:${event.item.song.id}`);
+      if (event.item.song.id === "first") stopping = event.queue.stop();
+    });
+    harness.distube.on("queue.deleted", () => events.push("deleted"));
 
     const firstEnqueue = queue.enqueue(mediaUrl("first"));
     const secondEnqueue = capture(queue.enqueue(mediaUrl("second")));
@@ -80,7 +80,7 @@ describe("enqueue commitment", () => {
     first.resolve(media("source", "first"));
 
     await expect(firstEnqueue).resolves.toHaveLength(1);
-    expect(await secondEnqueue).toMatchObject({ code: ErrorCode.QUEUE_FAILED });
+    expect(await secondEnqueue).toMatchObject({ code: "INVALID_STATE" });
     expect(stopping).toBeDefined();
     await stopping;
     expect(events).toEqual(["added:first", "deleted"]);
@@ -125,7 +125,7 @@ describe("playback preparation", () => {
 
     expect(dispose).toHaveBeenCalledTimes(1);
     expect(failed).toHaveBeenCalledTimes(1);
-    expect(failed.mock.calls[0]?.[0].error).toMatchObject({ code: ErrorCode.SOURCE_FAILED });
+    expect(failed.mock.calls[0]?.[0].error).toMatchObject({ code: "SOURCE_FAILED" });
     expect(failed.mock.calls[0]?.[0].error.message).not.toContain(secret);
   });
 
@@ -141,7 +141,8 @@ describe("playback preparation", () => {
     const harness = setup([source]);
     const finished = vi.fn();
     const failed = vi.fn();
-    harness.distube.on("queue.item.finished", finished).on("queue.item.failed", failed);
+    harness.distube.on("queue.item.finished", finished);
+    harness.distube.on("queue.item.failed", failed);
 
     await harness.distube.play(TARGET, media("source"));
     await settle();
@@ -180,7 +181,7 @@ describe("playback preparation", () => {
     expect(settled).toBe(false);
 
     disposal.reject(disposalError);
-    await expect(stopping).rejects.toMatchObject({ code: ErrorCode.VOICE_FAILED, cause: disposalError });
+    await expect(stopping).rejects.toMatchObject({ code: "VOICE_FAILED", cause: disposalError });
     expect(deleted).toHaveBeenCalledTimes(1);
   });
 });
@@ -252,7 +253,7 @@ describe("explicit fallback", () => {
 
     expect(soundcloud.preparePlayback).toHaveBeenCalledTimes(5);
     const error = failed.mock.calls[0]?.[0].error;
-    expect(error).toMatchObject({ code: ErrorCode.SOURCE_FAILED, cause: expect.any(AggregateError) });
+    expect(error).toMatchObject({ code: "SOURCE_FAILED", cause: expect.any(AggregateError) });
     expect((error.cause as AggregateError).errors.map((cause: Error) => cause.message)).toEqual([
       "youtube search",
       ...candidates.slice(0, 5).map(song => `prepare ${song.id}`),
@@ -276,7 +277,7 @@ describe("explicit fallback", () => {
     await settle();
 
     const error = failed.mock.calls[0]?.[0].error;
-    expect(error).toMatchObject({ code: ErrorCode.SOURCE_FAILED, cause: expect.any(AggregateError) });
+    expect(error).toMatchObject({ code: "SOURCE_FAILED", cause: expect.any(AggregateError) });
     expect((error.cause as AggregateError).errors).toEqual([repeated]);
   });
 
@@ -310,7 +311,7 @@ describe("explicit fallback", () => {
     await settle();
 
     expect(youtube.preparePlayback).not.toHaveBeenCalled();
-    expect(failed.mock.calls[0]?.[0].error.code).toBe(ErrorCode.SOURCE_FAILED);
+    expect(failed.mock.calls[0]?.[0].error.code).toBe("SOURCE_FAILED");
   });
 
   it("never falls back when the owning source itself fails to prepare", async () => {
@@ -324,7 +325,7 @@ describe("explicit fallback", () => {
     await harness.distube.play(TARGET, media("original", "provider-failure"));
     await settle();
 
-    expect(failures).toEqual([ErrorCode.SOURCE_FAILED]);
+    expect(failures).toEqual(["SOURCE_FAILED"]);
     expect(other.search).not.toHaveBeenCalled();
   });
 
@@ -341,7 +342,7 @@ describe("explicit fallback", () => {
     await capture(harness.distube.play(TARGET, media("original", "player-failure")));
     await settle();
 
-    expect(failures).toEqual([ErrorCode.VOICE_FAILED]);
+    expect(failures).toEqual(["VOICE_FAILED"]);
     expect(other.search).not.toHaveBeenCalled();
     expect(dispose).toHaveBeenCalledTimes(1);
   });
@@ -356,7 +357,7 @@ describe("terminal authority", () => {
     (harness.engine.players[0] as FakePlayer).stopTrack.mockReturnValueOnce(teardown.promise);
 
     const stopping = queue.stop();
-    expect(queue.state.items).toEqual([]);
+    expect(queue.state.upcoming).toEqual([]);
     expect(queue.state.current).toBeUndefined();
     expect(harness.distube.getQueue(GUILD)).toBeUndefined();
     teardown.resolve();
@@ -373,7 +374,7 @@ describe("terminal authority", () => {
     await settle();
     (harness.engine.players[0] as FakePlayer).stopTrack.mockRejectedValue(new Error("cleanup failed"));
 
-    await expect(queue.stop()).rejects.toMatchObject({ code: ErrorCode.VOICE_FAILED });
+    await expect(queue.stop()).rejects.toMatchObject({ code: "VOICE_FAILED" });
     expect(harness.distube.getQueue(GUILD)).toBeUndefined();
   });
 
@@ -421,7 +422,7 @@ describe("terminal authority", () => {
     creation.resolve(late);
     await stopping;
 
-    // The Player belongs to the Voice, so the deleted queue leaves it ready for the next queue.
+    // The Player belongs to the DisTubeVoice, so the deleted queue leaves it ready for the next queue.
     expect(late.requests).toHaveLength(0);
     expect(late.stopTrack).not.toHaveBeenCalled();
     expect(late.listeners.size).toBe(1);
@@ -442,8 +443,8 @@ describe("terminal authority", () => {
     await settle();
     const player = harness.engine.players[0] as FakePlayer;
 
-    const removed = await queue.remove(items[0]?.id as string);
-    expect(removed).toEqual(items);
+    await queue.remove(items[0]?.id as string);
+    expect(queue.state.upcoming.some(item => item.id === items[0]?.id)).toBe(false);
     expect(signal?.aborted).toBe(true);
     const { preparation: late, dispose } = prepared("https://stream.example/late");
     preparation.resolve(late);

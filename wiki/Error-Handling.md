@@ -1,63 +1,63 @@
 # Error handling
 
-All public failures use `DisTubeError` and one of six codes:
+Public failures use `DisTubeError` with a closed literal `code`:
 
 | Code | Meaning |
 | --- | --- |
-| `INVALID_ARGUMENT` | Invalid public input or configuration |
-| `SOURCE_FAILED` | Resolution, original-source preparation, or explicit fallback exhaustion failed |
-| `VOICE_FAILED` | Voice session or Player request/control/outcome, or native teardown failed |
-| `PLUGIN_FAILED` | Plugin initialization or disposal failed |
-| `QUEUE_FAILED` | Queue state, stale operation, deletion, or shutdown rejected work |
-| `UNSUPPORTED` | The active playback engine cannot express the requested effect (e.g. Eris seek) |
+| `INVALID_ARGUMENT` | Malformed input or configuration |
+| `INVALID_STATE` | Well-formed operation forbidden now, stale work or a disposed owner |
+| `ABORTED` | Caller cancellation observed before commit |
+| `SOURCE_FAILED` | Provider resolution, malformed resolution results, preparation or explicit fallback exhaustion failed |
+| `VOICE_FAILED` | Voice connection, backend effect or native cleanup failed |
+| `PLUGIN_FAILED` | Integration initialization or disposal failed |
+| `QUEUE_FAILED` | Queue decision logic failed |
+| `UNSUPPORTED` | The engine cannot perform the requested capability, such as Eris seek |
 
-Check `error instanceof DisTubeError`, switch on `error.code`, and inspect `error.cause` for the original provider or
-platform failure. There are no package-specific public error hierarchies.
-
-## `reason`, on `INVALID_ARGUMENT` only
-
-`INVALID_ARGUMENT` covers two different bugs, and `error.reason` separates them. It is set exactly when the code is
-`INVALID_ARGUMENT` and `undefined` for the other five.
-
-| `ErrorReason` | What went wrong | Examples |
-| --- | --- | --- |
-| `Argument` (`"argument"`) | The value the caller passed fails the documented contract | wrong type, unknown QueueItem ID, position past the end, negative volume |
-| `State` (`"state"`) | The call is well formed but the current state forbids it | pausing when nothing is playing, removing the item that is playing, `previous()` with empty history |
-
-That distinction is the one a bot acts on: `Argument` means fix the command parsing, `State` means tell the user the
-queue is not in a position to do that.
-
+<!-- verify-ts -->
 ```ts
-import { DisTubeError, ErrorCode, ErrorReason } from "distube";
-import type { GuildQueue } from "distube";
+import { DisTubeError } from "distube";
+import type { DisTubeGuild } from "distube";
 
-declare const queue: GuildQueue;
+declare const queue: DisTubeGuild;
 declare const reply: (message: string) => Promise<void>;
 
 try {
-  await queue.previous();
+  await queue.pause();
 } catch (error) {
-  if (error instanceof DisTubeError && error.code === ErrorCode.INVALID_ARGUMENT) {
-    await reply(error.reason === ErrorReason.State ? "Nothing has played yet." : "That is not a valid track.");
-  }
+  if (!(error instanceof DisTubeError)) throw error;
+  if (error.code === "INVALID_STATE") await reply("Nothing is playing.");
+  else if (error.code === "VOICE_FAILED") await reply("The voice connection could not pause playback.");
+  else throw error;
 }
 ```
 
-A subsystem that replaces an incompatible code never copies the wrapped error's `reason` forward: the new code owns
-the failure, and the original stays reachable through `cause` with its own `reason` intact.
+Use `INVALID_ARGUMENT` to correct input parsing and `INVALID_STATE` to explain why a valid command cannot run now.
+Malformed constructor configuration rejects `INVALID_ARGUMENT`; integration lifecycle execution failures use
+`PLUGIN_FAILED`. A malformed provider resolution result uses `SOURCE_FAILED` and retains its validation failure
+as cause. Codes do not promise retryability. Inspect `cause` for the original provider or platform error without exposing
+credentials or prepared URLs to users. There are no package-specific public error hierarchies or runtime error enums.
 
 ## Cancellation
 
-`play`, `enqueue`, and `resolve` accept an `options.signal`. Aborting it rejects that call with one `QUEUE_FAILED`
-`DisTubeError` and leaves no QueueItem, resource, or success event behind. The raw abort reason is never the thrown
-value, so a platform `DOMException` or `AbortError` cannot reach a caller that only handles `DisTubeError`; when the
-reason is an Error it is preserved as `cause`, and when it is anything else there is no `cause` at all.
-An existing DisTubeError is reused only when its code matches the subsystem that accepted responsibility; otherwise
-the boundary creates the correct code and preserves the incompatible DisTubeError as `cause`.
+`play`, `enqueue` and `resolve` accept `options.signal`. An already-aborted signal rejects `ABORTED` before allocation
+or source work. Cancellation observed before insertion prevents that call's commit. Once insertion commits,
+cancellation cannot undo it. Other calls' items, reservations and adopted voice remain owned by those calls.
 
-Fallback exhaustion preserves target-search and candidate-preparation causes once in deterministic order through one
-`AggregateError` cause. Cancellation superseded by stop/removal/destruction/shutdown produces no item terminal event.
-Cleanup failure after an already committed item outcome is diagnostic and never rewrites playback history; a pending
-stop, destroy, or shutdown caller receives its cleanup failure while logical state remains terminal.
-Multiple queue, Player, resource, binding, or Plugin cleanup failures are attempted fully and returned once in stable
-queue-registration/cleanup ownership order followed by reverse Plugin order.
+The public rejection is a `DisTubeError`, never a raw abort value. An Error abort reason becomes `cause`; a non-Error
+reason leaves `cause` undefined. A later provider abort exception does not replace the caller reason. Supersession
+by stop or disposal uses `INVALID_STATE` and does not fabricate an item failure for work that never committed.
+
+## Backend and cleanup failures
+
+Backend-rendered settings commit only after acknowledgement. Failed filter replacement preserves the last
+acknowledged state and rendering. Queue deletion also resets filters; if reset fails, the queue stays deleted,
+prior acknowledged filter settings remain visible and cleanup reports the failure.
+
+Subsystem boundaries preserve an already matching normalized error. Reclassification preserves the incompatible
+error as its cause once. Explicit fallback exhaustion retains attempted search and preparation causes in deterministic
+order through an `AggregateError` cause. No provider cause is invented when none occurred.
+
+Cleanup attempts every owned disposer even if another fails, aggregating failures under the accepting boundary.
+A pending stop, leave or dispose caller receives its cleanup failure while logical state remains terminal.
+Background failures use safe diagnostics. Cleanup cannot restore an old item, rewrite a terminal event or affect
+replacement playback. A disposer that never settles remains pending; there is no fabricated successful timeout.

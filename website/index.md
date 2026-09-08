@@ -15,9 +15,9 @@ hero:
 
 features:
   - title: Explicit ownership
-    details: GuildQueue owns queue state and events while Adapter-created Players own playback effects.
+    details: DisTubeGuild owns queue state, DisTubeVoice owns connections and settings, and DisTube starts playback directly.
   - title: Public contracts
-    details: Adapters and SourcePlugins integrate through the public distube package without private support packages.
+    details: Applications import distube; adapters, sources and engines use type-only distube/integrations contracts.
   - title: Independent releases
     details: Core, adapters, and media plugins retain package-owned tests, declarations, and packed-install verification.
 ---

@@ -2,11 +2,11 @@ import type { DiscordGatewayAdapterCreator } from "@discordjs/voice";
 import type { FfmpegFilterDefinitions } from "@distube/voice-core/core";
 import { DiscordVoiceEngine, DiscordVoiceSession, discordPreflight } from "@distube/voice-core/discord";
 import type { Client } from "discord.js";
-import type { Adapter, Engine, VoiceSession, VoiceTarget } from "distube";
+import type { Adapter, Engine, VoiceSession, VoiceTarget } from "distube/integrations";
 
 export interface DiscordJSAdapterOptions {
   readonly connectionTimeoutMs?: number;
-  /** Filter presets merged over the engine's built-in `Filters` defaults. */
+  /** Filter presets merged over the engine's built-in filter defaults. */
   readonly filters?: FfmpegFilterDefinitions;
 }
 

@@ -1,4 +1,4 @@
-import type { Engine, Player, VoiceGatewayData, VoiceSession, VoiceSessionEvent } from "../contracts";
+import type { Engine, FilterEntry, Player, VoiceGatewayData, VoiceSession, VoiceSessionEvent } from "../contracts";
 import type { RepeatMode } from "../enums";
 import { asDisTubeError, asError, DisTubeError, ErrorCode } from "../errors";
 import type { QueueItem } from "../media";
@@ -12,27 +12,26 @@ import type {
   QueueVoiceLease,
 } from "../queue/voice";
 import { settleGrowing, TrackedWork } from "../utils/tracked-work";
-import { type FilterChange, foldFilters, sameFilters, type VoiceFilters, VoiceFiltersImpl } from "./filters";
-import { VoiceSettings, validateAutoplay, validateRepeatMode, validateVolume } from "./settings";
+import { VoiceSettings as StoredVoiceSettings, validateAutoplay, validateRepeatMode, validateVolume } from "./settings";
+import { normalizeChannel, type VoiceChannelTarget } from "./target";
 
 /** Public guild voice facade. `Metadata` is the client's caller-metadata type. */
-export type Voice<Metadata = unknown> = {
+export interface VoiceSettings {
+  readonly volume: number;
+  readonly repeat: RepeatMode;
+  readonly autoplay: boolean;
+  readonly filters: readonly string[];
+}
+
+export type DisTubeVoice = {
   readonly guildId: string;
   readonly channelId: string;
-  /** The committed playback volume as a percentage. */
-  readonly volume: number;
+  readonly settings: VoiceSettings;
+  move(channel: VoiceChannelTarget): Promise<void>;
   setVolume(percent: number): Promise<void>;
-  /** The committed repeat mode the guild's queues consult at progression. */
-  readonly repeatMode: RepeatMode;
-  setRepeatMode(mode: RepeatMode): Promise<void>;
-  /** Whether queues exhausted by this Voice continue with related media. */
-  readonly autoplay: boolean;
+  setRepeat(mode: RepeatMode): Promise<void>;
   setAutoplay(enabled: boolean): Promise<void>;
-  /** The ordered named filter set rendered on this Voice's long-lived Player. */
-  readonly filters: VoiceFilters;
-  /** Finished and skipped occurrences of this guild, oldest first, capped at the newest 100. */
-  readonly previousSongs: readonly QueueItem<Metadata>[];
-  join(channelId: string): Promise<void>;
+  setFilters(names: readonly string[]): Promise<void>;
 };
 
 type VoicePhase = "open" | "fenced" | "released";
@@ -65,11 +64,11 @@ interface LeaseRecord {
 /**
  * One guild's voice presence.
  *
- * Voice owns the session, Player generations, the only queue lease, and the durable playback
- * settings. GuildQueue owns queue state, item decisions, events, and source resources.
+ * DisTubeVoice owns the session, Player generations, the only queue lease, and the durable playback
+ * settings. DisTubeGuild owns queue state, item decisions, events, and source resources.
  */
 export class VoiceImpl implements QueueVoice {
-  readonly #facade: Voice;
+  readonly #facade: DisTubeVoice;
   readonly #session: VoiceSession;
   readonly #engine: Engine;
   readonly #onTerminal: (error?: Error) => void;
@@ -79,8 +78,7 @@ export class VoiceImpl implements QueueVoice {
   readonly #work = new TrackedWork();
   /** Retired backend completions remain terminal work even after their ordinary queue slot settles. */
   readonly #retirements: Promise<void>[] = [];
-  readonly #settings = new VoiceSettings();
-  readonly #filtersFacade: VoiceFilters;
+  readonly #settings = new StoredVoiceSettings();
   #autoplayListener?: (enabled: boolean) => void;
   #phase: VoicePhase = "open";
   #channelId: string;
@@ -110,10 +108,6 @@ export class VoiceImpl implements QueueVoice {
     this.#report = report;
     this.#sessionUnsubscribe = session.subscribe(event => this.#onSessionEvent(event));
     const self = this;
-    this.#filtersFacade = new VoiceFiltersImpl(engine, {
-      entries: () => self.#settings.entries,
-      commit: change => self.commitFilters(change),
-    }).facade;
     const facade = {
       get guildId(): string {
         return self.guildId;
@@ -121,25 +115,24 @@ export class VoiceImpl implements QueueVoice {
       get channelId(): string {
         return self.channelId;
       },
-      get volume(): number {
-        return self.volume;
+      get settings(): VoiceSettings {
+        return Object.freeze({
+          volume: self.volume,
+          repeat: self.repeatMode,
+          autoplay: self.autoplay,
+          filters: Object.freeze(self.#settings.entries.map(entry => entry.name)),
+        });
       },
-      get repeatMode(): RepeatMode {
-        return self.repeatMode;
+      move: async (channel: VoiceChannelTarget): Promise<void> => {
+        const target = normalizeChannel(channel);
+        if (target.guildId !== self.guildId)
+          throw new DisTubeError("INVALID_ARGUMENT", "Cannot move voice to another guild");
+        await self.#requestMove(target.channelId);
       },
-      get autoplay(): boolean {
-        return self.autoplay;
-      },
-      get filters(): VoiceFilters {
-        return self.#filtersFacade;
-      },
-      get previousSongs(): readonly QueueItem[] {
-        return self.previousSongs;
-      },
-      join: (channelId: string): Promise<void> => self.#requestMove(channelId),
       setVolume: (percent: number): Promise<void> => self.setVolume(percent),
-      setRepeatMode: (mode: RepeatMode): Promise<void> => self.setRepeatMode(mode),
+      setRepeat: (mode: RepeatMode): Promise<void> => self.setRepeatMode(mode),
       setAutoplay: (enabled: boolean): Promise<void> => self.setAutoplay(enabled),
+      setFilters: (names: readonly string[]): Promise<void> => self.setFilters(names),
     };
     Object.freeze(facade);
     this.#facade = facade;
@@ -148,7 +141,7 @@ export class VoiceImpl implements QueueVoice {
   readonly generation: number;
 
   /** Package-private public view; the implementation never crosses the package boundary. */
-  get facade(): Voice {
+  get facade(): DisTubeVoice {
     return this.#facade;
   }
 
@@ -164,7 +157,7 @@ export class VoiceImpl implements QueueVoice {
     return this.#phase === "released";
   }
 
-  // Playback settings are read synchronously by GuildQueue decisions through QueueVoice.
+  // Playback settings are read synchronously by DisTubeGuild decisions through QueueVoice.
 
   get volume(): number {
     return this.#settings.volume;
@@ -178,17 +171,8 @@ export class VoiceImpl implements QueueVoice {
     return this.#settings.autoplay;
   }
 
-  get previousSongs(): readonly QueueItem[] {
-    return this.#settings.previousSongs;
-  }
-
   lastPlayedSong(): QueueItem | undefined {
-    const history = this.previousSongs;
-    return history.at(-1);
-  }
-
-  popPreviousSong(): QueueItem | undefined {
-    return this.#settings.popPrevious();
+    return this.#settings.lastPlayed;
   }
 
   rememberPlayed(items: readonly QueueItem[]): void {
@@ -205,6 +189,7 @@ export class VoiceImpl implements QueueVoice {
 
   /** Commits a volume change only after its Player effect succeeds; serialized on the Player lane. */
   async setVolume(requested: number): Promise<void> {
+    this.#assertOpen();
     const percent = validateVolume(requested);
     try {
       if (this.#player) {
@@ -213,7 +198,7 @@ export class VoiceImpl implements QueueVoice {
           if (this.#phase !== "open") throw this.#terminal();
           const record = this.#player;
           // A terminal outcome can retire the Player while this request waits in its lane. The
-          // value still belongs to Voice, so retain it for the Player that eventually succeeds it.
+          // value still belongs to DisTubeVoice, so retain it for the Player that eventually succeeds it.
           if (record) await record.player.setVolume(percent);
           this.#settings.setVolume(percent);
         });
@@ -234,36 +219,48 @@ export class VoiceImpl implements QueueVoice {
 
   /** Repeat mode is pure committed state; queues read it at their own progression points. */
   async setRepeatMode(mode: RepeatMode): Promise<void> {
+    this.#assertOpen();
     this.#settings.setRepeatMode(validateRepeatMode(mode));
   }
 
   /** Notifies the attached queue in the caller's stack so disabling aborts a pending lookup now. */
   async setAutoplay(enabled: boolean): Promise<void> {
+    this.#assertOpen();
     this.#settings.setAutoplay(validateAutoplay(enabled));
     if (!enabled) this.#autoplayListener?.(false);
   }
 
+  async setFilters(names: readonly string[]): Promise<void> {
+    this.#assertOpen();
+    if (!Array.isArray(names) || names.some(name => typeof name !== "string" || name.length === 0)) {
+      throw new DisTubeError("INVALID_ARGUMENT", "Filters must be non-empty names");
+    }
+    if (names.some(name => !this.#engine.resolvable(name)))
+      throw new DisTubeError("UNSUPPORTED", "Engine cannot render a requested filter");
+    await this.commitFilters(Object.freeze([...new Set(names)].map(name => Object.freeze({ name }))));
+  }
+
+  /** Queue deletion commits empty selection after rendering; later settings share this cleanup barrier. */
+  resetQueueFilters(): Promise<void> {
+    return this.#enqueue(async () => {
+      const record = this.#player;
+      if (record) await record.player.setFilters(Object.freeze([]));
+      this.#settings.setEntries(Object.freeze([]));
+    });
+  }
+
   /** Folds `change` onto the committed entries and renders the result before committing it. */
-  async commitFilters(change: FilterChange): Promise<void> {
+  async commitFilters(entries: readonly FilterEntry[]): Promise<void> {
     try {
-      if (this.#player) {
-        // Fold only when this operation reaches the Player lane. Calls made without awaiting one
-        // another then observe the set each earlier call committed.
-        await this.#enqueue(async () => {
-          if (this.#phase !== "open") throw this.#terminal();
-          const entries = foldFilters(this.#settings.entries, change);
-          if (sameFilters(this.#settings.entries, entries)) return;
-          const record = this.#player;
-          // A queued render must still update Voice state if the previous Player retired first.
-          if (record) await record.player.setFilters(entries);
-          this.#settings.setEntries(entries);
-        });
-        return;
-      }
-      // No Player yet: the folded set is committed state that the next Player restores at activation.
-      const entries = foldFilters(this.#settings.entries, change);
-      if (sameFilters(this.#settings.entries, entries)) return;
-      this.#settings.setEntries(entries);
+      await this.#enqueue(async () => {
+        this.#assertOpen();
+        const current = this.#settings.entries;
+        if (current.length === entries.length && current.every((entry, index) => entry.name === entries[index]?.name))
+          return;
+        const record = this.#player;
+        if (record) await record.player.setFilters(entries);
+        this.#settings.setEntries(entries);
+      });
     } catch (error: unknown) {
       throw playerFiltersFailure(error);
     }
@@ -287,13 +284,14 @@ export class VoiceImpl implements QueueVoice {
     return this.#work.start(async () => {
       const prior = this.#lease;
       if (prior) {
-        if (!prior.closePromise) throw new DisTubeError(ErrorCode.QUEUE_FAILED, "Voice is already leased to a queue");
+        if (!prior.closePromise)
+          throw new DisTubeError(ErrorCode.QUEUE_FAILED, "DisTubeVoice is already leased to a queue");
         await prior.closePromise.catch(() => undefined);
       }
       this.#assertOpen();
       if (request.signal.aborted) throw this.#stale();
 
-      // Player creation is ordered through the Voice lane and remains owned by Voice if this request is cancelled.
+      // Player creation is ordered through the DisTubeVoice lane and remains owned by DisTubeVoice if this request is cancelled.
       const player = await this.#ensurePlayer();
       this.#assertOpen();
       if (request.signal.aborted) throw this.#stale();
@@ -346,13 +344,17 @@ export class VoiceImpl implements QueueVoice {
       } catch (error: unknown) {
         failures.push(asError(error));
       } finally {
-        this.#sessionUnsubscribe();
+        try {
+          this.#sessionUnsubscribe();
+        } catch (error: unknown) {
+          failures.push(asError(error));
+        }
       }
       terminalFailure = cleanupFailure(
         ErrorCode.VOICE_FAILED,
-        "Voice cleanup failed",
+        "DisTubeVoice cleanup failed",
         failures,
-        "Voice terminal cleanup failures",
+        "DisTubeVoice terminal cleanup failures",
       );
     });
     const failures = await this.#work.settle();
@@ -360,9 +362,9 @@ export class VoiceImpl implements QueueVoice {
     if (terminalFailure && failures.length === 0) throw terminalFailure;
     const failure = cleanupFailure(
       ErrorCode.VOICE_FAILED,
-      "Voice cleanup failed",
+      "DisTubeVoice cleanup failed",
       [...(terminalFailure ? [terminalFailure] : []), ...failures],
-      "Voice cleanup failures",
+      "DisTubeVoice cleanup failures",
     );
     if (failure) throw failure;
   }
@@ -380,7 +382,8 @@ export class VoiceImpl implements QueueVoice {
 
   #position(lease: LeaseRecord, authority: QueueItemAuthority): number {
     if (!lease.accepting || !this.#matchesItem(lease, authority)) return 0;
-    return this.#player?.player.position ?? 0;
+    const seconds = this.#player?.player.position ?? 0;
+    return Number.isFinite(seconds) && seconds >= 0 ? seconds : 0;
   }
 
   #runLeaseEffect(lease: LeaseRecord, effect: QueuePlayerEffect): Promise<void> {
@@ -474,7 +477,7 @@ export class VoiceImpl implements QueueVoice {
 
   async #stop(lease: LeaseRecord, record: PlayerRecord, authority: QueueItemAuthority): Promise<void> {
     if (!this.#matchesItem(lease, authority)) throw this.#stale();
-    // A native finish emitted by stop must fail the authority check before it reaches GuildQueue.
+    // A native finish emitted by stop must fail the authority check before it reaches DisTubeGuild.
     lease.item = undefined;
     await record.player.stopTrack();
   }
@@ -511,8 +514,10 @@ export class VoiceImpl implements QueueVoice {
   #ensurePlayer(): Promise<PlayerRecord> {
     if (this.#player) return Promise.resolve(this.#player);
     this.#creation ??= this.#enqueue(async () => {
+      let owned: Player | undefined;
       try {
         const player = await this.#engine.createPlayer(this.#session);
+        owned = player;
         let unsubscribe = (): void => undefined;
         const record: PlayerRecord = {
           generation: ++this.#playerGeneration,
@@ -522,9 +527,19 @@ export class VoiceImpl implements QueueVoice {
         };
         unsubscribe = player.subscribe(event => this.#acceptPlayerOutcome(record, event));
         this.#player = record;
+        owned = undefined;
         if (this.#lease?.accepting) this.#lease.playerGeneration = record.generation;
         return record;
       } catch (error: unknown) {
+        if (owned) {
+          try {
+            await owned.release();
+          } catch (cleanup: unknown) {
+            throw new DisTubeError("VOICE_FAILED", "Player construction cleanup failed", {
+              cause: new AggregateError([asError(error), asError(cleanup)], "Player construction failures"),
+            });
+          }
+        }
         throw asDisTubeError(ErrorCode.VOICE_FAILED, "Engine failed to create Player", error);
       }
     });
@@ -664,8 +679,12 @@ export class VoiceImpl implements QueueVoice {
   #takeCurrentPlayer(expected?: PlayerRecord): PlayerRecord | undefined {
     const record = this.#player;
     if (!record || (expected && record !== expected)) return undefined;
-    record.unsubscribe();
     this.#player = undefined;
+    try {
+      record.unsubscribe();
+    } catch (error: unknown) {
+      this.#rememberRetirement(Promise.reject(asError(error)));
+    }
     return record;
   }
 
@@ -702,11 +721,11 @@ export class VoiceImpl implements QueueVoice {
   }
 
   #stale(): DisTubeError {
-    return new DisTubeError(ErrorCode.QUEUE_FAILED, "Queue lease is no longer active");
+    return new DisTubeError("INVALID_STATE", "Queue lease is no longer active");
   }
 
   #terminal(): DisTubeError {
-    return new DisTubeError(ErrorCode.VOICE_FAILED, "Voice is no longer connected");
+    return new DisTubeError("INVALID_STATE", "DisTubeVoice is no longer connected");
   }
 }
 
@@ -714,9 +733,14 @@ export class VoiceImpl implements QueueVoice {
 function playerFiltersFailure(error: unknown): DisTubeError {
   if (
     error instanceof DisTubeError &&
-    [ErrorCode.VOICE_FAILED, ErrorCode.UNSUPPORTED, ErrorCode.QUEUE_FAILED, ErrorCode.INVALID_ARGUMENT].includes(
-      error.code,
-    )
+    (
+      [
+        ErrorCode.VOICE_FAILED,
+        ErrorCode.UNSUPPORTED,
+        ErrorCode.INVALID_STATE,
+        ErrorCode.INVALID_ARGUMENT,
+      ] as readonly string[]
+    ).includes(error.code)
   ) {
     return error;
   }

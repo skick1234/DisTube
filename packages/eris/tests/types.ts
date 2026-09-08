@@ -1,4 +1,4 @@
-import type { Adapter, Player, PlayerEvent, VoiceSession } from "distube";
+import type { Adapter, Player, PlayerEvent, VoiceSession } from "distube/integrations";
 import type { Client } from "eris";
 import * as erisExports from "../src";
 

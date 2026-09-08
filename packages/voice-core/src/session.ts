@@ -12,7 +12,7 @@ import {
   VoiceConnectionDisconnectReason,
   VoiceConnectionStatus,
 } from "@discordjs/voice";
-import type { VoiceGatewayData, VoiceSession, VoiceSessionEvent } from "distube";
+import type { VoiceGatewayData, VoiceSession, VoiceSessionEvent } from "distube/integrations";
 import { cleanupAll } from "./cleanup";
 
 /** Discord severs the voice socket with this close code when it moves or removes the bot. */

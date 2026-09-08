@@ -1,4 +1,4 @@
-import type { VoiceSessionEvent } from "distube";
+import type { VoiceSessionEvent } from "distube/integrations";
 import { describe, expect, it, vi } from "vitest";
 import { ErisVoiceSession } from "../src/session";
 import {

@@ -8,7 +8,7 @@ import type {
   SourcePlugin,
 } from "./contracts";
 import { isEngine, isSourcePlugin } from "./contracts";
-import { ErrorReason } from "./enums";
+import type { DisTubeGuild } from "./DisTubeGuild";
 import { asDisTubeError, asError, DisTubeError, ErrorCode } from "./errors";
 import {
   DisTubeEventEmitter,
@@ -16,7 +16,6 @@ import {
   type DisTubeEventName,
   type VoiceDisconnectReason,
 } from "./events";
-import type { GuildQueue } from "./GuildQueue";
 import type { Playlist, QueueItem, Song } from "./media";
 import { throwIfAborted } from "./playback/abort";
 import { resolveInput } from "./playback/resolve";
@@ -24,65 +23,70 @@ import { createSourceCatalog, type SourceCatalog } from "./playback/sources";
 import { validateSourceName } from "./playback/validation";
 import { type QueueCollection, QueueManager } from "./QueueManager";
 import { settleAll } from "./utils/dispose";
-import type { Voice } from "./voice/Voice";
+import type { DisTubeVoice } from "./voice/DisTubeVoice";
 import { type VoiceManager, VoiceManagerImpl } from "./voice/VoiceManager";
 
 export interface DisTubeOptions {
   readonly adapter: Adapter;
-  readonly plugins: readonly Plugin[];
-  readonly onDiagnostic?: (diagnostic: Diagnostic) => unknown;
+  readonly sources: readonly SourcePlugin[];
+  readonly engine?: Engine;
+  readonly onDiagnostic?: (diagnostic: Diagnostic) => void | Promise<void>;
 }
 
-/** The guild and voice channel a `play` call targets, in platform-neutral IDs. */
-export interface PlayTarget {
-  readonly guildId: string;
-  readonly voiceChannelId: string;
-}
+export type { VoiceChannelTarget } from "./voice/target";
+
+import type { VoiceChannelTarget } from "./voice/target";
 
 export interface PlayOptions<Metadata = unknown> {
-  /** Zero-based slot in the pending list; absent appends, beyond the end clamps. */
-  readonly position?: number;
-  /** Caller-owned reference stored on every QueueItem the call creates. */
   readonly metadata?: Metadata;
-  /** Ends the current track once the insertion commits. Pair with `position: 0` to play the new media next. */
-  readonly skip?: boolean;
-  /** Cancels the call; it then rejects with `QUEUE_FAILED` and leaves no queue, item, or event behind. */
   readonly signal?: AbortSignal;
 }
 
 export interface PlayResult<Metadata = unknown> {
-  readonly queue: GuildQueue<Metadata>;
+  readonly queue: DisTubeGuild<Metadata>;
   readonly items: readonly QueueItem<Metadata>[];
 }
 
 /**
  * The public client.
  *
- * `Metadata` names the shape of `options.metadata`, and threads to every QueueItem, GuildQueue, Voice, and
+ * `Metadata` names the shape of `options.metadata`, and threads to every QueueItem, DisTubeGuild, DisTubeVoice, and
  * event payload this client hands back, so those reads need no cast. It is a type-level contract only:
  * core never inspects the value, and omitting the parameter leaves every `metadata` typed `unknown`.
  */
 export class DisTube<Metadata = unknown> {
   /** Guild voice presence, usable with or without a queue. */
-  readonly voices: VoiceManager<Metadata>;
-  readonly #plugins: readonly Plugin[];
+  readonly voices: VoiceManager;
+  readonly #plugins: readonly (Engine | SourcePlugin)[];
   readonly #events: DisTubeEventEmitter;
   readonly #voiceManager: VoiceManagerImpl;
   readonly #queues: QueueManager;
   readonly #sources: SourceCatalog;
-  readonly #resolutions = new Set<AbortController>();
+  readonly #resolutions = new Map<AbortController, Promise<Song | Playlist>>();
   #shuttingDown = false;
   #shutdownPromise?: Promise<void>;
 
   constructor(options: DisTubeOptions) {
     this.#validateOptions(options);
+    const sources = Object.freeze([...options.sources]);
+    const adapter = options.adapter;
+    const engine = options.engine ?? adapter.engine;
     const diagnostic = options.onDiagnostic ?? (() => undefined);
     this.#events = new DisTubeEventEmitter(diagnostic);
-    const initialized: Plugin[] = [];
+    const integrations = [...new Set<Engine | SourcePlugin>([...sources, engine])];
+    for (const integration of integrations) {
+      if (ownedIntegrations.has(integration))
+        throw new DisTubeError("INVALID_STATE", "Integration already belongs to a live client");
+    }
+    for (const integration of integrations) ownedIntegrations.add(integration);
+    const initialized: (Engine | SourcePlugin)[] = [];
     try {
-      for (const plugin of options.plugins) {
-        const result: unknown = (plugin.initialize as (context: Parameters<Plugin["initialize"]>[0]) => unknown)({
-          diagnostic: record => this.#events.report(Object.freeze({ ...record, plugin: plugin.name })),
+      for (const plugin of integrations) {
+        const result: unknown = (
+          plugin.initialize as ((context: Parameters<Plugin["initialize"]>[0]) => unknown) | undefined
+        )?.({
+          diagnostic: record =>
+            this.#events.report(Object.freeze({ ...record, ...(plugin.name ? { plugin: plugin.name } : {}) })),
         });
         if (result && typeof (result as PromiseLike<unknown>).then === "function") {
           void Promise.resolve(result).catch(error =>
@@ -90,7 +94,7 @@ export class DisTube<Metadata = unknown> {
               severity: "error",
               stage: "plugin.initialize.late-rejection",
               message: `${plugin.name}.initialize rejected after returning an unsupported thenable`,
-              plugin: plugin.name,
+              ...(plugin.name ? { plugin: plugin.name } : {}),
               error: asError(error),
             }),
           );
@@ -99,37 +103,39 @@ export class DisTube<Metadata = unknown> {
         initialized.push(plugin);
       }
     } catch (error: unknown) {
-      const reportRollbackFailure = (plugin: Plugin, disposeError: unknown): void => {
+      const reportRollbackFailure = (plugin: Engine | SourcePlugin, disposeError: unknown): void => {
         this.#events.report({
           severity: "error",
           stage: "plugin.initialize.rollback",
           message: `${plugin.name}.dispose failed during initialization rollback`,
-          plugin: plugin.name,
+          ...(plugin.name ? { plugin: plugin.name } : {}),
           error: asError(disposeError),
         });
       };
+      const pending = new Set(initialized);
       for (const plugin of initialized.reverse()) {
         try {
-          void Promise.resolve(plugin.dispose()).catch(disposeError => reportRollbackFailure(plugin, disposeError));
+          void Promise.resolve(plugin.dispose?.())
+            .catch(disposeError => reportRollbackFailure(plugin, disposeError))
+            .finally(() => ownedIntegrations.delete(plugin));
         } catch (disposeError: unknown) {
           reportRollbackFailure(plugin, disposeError);
+          ownedIntegrations.delete(plugin);
         }
       }
-      throw asDisTubeError(ErrorCode.PLUGIN_FAILED, "Plugin initialization failed", error);
+      for (const integration of integrations) if (!pending.has(integration)) ownedIntegrations.delete(integration);
+      throw asDisTubeError(ErrorCode.PLUGIN_FAILED, "Integration initialization failed", error);
     }
-    this.#plugins = Object.freeze([...options.plugins]);
-    const sources = this.#plugins.filter(isSourcePlugin) as readonly SourcePlugin[];
+    this.#plugins = Object.freeze(integrations);
     this.#sources = createSourceCatalog(sources);
-    // An engine-capable Plugin replaces the Adapter's default engine for every guild.
-    const engine = (options.plugins.find(isEngine) as Engine | undefined) ?? options.adapter.engine;
-    this.#voiceManager = new VoiceManagerImpl(options.adapter, engine, {
+    this.#voiceManager = new VoiceManagerImpl(adapter, engine, {
+      order: (guildId, work) => this.#queues.order(guildId, work),
       deleteQueue: (guildId, cause) => this.#queues.delete(guildId, cause),
       onDisconnected: (voice, reason, error) => this.#voiceDisconnected(voice, reason, error),
       report: diagnostic => this.#events.report(diagnostic),
     });
-    // The implementation is metadata-blind; this is where the client's declared type is put on it.
-    this.voices = this.#voiceManager.facade as VoiceManager<Metadata>;
-    // QueueManager owns guild-ordered play work; its closures keep internal Voice capabilities private.
+    this.voices = this.#voiceManager.facade;
+    // QueueManager owns guild-ordered play work; its closures keep internal DisTubeVoice capabilities private.
     this.#queues = new QueueManager(
       target => this.#voiceManager.joinInternal(target),
       guildId => this.#voiceManager.getInternal(guildId),
@@ -141,63 +147,63 @@ export class DisTube<Metadata = unknown> {
   }
 
   /** The public facade for QueueManager's private, per-guild play lane. */
-  play(target: PlayTarget, input: ResolvableInput, options: PlayOptions<Metadata> = {}): Promise<PlayResult<Metadata>> {
+  play(
+    target: VoiceChannelTarget,
+    input: ResolvableInput,
+    options: PlayOptions<Metadata> = {},
+  ): Promise<PlayResult<Metadata>> {
     return this.#queues.play(target, input, options) as Promise<PlayResult<Metadata>>;
   }
 
   /**
    * Resolves media through the configured SourcePlugins without touching queue or voice state.
    *
-   * Shutdown fences this the same way it fences play and join: once `shutdown()` starts, the plugins are
+   * Disposal fences this the same way it fences play and join: once `dispose()` starts, the plugins are
    * on their way to `dispose()`, so a resolution begun now would outlive them.
    */
-  async resolve(input: ResolvableInput, options: SourceOperationOptions = {}): Promise<Song | Playlist> {
+  resolve(input: ResolvableInput, options: SourceOperationOptions = {}): Promise<Song | Playlist> {
+    if (this.#shuttingDown) return Promise.reject(this.#shutdownError());
+    if (
+      !options ||
+      typeof options !== "object" ||
+      (options.signal !== undefined && !(options.signal instanceof AbortSignal))
+    ) {
+      return Promise.reject(new DisTubeError("INVALID_ARGUMENT", "Invalid resolution options"));
+    }
     const controller = new AbortController();
     const signal = options.signal ? AbortSignal.any([controller.signal, options.signal]) : controller.signal;
-    throwIfAborted(signal);
-    if (this.#shuttingDown) throw this.#shutdownError();
-    this.#resolutions.add(controller);
-    try {
-      const media = await resolveInput(input, this.#sources, signal);
-      throwIfAborted(signal);
-      return media;
-    } finally {
-      this.#resolutions.delete(controller);
-    }
+    const operation = Promise.resolve().then(async () => {
+      try {
+        throwIfAborted(signal);
+        const media = await resolveInput(input, this.#sources, signal);
+        if (this.#shuttingDown) throw this.#shutdownError();
+        throwIfAborted(signal);
+        return media;
+      } catch (error: unknown) {
+        if (this.#shuttingDown) throw this.#shutdownError();
+        throw error;
+      } finally {
+        this.#resolutions.delete(controller);
+      }
+    });
+    this.#resolutions.set(controller, operation);
+    return operation;
   }
 
-  /** The guild's live GuildQueue, or `undefined` once it has been deleted. */
-  getQueue(guildId: string): GuildQueue<Metadata> | undefined {
-    return this.#queues.get(guildId) as GuildQueue<Metadata> | undefined;
+  /** The guild's live DisTubeGuild, or `undefined` once it has been deleted. */
+  getQueue(guildId: string): DisTubeGuild<Metadata> | undefined {
+    return this.#queues.get(guildId) as DisTubeGuild<Metadata> | undefined;
   }
 
   get queues(): QueueCollection<Metadata> {
     return this.#queues.view as QueueCollection<Metadata>;
   }
 
-  on<Name extends DisTubeEventName>(name: Name, listener: DisTubeEventListener<Name, Metadata>): this {
-    this.#events.on(name, listener as DisTubeEventListener<Name>);
-    return this;
+  on<Name extends DisTubeEventName>(name: Name, listener: DisTubeEventListener<Name, Metadata>): () => void {
+    return this.#events.on(name, listener as DisTubeEventListener<Name>);
   }
 
-  once<Name extends DisTubeEventName>(name: Name, listener: DisTubeEventListener<Name, Metadata>): this {
-    this.#events.once(name, listener as DisTubeEventListener<Name>);
-    return this;
-  }
-
-  /** Removes one registration of `listener`, whether it was added with `on` or with `once`. */
-  off<Name extends DisTubeEventName>(name: Name, listener: DisTubeEventListener<Name, Metadata>): this {
-    this.#events.off(name, listener as DisTubeEventListener<Name>);
-    return this;
-  }
-
-  /** Drops every listener for `name`, or for every event when `name` is omitted. */
-  removeAllListeners(name?: DisTubeEventName): this {
-    this.#events.removeAllListeners(name);
-    return this;
-  }
-
-  shutdown(): Promise<void> {
+  dispose(): Promise<void> {
     if (!this.#shutdownPromise) {
       this.#shuttingDown = true;
       this.#fenceResolutions();
@@ -211,7 +217,9 @@ export class DisTube<Metadata = unknown> {
     this.#voiceManager.fence();
     const queueFailures = await this.#queues.deleteAll({ kind: "shutdown" });
     const voiceFailures = await this.#voiceManager.releaseAll();
-    const pluginFailures = await settleAll([...this.#plugins].reverse().map(plugin => () => plugin.dispose()));
+    await Promise.allSettled([...this.#resolutions.values()]);
+    const pluginFailures = await settleAll([...this.#plugins].reverse().map(plugin => () => plugin.dispose?.()));
+    for (const integration of this.#plugins) ownedIntegrations.delete(integration);
     const failures = [
       ...queueFailures.flatMap(cleanupCauses),
       ...voiceFailures.flatMap(cleanupCauses),
@@ -231,70 +239,68 @@ export class DisTube<Metadata = unknown> {
   }
 
   #fenceResolutions(): void {
-    for (const controller of this.#resolutions) controller.abort(this.#shutdownError());
+    for (const controller of this.#resolutions.keys()) controller.abort(this.#shutdownError());
   }
 
   #shutdownError(): DisTubeError {
-    return new DisTubeError(ErrorCode.QUEUE_FAILED, "DisTube is shutting down");
+    return new DisTubeError("INVALID_STATE", "DisTube is disposed");
   }
 
-  #voiceDisconnected(voice: Voice, reason: VoiceDisconnectReason, error?: Error): void {
+  #voiceDisconnected(voice: DisTubeVoice, reason: VoiceDisconnectReason, error?: Error): void {
     this.#events.emit(
       "voice.disconnected",
       Object.freeze({
         guildId: voice.guildId,
+        voice,
+        channelId: voice.channelId,
         timestamp: Date.now(),
         reason,
-        ...(error ? { error: asDisTubeError(ErrorCode.VOICE_FAILED, "Voice disconnected terminally", error) } : {}),
+        ...(error
+          ? { error: asDisTubeError(ErrorCode.VOICE_FAILED, "DisTubeVoice disconnected terminally", error) }
+          : {}),
       }),
     );
   }
 
   #validateOptions(options: DisTubeOptions): void {
-    if (!options || typeof options !== "object") {
-      throw new DisTubeError(ErrorCode.INVALID_ARGUMENT, ErrorReason.Argument, "DisTube options are required");
+    if (!options || typeof options !== "object")
+      throw new DisTubeError("INVALID_ARGUMENT", "DisTube options are required");
+    if (Object.keys(options).some(key => !["adapter", "sources", "engine", "onDiagnostic"].includes(key))) {
+      throw new DisTubeError("INVALID_ARGUMENT", "Unknown DisTube option");
     }
-    const unknown = Object.keys(options).filter(key => !["adapter", "plugins", "onDiagnostic"].includes(key));
-    if (unknown.length > 0)
-      throw new DisTubeError(ErrorCode.INVALID_ARGUMENT, ErrorReason.Argument, `Unknown option: ${unknown[0]}`);
     if (
       !options.adapter ||
       typeof options.adapter.createVoiceSession !== "function" ||
       !isEngine(options.adapter.engine)
     ) {
-      throw new DisTubeError(
-        ErrorCode.INVALID_ARGUMENT,
-        ErrorReason.Argument,
-        "options.adapter must implement Adapter",
-      );
+      throw new DisTubeError("INVALID_ARGUMENT", "options.adapter must implement Adapter");
     }
-    if (!Array.isArray(options.plugins))
-      throw new DisTubeError(ErrorCode.INVALID_ARGUMENT, ErrorReason.Argument, "options.plugins must be an array");
-    const instances = new Set<Plugin>();
+    if (!Array.isArray(options.sources)) throw new DisTubeError("INVALID_ARGUMENT", "options.sources must be an array");
     const names = new Set<string>();
-    let engines = 0;
-    for (const plugin of options.plugins) {
-      if (!plugin || typeof plugin.initialize !== "function" || typeof plugin.dispose !== "function") {
-        throw new DisTubeError(ErrorCode.INVALID_ARGUMENT, ErrorReason.Argument, "Each plugin must implement Plugin");
+    for (const source of options.sources) {
+      if (!isSourcePlugin(source) || typeof source.initialize !== "function" || typeof source.dispose !== "function") {
+        throw new DisTubeError("INVALID_ARGUMENT", "Each source must implement SourcePlugin");
       }
-      validateSourceName(plugin.name, "Plugin name");
-      if (instances.has(plugin) || names.has(plugin.name)) {
-        throw new DisTubeError(ErrorCode.INVALID_ARGUMENT, ErrorReason.Argument, `Duplicate Plugin: ${plugin.name}`);
+      validateSourceName(source.name);
+      if (names.has(source.name)) throw new DisTubeError("INVALID_ARGUMENT", "Duplicate source name");
+      names.add(source.name);
+    }
+    const engine = options.engine ?? options.adapter.engine;
+    if (!isEngine(engine)) throw new DisTubeError("INVALID_ARGUMENT", "options.engine must implement Engine");
+    if (engine.name !== undefined) {
+      validateSourceName(engine.name, "Engine name");
+      if (options.sources.some(source => source.name === engine.name && source !== engine)) {
+        throw new DisTubeError("INVALID_ARGUMENT", "Distinct source and engine instances cannot share a name");
       }
-      // An engine-capable Plugin replaces the Adapter's default engine for every guild.
-      if (isEngine(plugin)) {
-        engines += 1;
-        const engineName: string | undefined = (plugin as { name?: string }).name;
-        if (engines > 1) {
-          throw new DisTubeError(
-            ErrorCode.INVALID_ARGUMENT,
-            ErrorReason.Argument,
-            `Only one engine-capable Plugin is allowed${engineName ? `: ${engineName}` : ""}`,
-          );
-        }
-      }
-      instances.add(plugin);
-      names.add(plugin.name);
+    }
+    if (
+      (engine.initialize !== undefined || engine.dispose !== undefined) &&
+      (typeof engine.initialize !== "function" || typeof engine.dispose !== "function")
+    ) {
+      throw new DisTubeError("INVALID_ARGUMENT", "Engine initialize and dispose must be supplied together");
+    }
+    if (options.onDiagnostic !== undefined && typeof options.onDiagnostic !== "function") {
+      throw new DisTubeError("INVALID_ARGUMENT", "onDiagnostic must be a function");
     }
   }
 }
@@ -306,3 +312,5 @@ function cleanupCauses(error: Error): readonly Error[] {
   }
   return error.cause instanceof Error ? cleanupCauses(error.cause) : [error];
 }
+
+const ownedIntegrations = new WeakSet<object>();

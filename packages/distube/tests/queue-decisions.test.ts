@@ -1,8 +1,9 @@
-import { describe, expect, it, vi } from "vitest";
-import { DisTubeError, ErrorCode, QueueItem, QueueStatus } from "../src";
+import { describe, expect, it } from "vitest";
+import { DisTubeError } from "../src";
+import { QueueStatus } from "../src/enums";
+import { QueueItem } from "../src/media";
 import { cancelPlaybackAttempt, createPlaybackAttempt, isCurrentPlaybackAttempt } from "../src/queue/attempt";
 import { decideControl } from "../src/queue/control";
-import { EnqueueCoordinator } from "../src/queue/enqueue";
 import { asError, cleanupFailure } from "../src/queue/failures";
 import type { ActivePlayback } from "../src/queue/protocol";
 import { IDLE_QUEUE_STATE, insertItems, setStatus, startFirst } from "../src/queue/state";
@@ -11,53 +12,6 @@ import { media } from "./support/harness";
 function item(id: string): QueueItem {
   return new QueueItem({ song: media("source", id) });
 }
-
-describe("enqueue coordination", () => {
-  it("releases completed resolutions only in acceptance order", () => {
-    const enqueues = new EnqueueCoordinator();
-    const first = enqueues.create({}, vi.fn(), vi.fn());
-    const second = enqueues.create({}, vi.fn(), vi.fn());
-    enqueues.accept(first);
-    enqueues.accept(second);
-    const firstCompletion = { operation: first, media: item("first").song } as const;
-    const secondCompletion = { operation: second, media: item("second").song } as const;
-
-    expect(enqueues.complete(secondCompletion)).toEqual([]);
-    expect(enqueues.complete(firstCompletion)).toEqual([firstCompletion, secondCompletion]);
-  });
-
-  it("cancels accepted work and ignores its late completion", () => {
-    const enqueues = new EnqueueCoordinator();
-    const reject = vi.fn();
-    const operation = enqueues.create({}, vi.fn(), reject);
-    enqueues.accept(operation);
-    enqueues.cancel(() => new Error("stale"));
-
-    expect(operation.controller.signal.aborted).toBe(true);
-    expect(reject).toHaveBeenCalledWith(expect.objectContaining({ message: "stale" }));
-    expect(enqueues.complete({ operation, media: item("late").song })).toEqual([]);
-  });
-
-  it("keeps ready completions cancellable until commit", () => {
-    const enqueues = new EnqueueCoordinator();
-    const firstReject = vi.fn();
-    const secondReject = vi.fn();
-    const first = enqueues.create({}, vi.fn(), firstReject);
-    const second = enqueues.create({}, vi.fn(), secondReject);
-    enqueues.accept(first);
-    enqueues.accept(second);
-    const firstCompletion = { operation: first, media: item("first").song } as const;
-    const secondCompletion = { operation: second, media: item("second").song } as const;
-
-    enqueues.complete(secondCompletion);
-    expect(enqueues.complete(firstCompletion)).toEqual([firstCompletion, secondCompletion]);
-    enqueues.commit(firstCompletion);
-    enqueues.cancel(() => new Error("stale"));
-
-    expect(firstReject).not.toHaveBeenCalled();
-    expect(secondReject).toHaveBeenCalledWith(expect.objectContaining({ message: "stale" }));
-  });
-});
 
 describe("playback attempt decisions", () => {
   it("creates, identifies, and cancels attempts without owning a backend handle", () => {
@@ -103,15 +57,15 @@ describe("control and failure decisions", () => {
   });
 
   it("normalizes zero, one, and aggregate cleanup failures", () => {
-    expect(cleanupFailure(ErrorCode.QUEUE_FAILED, "failed", [], "failures")).toBeUndefined();
-    expect(cleanupFailure(ErrorCode.QUEUE_FAILED, "failed", [new Error("one")], "failures")).toMatchObject({
-      code: ErrorCode.QUEUE_FAILED,
+    expect(cleanupFailure("QUEUE_FAILED", "failed", [], "failures")).toBeUndefined();
+    expect(cleanupFailure("QUEUE_FAILED", "failed", [new Error("one")], "failures")).toMatchObject({
+      code: "QUEUE_FAILED",
       cause: expect.objectContaining({ message: "one" }),
     });
-    expect(
-      cleanupFailure(ErrorCode.QUEUE_FAILED, "failed", [new Error("one"), new Error("two")], "failures"),
-    ).toMatchObject({ cause: expect.any(AggregateError) });
-    expect(asError("plain")).toMatchObject({ message: "plain" });
+    expect(cleanupFailure("QUEUE_FAILED", "failed", [new Error("one"), new Error("two")], "failures")).toMatchObject({
+      cause: expect.any(AggregateError),
+    });
+    expect(asError("plain")).toMatchObject({ message: "Operation failed with a non-Error value" });
     expect(asError(new Error("exact"))).toMatchObject({ message: "exact" });
   });
 });

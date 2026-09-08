@@ -148,7 +148,7 @@ function permutationCases(values: readonly ModelAction[]): readonly (readonly [r
   return permutations(values).map(actions => [actions] as const);
 }
 
-describe("reference GuildQueue decision model", () => {
+describe("reference DisTubeGuild decision model", () => {
   it.each(permutationCases(["resolve-a", "resolve-b", "stop"]))(
     "keeps terminal stop authoritative for enqueue ordering: %j",
     actions => {

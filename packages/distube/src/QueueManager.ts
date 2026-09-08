@@ -1,48 +1,39 @@
 import { randomUUID } from "node:crypto";
 import type { ResolvableInput, VoiceTarget } from "./contracts";
-import { ErrorReason } from "./enums";
+import { type DisTubeGuild, GuildQueueImpl } from "./DisTubeGuild";
 import { abortFailure, DisTubeError, ErrorCode } from "./errors";
 import type { DisTubeEventEmitter } from "./events";
-import { type GuildQueue, GuildQueueImpl } from "./GuildQueue";
-import type { QueueItem } from "./media";
+import { Playlist, type QueueItem, Song } from "./media";
 import { resolveInput } from "./playback/resolve";
 import type { SourceCatalog } from "./playback/sources";
 import { cleanupFailure } from "./queue/failures";
 import type { QueueTerminalCause } from "./queue/terminal";
 import type { QueueVoice } from "./queue/voice";
 import { settleAll } from "./utils/dispose";
+import { normalizeChannel, type VoiceChannelTarget } from "./voice/target";
 
 /** Readonly view over the registered GuildQueues, published as `distube.queues`. */
 export type QueueCollection<Metadata = unknown> = Readonly<{
   readonly size: number;
-  [Symbol.iterator](): IterableIterator<GuildQueue<Metadata>>;
+  [Symbol.iterator](): IterableIterator<DisTubeGuild<Metadata>>;
 }>;
 
-/** Package-private input accepted by QueueManager's ordered play lane. */
-interface QueuePlayTarget {
-  readonly guildId: string;
-  readonly voiceChannelId: string;
-}
-
-/** Package-private options QueueManager passes to a committed queue insertion. */
 interface QueuePlayOptions {
-  readonly position?: number;
   readonly metadata?: unknown;
-  readonly skip?: boolean;
   readonly signal?: AbortSignal;
 }
 
-/** Package-private result returned through the public `DisTube.play` facade. */
 interface QueuePlayResult {
-  readonly queue: GuildQueue;
+  readonly queue: DisTubeGuild;
   readonly items: readonly QueueItem[];
 }
 
 interface PlayInvocation {
   readonly guildId: string;
-  readonly controller: AbortController;
-  /** The controller's signal, joined with the caller's when one was supplied. */
+  readonly queue: GuildQueueImpl;
   readonly signal: AbortSignal;
+  readonly release: () => void;
+  completion?: Promise<QueuePlayResult>;
 }
 
 interface DeletionRecord {
@@ -59,8 +50,6 @@ export class QueueManager {
   readonly #sources: SourceCatalog;
   readonly #events: DisTubeEventEmitter;
   readonly #queues = new Map<string, GuildQueueImpl>();
-  /** Queues that exist only while their first insertion is still transactional. */
-  readonly #provisional = new Map<string, GuildQueueImpl>();
   /** One promise tail per guild keeps play calls in invocation order. */
   readonly #lanes = new Map<string, Promise<void>>();
   readonly #inFlight = new Set<PlayInvocation>();
@@ -70,6 +59,8 @@ export class QueueManager {
   readonly #deleting = new Map<string, DeletionRecord>();
   readonly view: QueueCollection;
   #fenced = false;
+  readonly #stops = new WeakMap<GuildQueueImpl, Promise<void>>();
+  readonly #unadoptedVoices = new Map<string, QueueVoice>();
 
   constructor(
     moveVoice: (target: VoiceTarget) => Promise<QueueVoice>,
@@ -90,7 +81,7 @@ export class QueueManager {
       get size(): number {
         return queues.size;
       },
-      *[Symbol.iterator](): IterableIterator<GuildQueue> {
+      *[Symbol.iterator](): IterableIterator<DisTubeGuild> {
         for (const queue of queues.values()) yield queue.facade;
       },
     };
@@ -99,47 +90,76 @@ export class QueueManager {
   }
 
   /** Serializes all play work for a guild without exposing a transaction object publicly. */
-  play(target: QueuePlayTarget, input: ResolvableInput, options: QueuePlayOptions = {}): Promise<QueuePlayResult> {
-    let voiceTarget: VoiceTarget;
+  play(target: VoiceChannelTarget, input: ResolvableInput, options: QueuePlayOptions = {}): Promise<QueuePlayResult> {
     try {
-      voiceTarget = toVoiceTarget(target);
       this.#assertReady();
-      this.#assertVoiceJoinable(voiceTarget.guildId);
-      validatePlayOptions(options);
+      const normalized = normalizeChannel(target);
+      validateInput(input, options);
+      this.#assertVoiceJoinable(normalized.guildId);
+      const queue = this.#queues.get(normalized.guildId) ?? this.#createQueue(normalized.guildId);
+      return this.#reserve(queue, input, options, normalized);
     } catch (error: unknown) {
       return Promise.reject(error);
     }
+  }
 
-    const invocation = this.#invocation(voiceTarget.guildId, options.signal);
-    const invocationOptions: QueuePlayOptions = Object.freeze({
-      position: options.position,
-      metadata: options.metadata,
-      skip: options.skip,
-      signal: invocation.signal,
-    });
-    // Register the invocation before its lane turn. A terminal deletion can then abort a resolution that
-    // has not reached the front of the lane yet.
-    this.#inFlight.add(invocation);
-    const previous = this.#lanes.get(voiceTarget.guildId) ?? Promise.resolve();
-    const operation = previous.then(() => this.#runPlay(voiceTarget, input, invocationOptions, invocation));
+  enqueue(
+    queue: GuildQueueImpl,
+    input: ResolvableInput,
+    options: QueuePlayOptions = {},
+  ): Promise<readonly QueueItem[]> {
+    try {
+      this.#assertReady();
+      validateInput(input, options);
+      if (this.#queues.get(queue.guildId) !== queue || !this.#getVoice(queue.guildId)) {
+        throw new DisTubeError("INVALID_STATE", "Enqueue requires this connected queue");
+      }
+      return this.#reserve(queue, input, options).then(result => result.items);
+    } catch (error: unknown) {
+      return Promise.reject(error);
+    }
+  }
+
+  /** One ordering authority for insertion and public voice movement. Work never starts inline. */
+  order<Value>(guildId: string, work: () => Promise<Value>): Promise<Value> {
+    const previous = this.#lanes.get(guildId) ?? Promise.resolve();
+    const operation = previous.then(work);
     const tail = operation.then(
       () => undefined,
       () => undefined,
     );
-    this.#lanes.set(voiceTarget.guildId, tail);
+    this.#lanes.set(guildId, tail);
     void tail.then(() => {
-      if (this.#lanes.get(voiceTarget.guildId) === tail) this.#lanes.delete(voiceTarget.guildId);
+      if (this.#lanes.get(guildId) === tail) this.#lanes.delete(guildId);
     });
-    void operation.finally(() => this.#inFlight.delete(invocation)).catch(() => undefined);
     return operation;
   }
 
-  get(guildId: string): GuildQueue | undefined {
+  #reserve(
+    queue: GuildQueueImpl,
+    input: ResolvableInput,
+    options: QueuePlayOptions,
+    target?: VoiceTarget,
+  ): Promise<QueuePlayResult> {
+    const reservation = queue.reserve(options.signal);
+    const invocation: PlayInvocation = { guildId: queue.guildId, queue, ...reservation };
+    const invocationOptions = Object.freeze({ metadata: options.metadata, signal: invocation.signal });
+    this.#inFlight.add(invocation);
+    const operation = this.order(queue.guildId, () => this.#runPlay(input, invocationOptions, invocation, target));
+    invocation.completion = operation;
+    queue.publishCreated();
+    return operation.finally(() => {
+      this.#inFlight.delete(invocation);
+      invocation.release();
+    });
+  }
+
+  get(guildId: string): DisTubeGuild | undefined {
     return this.#queues.get(guildId)?.facade;
   }
 
   /**
-   * Installs terminal authority on both live and provisional queues before waiting for the guild play lane.
+   * Installs terminal authority on registered queues before waiting for the guild play lane.
    * A late first-play rollback remains part of that lane, so deletion cannot lose it.
    */
   delete(guildId: string, cause: QueueTerminalCause = { kind: "stop" }): Promise<void> {
@@ -170,14 +190,13 @@ export class QueueManager {
   fence(): void {
     if (this.#fenced) return;
     this.#fenced = true;
-    for (const invocation of this.#inFlight) invocation.controller.abort(this.#shutdownError());
+    for (const queue of this.#queues.values()) queue.fenceReservations();
   }
 
   /** Fences every current guild synchronously, then joins queue cleanup and every play lane. */
   deleteAll(cause: QueueTerminalCause = { kind: "shutdown" }): Promise<readonly Error[]> {
     const guilds = new Set([
       ...this.#queues.keys(),
-      ...this.#provisional.keys(),
       ...this.#lanes.keys(),
       ...this.#cleanup.keys(),
       ...this.#deleting.keys(),
@@ -187,107 +206,96 @@ export class QueueManager {
   }
 
   async #runPlay(
-    target: VoiceTarget,
     input: ResolvableInput,
     options: QueuePlayOptions,
     invocation: PlayInvocation,
+    target?: VoiceTarget,
   ): Promise<QueuePlayResult> {
-    this.#assertReady();
-    this.#assertInvocation(invocation);
-    this.#assertVoiceJoinable(target.guildId);
-    const existing = this.#queues.get(target.guildId);
-    const queue = existing ?? this.#createProvisional(target);
-    const ownsQueue = !existing;
-    let ownedVoice: QueueVoice | undefined;
-    let committed = existing === queue;
-
+    const queue = invocation.queue;
     try {
+      this.#assertReady();
+      this.#assertInvocation(invocation);
       const media = await resolveInput(input, this.#sources, invocation.signal);
       this.#assertReady();
       this.#assertInvocation(invocation);
-      this.#assertVoiceJoinable(target.guildId);
-
-      const previousVoice = this.#getVoice(target.guildId);
-      const voice = await this.#moveVoice(target);
-      if (!previousVoice && this.#getVoice(target.guildId) === voice) ownedVoice = voice;
+      // Old terminal effects finish before a new queue may borrow or reset this backend.
+      await Promise.all([...(this.#cleanup.get(queue.guildId) ?? [])]);
       this.#assertInvocation(invocation);
-      queue.attachVoice(voice);
-      this.#assertReady();
-      this.#assertInvocation(invocation);
-
-      const currentItemId = queue.state.current?.id;
-      const items = await queue.enqueue(media, {
-        position: options.position,
-        metadata: options.metadata,
-        signal: options.signal,
-      });
-      this.#assertReady();
-      this.#assertInvocation(invocation);
-      committed ||= this.#queues.get(target.guildId) === queue;
-      if (options.skip && currentItemId !== undefined && queue.state.current?.id === currentItemId) {
-        await queue.skip();
-        this.#assertReady();
+      if (target) {
+        this.#assertVoiceJoinable(queue.guildId);
+        const previous = this.#getVoice(queue.guildId);
+        const voice = await this.#moveVoice(target);
+        if (!previous && this.#getVoice(queue.guildId) === voice) this.#unadoptedVoices.set(queue.guildId, voice);
         this.#assertInvocation(invocation);
+        queue.attachVoice(voice);
       }
+      const items = await queue.insert(media, options);
+      this.#unadoptedVoices.delete(queue.guildId);
       return Object.freeze({ queue: queue.facade, items });
     } catch (error: unknown) {
-      if (!committed && ownsQueue) await this.#rollback(target.guildId, queue, ownedVoice);
+      const superseded = queue.terminal;
+      const cleanupErrors: Error[] = [];
+      invocation.release();
+      if (queue.empty && this.#queues.get(queue.guildId) === queue) {
+        try {
+          await queue.destroy({ kind: "rollback" });
+        } catch (cleanup: unknown) {
+          cleanupErrors.push(cleanup instanceof Error ? cleanup : new Error("Queue cleanup failed"));
+        }
+      }
+      const ownedVoice = this.#unadoptedVoices.get(queue.guildId);
+      if (ownedVoice && this.#getVoice(queue.guildId) === ownedVoice && !this.#queues.has(queue.guildId)) {
+        this.#unadoptedVoices.delete(queue.guildId);
+        try {
+          await this.#releaseOwnedVoice(ownedVoice);
+        } catch (cleanup: unknown) {
+          cleanupErrors.push(cleanup instanceof Error ? cleanup : new Error("Voice cleanup failed"));
+        }
+      }
+      if (cleanupErrors.length > 0)
+        throw new DisTubeError(
+          error instanceof DisTubeError ? error.code : "QUEUE_FAILED",
+          "Play failed and cleanup failed",
+          { cause: new AggregateError([error, ...cleanupErrors], "Play and cleanup failures") },
+        );
+      if (superseded) throw new DisTubeError("INVALID_STATE", "Queue operation was superseded");
       throw error;
     }
   }
 
-  /** Makes a queue visible only when GuildQueue has committed its first insertion. */
-  #createProvisional(target: VoiceTarget): GuildQueueImpl {
-    let queue!: GuildQueueImpl;
-    queue = new GuildQueueImpl(
-      { queueId: randomUUID(), guildId: target.guildId },
+  stop(queue: GuildQueueImpl): Promise<void> {
+    const existing = this.#stops.get(queue);
+    if (existing) return existing;
+    const work = [...this.#inFlight]
+      .filter(invocation => invocation.queue === queue)
+      .map(invocation => invocation.completion);
+    const cleanup = queue.destroy();
+    const completion = Promise.allSettled([cleanup, ...work]).then(results => {
+      const terminal = results[0];
+      if (terminal?.status === "rejected") throw terminal.reason;
+    });
+    this.#stops.set(queue, completion);
+    return completion;
+  }
+
+  #createQueue(guildId: string): GuildQueueImpl {
+    const queue = new GuildQueueImpl(
+      { queueId: randomUUID(), guildId },
       this.#sources,
       this.#events,
-      completion => this.#unregister(target.guildId, queue, completion),
-      () => this.#promote(target.guildId, queue),
+      completion => this.#unregister(guildId, queue, completion),
+      (input, options) => this.enqueue(queue, input, options),
+      () => this.stop(queue),
     );
-    this.#provisional.set(target.guildId, queue);
+    const voice = this.#getVoice(guildId);
+    if (voice) queue.attachVoice(voice);
+    this.#queues.set(guildId, queue);
     return queue;
   }
 
-  /** Publishes queue creation after the first insertion's QueueState commit and before its item event. */
-  #promote(guildId: string, queue: GuildQueueImpl): void {
-    this.#assertReady();
-    if (this.#provisional.get(guildId) !== queue) {
-      throw new DisTubeError(ErrorCode.QUEUE_FAILED, "Queue operation was superseded");
-    }
-    this.#provisional.delete(guildId);
-    this.#queues.set(guildId, queue);
-    this.#events.emit("queue.created", Object.freeze({ guildId, queue: queue.facade, timestamp: Date.now() }));
-  }
-
-  /** Rolls back only a still-provisional queue and the Voice created for that same invocation. */
-  async #rollback(guildId: string, queue: GuildQueueImpl, ownedVoice: QueueVoice | undefined): Promise<void> {
-    if (this.#provisional.get(guildId) === queue) {
-      try {
-        await queue.destroy({ kind: "rollback" });
-      } catch (error: unknown) {
-        this.#reportRollbackFailure(guildId, "queue", error);
-      }
-    }
-    if (
-      ownedVoice &&
-      this.#getVoice(guildId) === ownedVoice &&
-      !this.#queues.has(guildId) &&
-      !this.#provisional.has(guildId)
-    ) {
-      try {
-        await this.#releaseOwnedVoice(ownedVoice);
-      } catch (error: unknown) {
-        this.#reportRollbackFailure(guildId, "voice", error);
-      }
-    }
-  }
-
-  /** Frees a live or provisional queue and records its cleanup before it begins settling. */
+  /** Frees a registered queue and records its cleanup before it begins settling. */
   #unregister(guildId: string, queue: GuildQueueImpl, completion: Promise<void>): void {
     if (this.#queues.get(guildId) === queue) this.#queues.delete(guildId);
-    if (this.#provisional.get(guildId) === queue) this.#provisional.delete(guildId);
     const completions = this.#cleanup.get(guildId) ?? new Set<Promise<void>>();
     completions.add(completion);
     this.#cleanup.set(guildId, completions);
@@ -322,29 +330,18 @@ export class QueueManager {
   }
 
   #currentQueues(guildId: string): readonly GuildQueueImpl[] {
-    return [
-      ...new Set([this.#queues.get(guildId), this.#provisional.get(guildId)].filter(Boolean)),
-    ] as GuildQueueImpl[];
-  }
-
-  /** One invocation whose cancellation the caller and a terminal deletion can both request. */
-  #invocation(guildId: string, signal: AbortSignal | undefined): PlayInvocation {
-    const controller = new AbortController();
-    return {
-      guildId,
-      controller,
-      signal: signal ? AbortSignal.any([controller.signal, signal]) : controller.signal,
-    };
+    const queue = this.#queues.get(guildId);
+    return queue ? [queue] : [];
   }
 
   #abortGuildPlay(guildId: string): void {
-    const error = new DisTubeError(ErrorCode.QUEUE_FAILED, "Play operation was superseded by queue deletion");
     for (const invocation of this.#inFlight) {
-      if (invocation.guildId === guildId) invocation.controller.abort(error);
+      if (invocation.guildId === guildId) invocation.queue.fenceReservations();
     }
   }
 
   #assertInvocation(invocation: PlayInvocation): void {
+    if (invocation.queue.terminal) throw new DisTubeError("INVALID_STATE", "Queue operation was superseded");
     if (!invocation.signal.aborted) return;
     throw abortFailure(invocation.signal.reason);
   }
@@ -354,17 +351,7 @@ export class QueueManager {
   }
 
   #shutdownError(): DisTubeError {
-    return new DisTubeError(ErrorCode.QUEUE_FAILED, "DisTube is shutting down");
-  }
-
-  #reportRollbackFailure(guildId: string, owner: "queue" | "voice", error: unknown): void {
-    this.#events.report({
-      severity: "error",
-      stage: `play.rollback.${owner}`,
-      message: `Failed to roll back a rejected play's ${owner}`,
-      error: error instanceof Error ? error : new Error(String(error)),
-      detail: Object.freeze({ guildId }),
-    });
+    return new DisTubeError("INVALID_STATE", "DisTube is disposed");
   }
 }
 
@@ -372,25 +359,24 @@ function sameQueues(left: readonly GuildQueueImpl[], right: readonly GuildQueueI
   return left.length === right.length && left.every((queue, index) => queue === right[index]);
 }
 
-function toVoiceTarget(target: QueuePlayTarget): VoiceTarget {
-  if (!target || typeof target.guildId !== "string" || target.guildId.length === 0) {
-    throw new DisTubeError(ErrorCode.INVALID_ARGUMENT, ErrorReason.Argument, "guildId must be a non-empty string");
+function validateInput(input: ResolvableInput, options: QueuePlayOptions): void {
+  if (
+    !(input instanceof Song) &&
+    !(input instanceof Playlist) &&
+    (typeof input !== "string" || input.trim().length === 0)
+  ) {
+    throw new DisTubeError("INVALID_ARGUMENT", "Input must be a Song, Playlist, URL, or non-empty query");
   }
-  if (typeof target.voiceChannelId !== "string" || target.voiceChannelId.length === 0) {
-    throw new DisTubeError(
-      ErrorCode.INVALID_ARGUMENT,
-      ErrorReason.Argument,
-      "voiceChannelId must be a non-empty string",
-    );
+  if (
+    !options ||
+    typeof options !== "object" ||
+    Array.isArray(options) ||
+    Object.keys(options).some(key => !["metadata", "signal"].includes(key))
+  ) {
+    throw new DisTubeError("INVALID_ARGUMENT", "Invalid play options");
   }
-  return Object.freeze({ guildId: target.guildId, channelId: target.voiceChannelId });
-}
-
-function validatePlayOptions(options: QueuePlayOptions): void {
-  if (!options || typeof options !== "object") {
-    throw new DisTubeError(ErrorCode.INVALID_ARGUMENT, ErrorReason.Argument, "play options must be an object");
+  if (options.signal !== undefined && !(options.signal instanceof AbortSignal)) {
+    throw new DisTubeError("INVALID_ARGUMENT", "signal must be an AbortSignal");
   }
-  if (options.position !== undefined && (!Number.isInteger(options.position) || options.position < 0)) {
-    throw new DisTubeError(ErrorCode.INVALID_ARGUMENT, ErrorReason.Argument, "position must be a non-negative integer");
-  }
+  if (options.signal?.aborted) throw abortFailure(options.signal.reason);
 }

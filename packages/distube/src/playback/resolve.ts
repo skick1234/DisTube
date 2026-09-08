@@ -1,5 +1,4 @@
 import type { ResolvableInput } from "../contracts";
-import { ErrorReason } from "../enums";
 import { asDisTubeError, DisTubeError, ErrorCode } from "../errors";
 import { Playlist, Song } from "../media";
 import { throwIfAborted } from "./abort";
@@ -34,11 +33,7 @@ export async function resolveInput(
     return input;
   }
   if (typeof input !== "string" || input.trim().length === 0) {
-    throw new DisTubeError(
-      ErrorCode.INVALID_ARGUMENT,
-      ErrorReason.Argument,
-      "input must be a Song, a Playlist, a URL, or a non-empty query",
-    );
+    throw new DisTubeError("INVALID_ARGUMENT", "input must be a Song, a Playlist, a URL, or a non-empty query");
   }
   return isAbsoluteUrl(input) ? resolveUrl(input, sources, signal) : resolveQuery(input, sources, signal);
 }

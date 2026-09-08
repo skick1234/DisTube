@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { type DisTubeError, ErrorCode, Playlist, QueueItem, Song, type SongData } from "../src";
+import { type DisTubeError, Playlist, Song, type SongData } from "../src";
+import { QueueItem } from "../src/media";
 
 const valid: SongData = {
   id: "song",
-  title: "Song",
+  name: "Song",
   url: "https://provider.example/song",
   duration: 60,
   source: "provider",
@@ -12,57 +13,41 @@ const valid: SongData = {
 describe("media value validation", () => {
   it.each([
     ["id", "", "Song id must be a non-empty string"],
-    ["title", "", "Song title must be a non-empty string"],
+    ["name", "", "Song name must be a non-empty string"],
     ["url", "", "Song url must be a non-empty string"],
     ["duration", -1, "Song duration must be a non-negative number"],
     ["duration", Number.NaN, "Song duration must be a non-negative number"],
     ["source", "", "Song source must be a non-empty string"],
   ] as const)("rejects invalid %s", (key, value, message) => {
     expect(() => new Song({ ...valid, [key]: value })).toThrowError(
-      expect.objectContaining<Partial<DisTubeError>>({ code: ErrorCode.INVALID_ARGUMENT, message }),
+      expect.objectContaining<Partial<DisTubeError>>({ code: "INVALID_ARGUMENT", message }),
     );
   });
 
   it("rejects a non-Song QueueItem owner", () => {
     expect(() => new QueueItem({ song: {} as Song })).toThrowError(
       expect.objectContaining<Partial<DisTubeError>>({
-        code: ErrorCode.INVALID_ARGUMENT,
+        code: "INVALID_ARGUMENT",
         message: "QueueItem song must be a Song",
       }),
     );
   });
 
-  it("exposes optional display fields and reads absent ones as undefined", () => {
-    const song = new Song({
-      ...valid,
-      thumbnail: "https://provider.example/art.jpg",
-      uploader: { name: "Channel", url: "https://provider.example/channel" },
-      isLive: true,
-      views: 42,
-    });
-    expect(song).toMatchObject({ thumbnail: "https://provider.example/art.jpg", isLive: true, views: 42 });
-    expect(song.uploader).toEqual({ name: "Channel", url: "https://provider.example/channel" });
-    expect(new Song({ ...valid, uploader: { name: "Channel" } }).uploader).toEqual({ name: "Channel" });
-    expect(new Song(valid)).toMatchObject({ thumbnail: undefined, uploader: undefined, views: undefined });
+  it("accepts optional duration and display fields", () => {
+    const { duration: _, ...withoutDuration } = valid;
+    expect(new Song(withoutDuration).duration).toBeUndefined();
+    const song = new Song({ ...valid, thumbnail: "cover.jpg", artist: "Artist" });
+    expect(song).toMatchObject({ thumbnail: "cover.jpg", artist: "Artist", duration: 60 });
+    expect(Object.isFrozen(song)).toBe(true);
   });
 
-  it.each([
-    ["thumbnail", "", "Song thumbnail must be a non-empty string"],
-    ["uploader", null, "Song uploader must be an object"],
-    ["uploader", { name: "" }, "Song uploader name must be a non-empty string"],
-    ["uploader", { name: "Channel", url: "" }, "Song uploader url must be a non-empty string"],
-    ["isLive", "yes", "Song isLive must be a boolean"],
-    ["views", -1, "Song views must be a non-negative number"],
-  ] as const)("rejects invalid display field %s", (key, value, message) => {
-    expect(() => new Song({ ...valid, [key]: value })).toThrowError(
-      expect.objectContaining<Partial<DisTubeError>>({ code: ErrorCode.INVALID_ARGUMENT, message }),
-    );
+  it.each(["thumbnail", "artist"] as const)("rejects an empty %s", key => {
+    expect(() => new Song({ ...valid, [key]: "" })).toThrowError(expect.objectContaining({ code: "INVALID_ARGUMENT" }));
   });
 
   it("keeps a Playlist ordered and immutable", () => {
     const first = new Song({ ...valid, id: "a" });
     const second = new Song({ ...valid, id: "b" });
-    const metadata = { nested: { value: 1 } };
     const songs = [first, second];
     const playlist = new Playlist({
       id: "list",
@@ -70,20 +55,17 @@ describe("media value validation", () => {
       url: "https://provider.example/list",
       source: "provider",
       songs,
-      metadata,
     });
     songs.push(first);
-    metadata.nested.value = 2;
 
     expect(playlist.songs).toEqual([first, second]);
     expect(() => (playlist.songs as Song[]).push(second)).toThrowError();
-    expect(playlist.metadata).toEqual({ nested: { value: 1 } });
   });
 
   it("rejects malformed Playlist data and accepts an optional thumbnail", () => {
     expect(() => new Playlist(null as never)).toThrowError(
       expect.objectContaining<Partial<DisTubeError>>({
-        code: ErrorCode.INVALID_ARGUMENT,
+        code: "INVALID_ARGUMENT",
         message: "Playlist data must be an object",
       }),
     );
@@ -92,7 +74,7 @@ describe("media value validation", () => {
     for (const songs of [[], [{} as Song]]) {
       expect(() => new Playlist({ ...data, songs })).toThrowError(
         expect.objectContaining<Partial<DisTubeError>>({
-          code: ErrorCode.INVALID_ARGUMENT,
+          code: "INVALID_ARGUMENT",
           message: "Playlist songs must be a non-empty list of Songs",
         }),
       );
@@ -100,23 +82,20 @@ describe("media value validation", () => {
 
     expect(() => new Playlist({ ...data, songs: [new Song(valid)], thumbnail: "" })).toThrowError(
       expect.objectContaining<Partial<DisTubeError>>({
-        code: ErrorCode.INVALID_ARGUMENT,
+        code: "INVALID_ARGUMENT",
         message: "Playlist thumbnail must be a non-empty string",
       }),
     );
     expect(new Playlist({ ...data, songs: [new Song(valid)], thumbnail: "cover.jpg" }).thumbnail).toBe("cover.jpg");
   });
 
-  it("returns defensive Song metadata and date values", () => {
-    const songMetadata = { nested: { value: 1 } };
-    const song = new Song({ ...valid, metadata: songMetadata });
+  it("keeps occurrence dates defensive and generates a new identity each time", () => {
+    const song = new Song(valid);
     const item = new QueueItem({ song });
-    songMetadata.nested.value = 2;
-
-    expect(song.metadata).toEqual({ nested: { value: 1 } });
     const first = item.addedAt;
     first.setFullYear(2000);
     expect(item.addedAt.getFullYear()).not.toBe(2000);
+    expect(new QueueItem({ song }).id).not.toBe(item.id);
   });
 
   it("keeps QueueItem metadata caller-owned while identity stays immutable", () => {
@@ -127,8 +106,12 @@ describe("media value validation", () => {
     requester.id = "changed";
     expect(item.metadata).toBe(requester);
 
-    item.metadata = "replaced";
-    expect(item.metadata).toBe("replaced");
+    expect(() => {
+      // @ts-expect-error The binding is readonly; the caller still owns the object.
+      item.metadata = "replaced";
+    }).toThrowError();
+    expect(item.metadata).toBe(requester);
+    expect(Object.isFrozen(requester)).toBe(false);
     expect(new QueueItem({ song }).metadata).toBeUndefined();
     expect(() => {
       (item as { id: string }).id = "forged";

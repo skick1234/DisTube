@@ -178,6 +178,10 @@ if (import.meta.main) {
       "dir",
     );
     await symlink(resolve(workspace, "node_modules/typescript"), resolve(smoke, "node_modules/typescript"), "dir");
+    const typeOnlyExports = packedTypeOnlyExports(
+      await run(["tar", "-xOf", distubeArchive, "package/dist/index.d.mts"], workspace),
+    );
+    if (typeOnlyExports.length === 0) throw new Error("distube packed declaration has no type-only exports");
     await writeFile(
       resolve(smoke, "smoke.mjs"),
       `import * as core from "distube";
@@ -186,21 +190,19 @@ import { OceanicAdapter } from "@distube/oceanic";
 import { ErisAdapter } from "@distube/eris";
 
 // The values the reshaped surface publishes, and the commands each published class carries.
-const restored = ["DisTube", "DisTubeError", "ErrorCode", "Events", "Filters", "Playlist", "QueueItem", "QueueStatus",
-  "RepeatMode", "Song", "asDisTubeError"];
+const restored = ["DisTube", "DisTubeError", "Playlist", "Song"];
+for (const name of Object.keys(core)) {
+  if (!restored.includes(name)) throw new Error(\`unexpected runtime export \${name}\`);
+}
 const commands = {
-  DisTube: ["play", "resolve", "getQueue", "shutdown"],
+  DisTube: ["play", "resolve", "getQueue", "on", "dispose"],
 };
 
 for (const name of restored) {
   if (!core[name]) throw new Error(\`missing public export \${name}\`);
 }
-const typeOnlyExports = packedTypeOnlyExports(
-  await run(["tar", "-xOf", distubeArchive, "package/dist/index.d.mts"], workspace),
-);
-if (typeOnlyExports.length === 0) throw new Error("distube: packed declaration has no type-only export inventory");
-for (const name of typeOnlyExports) {
-  if (name in core) throw new Error(\`\${name} must be type-only\`);
+for (const name of ${JSON.stringify(typeOnlyExports)}) {
+  if (name in core) throw new Error(\`type-only export \${name} has a runtime value\`);
 }
 for (const [owner, members] of Object.entries(commands)) {
   for (const member of members) {
@@ -210,8 +212,6 @@ for (const [owner, members] of Object.entries(commands)) {
 for (const removed of ["createQueue", "destroyQueue"]) {
   if (removed in core.DisTube.prototype) throw new Error(\`DisTube still exposes removed \${removed}\`);
 }
-if (core.Events.QueueDeleted !== "queue.deleted") throw new Error("queue.deleted event was not restored");
-if (Object.values(core.Events).includes("queue.destroyed")) throw new Error("queue.destroyed is still published");
 for (const Adapter of [DiscordJSAdapter, OceanicAdapter, ErisAdapter]) {
   if (typeof Adapter.prototype.createVoiceSession !== "function") throw new Error(\`\${Adapter.name} creates no VoiceSession\`);
   if ("createPlayer" in Adapter.prototype) throw new Error(\`\${Adapter.name} still exposes createPlayer\`);
@@ -249,7 +249,7 @@ for (const adapter of adapters) {
     await run(["node", "adapter-surface.mjs"], smoke);
     await writeFile(
       resolve(smoke, "adapter-contract.ts"),
-      `import type { Adapter, VoiceSession } from "distube";
+      `import type { Adapter, VoiceSession } from "distube/integrations";
 import type { Client as DiscordClient } from "discord.js";
 import type { Client as OceanicClient } from "oceanic.js";
 import type { Client as ErisClient } from "eris";

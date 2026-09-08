@@ -7,15 +7,8 @@ import {
   playbackRequest,
   spawnFfmpeg,
 } from "@distube/voice-core/core";
-import {
-  DisTubeError,
-  ErrorCode,
-  ErrorReason,
-  type FilterEntry,
-  type PlaybackRequest,
-  type Player,
-  type PlayerEvent,
-} from "distube";
+import { DisTubeError } from "distube";
+import type { FilterEntry, PlaybackRequest, Player, PlayerEvent } from "distube/integrations";
 import type { VoiceConnection, VoiceResourceOptions } from "eris";
 import { ensureErisErrorSink, type NativeCurrent, observeStopPlaying } from "./native-playback";
 
@@ -139,13 +132,13 @@ export class ErisVoicePlayer implements Player {
 
   async seek(_seconds: number): Promise<void> {
     this.#assertOpen();
-    throw new DisTubeError(ErrorCode.UNSUPPORTED, "The default voice engine cannot seek");
+    throw new DisTubeError("UNSUPPORTED", "The default voice engine cannot seek");
   }
 
   async setVolume(percent: number): Promise<void> {
     this.#assertOpen();
     if (typeof percent !== "number" || !Number.isFinite(percent) || percent < 0) {
-      throw new DisTubeError(ErrorCode.INVALID_ARGUMENT, ErrorReason.Argument, "volume must be a non-negative number");
+      throw new DisTubeError("INVALID_ARGUMENT", "volume must be a non-negative number");
     }
     this.#volume = percent;
     // Eris keeps the level on its encoder, so it survives every later track on this connection.

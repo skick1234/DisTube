@@ -1,52 +1,25 @@
 import { describe, expect, it } from "vitest";
-import { Events, Filters, QueueStatus, RepeatMode } from "../src";
+import { DisTubeError, type ErrorCode, type PlaybackStatus, type RepeatMode } from "../src";
 
-// Enum values are frozen public contract (ADR 0048): renaming a value is breaking
-// even when the member name survives, so the closed sets are asserted literally.
-describe("public vocabulary", () => {
-  it("names the ten public events", () => {
-    expect(Object.values(Events)).toEqual([
-      "queue.created",
-      "queue.item.added",
-      "queue.playlist.added",
-      "queue.item.started",
-      "queue.item.finished",
-      "queue.item.failed",
-      "queue.finished",
-      "queue.autoplay.failed",
-      "queue.deleted",
-      "voice.disconnected",
-    ]);
+describe("public literal vocabulary", () => {
+  it("accepts literal codes without runtime enum members", () => {
+    const codes = [
+      "INVALID_ARGUMENT",
+      "INVALID_STATE",
+      "ABORTED",
+      "SOURCE_FAILED",
+      "VOICE_FAILED",
+      "PLUGIN_FAILED",
+      "QUEUE_FAILED",
+      "UNSUPPORTED",
+    ] satisfies ErrorCode[];
+    for (const code of codes) expect(new DisTubeError(code, "Operation failed").code).toBe(code);
   });
 
-  it("names the closed repeat and status sets", () => {
-    expect(Object.values(RepeatMode)).toEqual(["off", "song", "queue"]);
-    expect(Object.values(QueueStatus)).toEqual(["idle", "playing", "paused"]);
-  });
-
-  it("names the conventional filters every engine must define", () => {
-    expect(Object.values(Filters)).toEqual([
-      "3d",
-      "bassboost",
-      "earwax",
-      "echo",
-      "flanger",
-      "gate",
-      "haas",
-      "karaoke",
-      "mcompand",
-      "nightcore",
-      "phaser",
-      "reverse",
-      "surround",
-      "tremolo",
-      "vaporwave",
-    ]);
-  });
-
-  it("keeps members assignable to their literal strings", () => {
-    const started: "queue.item.started" = Events.QueueItemStarted;
-    const paused: "paused" = QueueStatus.Paused;
-    expect([started, paused]).toEqual(["queue.item.started", "paused"]);
+  it("accepts literal repeat modes and queue statuses", () => {
+    const modes = ["off", "song", "queue"] satisfies RepeatMode[];
+    const statuses = ["idle", "playing", "paused"] satisfies PlaybackStatus[];
+    expect(modes).toContain("song");
+    expect(statuses).toContain("paused");
   });
 });

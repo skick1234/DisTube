@@ -1,56 +1,63 @@
 # Frequently asked questions
 
-## Where is `play()`?
+## How do I start playback?
 
-`distube.play({ guildId, voiceChannelId }, input, options?)` is the single creation-capable insertion entry point: it
-upserts the guild's queue, joins or reuses the guild's Voice, and inserts the resolved media.
+Call `distube.play(voiceChannel, input, options?)` with the native channel object you already have. It registers and
+reserves the guild queue immediately, then resolves media, joins or reuses voice and inserts. The result contains
+`queue` and inserted `items`. A prior guild selector or explicit join is unnecessary.
+
+## Why does lookup return an empty queue before play resolves?
+
+Registration is synchronous after shallow validation. The queue is idle with no current or upcoming items until
+insertion commits. `queue.created` does not mean the request succeeded. If failed initial work leaves no playback or
+other pending insertion, the queue is deleted without `queue.finished`. Stop prevents that request's late result
+from entering a replacement queue.
 
 ## How do I search?
 
-Pass the query straight to `play` or `queue.enqueue`. Core searches your configured plugins in constructor order and
-enqueues the first candidate the first answering plugin ranked. For a candidate list you present to the user before
-committing to one, retain the typed plugin instance and call its own `search(query, options?)`, which takes a `limit`
-and a zero-based `offset` the plugin documents bounds for.
+Pass a query to `play`, `queue.enqueue` or `distube.resolve`. Core searches configured `sources` in constructor order
+and uses the first answering source's candidate ranking. To present choices to users, retain the source instance and
+call its `search(query, { limit, offset })`; each provider documents its bounds.
 
-## Why is my `spotify:track:…` URI treated as a query?
+## Why is a provider URI treated as a query?
 
-Because core only calls `resolve` for absolute `http:` and `https:` URLs. Any other scheme is indistinguishable from a
-typed query like `artist: song title`, so it goes to search. Use the provider's HTTPS URL, or a plugin that accepts its
-URI scheme in `search`.
+Only absolute HTTP(S) URLs use URL resolution. Other strings, including `spotify:track:…`, use search. Use the
+provider HTTPS URL or a source that accepts its URI scheme in search. Declined URLs are not retried as queries.
 
 ## How do I move voice channels?
 
-`distube.voices.get(guildId)` returns the guild's Voice; ask it to join the new channel. The queue is guild-keyed and
-unaffected by channel moves.
+Get `distube.voices.get(guildId)` and call `voice.move(channel)`. The target must belong to the same guild and pass
+adapter voice-capability validation. Movement retains queue and voice identity. You can independently join through
+`distube.voices.join(channel)` without creating a queue.
 
-## Where are filters, repeat, autoplay, and volume?
+## Which settings survive queue deletion?
 
-On the Voice, reached with `distube.voices.get(guildId)`: `voice.filters` (`apply`/`set`/`remove`/`clear`, rendered by
-the playback engine), `voice.setRepeatMode` with `RepeatMode`, `voice.setAutoplay`, and `voice.setVolume`. All four are
-guild presence state: they outlive every queue and reset only when the Voice leaves.
+`DisTubeVoice.settings` contains volume, repeat, autoplay and filters. Change them with `setVolume`, `setRepeat`,
+`setAutoplay` and `setFilters`. Volume, repeat and autoplay persist while voice remains connected. Successful queue
+deletion clears selected filters and backend rendering. A failed reset reports cleanup failure and retains last
+acknowledged filter state. Leaving voice destroys all settings; the next voice starts with defaults.
 
 ## What deletes a queue?
 
-`queue.stop()`, `distube.voices.leave(guildId)`, shutdown, exhaustion, or a terminal platform Voice disconnect deletes
-the queue. Exhaustion publishes `Events.QueueFinished` first. A terminal platform disconnect with an active item
-publishes `Events.QueueItemFailed`, then `Events.QueueDeleted`, then `Events.VoiceDisconnected`. The guild's Voice
-survives queue stop and exhaustion, but not `leave`, a platform disconnect, or shutdown.
+Stop, exhaustion, failed empty initial acquisition, voice leave, terminal connection loss and client disposal.
+Exhaustion publishes `queue.finished` first. A terminal disconnect with an active item publishes
+`queue.item.failed`, `queue.deleted`, then `voice.disconnected`. Stop and exhaustion keep voice connected.
+Pending insertion reservations prevent premature exhaustion.
 
-## How does previous-track history work?
+## How do I replay something from history?
 
-`distube.voices.get(guildId)?.previousSongs` is the history API. It keeps at most 100 finished QueueItem occurrences
-on the guild's Voice, so the history survives queue deletion while that Voice remains connected. A live queue can call
-`queue.previous()` to replay the newest history entry. It inserts a fresh occurrence for the selected Song, with a new
-item ID and timestamp while preserving the Song and metadata references. History never revives an old QueueItem identity.
+Keep application history from committed events and enqueue its retained Song with the desired metadata reference.
+Every insertion creates a fresh occurrence ID and timestamp. The library does not expose a history or previous-track
+API. Keep other application guild state in your own storage as well.
 
 ## Which package handles voice?
 
-The selected platform Adapter creates voice sessions and supplies the playback engine that creates Players. There is
-no separate voice plugin.
-
-Official choices are `@distube/discordjs`, `@distube/oceanic`, and `@distube/eris`. Eris 0.18 needs an Opus
-implementation for voice, and seek rejects with `UNSUPPORTED` because its supported voice API cannot seek a resource.
+The Adapter creates voice sessions and supplies the default engine. Official adapters are `@distube/discordjs`,
+`@distube/oceanic` and `@distube/eris`. An explicit `engine` option selects a remote engine such as Lavalink. A
+source/engine instance supplied in both roles initializes and disposes once. No separate voice plugin is required.
+Eris 0.18 needs an Opus implementation; seek rejects `UNSUPPORTED` because its native API cannot seek a resource.
 
 ## Does DisTube send Discord replies?
 
-No. Core and adapters publish state/events; application code sends user-facing messages.
+No. Application code sends messages using typed dotted events and handles `DisTubeError` codes. `on` returns an
+unsubscribe function. Call `await distube.dispose()` when the bot stops.

@@ -1,19 +1,23 @@
 {
   "schemaVersion": 2,
-  "configuredBunVersion": "1.4.0",
-  "bunVersion": "1.4.0",
-  "bunRevision": "1.4.0+34cbb9a40",
-  "inputFingerprint": "bbf3f46ef91f70b4bd398c560cb7fe298b53a911687ff9d5d477de75b5aff8e6",
+  "configuredBunVersion": "1.4.2",
+  "bunVersion": "1.4.2",
+  "bunRevision": "1.4.2+744846f84",
+  "inputFingerprint": "51d874e7ef71cc28e05867586b11f882bc893b97199c4b266ebee882013ec47d",
   "outputs": {
-    "packages/distube/dist/index.d.mts": "c4a82dea635d8f78631ace47307fc36eba746691005b56bc33d4777c7e3a78fe",
-    "packages/distube/dist/index.d.mts.map": "d5be7393e7d80465e5511cefd5d799aa42c1cb09690e3260656b678d5f69cfba",
-    "packages/distube/dist/index.mjs": "f1e552f35b51c7b10fa5dc4dcc4059020382e87b773dd518e89477fcb3c4458b",
-    "packages/distube/dist/index.mjs.map": "2f13ecf945d12f28ad67a800c9ec642acec590152030def12e313fa79f6280a2",
-    "packages/discordjs/dist/index.d.mts": "b4b265bfb258aad347eeb37f6e41b131b3741981d62f9de3b136a5a5b6a2b551",
-    "packages/discordjs/dist/index.mjs": "c31b543c90cee76c87ddd51792eb7b71ab651ead3992574e2ffea42953bb4164",
-    "packages/oceanic/dist/index.d.mts": "1fed45e9d40d7686e1472d93830c8ee67fd9cfbd980ab49340b1acd2e7aceefb",
-    "packages/oceanic/dist/index.mjs": "3f0b5a6ff02590064ad276710eb27c37fda18e2af17a5adafb463719bc2de3ac",
-    "packages/eris/dist/index.d.mts": "35297a49f90be66890c873749e3745c4439aa2e1b9fa640e639e3f9cc4f3216b",
-    "packages/eris/dist/index.mjs": "cfb11fa62bec3f88679362f11b880bc9d616a3cf586d47def2d6cd4c3e36ebef"
+    "packages/distube/dist/contracts-fsLbr7EH.d.mts": "60f76bd2aa62697cc251e074cda94605c7378c6d505351ff1e093841a5d250f0",
+    "packages/distube/dist/contracts-fsLbr7EH.d.mts.map": "5286bad6f6031d07226549bcb28b37b5e15134396e05bb0def24ec8e42ed19e7",
+    "packages/distube/dist/index.d.mts": "089b7e7534b540b7c09568543005e385fa7a72d5095330d8989daaedb458035a",
+    "packages/distube/dist/index.d.mts.map": "8fe11b75fa40622c8ef4d342f09d6940fd6e6884052aeb8167f77bc201797ab0",
+    "packages/distube/dist/index.mjs": "df8b650ee5ae725a89ee79b0d436bca916470501b18c697c4a9fed2d2110210e",
+    "packages/distube/dist/index.mjs.map": "e793d53842ae75c68765b91bd90073fb9c1d6def425e009a6dd9b0aac108577c",
+    "packages/distube/dist/integrations.d.mts": "ecd41e6c619bd066024c88b2ea65da20a9e3baf83fcc504215e50369272378f1",
+    "packages/distube/dist/integrations.mjs": "c4a80933b37efae05bcd3a08f4179ff4f8ebde0708e3d3216ca3447ad61d46cb",
+    "packages/discordjs/dist/index.d.mts": "6806a06e22ee09106febc7a80cde922311e32a93a6206c75b28bcf4e78a2d10e",
+    "packages/discordjs/dist/index.mjs": "2a134ae77512713ecadf9a22e9dd46a5812f4ae038578900cd458a2ba76219e9",
+    "packages/oceanic/dist/index.d.mts": "a83001ff42f6da903ec4408b8af8579ad53a04e99db813c5ba2fa43b9a6f9d34",
+    "packages/oceanic/dist/index.mjs": "505d3f53ed0f8cafec8b6019d0195c7b7b651f998062b5c9179c4d64f8f51538",
+    "packages/eris/dist/index.d.mts": "01c406e224f605ea1f8184d3f0541af9a7603d69ba55f3b3a3d0485253c9c2aa",
+    "packages/eris/dist/index.mjs": "1c3bd236bf336f2628ddeb6ca32cb2732aa29bac70646ce6a96bd19b296d6fa0"
   }
 }

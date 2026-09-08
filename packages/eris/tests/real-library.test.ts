@@ -4,7 +4,7 @@ import {
   ERIS_OPUS_MODULES,
   FilterRegistry,
 } from "@distube/voice-core/core";
-import { ErrorCode, type VoiceSessionEvent } from "distube";
+import type { VoiceSessionEvent } from "distube/integrations";
 import { Client, VoiceConnection } from "eris";
 import { afterAll, describe, expect, it } from "vitest";
 import { type AudioOrigin, serveAudio } from "../../voice-core/tests/support/real";
@@ -97,7 +97,7 @@ describe("real Eris", () => {
   it("rejects seek with UNSUPPORTED, because the real Eris voice API cannot seek", async () => {
     const player = new ErisVoicePlayer(realConnection(), new FilterRegistry());
     try {
-      await expect(player.seek(10)).rejects.toMatchObject({ code: ErrorCode.UNSUPPORTED });
+      await expect(player.seek(10)).rejects.toMatchObject({ code: "UNSUPPORTED" });
     } finally {
       await player.release();
     }
@@ -117,7 +117,7 @@ describe("real Eris", () => {
     );
     if (!failure) return;
 
-    expect(failure.code).toBe(ErrorCode.VOICE_FAILED);
+    expect(failure.code).toBe("VOICE_FAILED");
     expect(failure.message).toContain("@distube/eris");
     const named = [...ERIS_ENCRYPTION_MODULES, ...ERIS_OPUS_MODULES];
     expect(named.some(module => failure.message?.includes(module))).toBe(true);

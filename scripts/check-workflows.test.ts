@@ -36,7 +36,7 @@ jobs:
           python3 DisTube/scripts/extract-release-candidate.py "candidate-\${AUTHORIZED_RELEASE_CANDIDATE_ID}.tar.gz" .candidate-bundle
           test -f .candidate-bundle/.artifacts/release-candidate/manifest.json
       - uses: oven-sh/setup-bun@v2
-        with: { bun-version: 1.4.0 }
+        with: { bun-version: 1.4.2 }
       - uses: actions/setup-node@v4
         with: { node-version: 22.12.0, registry-url: "https://registry.npmjs.org" }
       - run: bun run check:runtime
@@ -55,21 +55,21 @@ jobs:
 
 describe("workflow parity", () => {
   test("rejects actual Bun runtime drift", () => {
-    expect(inspectRuntimeVersion("1.4.0", "1.3.14")).toEqual(["expected Bun 1.4.0, observed 1.3.14"]);
+    expect(inspectRuntimeVersion("1.4.2", "1.3.14")).toEqual(["expected Bun 1.4.2, observed 1.3.14"]);
   });
 
   test("rejects a canary revision that reports the pinned release version", () => {
-    expect(inspectRuntimeVersion("1.4.0", "1.4.0", "1.4.0-canary.1+32e87032b")).toEqual([
-      "expected stable Bun 1.4.0, observed canary revision 1.4.0-canary.1+32e87032b",
+    expect(inspectRuntimeVersion("1.4.2", "1.4.2", "1.4.2-canary.1+32e87032b")).toEqual([
+      "expected stable Bun 1.4.2, observed canary revision 1.4.2-canary.1+32e87032b",
     ]);
   });
 
   test("accepts a stable Bun revision", () => {
-    expect(inspectRuntimeVersion("1.4.0", "1.4.0", "1.4.0+32e87032b")).toEqual([]);
+    expect(inspectRuntimeVersion("1.4.2", "1.4.2", "1.4.2+32e87032b")).toEqual([]);
   });
 
   test("accepts candidate acquisition and direct archive publication", () => {
-    expect(inspectWorkflow(validPublishWorkflow, "1.4.0", publishPolicy)).toEqual([]);
+    expect(inspectWorkflow(validPublishWorkflow, "1.4.2", publishPolicy)).toEqual([]);
   });
 
   test("rejects a publish step with no registry credentials", () => {
@@ -77,7 +77,7 @@ describe("workflow parity", () => {
       "      - env: { NODE_AUTH_TOKEN: token }\n        run: bun ./scripts/check-publish-authorization.ts --candidate-dir=../.candidate-bundle/.artifacts/release-candidate --package=distube",
       "      - run: bun ./scripts/check-publish-authorization.ts --candidate-dir=../.candidate-bundle/.artifacts/release-candidate --package=distube",
     );
-    expect(inspectWorkflow(workflow, "1.4.0", publishPolicy)).toContain(
+    expect(inspectWorkflow(workflow, "1.4.2", publishPolicy)).toContain(
       "publish.yml: distube publish step must set NODE_AUTH_TOKEN",
     );
   });
@@ -87,7 +87,7 @@ describe("workflow parity", () => {
       '      - uses: actions/setup-node@v4\n        with: { node-version: 22.12.0, registry-url: "https://registry.npmjs.org" }\n',
       "",
     );
-    expect(inspectWorkflow(workflow, "1.4.0", publishPolicy)).toContain(
+    expect(inspectWorkflow(workflow, "1.4.2", publishPolicy)).toContain(
       "publish.yml: distube publish must follow a setup-node step with registry-url",
     );
   });
@@ -97,14 +97,14 @@ describe("workflow parity", () => {
       `npm publish ${archive("distube-eris")} --provenance --access public`,
       `npm publish ${archive("distube-eris")} --provenance`,
     );
-    expect(inspectWorkflow(workflow, "1.4.0", publishPolicy)).toContain(
+    expect(inspectWorkflow(workflow, "1.4.2", publishPolicy)).toContain(
       "publish.yml: scoped package @distube/eris must publish with --access public",
     );
   });
 
   test("rejects a missing exact candidate asset acquisition", () => {
     const workflow = validPublishWorkflow.replace(candidateAsset, "candidate.tgz");
-    expect(inspectWorkflow(workflow, "1.4.0", publishPolicy)).toContain(
+    expect(inspectWorkflow(workflow, "1.4.2", publishPolicy)).toContain(
       "publish.yml: release download must select the exact authorized candidate asset",
     );
   });
@@ -114,14 +114,14 @@ describe("workflow parity", () => {
       `python3 DisTube/scripts/extract-release-candidate.py "${candidateAsset}" .candidate-bundle`,
       `tar -xzf "${candidateAsset}" -C .`,
     );
-    const errors = inspectWorkflow(workflow, "1.4.0", publishPolicy);
+    const errors = inspectWorkflow(workflow, "1.4.2", publishPolicy);
     expect(errors).toContain("publish.yml: candidate asset must use validated extraction into .candidate-bundle");
     expect(errors).toContain("publish.yml: candidate asset must not use direct tar extraction");
   });
 
   test("rejects a wrong Bun pin", () => {
-    expect(inspectWorkflow(validPublishWorkflow.replace("1.4.0", "1.3.14"), "1.4.0", publishPolicy)).toContain(
-      "publish.yml: expected Bun 1.4.0",
+    expect(inspectWorkflow(validPublishWorkflow.replace("1.4.2", "1.3.14"), "1.4.2", publishPolicy)).toContain(
+      "publish.yml: expected Bun 1.4.2",
     );
   });
 
@@ -135,7 +135,7 @@ describe("workflow parity", () => {
 
   test("rejects publication before verification", () => {
     const workflow = validPublishWorkflow.replace("      - run: bun run verify\n", "");
-    expect(inspectWorkflow(workflow, "1.4.0", publishPolicy)).toContain(
+    expect(inspectWorkflow(workflow, "1.4.2", publishPolicy)).toContain(
       `publish.yml: bun run verify must finish before registry mutation npm publish ${archive("distube")} --provenance`,
     );
   });
@@ -145,7 +145,7 @@ describe("workflow parity", () => {
     const workflow = validPublishWorkflow
       .replace("      - run: bun run verify\n", "")
       .replace(firstPublish, `${firstPublish}      - run: bun run verify\n`);
-    expect(inspectWorkflow(workflow, "1.4.0", publishPolicy)).toContain(
+    expect(inspectWorkflow(workflow, "1.4.2", publishPolicy)).toContain(
       `publish.yml: bun run verify must finish before registry mutation npm publish ${archive("distube")} --provenance`,
     );
   });
@@ -155,7 +155,7 @@ describe("workflow parity", () => {
       `--package=distube --archive=${archive("distube")} && npm publish`,
       `--package=distube --archive=${archive("distube")} && bun run check && npm publish`,
     );
-    expect(inspectWorkflow(workflow, "1.4.0", publishPolicy)).toContain(
+    expect(inspectWorkflow(workflow, "1.4.2", publishPolicy)).toContain(
       "publish.yml: distube authorization must run directly before npm publish",
     );
   });
@@ -165,14 +165,14 @@ describe("workflow parity", () => {
       `npm publish ${archive("distube")} --provenance`,
       `npm publish ${archive("distube")} --provenance; npm deprecate distube@6.0.0 broken`,
     );
-    expect(inspectWorkflow(workflow, "1.4.0", publishPolicy)).toContain(
+    expect(inspectWorkflow(workflow, "1.4.2", publishPolicy)).toContain(
       "publish.yml: forbidden registry mutation npm deprecate distube@6.0.0 broken",
     );
   });
 
   test("rejects a package-directory publication", () => {
     const workflow = validPublishWorkflow.replace(`npm publish ${archive("distube")}`, "npm publish packages/distube");
-    expect(inspectWorkflow(workflow, "1.4.0", publishPolicy)).toContain(
+    expect(inspectWorkflow(workflow, "1.4.2", publishPolicy)).toContain(
       "publish.yml: npm publish must use an exact candidate core archive, found packages/distube",
     );
   });
@@ -197,7 +197,7 @@ describe("workflow parity", () => {
         "      - run: bun run verify\n",
         `      - run: ${mutation}\n      - run: bun run verify\n`,
       );
-      expect(inspectWorkflow(workflow, "1.4.0", publishPolicy)).toContain(
+      expect(inspectWorkflow(workflow, "1.4.2", publishPolicy)).toContain(
         `publish.yml: forbidden registry mutation ${mutation}`,
       );
     }

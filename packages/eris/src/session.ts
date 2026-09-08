@@ -1,5 +1,5 @@
 import { asError, collectCleanupFailures } from "@distube/voice-core/core";
-import type { VoiceGatewayData, VoiceSession, VoiceSessionEvent } from "distube";
+import type { VoiceGatewayData, VoiceSession, VoiceSessionEvent } from "distube/integrations";
 import type { Client, RawPacket, VoiceConnection } from "eris";
 // Reporting stays local: the aggregate names this package.
 import { throwCleanupFailures } from "./cleanup";

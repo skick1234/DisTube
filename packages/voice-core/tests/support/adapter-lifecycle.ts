@@ -1,16 +1,14 @@
-import {
-  type Adapter,
-  DisTube,
-  Events,
-  type PlaybackContext,
-  type PlaybackPreparation,
-  type PluginContext,
-  Song,
-  type SourceOperationOptions,
-  type SourcePlugin,
-  type VoiceSession,
-  type VoiceTarget,
-} from "distube";
+import { DisTube, Song } from "distube";
+import type {
+  Adapter,
+  PlaybackContext,
+  PlaybackPreparation,
+  PluginContext,
+  SourceOperationOptions,
+  SourcePlugin,
+  VoiceSession,
+  VoiceTarget,
+} from "distube/integrations";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { DiscordVoiceEngine } from "../../src/engine";
 import { audioPlayerError, type FakeConnection, latest, native, resetNative, settle } from "./native";
@@ -34,15 +32,15 @@ export function adapterLifecycleSuite(name: string, createBridge: () => AdapterL
       const distube = createDisTube(bridge);
       const finished = vi.fn();
       const failed = vi.fn();
-      distube.on(Events.QueueItemFinished, finished);
-      distube.on(Events.QueueItemFailed, failed);
+      distube.on("queue.item.finished", finished);
+      distube.on("queue.item.failed", failed);
 
       const firstStarted = waitForStart(distube);
-      const first = await distube.play({ guildId: GUILD, voiceChannelId: CHANNEL_A }, song("A"));
+      const first = await distube.play({ guildId: GUILD, id: CHANNEL_A }, song("A"));
       await firstStarted;
       const activeId = first.queue.state.current?.id;
 
-      const second = await distube.play({ guildId: GUILD, voiceChannelId: CHANNEL_B }, song("B"));
+      const second = await distube.play({ guildId: GUILD, id: CHANNEL_B }, song("B"));
 
       expect(second.queue).toBe(first.queue);
       expect(distube.queues.size).toBe(1);
@@ -57,14 +55,14 @@ export function adapterLifecycleSuite(name: string, createBridge: () => AdapterL
       const bridge = createBridge();
       const distube = createDisTube(bridge);
       const started = waitForStart(distube);
-      await distube.play({ guildId: GUILD, voiceChannelId: CHANNEL_A }, song("A"));
+      await distube.play({ guildId: GUILD, id: CHANNEL_A }, song("A"));
       await started;
       const connection = bridge.connection();
       const decoder = latest.child;
       const order: string[] = [];
       const outcomes: string[] = [];
-      distube.on(Events.QueueItemFinished, () => outcomes.push("finished"));
-      distube.on(Events.QueueItemFailed, () => outcomes.push("failed"));
+      distube.on("queue.item.finished", () => outcomes.push("finished"));
+      distube.on("queue.item.failed", () => outcomes.push("failed"));
       connection.subscription.unsubscribe.mockImplementationOnce(() => {
         order.push("unsubscribe");
       });
@@ -105,8 +103,8 @@ export function adapterLifecycleSuite(name: string, createBridge: () => AdapterL
       const started = waitForStart(distube);
       const failed = waitForFailure(distube);
       const finished = vi.fn();
-      distube.on(Events.QueueItemFinished, finished);
-      await distube.play({ guildId: GUILD, voiceChannelId: CHANNEL_A }, song("A"));
+      distube.on("queue.item.finished", finished);
+      await distube.play({ guildId: GUILD, id: CHANNEL_A }, song("A"));
       await started;
 
       latest.child.close(1, null);
@@ -121,9 +119,12 @@ export function adapterLifecycleSuite(name: string, createBridge: () => AdapterL
       const distube = createDisTube(bridge);
       const started = waitForStart(distube);
       const failed = new Promise<Error>(resolve => {
-        distube.once(Events.QueueItemFailed, event => resolve(event.error));
+        const unsubscribe = distube.on("queue.item.failed", event => {
+          unsubscribe();
+          resolve(event.error);
+        });
       });
-      await distube.play({ guildId: GUILD, voiceChannelId: CHANNEL_A }, song("A"));
+      await distube.play({ guildId: GUILD, id: CHANNEL_A }, song("A"));
       await started;
       const resource = latest.resource;
 
@@ -139,7 +140,7 @@ function createDisTube(bridge: AdapterLifecycleBridge): DisTube {
     createVoiceSession: bridge.createVoiceSession,
     engine: new DiscordVoiceEngine(undefined, async () => undefined),
   };
-  return new DisTube({ adapter, plugins: [localSource()] });
+  return new DisTube({ adapter, sources: [localSource()] });
 }
 
 function localSource(): SourcePlugin {
@@ -163,7 +164,7 @@ function localSource(): SourcePlugin {
 function song(id: string): Song {
   return new Song({
     id,
-    title: id,
+    name: id,
     url: `https://provider.example/${id}`,
     duration: 60,
     source: "local",
@@ -171,11 +172,21 @@ function song(id: string): Song {
 }
 
 function waitForStart(distube: DisTube): Promise<void> {
-  return new Promise(resolve => distube.once(Events.QueueItemStarted, () => resolve()));
+  return new Promise(resolve => {
+    const unsubscribe = distube.on("queue.item.started", () => {
+      unsubscribe();
+      resolve();
+    });
+  });
 }
 
 function waitForFailure(distube: DisTube): Promise<void> {
-  return new Promise(resolve => distube.once(Events.QueueItemFailed, () => resolve()));
+  return new Promise(resolve => {
+    const unsubscribe = distube.on("queue.item.failed", () => {
+      unsubscribe();
+      resolve();
+    });
+  });
 }
 
 /** The public error chain must never retain the native AudioResource held by AudioPlayerError. */

@@ -255,12 +255,12 @@ const url = "http://127.0.0.1:" + address.port + "/audio.wav";
 try {
   await start(
     "discordjs",
-    new DiscordJSAdapter({ guilds: { cache: new Map([[guildId, { voiceAdapterCreator: () => ({}) }]]) } }),
+    new DiscordJSAdapter({ user: { id: "bot" }, guilds: { cache: new Map([[guildId, { channels: { cache: new Map([[channelId, { guildId, isVoiceBased: () => true }]]) }, voiceAdapterCreator: () => ({}) }]]) } }),
     url,
   );
   await start(
     "oceanic",
-    new OceanicAdapter({ guilds: new Map([[guildId, { voiceAdapterCreator: () => ({}) }]]) }),
+    new OceanicAdapter({ user: { id: "bot" }, guilds: new Map([[guildId, { channels: new Map([[channelId, { guildID: guildId, type: 2 }]]), voiceAdapterCreator: () => ({}) }]]) }),
     url,
   );
   await start("eris", new ErisAdapter(erisClient()), url);
@@ -325,7 +325,7 @@ function erisClient() {
   const client = Object.assign(new EventEmitter(), {
     user: { id: "bot" },
     connection,
-    channel: { join() {}, guild: { id: guildId } },
+    channel: { id: channelId, type: 2, join() {}, guild: { id: guildId } },
   });
   client.getChannel = () => client.channel;
   client.joinVoiceChannel = async nextChannel => {
@@ -360,7 +360,7 @@ function wav() {
 
 function preflightSmoke(): string {
   return `import { EventEmitter } from "node:events";
-import { ErrorCode } from "distube";
+
 import { DiscordJSAdapter } from "@distube/discordjs";
 import { OceanicAdapter } from "@distube/oceanic";
 import { ErisAdapter } from "@distube/eris";
@@ -372,28 +372,21 @@ const guildId = "guild";
 const channelId = "channel";
 
 const adapters = [
-  new DiscordJSAdapter({ guilds: { cache: new Map([[guildId, { voiceAdapterCreator: () => ({}) }]]) } }),
-  new OceanicAdapter({ guilds: new Map([[guildId, { voiceAdapterCreator: () => ({}) }]]) }),
+  new DiscordJSAdapter({ user: { id: "bot" }, guilds: { cache: new Map([[guildId, { channels: { cache: new Map([[channelId, { guildId, isVoiceBased: () => true }]]) }, voiceAdapterCreator: () => ({}) }]]) } }),
+  new OceanicAdapter({ user: { id: "bot" }, guilds: new Map([[guildId, { channels: new Map([[channelId, { guildID: guildId, type: 2 }]]), voiceAdapterCreator: () => ({}) }]]) }),
   new ErisAdapter(erisClient()),
 ];
 for (const adapter of adapters) await expectPrerequisiteFailure(adapter, capability);
 
 async function expectPrerequisiteFailure(adapter, capability) {
-  const session = await adapter.createVoiceSession({ guildId, channelId });
-  const player = await adapter.engine.createPlayer(session);
   let failure;
   try {
-    await player.play({
-      itemId: "missing-" + capability,
-      resource: { kind: "url", url: "https://stream.example/audio", dispose() {} },
-    });
+    const session = await adapter.createVoiceSession({ guildId, channelId });
+    await session.release();
   } catch (error) {
     failure = error;
-  } finally {
-    await player.release();
-    await session.release();
   }
-  if (!failure || failure.code !== ErrorCode.VOICE_FAILED || !failure.message.includes(capability)) {
+  if (!failure || failure.code !== "VOICE_FAILED" || !failure.message.includes(capability)) {
     throw new Error("expected VOICE_FAILED mentioning " + capability);
   }
 }
@@ -422,7 +415,7 @@ function erisClient() {
   const client = Object.assign(new EventEmitter(), {
     user: { id: "bot" },
     connection,
-    channel: { join() {}, guild: { id: guildId } },
+    channel: { id: channelId, type: 2, join() {}, guild: { id: guildId } },
   });
   client.getChannel = () => client.channel;
   client.joinVoiceChannel = async nextChannel => {

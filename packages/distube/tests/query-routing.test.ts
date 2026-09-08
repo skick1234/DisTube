@@ -1,8 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { ErrorCode } from "../src";
 import { capture, deferred, FakeSource, GUILD, media, mediaUrl, settle, setup, VOICE_CHANNEL } from "./support/harness";
 
-const TARGET = { guildId: GUILD, voiceChannelId: VOICE_CHANNEL };
+const TARGET = { guildId: GUILD, id: VOICE_CHANNEL };
 
 /** Three configured sources in constructor order, none of which answers anything until a test says so. */
 function sources(): readonly [FakeSource, FakeSource, FakeSource] {
@@ -41,7 +40,7 @@ describe("string classification", () => {
     const [source] = sources();
     const harness = setup([source]);
 
-    await expect(harness.distube.play(TARGET, "   ")).rejects.toMatchObject({ code: ErrorCode.INVALID_ARGUMENT });
+    await expect(harness.distube.play(TARGET, "   ")).rejects.toMatchObject({ code: "INVALID_ARGUMENT" });
     expect(source.resolve).not.toHaveBeenCalled();
     expect(source.search).not.toHaveBeenCalled();
   });
@@ -51,7 +50,7 @@ describe("string classification", () => {
     const harness = setup([first, second]);
 
     await expect(harness.distube.play(TARGET, "https://provider.example/unknown")).rejects.toMatchObject({
-      code: ErrorCode.SOURCE_FAILED,
+      code: "SOURCE_FAILED",
       message: "No SourcePlugin resolved the source",
     });
     expect(first.resolve).toHaveBeenCalledTimes(1);
@@ -110,7 +109,7 @@ describe("query search chain", () => {
     const failure = (await capture(harness.distube.play(TARGET, "a query"))) as { cause: AggregateError };
 
     expect(failure).toMatchObject({
-      code: ErrorCode.SOURCE_FAILED,
+      code: "SOURCE_FAILED",
       message: "No SourcePlugin found a result for the query",
     });
     // Only the sources that threw contribute a cause; the one that simply missed is not a failure.
@@ -135,7 +134,7 @@ describe("query search chain", () => {
     controller.abort();
     held.reject(new Error("cancelled by provider"));
 
-    expect(await play).toMatchObject({ code: ErrorCode.QUEUE_FAILED });
+    expect(await play).toMatchObject({ code: "ABORTED" });
     expect(second.search).not.toHaveBeenCalled();
     expect(harness.distube.queues.size).toBe(0);
   });
@@ -152,7 +151,7 @@ describe("query entry points", () => {
     const [item] = await queue.enqueue("follow up");
 
     expect(item?.song.id).toBe("follow up");
-    expect(queue.state.items.map(queued => queued.song.id)).toEqual(["follow up"]);
+    expect(queue.state.upcoming.map(queued => queued.song.id)).toEqual(["follow up"]);
   });
 
   it("resolves a query through resolve() without creating queue or voice state", async () => {
@@ -172,11 +171,11 @@ describe("query entry points", () => {
     source.search.mockResolvedValue([media("first", "standalone")]);
     const harness = setup([source]);
 
-    await harness.distube.shutdown();
+    await harness.distube.dispose();
 
     await expect(harness.distube.resolve("a query")).rejects.toMatchObject({
-      code: ErrorCode.QUEUE_FAILED,
-      message: "DisTube is shutting down",
+      code: "INVALID_STATE",
+      message: "DisTube is disposed",
     });
     expect(source.search).not.toHaveBeenCalled();
   });

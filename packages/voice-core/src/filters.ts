@@ -1,37 +1,30 @@
-import {
-  DisTubeError,
-  ErrorCode,
-  ErrorReason,
-  type FilterDefinition,
-  type FilterDefinitions,
-  type FilterEntry,
-  Filters,
-} from "distube";
+import { DisTubeError } from "distube";
+import type { FilterDefinition, FilterDefinitions, FilterEntry } from "distube/integrations";
 
 /** Preset definitions for an ffmpeg engine: a filter fragment, or a calculation from the entry's value. */
 export type FfmpegFilterDefinitions = FilterDefinitions<string>;
 
 /**
- * Built-in fragment for every conventional `Filters` name.
+ * Built-in fragment for every conventional filter name.
  *
  * Presets whose strength is a number are calculations, so `apply(name, value)` renders natively.
  */
 export const DEFAULT_FILTERS: FfmpegFilterDefinitions = Object.freeze({
-  [Filters.ThreeD]: "apulsator=hz=0.125",
-  [Filters.Bassboost]: (value = 10) => `bass=g=${value}`,
-  [Filters.Earwax]: "earwax",
-  [Filters.Echo]: "aecho=0.8:0.9:1000:0.3",
-  [Filters.Flanger]: "flanger",
-  [Filters.Gate]: "agate",
-  [Filters.Haas]: "haas",
-  [Filters.Karaoke]: "stereotools=mlev=0.03",
-  [Filters.Mcompand]: "mcompand",
-  [Filters.Nightcore]: (value = 1.25) => `asetrate=48000*${value},aresample=48000,bass=g=5`,
-  [Filters.Phaser]: "aphaser",
-  [Filters.Reverse]: "areverse",
-  [Filters.Surround]: "surround",
-  [Filters.Tremolo]: "tremolo",
-  [Filters.Vaporwave]: (value = 0.8) => `asetrate=48000*${value},aresample=48000,bass=g=5`,
+  "3d": "apulsator=hz=0.125",
+  bassboost: (value = 10) => `bass=g=${value}`,
+  earwax: "earwax",
+  echo: "aecho=0.8:0.9:1000:0.3",
+  flanger: "flanger",
+  gate: "agate",
+  haas: "haas",
+  karaoke: "stereotools=mlev=0.03",
+  mcompand: "mcompand",
+  nightcore: (value = 1.25) => `asetrate=48000*${value},aresample=48000,bass=g=5`,
+  phaser: "aphaser",
+  reverse: "areverse",
+  surround: "surround",
+  tremolo: "tremolo",
+  vaporwave: (value = 0.8) => `asetrate=48000*${value},aresample=48000,bass=g=5`,
 });
 
 /**
@@ -67,17 +60,13 @@ export class FilterRegistry {
   #fragment(entry: FilterEntry): string {
     if (entry.payload !== undefined) {
       if (typeof entry.payload !== "string" || entry.payload.trim().length === 0) {
-        throw new DisTubeError(
-          ErrorCode.INVALID_ARGUMENT,
-          ErrorReason.Argument,
-          `Filter ${entry.name} payload must be an ffmpeg fragment`,
-        );
+        throw new DisTubeError("INVALID_ARGUMENT", `Filter ${entry.name} payload must be an ffmpeg fragment`);
       }
       return entry.payload.trim();
     }
     const definition = this.#definitions.get(entry.name);
     if (definition === undefined) {
-      throw new DisTubeError(ErrorCode.UNSUPPORTED, `Filter ${entry.name} is not defined by this engine`);
+      throw new DisTubeError("UNSUPPORTED", `Filter ${entry.name} is not defined by this engine`);
     }
     return (typeof definition === "function" ? definition(entry.value) : definition).trim();
   }

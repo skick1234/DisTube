@@ -1,4 +1,5 @@
-import { DisTubeError, ErrorCode, type PlaybackRequest, type UrlPlaybackResource } from "distube";
+import { DisTubeError } from "distube";
+import type { PlaybackRequest, UrlPlaybackResource } from "distube/integrations";
 
 /** A playback request narrowed to the `url` resource kind this engine accepts. */
 export type UrlPlaybackRequest = PlaybackRequest & { readonly resource: UrlPlaybackResource };
@@ -14,7 +15,7 @@ export function playbackRequest(value: unknown): UrlPlaybackRequest {
   const candidate = resource as Readonly<Record<string, unknown>>;
   // An engine that cannot perform a kind says so in its own words, which is what keeps UNSUPPORTED honest.
   if (candidate.kind === "encoded") {
-    throw new DisTubeError(ErrorCode.UNSUPPORTED, "The default voice engine cannot play encoded resources");
+    throw new DisTubeError("UNSUPPORTED", "The default voice engine cannot play encoded resources");
   }
   if (candidate.kind !== "url" || typeof candidate.url !== "string" || typeof candidate.dispose !== "function") {
     throw new TypeError("Playback resource must be a valid URL resource");

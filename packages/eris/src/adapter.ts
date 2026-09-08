@@ -1,5 +1,5 @@
 import type { FfmpegFilterDefinitions } from "@distube/voice-core/core";
-import type { Adapter, Engine, VoiceSession, VoiceTarget } from "distube";
+import type { Adapter, Engine, VoiceSession, VoiceTarget } from "distube/integrations";
 import type { Client } from "eris";
 import { ErisVoiceEngine, erisPreflight } from "./engine";
 import { ErisVoiceSession } from "./session";
@@ -8,7 +8,7 @@ export interface ErisAdapterOptions {
   readonly connectionTimeoutMs?: number;
   readonly selfDeaf?: boolean;
   readonly selfMute?: boolean;
-  /** Filter presets merged over the engine's built-in `Filters` defaults. */
+  /** Filter presets merged over the engine's built-in filter defaults. */
   readonly filters?: FfmpegFilterDefinitions;
 }
 
