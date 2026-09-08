@@ -68,7 +68,8 @@ Player only borrows the resource.
 
 Song exposes fixed source, id, name and canonical URL fields, plus optional duration, thumbnail and artist.
 Artist is a string. Playlist exposes source, id, name, canonical URL, optional thumbnail and readonly Songs.
-Omit absent or invalid optional values rather than fabricating data. Unknown duration stays absent. Keep
+Core permits an absent duration; each source defines its normalization. The official YouTube source
+normalizes missing or invalid duration to zero. Omit other absent or invalid optional values. Keep
 provider-specific payloads, live flags, counts and temporary playback details private with a bounded lifetime.
 Caller metadata belongs to QueueItem as an optional readonly binding; core never freezes or clones its contents.
 

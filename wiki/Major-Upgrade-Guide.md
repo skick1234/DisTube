@@ -60,7 +60,8 @@ volume 100, repeat `"off"`, autoplay false and no filters. Commands on deleted q
 
 Song contains `source`, `id`, `name`, canonical `url`, optional `duration`, optional `thumbnail` and optional
 `artist: string`. Playlist contains `source`, `id`, `name`, canonical `url`, optional `thumbnail` and readonly Songs.
-Missing duration stays absent; do not fabricate a zero length from missing provider data. Keep signed URLs, encoded
+Core permits an absent duration; sources define their normalization. YouTube normalizes missing or invalid
+duration to zero. Keep signed URLs, encoded
 tracks and provider-specific state private. Sources reacquire playback resources for each attempt.
 
 Core creates each QueueItem's ID and insertion timestamp at commit. Every successful insertion or natural repeat
