@@ -1,10 +1,20 @@
 import { vi } from "vitest";
-import { type Diagnostic, DisTube, type DisTubeEventName, type Playlist, Song } from "../../src";
+import {
+  type Diagnostic,
+  DisTube,
+  type DisTubeEventName,
+  type Playlist,
+  Song,
+  type VoiceChannelTarget,
+} from "../../src";
 import { Filters } from "../../src/enums";
 import type {
   Adapter,
   Engine,
+  FilterDefinitionInfo,
+  FilterDefinitions,
   FilterEntry,
+  JoinOptions,
   PlaybackContext,
   PlaybackPreparation,
   PlaybackRequest,
@@ -77,7 +87,7 @@ export class FakeSource implements SourcePlugin {
     async (_url: string, _options?: SourceOperationOptions): Promise<Song | Playlist | undefined> => undefined,
   );
   readonly related = vi.fn(async (_song: Song, _context: RelatedContext): Promise<Song | undefined> => undefined);
-  readonly preparePlayback = vi.fn(
+  readonly stream = vi.fn(
     async (song: Song, _context: PlaybackContext): Promise<PlaybackPreparation> => this.resourceFor(song),
   );
 
@@ -90,6 +100,7 @@ export class FakeSource implements SourcePlugin {
       resource: {
         kind: "url",
         url: `https://stream.example/${song.id}`,
+        seekable: true,
         dispose: () => {
           this.disposed.push(song.id);
         },
@@ -122,12 +133,23 @@ interface InternalFakePlayerGate extends FakePlayerGate {
 }
 
 /** A long-lived Player with controllable backend acknowledgements. */
+/**
+ * The voice sends the Player a unique per-play request ID of the form `<itemId>#<n>`. The fake reports the
+ * caller's public ID everywhere a test reads it and translates public IDs back on `emit`, so tests speak
+ * in item IDs; `requestIds` exposes the raw form for late-outcome cases.
+ */
+export function publicTrackId(requestId: string): string {
+  return requestId.replace(/#\d+$/u, "");
+}
+
 export class FakePlayer implements Player {
   position = 0;
+  /** Requests as the test sees them: `itemId` is the caller's public ID. */
   readonly requests: PlaybackRequest[] = [];
+  /** Raw per-play request IDs in play order. */
+  readonly requestIds: string[] = [];
   readonly renders: (readonly FilterEntry[])[] = [];
   readonly volumes: number[] = [];
-  readonly gateways: VoiceGatewayData[] = [];
   readonly calls: string[] = [];
   readonly listeners = new Set<(event: PlayerEvent) => void>();
   readonly #gates = new Map<FakePlayerOperation, InternalFakePlayerGate[]>();
@@ -144,10 +166,12 @@ export class FakePlayer implements Player {
   });
   readonly play = vi.fn(async (request: PlaybackRequest): Promise<void> => {
     this.#assertOpen();
-    this.requests.push(request);
+    const itemId = publicTrackId(request.itemId);
+    this.requests.push({ ...request, itemId });
+    this.requestIds.push(request.itemId);
     // The bare name matches any play; the keyed name matches only that item.
-    await this.#effect("play", `play:${request.itemId}`);
-    const keyed = this.#gates.get(`play:${request.itemId}`)?.shift();
+    await this.#effect("play", `play:${itemId}`);
+    const keyed = this.#gates.get(`play:${itemId}`)?.shift();
     if (keyed) {
       keyed.markEntered();
       await keyed.promise;
@@ -174,9 +198,8 @@ export class FakePlayer implements Player {
     this.#releasePromise ??= this.#effect("release", "release", true);
     return this.#releasePromise;
   });
-  readonly updateVoiceGateway = vi.fn(async (gateway: VoiceGatewayData): Promise<void> => {
+  readonly updateVoiceGateway = vi.fn(async (_gateway: VoiceGatewayData): Promise<void> => {
     await this.#effect("gateway");
-    this.gateways.push(gateway);
   });
 
   /** Holds the next named backend operation until the returned gate settles. */
@@ -193,9 +216,9 @@ export class FakePlayer implements Player {
     return gate;
   }
 
-  /** The item the Player has actually acknowledged as active. */
+  /** The public ID of the item the Player has actually acknowledged as active. */
   get playing(): string | undefined {
-    return this.#currentItem;
+    return this.#currentItem === undefined ? undefined : publicTrackId(this.#currentItem);
   }
 
   subscribe(listener: (event: PlayerEvent) => void): () => void {
@@ -204,17 +227,23 @@ export class FakePlayer implements Player {
     return () => this.listeners.delete(listener);
   }
 
-  /** Publishes a native outcome to whichever queue currently holds the borrow. */
+  /** Publishes a native outcome. A public item ID names the latest request for that item; a raw request ID is used as is. */
   emit(event: PlayerEvent): void {
     if (this.#terminal) return;
-    if (event.type !== "terminal" && this.#currentItem === event.itemId) this.#currentItem = undefined;
-    for (const listener of [...this.listeners]) listener(event);
+    const outcome = event.type === "terminal" ? event : { ...event, itemId: this.#requestIdFor(event.itemId) };
+    if (outcome.type !== "terminal" && this.#currentItem === outcome.itemId) this.#currentItem = undefined;
+    for (const listener of [...this.listeners]) listener(outcome);
   }
 
   /** Reports the active track as finished, the way a backend does when it runs out of media. */
   finish(): void {
-    const itemId = this.playing;
+    const itemId = this.#currentItem;
     if (itemId) this.emit({ type: "finished", itemId });
+  }
+
+  #requestIdFor(itemId: string): string {
+    if (this.requestIds.includes(itemId)) return itemId;
+    return this.requestIds.findLast(requestId => publicTrackId(requestId) === itemId) ?? itemId;
   }
 
   async #effect(operation: FakePlayerOperation, call: string = operation, terminal = false): Promise<void> {
@@ -236,11 +265,21 @@ export class FakePlayer implements Player {
 export class FakeVoiceSession implements VoiceSession {
   readonly clientUserId = "bot";
   channelId: string;
-  gateway?: VoiceGatewayData;
   readonly listeners = new Set<(event: VoiceSessionEvent) => void>();
   readonly #releaseGates: Deferred<void>[] = [];
-  readonly join = vi.fn(async (channelId: string): Promise<void> => {
+  /** Every voice state the session sent: the join state plus each runtime update. */
+  readonly states: Required<JoinOptions>[] = [];
+  selfDeaf = true;
+  selfMute = false;
+  readonly join = vi.fn(async (channelId: string, options: JoinOptions = {}): Promise<void> => {
     this.channelId = channelId;
+    this.#record(options);
+  });
+  readonly setSelfDeaf = vi.fn(async (enabled: boolean): Promise<void> => {
+    this.#record({ selfDeaf: enabled });
+  });
+  readonly setSelfMute = vi.fn(async (enabled: boolean): Promise<void> => {
+    this.#record({ selfMute: enabled });
   });
   readonly release = vi.fn(async (): Promise<void> => {
     const gate = this.#releaseGates.shift();
@@ -250,8 +289,16 @@ export class FakeVoiceSession implements VoiceSession {
   constructor(
     readonly guildId: string,
     channelId: string,
+    state: JoinOptions = {},
   ) {
     this.channelId = channelId;
+    this.#record(state);
+  }
+
+  #record(options: JoinOptions): void {
+    this.selfDeaf = options.selfDeaf ?? this.selfDeaf;
+    this.selfMute = options.selfMute ?? this.selfMute;
+    this.states.push({ selfDeaf: this.selfDeaf, selfMute: this.selfMute });
   }
 
   /** Holds the next session release until the returned gate settles. */
@@ -268,7 +315,6 @@ export class FakeVoiceSession implements VoiceSession {
 
   /** Publishes renewed platform gateway data. */
   connect(gateway: VoiceGatewayData, channelId = this.channelId): void {
-    this.gateway = gateway;
     this.channelId = channelId;
     for (const listener of [...this.listeners]) listener({ type: "connected", channelId, gateway });
   }
@@ -279,8 +325,46 @@ export class FakeVoiceSession implements VoiceSession {
   }
 }
 
+/** The conventional presets with the ranges the official engines declare; the rest are fixed. */
+export const FAKE_FILTERS: FilterDefinitions<string> = Object.freeze({
+  ...Object.fromEntries(
+    Object.values(Filters).map(name => [
+      name,
+      { render: () => name, label: name } satisfies FilterDefinitions<string>[string],
+    ]),
+  ),
+  bassboost: {
+    render: (value = 10) => `bass=g=${value}`,
+    default: 10,
+    min: 0,
+    max: 20,
+    label: (value = 10) => `Bass +${value}dB`,
+  },
+  nightcore: { render: () => "nightcore", label: "Nightcore" },
+  vaporwave: { render: (value = 0.8) => `rate=${value}`, default: 0.8, min: 0.5, max: 1 },
+});
+
+/** Builds the metadata map an Engine exposes for `voice.filters.definitions`. */
+export function filterInfo(definitions: FilterDefinitions<string>): ReadonlyMap<string, FilterDefinitionInfo> {
+  return new Map(
+    Object.entries(definitions).map(([name, definition]) => [
+      name,
+      {
+        ...(definition.default === undefined ? {} : { default: definition.default }),
+        ...(definition.min === undefined ? {} : { min: definition.min }),
+        ...(definition.max === undefined ? {} : { max: definition.max }),
+        acceptsValue: definition.default !== undefined || definition.min !== undefined || definition.max !== undefined,
+        label: (value?: number): string =>
+          typeof definition.label === "function" ? definition.label(value) : (definition.label ?? name),
+      },
+    ]),
+  );
+}
+
 export class FakeEngine implements Engine {
   readonly accepts: ReadonlySet<PlaybackResource["kind"]> = new Set(["url" as const]);
+  readonly capabilities: Readonly<{ seek: boolean }>;
+  readonly filters: ReadonlyMap<string, FilterDefinitionInfo>;
   readonly players: FakePlayer[] = [];
   readonly #createGates: Deferred<Player>[] = [];
   readonly createPlayer = vi.fn(async (_session: VoiceSession): Promise<Player> => {
@@ -297,19 +381,22 @@ export class FakeEngine implements Engine {
     return gate;
   }
 
-  constructor(private readonly presets: ReadonlySet<string> = new Set(Object.values(Filters))) {}
-
-  resolvable(name: string): boolean {
-    return this.presets.has(name);
+  constructor(definitions: FilterDefinitions<string> = FAKE_FILTERS, capabilities = { seek: true }) {
+    this.filters = filterInfo(definitions);
+    this.capabilities = Object.freeze({ ...capabilities });
   }
 }
 
 export class FakeAdapter implements Adapter {
+  readonly normalizeTarget = (channel: VoiceChannelTarget): VoiceTarget => ({
+    guildId: "guildId" in channel ? channel.guildId : channel.guild.id,
+    channelId: channel.id,
+  });
   readonly sessions: FakeVoiceSession[] = [];
   readonly #createGates: Deferred<VoiceSession>[] = [];
-  readonly createVoiceSession = vi.fn(async (target: VoiceTarget): Promise<VoiceSession> => {
+  readonly createVoiceSession = vi.fn(async (target: VoiceTarget, state: JoinOptions = {}): Promise<VoiceSession> => {
     const gate = this.#createGates.shift();
-    const session = gate ? await gate.promise : new FakeVoiceSession(target.guildId, target.channelId);
+    const session = gate ? await gate.promise : new FakeVoiceSession(target.guildId, target.channelId, state);
     if (session instanceof FakeVoiceSession) this.sessions.push(session);
     return session;
   });
@@ -339,6 +426,7 @@ export interface HarnessOptions {
   readonly engine?: FakeEngine;
   /** Adapter override for tests that fail or defer session creation. */
   readonly adapter?: FakeAdapter;
+  readonly historySize?: number;
 }
 
 export function setup(sources: readonly SourcePlugin[], options: HarnessOptions = {}): Harness {
@@ -348,6 +436,7 @@ export function setup(sources: readonly SourcePlugin[], options: HarnessOptions 
   const distube = new DisTube({
     adapter,
     sources: [...sources, ...(options.sources ?? [])],
+    ...(options.historySize === undefined ? {} : { historySize: options.historySize }),
     onDiagnostic: diagnostics,
   });
   return { adapter, engine, diagnostics, distube };

@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { DisTubeError } from "./errors";
 
-export interface SongData {
+export type SongData<PluginData = unknown> = {
   readonly source: string;
   readonly id: string;
   readonly name: string;
@@ -9,10 +9,17 @@ export interface SongData {
   readonly duration?: number;
   readonly thumbnail?: string;
   readonly artist?: string;
-}
+  /** Provider-owned display and identity data. Core never reads it. */
+  readonly pluginData?: PluginData;
+} & (undefined extends PluginData ? unknown : { readonly pluginData: PluginData });
 
-/** Immutable provider-neutral identity and display fields. */
-export class Song {
+/**
+ * Immutable provider-neutral identity and display fields.
+ *
+ * `PluginData` is declared by the owning SourcePlugin; core stores the reference and never reads,
+ * clones, freezes or interprets it.
+ */
+export class Song<PluginData = unknown> {
   readonly source: string;
   readonly id: string;
   readonly name: string;
@@ -20,8 +27,9 @@ export class Song {
   readonly duration?: number;
   readonly thumbnail?: string;
   readonly artist?: string;
+  readonly pluginData: PluginData;
 
-  constructor(data: SongData) {
+  constructor(data: SongData<PluginData>) {
     if (!data) throw new DisTubeError("INVALID_ARGUMENT", "Song data must be an object");
     this.source = requireNonEmpty(data.source, "Song source");
     this.id = requireNonEmpty(data.id, "Song id");
@@ -35,8 +43,24 @@ export class Song {
     }
     if (data.thumbnail !== undefined) this.thumbnail = requireNonEmpty(data.thumbnail, "Song thumbnail");
     if (data.artist !== undefined) this.artist = requireNonEmpty(data.artist, "Song artist");
+    this.pluginData = data.pluginData as PluginData;
     Object.freeze(this);
   }
+
+  /** `h:mm:ss` from one hour, otherwise `m:ss`; `Live` when no duration is known. */
+  get formattedDuration(): string {
+    return this.duration === undefined || this.duration === 0 ? "Live" : formatDuration(this.duration);
+  }
+}
+
+/** Deterministic, locale-independent clock rendering of whole seconds. */
+export function formatDuration(seconds: number): string {
+  const total = Math.floor(seconds);
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const rest = total % 60;
+  const pad = (value: number): string => String(value).padStart(2, "0");
+  return hours > 0 ? `${hours}:${pad(minutes)}:${pad(rest)}` : `${minutes}:${pad(rest)}`;
 }
 
 function requireNonEmpty(value: unknown, label: string): string {
@@ -46,25 +70,29 @@ function requireNonEmpty(value: unknown, label: string): string {
   return value;
 }
 
-export interface PlaylistData {
+export interface PlaylistData<PluginData = unknown> {
   readonly id: string;
   readonly name: string;
   readonly url: string;
   readonly source: string;
   /** Ordered and non-empty; core creates one QueueItem per Song in this order. */
-  readonly songs: readonly Song[];
+  readonly songs: readonly Song<PluginData>[];
   readonly thumbnail?: string;
+  /** Provider-owned playlist data. Core never reads it. */
+  readonly pluginData?: unknown;
 }
 
-export class Playlist {
+/** Immutable provider playlist. `PluginData` types its Songs; the playlist's own slot stays provider-narrowed. */
+export class Playlist<PluginData = unknown> {
   readonly id: string;
   readonly name: string;
   readonly url: string;
   readonly source: string;
-  readonly songs: readonly Song[];
+  readonly songs: readonly Song<PluginData>[];
   readonly thumbnail?: string;
+  readonly pluginData: unknown;
 
-  constructor(data: PlaylistData) {
+  constructor(data: PlaylistData<PluginData>) {
     if (!data) throw new DisTubeError("INVALID_ARGUMENT", "Playlist data must be an object");
     this.id = requireNonEmpty(data.id, "Playlist id");
     this.name = requireNonEmpty(data.name, "Playlist name");
@@ -75,7 +103,17 @@ export class Playlist {
     }
     this.songs = Object.freeze([...data.songs]);
     if (data.thumbnail !== undefined) this.thumbnail = requireNonEmpty(data.thumbnail, "Playlist thumbnail");
+    this.pluginData = data.pluginData;
     Object.freeze(this);
+  }
+
+  /** Sum of Song durations in seconds; an unknown duration counts as 0. */
+  get duration(): number {
+    return this.songs.reduce((total, song) => total + (song.duration ?? 0), 0);
+  }
+
+  get formattedDuration(): string {
+    return formatDuration(this.duration);
   }
 }
 
@@ -98,9 +136,6 @@ export class QueueItem<Metadata = unknown> {
   readonly #addedAt: Date;
 
   constructor(data: QueueItemData<Metadata>) {
-    if (!(data?.song instanceof Song)) {
-      throw new DisTubeError("INVALID_ARGUMENT", "QueueItem song must be a Song");
-    }
     this.#id = randomUUID();
     this.#song = data.song;
     this.#addedAt = new Date();

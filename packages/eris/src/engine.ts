@@ -5,7 +5,7 @@ import {
   ERIS_OPUS_MODULES,
   FilterRegistry,
 } from "@distube/voice-core/core";
-import type { Engine, PlaybackResource, Player, VoiceSession } from "distube/integrations";
+import type { Engine, FilterDefinitionInfo, PlaybackResource, Player, VoiceSession } from "distube/integrations";
 import { ErisVoicePlayer } from "./player";
 import { ErisVoiceSession } from "./session";
 
@@ -25,28 +25,34 @@ export function erisPreflight(owner: string): () => Promise<void> {
 }
 
 /**
- * The package's default voice engine: one long-lived Player per connected session.
+ * The package's default voice engine: one Player per attached local transport.
  *
  * It owns the filter vocabulary, so core keeps the ordered named set and this side renders it.
  */
 export class ErisVoiceEngine implements Engine {
-  /** ffmpeg decodes a URL; a provider-encoded track means nothing to it. */
-  readonly accepts: ReadonlySet<PlaybackResource["kind"]> = new Set(["url" as const]);
+  /** ffmpeg decodes local input; a provider-encoded track means nothing to it. */
+  readonly accepts: ReadonlySet<PlaybackResource["kind"]> = new Set(["url", "file", "stream"]);
+  /** Seekable files and URLs restart a decoder at the requested position. */
+  readonly capabilities = Object.freeze({ seek: true });
+  readonly filters: ReadonlyMap<string, FilterDefinitionInfo>;
   readonly #filters: FilterRegistry;
   readonly #preflight: () => Promise<void>;
 
   constructor(filters?: FfmpegFilterDefinitions, preflight: () => Promise<void> = erisPreflight("@distube/eris")) {
     this.#filters = new FilterRegistry(filters);
+    this.filters = this.#filters.definitions;
     this.#preflight = preflight;
   }
 
   async createPlayer(session: VoiceSession): Promise<Player> {
-    const connection = ErisVoiceSession.connectionOf(session);
+    if (!(session instanceof ErisVoiceSession)) {
+      throw new TypeError("This engine only plays through its own package's VoiceSession");
+    }
+    await this.#preflight();
+    const connection = await ErisVoiceSession.connectionOf(session);
     if (!connection) throw new TypeError("This engine only plays through its own package's VoiceSession");
-    return new ErisVoicePlayer(connection, this.#filters, this.#preflight);
-  }
-
-  resolvable(name: string): boolean {
-    return this.#filters.resolvable(name);
+    return new ErisVoicePlayer(connection, this.#filters, () => {
+      ErisVoiceSession.detachConnection(session, connection);
+    });
   }
 }

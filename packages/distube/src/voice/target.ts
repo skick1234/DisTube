@@ -1,5 +1,5 @@
-import type { VoiceTarget } from "../contracts";
-import { DisTubeError } from "../errors";
+import type { Adapter, VoiceTarget } from "../contracts";
+import { asError, DisTubeError, ErrorCode } from "../errors";
 
 /** Identity shared by supported native platform voice channels. */
 export type VoiceChannelTarget = { readonly id: string } & (
@@ -7,22 +7,27 @@ export type VoiceChannelTarget = { readonly id: string } & (
   | { readonly guild: { readonly id: string } }
 );
 
-export function normalizeChannel(channel: VoiceChannelTarget): VoiceTarget {
-  if (!channel || typeof channel !== "object") throw invalid();
-  const direct = "guildId" in channel ? channel.guildId : undefined;
-  const nested =
-    "guild" in channel && channel.guild && typeof channel.guild === "object" ? channel.guild.id : undefined;
-  if (!valid(channel.id) || (!valid(direct) && !valid(nested))) throw invalid();
-  if ("guildId" in channel && !valid(direct)) throw invalid();
-  if ("guild" in channel && !valid(nested)) throw invalid();
-  if (direct !== undefined && nested !== undefined && direct !== nested) throw invalid();
-  return Object.freeze({ guildId: (direct ?? nested) as string, channelId: channel.id });
+/** Adapter normalization plus core ID validation, shared by play, join and move. */
+export function normalizeTarget<Target>(adapter: Adapter<Target>, target: Target): VoiceTarget {
+  let normalized: VoiceTarget;
+  try {
+    normalized = adapter.normalizeTarget(target);
+  } catch (error: unknown) {
+    // Whatever the Adapter throws for a native target it cannot read, the caller passed bad input.
+    if (DisTubeError.is(error, ErrorCode.INVALID_ARGUMENT)) throw error;
+    throw new DisTubeError(ErrorCode.INVALID_ARGUMENT, "Voice target could not be normalized", {
+      cause: asError(error),
+    });
+  }
+  validateTarget(normalized);
+  return Object.freeze({ guildId: normalized.guildId, channelId: normalized.channelId });
 }
 
-function valid(value: unknown): value is string {
-  return typeof value === "string" && value.trim().length > 0 && value === value.trim();
-}
-
-function invalid(): DisTubeError {
-  return new DisTubeError("INVALID_ARGUMENT", "Voice channel must have consistent non-empty channel and guild IDs");
+export function validateTarget(target: VoiceTarget): void {
+  if (!target || typeof target.guildId !== "string" || target.guildId.length === 0) {
+    throw new DisTubeError(ErrorCode.INVALID_ARGUMENT, "guildId must be a non-empty string");
+  }
+  if (typeof target.channelId !== "string" || target.channelId.length === 0) {
+    throw new DisTubeError(ErrorCode.INVALID_ARGUMENT, "channelId must be a non-empty string");
+  }
 }

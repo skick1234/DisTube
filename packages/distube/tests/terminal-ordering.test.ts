@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
-import type { DisTubeError, DisTubeGuild } from "../src";
+import type { DisTubeError, DisTubeQueue } from "../src";
+import type { UrlPlaybackResource } from "../src/integrations";
 import {
   capture,
-  type FakePlayer,
+  deferred,
+  FakePlayer,
   GUILD,
   playableSetup,
   record,
@@ -21,22 +23,61 @@ const QUEUE_EVENTS = [
   "queue.item.started",
   "queue.item.finished",
   "queue.item.failed",
+  "queue.history.added",
   "queue.finished",
   "queue.autoplay.failed",
   "queue.deleted",
 ] as const;
 
+const clip = (): UrlPlaybackResource => ({ kind: "url", url: "https://clip.example/direct", dispose: () => undefined });
+
 async function playing(ids: readonly string[]) {
   const harness = playableSetup();
-  const { queue } = await harness.distube.play(TARGET, ids[0] as string);
-  for (const id of ids.slice(1)) await queue.enqueue(id);
+  const queue = await harness.distube.play(TARGET, ids[0] as string);
+  for (const id of ids.slice(1)) await queue.add(id);
   await settle();
   return { harness, queue, player: harness.engine.players[0] as FakePlayer };
 }
 
-const waiting = (queue: DisTubeGuild): string[] => queue.state.upcoming.map(item => item.song.id);
+const waiting = (queue: DisTubeQueue): string[] => queue.upcoming.map(item => item.song.id);
 
 describe("deletion is terminal for queue decisions", () => {
+  it.each(["skip", "jump", "previous"] as const)(
+    "joins %s cleanup and disposes its former active resource when stop deletes the queue",
+    async mode => {
+      const { harness, queue, player } = await playing(["a", "b", "c"]);
+      if (mode === "previous") {
+        player.finish();
+        await settle();
+      }
+      const active = required(queue.current);
+      const log = record(harness.distube, QUEUE_EVENTS);
+      const stop = player.gate("stop");
+      const advance = capture(mode === "skip" ? queue.skip() : mode === "jump" ? queue.jump(1) : queue.previous());
+      await stop.entered;
+
+      let settled = false;
+      const stopping = queue.stop().then(() => {
+        settled = true;
+      });
+      await settle();
+      const settledBeforeStop = settled;
+      const disposedBeforeStop = harness.source.disposed.includes(active.song.id);
+      stop.resolve();
+      await stopping;
+      const outcome = await advance;
+      await settle();
+
+      expect(settledBeforeStop).toBe(false);
+      expect(disposedBeforeStop).toBe(false);
+      expect(outcome).toMatchObject({ code: "INVALID_STATE" });
+      expect(harness.source.disposed.filter(id => id === active.song.id)).toEqual([active.song.id]);
+      expect(log).toEqual(["queue.deleted"]);
+      await harness.distube.dispose();
+      expect(harness.source.disposed.filter(id => id === active.song.id)).toEqual([active.song.id]);
+    },
+  );
+
   it("commits nothing from an advance suspended on a Player effect", async () => {
     const { harness, queue, player } = await playing(["a", "b"]);
     const log = record(harness.distube, QUEUE_EVENTS);
@@ -60,14 +101,15 @@ describe("deletion is terminal for queue decisions", () => {
 
     expect(log.at(-1)).toBe("queue.deleted");
     expect(log.filter(name => name === "queue.item.finished")).toHaveLength(0);
+    expect(log.filter(name => name === "queue.history.added")).toHaveLength(0);
     // `a` started before recording began, and the superseded advance never starts `b`.
     expect(log.filter(name => name === "queue.item.started")).toHaveLength(0);
+    expect(queue.history).toEqual([]);
     expect(((await advance) as DisTubeError).code).toBe("INVALID_STATE");
   });
 
-  it("keeps queue.deleted last when a paused control settles afterwards", async () => {
-    const { harness, queue, player } = await playing(["a"]);
-    const log = record(harness.distube, QUEUE_EVENTS);
+  it("rejects an in-flight pause and commits no status after deletion", async () => {
+    const { queue, player } = await playing(["a"]);
     const pause = player.gate("pause");
 
     const paused = capture(queue.pause());
@@ -78,7 +120,7 @@ describe("deletion is terminal for queue decisions", () => {
     await settle();
     await stopping;
 
-    expect(log.at(-1)).toBe("queue.deleted");
+    expect(queue.status).toBe("idle");
     expect(((await paused) as DisTubeError).code).toBe("INVALID_STATE");
   });
 
@@ -94,24 +136,8 @@ describe("deletion is terminal for queue decisions", () => {
     await stopping;
 
     expect(await applied).toBeUndefined();
-    // Volume belongs to the DisTubeVoice now: the effect commits even though the queue deleted mid-flight.
-    expect(harness.distube.voices.get(GUILD)?.settings.volume).toBe(42);
-  });
-
-  it("keeps queue.deleted last when a voice volume effect settles afterwards", async () => {
-    const { harness, queue, player } = await playing(["a"]);
-    const log = record(harness.distube, QUEUE_EVENTS);
-    const volume = player.gate("volume:42");
-
-    const applied = capture(harness.distube.voices.get(GUILD)?.setVolume(42) ?? Promise.reject(new Error("no voice")));
-    await volume.entered;
-    const stopping = capture(queue.stop());
-    volume.resolve();
-    await settle();
-    await stopping;
-
-    expect(log.at(-1)).toBe("queue.deleted");
-    expect(await applied).toBeUndefined();
+    // Volume belongs to the DisTubeVoice: the effect commits even though the queue deleted mid-flight.
+    expect(harness.distube.voices.get(GUILD)?.volume).toBe(42);
   });
 
   it("drops queued decisions that were waiting behind terminal authority", async () => {
@@ -135,38 +161,121 @@ describe("deletion is terminal for queue decisions", () => {
   });
 });
 
-describe("insertion reconciles the in-flight attempt", () => {
-  it("supersedes an attempt whose item a head insertion displaced", async () => {
-    const { harness, queue, player } = await playing(["a"]);
-    const play = player.gate("play");
+describe("queue termination frees the voice synchronously", () => {
+  it("queue.stop detaches before any await so a direct play in the same tick is accepted", async () => {
+    const { harness, queue } = await playing(["a"]);
+    const voice = required(harness.distube.voices.get(GUILD));
+    const queueLog = record(harness.distube, QUEUE_EVENTS);
+    const started: (string | undefined)[] = [];
+    harness.distube.on("voice.track.started", event => started.push(event.itemId));
 
-    // `b` is acquiring the Player; inserting `c` ahead of it must supersede that attempt.
-    const enqueued = queue.enqueue("b");
+    const stopping = queue.stop();
+    const direct = voice.play(clip());
+    await expect(direct).resolves.toBeUndefined();
+    await stopping;
     await settle();
-    await queue.skip().catch(() => undefined);
+
+    expect(started).toEqual([undefined]);
+    expect(queueLog).toEqual(["queue.deleted"]);
+    expect(harness.distube.getQueue(GUILD)).toBeUndefined();
+  });
+
+  it("natural exhaustion detaches before cleanup settles", async () => {
+    const { harness, player } = await playing(["a"]);
+    const voice = required(harness.distube.voices.get(GUILD));
+    const queueLog = record(harness.distube, QUEUE_EVENTS);
+    const started: (string | undefined)[] = [];
+    harness.distube.on("voice.track.started", event => started.push(event.itemId));
+    const direct = deferred<ReturnType<typeof capture<void>>>();
+    // The listener runs while the queue's terminal cleanup is still pending: the detach already happened.
+    harness.distube.on("queue.finished", () => {
+      expect(harness.distube.getQueue(GUILD)).toBeUndefined();
+      direct.resolve(capture(voice.play(clip())));
+    });
+
+    player.finish();
+    await settle();
+
+    expect(await await direct.promise).toBeUndefined();
+    expect(started).toEqual([undefined]);
+    expect(queueLog.slice(0, 3)).toEqual(["queue.item.finished", "queue.history.added", "queue.finished"]);
+    expect(queueLog.at(-1)).toBe("queue.deleted");
+    expect(queueLog.filter(name => name === "queue.item.started")).toHaveLength(0);
+  });
+});
+
+describe("insertion reconciles the in-flight attempt", () => {
+  it.each(["clear", "remove", "jump"] as const)(
+    "%s waits for the retired activation's stop before disposing its source",
+    async edit => {
+      const harness = playableSetup();
+      const player = new FakePlayer();
+      harness.engine.gateCreate().resolve(player);
+      const play = player.gate("play");
+      const queue = await harness.distube.play(TARGET, "a");
+      const items = [...(queue.current ? [queue.current] : []), ...queue.upcoming];
+      await queue.add("b");
+      await play.entered;
+      const stop = player.gate("stop");
+      const log = record(harness.distube, ["queue.item.started", "queue.item.finished"]);
+
+      if (edit === "clear") await queue.clear();
+      else if (edit === "remove") await queue.remove(required(items[0]).id);
+      else await queue.jump(2);
+      play.resolve();
+      await stop.entered;
+      await settle();
+      const disposedBeforeStop = [...harness.source.disposed];
+      stop.resolve();
+      await settle();
+
+      expect(disposedBeforeStop).toEqual([]);
+      expect(harness.source.disposed.filter(id => id === "a")).toEqual(["a"]);
+      expect(log).toEqual(edit === "clear" ? [] : ["queue.item.started"]);
+      expect(queue.current?.song.id).toBe(edit === "clear" ? undefined : "b");
+      await harness.distube.dispose();
+      expect(harness.source.disposed.filter(id => id === "a")).toEqual(["a"]);
+    },
+  );
+
+  it("supersedes an attempt whose item a head insertion displaced", async () => {
+    const { harness, queue, player } = await playing(["a", "b"]);
+    // Gates are keyed by occurrence ID, so hold the next play generically: it is `b`'s activation.
+    const play = player.gate("play");
+    await queue.skip();
+    // `b` is inside the Player's play acknowledgement; inserting `c` ahead of it supersedes that attempt.
     await play.entered;
 
-    const [inserted] = await queue.enqueue("c");
-    await queue.move(required(inserted).id, required(queue.state.upcoming[0]).id);
+    const [inserted] = await queue.add("c", { next: true });
+    expect(waiting(queue)[0]).toBe("c");
     play.resolve();
     await settle();
-    await enqueued;
 
-    // The queue keeps making progress rather than wedging on the displaced attempt.
-    expect(harness.engine.players[0]?.playing).toBeDefined();
-    expect(waiting(queue)).not.toContain(queue.state.current?.song.id);
+    expect(queue.current?.id).toBe(required(inserted).id);
+    expect(player.playing).toBe(required(inserted).id);
+    expect(harness.source.disposed.filter(id => id === "b")).toEqual(["b"]);
+    // The accepted play for `b` was stopped before `c` started on the same Player.
+    const plays = player.calls.filter(call => call.startsWith("play:"));
+    expect(plays).toHaveLength(3);
+    const stops = player.calls.map((call, index) => (call === "stop" ? index : -1)).filter(index => index >= 0);
+    // First stop ended `a` for the skip; the second ended `b`'s accepted play before `c` started.
+    expect(stops).toHaveLength(2);
+    expect(stops[1]).toBeGreaterThan(player.calls.indexOf(plays[1] as string));
+    expect(stops[1]).toBeLessThan(player.calls.indexOf(plays[2] as string));
+    // The displaced occurrence is still waiting; it lost its turn, not its place in the queue.
+    expect(waiting(queue)).toEqual(["b"]);
   });
 
   it("leaves a running attempt alone when insertion appends to the tail", async () => {
     const { queue, player } = await playing(["a"]);
     const started = player.requests.length;
 
-    await queue.enqueue("z");
+    await queue.add("z");
     await settle();
 
     // A tail insertion changes no decision about the current item.
     expect(player.requests.length).toBe(started);
-    expect(queue.state.current?.song.id).toBe("a");
+    expect(queue.current?.song.id).toBe("a");
     expect(waiting(queue)).toEqual(["z"]);
   });
 });

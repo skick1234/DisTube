@@ -4,7 +4,7 @@
  *
  * The `@discordjs/voice`-specific session, engine, and player live behind `./discord`.
  */
-export { asError, cleanupAll, collectCleanupFailures } from "./cleanup";
+export { asError } from "./cleanup";
 export type { FfmpegOutcome, FfmpegStream } from "./ffmpeg";
 export {
   ffmpegCommand,
@@ -12,8 +12,11 @@ export {
   finishedFfmpeg,
   killFfmpeg,
   spawnFfmpeg,
+  URL_READY_TIMEOUT_MS,
 } from "./ffmpeg";
 export {
+  DEFAULT_FILTERS,
+  type FfmpegFilterDefinition,
   type FfmpegFilterDefinitions,
   FilterRegistry,
 } from "./filters";
@@ -26,4 +29,9 @@ export {
   type PrerequisiteModules,
   type PrerequisiteRuntime,
 } from "./prerequisites";
-export { playbackRequest, type UrlPlaybackRequest } from "./validation";
+export {
+  type LocalPlaybackRequest,
+  type LocalPlaybackResource,
+  localPlaybackResource,
+  playbackRequest,
+} from "./validation";

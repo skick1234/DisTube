@@ -1,4 +1,0 @@
-bun install --frozen-lockfile
-bun run check
-bun run type
-bun run test

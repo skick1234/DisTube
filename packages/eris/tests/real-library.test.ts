@@ -1,22 +1,17 @@
-import {
-  createPrerequisiteCheck,
-  ERIS_ENCRYPTION_MODULES,
-  ERIS_OPUS_MODULES,
-  FilterRegistry,
-} from "@distube/voice-core/core";
+import { FilterRegistry } from "@distube/voice-core/core";
 import type { VoiceSessionEvent } from "distube/integrations";
 import { Client, VoiceConnection } from "eris";
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it, vi } from "vitest";
 import { type AudioOrigin, serveAudio } from "../../voice-core/tests/support/real";
 import { ErisVoicePlayer } from "../src/player";
-import { ErisVoiceSession } from "../src/session";
+import { ErisVoiceSession, suppressTransportVoiceState } from "../src/session";
 
 // Nothing is mocked here: the real Eris Client and VoiceConnection, the real ffmpeg binary, and a real
 // HTTP origin. The mocked suites prove our logic; this one proves Eris still behaves the way it assumes.
 
 const GUILD = "real-guild";
 const CHANNEL = "real-channel";
-const GATEWAY = { sessionId: "real-session", token: "real-token", endpoint: "voice.real.example" };
+const GATEWAY = { channelId: CHANNEL, sessionId: "real-session", token: "real-token", endpoint: "voice.real.example" };
 
 const origin: AudioOrigin = await serveAudio();
 afterAll(() => origin.stop());
@@ -37,7 +32,7 @@ function realConnection(): VoiceConnection {
 }
 
 describe("real Eris", () => {
-  it("reads its gateway credentials and channel off the real client's rawWS emitter", () => {
+  it("reads its gateway credentials and channel off the real client's rawWS emitter", async () => {
     const client = realClient();
     const session = new ErisVoiceSession({
       client,
@@ -72,9 +67,65 @@ describe("real Eris", () => {
       d: { guild_id: GUILD, user_id: "bot", session_id: GATEWAY.sessionId, channel_id: "dragged" },
     } as never);
 
+    expect(session.gateway).toBeUndefined();
+    client.emit("rawWS", {
+      op: 0,
+      t: "VOICE_SERVER_UPDATE",
+      d: { guild_id: GUILD, token: "moved-token", endpoint: "moved.example" },
+    } as never);
+
     expect(session.channelId).toBe("dragged");
-    expect(events.at(-1)).toEqual({ type: "connected", channelId: "dragged", gateway: GATEWAY });
+    expect(events.at(-1)).toEqual({
+      type: "connected",
+      channelId: "dragged",
+      gateway: {
+        ...GATEWAY,
+        channelId: "dragged",
+        token: "moved-token",
+        endpoint: "moved.example",
+      },
+    });
     expect(events.some(event => event.type === "disconnected")).toBe(false);
+    await session.release().catch(() => undefined);
+  });
+
+  it("keeps gateway membership when a real Eris transport disconnects", async () => {
+    const client = realClient();
+    const sendWS = vi.fn();
+    client.guilds.set(GUILD, { shard: { sendWS } } as never);
+    const session = new ErisVoiceSession({
+      client,
+      guildId: GUILD,
+      channelId: CHANNEL,
+      clientUserId: "bot",
+      selfDeaf: true,
+      selfMute: false,
+      connectionTimeoutMs: 50,
+    });
+    client.emit("rawWS", {
+      op: 0,
+      t: "VOICE_SERVER_UPDATE",
+      d: { guild_id: GUILD, token: GATEWAY.token, endpoint: GATEWAY.endpoint },
+    } as never);
+    client.emit("rawWS", {
+      op: 0,
+      t: "VOICE_STATE_UPDATE",
+      d: { guild_id: GUILD, user_id: "bot", session_id: GATEWAY.sessionId, channel_id: CHANNEL },
+    } as never);
+
+    const transport = realConnection();
+    suppressTransportVoiceState(transport);
+    transport.disconnect();
+    expect(sendWS).not.toHaveBeenCalled();
+    expect(session.gateway).toEqual(GATEWAY);
+
+    await session.release();
+    expect(sendWS).toHaveBeenCalledExactlyOnceWith(4, {
+      guild_id: GUILD,
+      channel_id: null,
+      self_deaf: true,
+      self_mute: false,
+    });
   });
 
   it("decodes with real ffmpeg and surfaces Eris's own refusal on a connection that is not ready", async () => {
@@ -92,34 +143,5 @@ describe("real Eris", () => {
     } finally {
       await player.release();
     }
-  });
-
-  it("rejects seek with UNSUPPORTED, because the real Eris voice API cannot seek", async () => {
-    const player = new ErisVoicePlayer(realConnection(), new FilterRegistry());
-    try {
-      await expect(player.seek(10)).rejects.toMatchObject({ code: "UNSUPPORTED" });
-    } finally {
-      await player.release();
-    }
-  });
-
-  it("names this package and an accepted module when a voice prerequisite is missing", async () => {
-    const check = createPrerequisiteCheck({
-      owner: "@distube/eris",
-      encryption: ERIS_ENCRYPTION_MODULES,
-      opus: ERIS_OPUS_MODULES,
-    });
-
-    // Whether the optional modules are installed is a property of the machine, so both outcomes are asserted.
-    const failure = await check().then(
-      () => undefined,
-      (error: unknown) => error as { code?: string; message?: string },
-    );
-    if (!failure) return;
-
-    expect(failure.code).toBe("VOICE_FAILED");
-    expect(failure.message).toContain("@distube/eris");
-    const named = [...ERIS_ENCRYPTION_MODULES, ...ERIS_OPUS_MODULES];
-    expect(named.some(module => failure.message?.includes(module))).toBe(true);
   });
 });

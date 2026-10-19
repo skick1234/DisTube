@@ -1,72 +1,169 @@
-import { QueueStatus } from "../enums";
+import { QueueStatus, RepeatMode } from "../enums";
 import { DisTubeError } from "../errors";
 import type { QueueItem } from "../media";
 
+/**
+ * The committed schedule of one DisTubeQueue: an immutable value replaced on every commit.
+ *
+ * `Metadata` is the client's caller-metadata type, threaded so a read of `item.metadata` needs no cast.
+ */
 export interface QueueState<Metadata = unknown> {
-  readonly items: readonly QueueItem<Metadata>[];
-  readonly current?: QueueItem<Metadata>;
+  readonly current: QueueItem<Metadata> | undefined;
+  readonly upcoming: readonly QueueItem<Metadata>[];
+  /** Recently ended occurrences, newest last, bounded by `DisTubeOptions.historySize`. */
+  readonly history: readonly QueueItem<Metadata>[];
   readonly status: QueueStatus;
+  readonly repeat: RepeatMode;
+  readonly autoplay: boolean;
 }
+
+const NO_ITEMS: readonly QueueItem[] = Object.freeze([]);
 
 export const IDLE_QUEUE_STATE: QueueState = Object.freeze({
-  items: Object.freeze([]),
+  current: undefined,
+  upcoming: NO_ITEMS,
+  history: NO_ITEMS,
   status: QueueStatus.Idle,
+  repeat: RepeatMode.Off,
+  autoplay: false,
 });
 
-function state(items: readonly QueueItem[], current: QueueItem | undefined, status: QueueStatus): QueueState {
-  return Object.freeze({ items: Object.freeze([...items]), ...(current ? { current } : {}), status });
-}
+type Removal = Readonly<{ items: readonly QueueItem[]; state: QueueState }>;
 
-/** Appends committed occurrences to the upcoming list. */
-export function insertItems(current: QueueState, items: readonly QueueItem[]): QueueState {
-  if (items.length === 0) return current;
-  return state([...current.items, ...items], current.current, current.status);
-}
-
-export function startFirst(current: QueueState): { readonly item: QueueItem; readonly state: QueueState } | undefined {
-  const item = current.items[0];
-  if (!item || current.current) return undefined;
-  return Object.freeze({ item, state: state(current.items.slice(1), item, QueueStatus.Playing) });
-}
-
-export function failFirst(current: QueueState, itemId: string): QueueState {
-  return state(
-    current.items.filter(item => item.id !== itemId),
-    current.current,
-    current.status,
-  );
-}
-
-export function finishCurrent(current: QueueState): QueueState {
-  return state(current.items, undefined, QueueStatus.Idle);
-}
-
-/** Removes one upcoming occurrence by its stable ID. */
-export function removeItem(
-  current: QueueState,
-  itemId: string,
-): { readonly items: readonly QueueItem[]; readonly state: QueueState } {
-  if (typeof itemId !== "string" || itemId.length === 0)
-    throw new DisTubeError("INVALID_ARGUMENT", "Occurrence ID must be non-empty");
-  const index = current.items.findIndex(item => item.id === itemId);
-  if (index < 0) throw new DisTubeError("INVALID_STATE", "Occurrence is not upcoming in this queue");
+function patch(current: QueueState, changes: Partial<QueueState>): QueueState {
+  const next = { ...current, ...changes };
   return Object.freeze({
-    items: Object.freeze([current.items[index] as QueueItem]),
-    state: state(current.items.toSpliced(index, 1), current.current, current.status),
+    ...next,
+    upcoming: next.upcoming === current.upcoming ? current.upcoming : Object.freeze([...next.upcoming]),
+    history: next.history === current.history ? current.history : Object.freeze([...next.history]),
   });
 }
 
-/** Puts `items` at the head of the waiting list, before everything already waiting. */
-export function frontItems(current: QueueState, items: readonly QueueItem[]): QueueState {
-  return items.length === 0 ? current : state([...items, ...current.items], current.current, current.status);
+/** Inserts committed occurrences at `at` in the waiting list, appending when `at` is absent or past the end. */
+export function insertAt(current: QueueState, items: readonly QueueItem[], at?: number): QueueState {
+  if (items.length === 0) return current;
+  const index = at === undefined ? current.upcoming.length : Math.min(Math.max(at, 0), current.upcoming.length);
+  return patch(current, { upcoming: current.upcoming.toSpliced(index, 0, ...items) });
+}
+
+export function startFirst(current: QueueState): { readonly item: QueueItem; readonly state: QueueState } | undefined {
+  const item = current.upcoming[0];
+  if (!item || current.current) return undefined;
+  return Object.freeze({
+    item,
+    state: patch(current, { upcoming: current.upcoming.slice(1), current: item, status: QueueStatus.Playing }),
+  });
+}
+
+/** Drops a waiting occurrence that could not be prepared or started. */
+export function failFirst(current: QueueState, itemId: string): QueueState {
+  return patch(current, { upcoming: current.upcoming.filter(item => item.id !== itemId) });
+}
+
+export function finishCurrent(current: QueueState): QueueState {
+  return patch(current, { current: undefined, status: QueueStatus.Idle });
+}
+
+/** Removes one upcoming occurrence by its stable ID. */
+export function removeItem(current: QueueState, itemId: string): Removal {
+  const index = current.upcoming.findIndex(item => item.id === itemId);
+  if (index < 0) throw new DisTubeError("INVALID_STATE", "Occurrence is not upcoming in this queue");
+  return removeRange(current, index, index);
+}
+
+/** Removes the zero-based inclusive index range from the waiting list; both ends must be waiting. */
+export function removeRange(current: QueueState, from: number, to: number): Removal {
+  if (!Number.isInteger(from) || !Number.isInteger(to) || from < 0 || to < from)
+    throw new DisTubeError("INVALID_ARGUMENT", "Range positions must be a non-inverted pair of positive integers");
+  if (to >= current.upcoming.length) throw new DisTubeError("INVALID_STATE", "Range is not upcoming in this queue");
+  return Object.freeze({
+    items: Object.freeze(current.upcoming.slice(from, to + 1)),
+    state: patch(current, { upcoming: current.upcoming.toSpliced(from, to - from + 1) }),
+  });
+}
+
+/** Moves a waiting occurrence before another one, or to the tail when `beforeItemId` is absent. */
+export function moveBefore(current: QueueState, itemId: string, beforeItemId?: string): QueueState {
+  if (
+    typeof itemId !== "string" ||
+    !itemId ||
+    (beforeItemId !== undefined && (typeof beforeItemId !== "string" || !beforeItemId))
+  ) {
+    throw new DisTubeError("INVALID_ARGUMENT", "Occurrence IDs must be non-empty strings");
+  }
+  const item = current.upcoming.find(entry => entry.id === itemId);
+  if (!item || (beforeItemId !== undefined && !current.upcoming.some(entry => entry.id === beforeItemId))) {
+    throw new DisTubeError("INVALID_STATE", "Occurrence is not upcoming in this queue");
+  }
+  if (itemId === beforeItemId) return current;
+  const rest = current.upcoming.filter(entry => entry !== item);
+  const index = beforeItemId === undefined ? rest.length : rest.findIndex(entry => entry.id === beforeItemId);
+  return patch(current, { upcoming: rest.toSpliced(index, 0, item) });
+}
+
+/**
+ * Ends the current occurrence and brings the waiting occurrence at `index` to the front.
+ *
+ * The ended current item and the items before the target are returned as `skipped`, in their original
+ * order; with `requeue` they are re-appended to the tail, otherwise the caller sends them to history.
+ */
+export function jumpTo(
+  current: QueueState,
+  index: number,
+  requeue: boolean,
+): Readonly<{ state: QueueState; skipped: readonly QueueItem[] }> {
+  if (index < 0 || index >= current.upcoming.length)
+    throw new DisTubeError("INVALID_STATE", "Jump target is not upcoming in this queue");
+  const skipped = [...(current.current ? [current.current] : []), ...current.upcoming.slice(0, index)];
+  const upcoming = [...current.upcoming.slice(index), ...(requeue ? skipped : [])];
+  return Object.freeze({
+    state: patch(current, { current: undefined, status: QueueStatus.Idle, upcoming }),
+    skipped: Object.freeze(skipped),
+  });
+}
+
+/** Fisher-Yates over the waiting list; the current item never moves. */
+export function shuffle(current: QueueState, random: () => number = Math.random): QueueState {
+  if (current.upcoming.length < 2) return current;
+  const upcoming = [...current.upcoming];
+  for (let index = upcoming.length - 1; index > 0; index -= 1) {
+    const other = Math.floor(random() * (index + 1));
+    [upcoming[index], upcoming[other]] = [upcoming[other] as QueueItem, upcoming[index] as QueueItem];
+  }
+  return patch(current, { upcoming });
+}
+
+/** Empties the waiting list without touching the current item. */
+export function clearUpcoming(current: QueueState): Removal {
+  return Object.freeze({ items: current.upcoming, state: patch(current, { upcoming: NO_ITEMS }) });
+}
+
+/** Appends an ended occurrence, evicting the oldest past `size`. A size of 0 keeps history empty. */
+export function pushHistory(current: QueueState, item: QueueItem, size: number): QueueState {
+  if (size <= 0) return current;
+  const history = [...current.history, item];
+  return patch(current, { history: history.slice(Math.max(0, history.length - size)) });
+}
+
+export function popHistory(current: QueueState): { readonly item: QueueItem; readonly state: QueueState } | undefined {
+  const item = current.history.at(-1);
+  if (!item) return undefined;
+  return Object.freeze({ item, state: patch(current, { history: current.history.slice(0, -1) }) });
 }
 
 export function setStatus(current: QueueState, status: QueueStatus): QueueState {
-  return current.status === status ? current : state(current.items, current.current, status);
+  return current.status === status ? current : patch(current, { status });
 }
 
+export function setRepeat(current: QueueState, repeat: RepeatMode): QueueState {
+  return current.repeat === repeat ? current : patch(current, { repeat });
+}
+
+export function setAutoplay(current: QueueState, autoplay: boolean): QueueState {
+  return current.autoplay === autoplay ? current : patch(current, { autoplay });
+}
+
+/** The terminal state: nothing current, waiting or remembered, with scheduling settings reset. */
 export function clearQueue(current: QueueState): QueueState {
-  return current.current || current.items.length > 0 || current.status !== QueueStatus.Idle
-    ? IDLE_QUEUE_STATE
-    : current;
+  return current === IDLE_QUEUE_STATE ? current : IDLE_QUEUE_STATE;
 }

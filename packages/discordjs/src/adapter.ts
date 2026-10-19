@@ -1,8 +1,8 @@
 import type { DiscordGatewayAdapterCreator } from "@discordjs/voice";
 import type { FfmpegFilterDefinitions } from "@distube/voice-core/core";
 import { DiscordVoiceEngine, DiscordVoiceSession, discordPreflight } from "@distube/voice-core/discord";
-import type { Client } from "discord.js";
-import type { Adapter, Engine, VoiceSession, VoiceTarget } from "distube/integrations";
+import type { Client, VoiceBasedChannel } from "discord.js";
+import type { Adapter, Engine, JoinOptions, VoiceSession, VoiceTarget } from "distube/integrations";
 
 export interface DiscordJSAdapterOptions {
   readonly connectionTimeoutMs?: number;
@@ -10,7 +10,7 @@ export interface DiscordJSAdapterOptions {
   readonly filters?: FfmpegFilterDefinitions;
 }
 
-export class DiscordJSAdapter implements Adapter {
+export class DiscordJSAdapter implements Adapter<VoiceBasedChannel> {
   readonly engine: Engine;
   readonly #client: Client;
   readonly #timeout: number;
@@ -26,7 +26,14 @@ export class DiscordJSAdapter implements Adapter {
     this.engine = new DiscordVoiceEngine(options.filters, this.#preflight);
   }
 
-  async createVoiceSession(target: VoiceTarget): Promise<VoiceSession> {
+  normalizeTarget(channel: VoiceBasedChannel): VoiceTarget {
+    if (channel.guild?.id && channel.guild.id !== channel.guildId) {
+      throw new TypeError("Discord channel has conflicting guild identities");
+    }
+    return { guildId: channel.guildId, channelId: channel.id };
+  }
+
+  async createVoiceSession(target: VoiceTarget, options: JoinOptions = {}): Promise<VoiceSession> {
     const guild = this.#client.guilds.cache.get(target.guildId);
     if (!guild) throw new Error(`Discord guild is unavailable: ${target.guildId}`);
     const channel = guild.channels.cache.get(target.channelId);
@@ -37,14 +44,13 @@ export class DiscordJSAdapter implements Adapter {
     }
     const clientUserId = this.#client.user?.id;
     if (!clientUserId) throw new Error("Discord client user is unavailable");
-    await this.#preflight();
     return DiscordVoiceSession.connect({
       guildId: target.guildId,
       channelId: target.channelId,
       clientUserId,
       adapterCreator: guild.voiceAdapterCreator as DiscordGatewayAdapterCreator,
-      selfDeaf: true,
-      selfMute: false,
+      selfDeaf: options.selfDeaf ?? true,
+      selfMute: options.selfMute ?? false,
       connectionTimeoutMs: this.#timeout,
     });
   }

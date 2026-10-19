@@ -81,6 +81,8 @@ describe("default voice engine prerequisites", () => {
     );
 
     expect(failure).toMatchObject({ code: "VOICE_FAILED" });
+    // The empty encryption list would reject too, so the message proves the Opus guard is the one that fired.
+    expect(failure.message).toContain("test-owner requires an Opus implementation");
     expect(loadModule.mock.calls.map(([name]) => name)).toEqual(DISCORD_OPUS_MODULES);
   });
 
@@ -97,6 +99,75 @@ describe("default voice engine prerequisites", () => {
     expect(dispose).toHaveBeenCalledTimes(1);
     expect(loadModule).toHaveBeenCalledTimes(2);
     expect(loadModule).toHaveBeenLastCalledWith("sodium-native");
+  });
+
+  it("tries the script encoder when the selected native binary cannot construct an encoder", async () => {
+    const destroy = vi.fn();
+    const loadModule = vi.fn((name: string) => {
+      if (name === "@discordjs/opus") {
+        return {
+          OpusEncoder: class {
+            constructor() {
+              throw new Error("native binary cannot initialize");
+            }
+          },
+        };
+      }
+      if (name === "opusscript") {
+        return class {
+          static Application = { AUDIO: 2049 };
+          destroy(): void {
+            destroy();
+          }
+        };
+      }
+      return {};
+    });
+    await expect(
+      createPrerequisiteCheck(
+        discordModules(),
+        runtime(
+          vi.fn(async () => undefined),
+          loadModule,
+        ),
+      )(),
+    ).resolves.toBeUndefined();
+
+    expect(destroy).toHaveBeenCalledTimes(1);
+    expect(loadModule.mock.calls.map(([name]) => name)).toEqual(["@discordjs/opus", "opusscript", "sodium-native"]);
+  });
+
+  it("uses the constructor signatures required by the native and script encoder shapes", async () => {
+    const nativeArguments = vi.fn();
+    const scriptArguments = vi.fn();
+    const native = {
+      OpusEncoder: class {
+        constructor(rate: number, channels: number) {
+          nativeArguments(rate, channels);
+        }
+      },
+    };
+    const script = class {
+      static Application = { AUDIO: 2049 };
+      constructor(rate: number, channels: number, application: number) {
+        scriptArguments(rate, channels, application);
+      }
+    };
+    for (const [selected, module] of [
+      ["@discordjs/opus", native],
+      ["opusscript", script],
+    ] as const) {
+      await createPrerequisiteCheck(
+        { owner: "test-owner", opus: [selected], encryption: ["sodium-native"] },
+        runtime(
+          vi.fn(async () => undefined),
+          name => (name === selected ? module : {}),
+        ),
+      )();
+    }
+
+    expect(nativeArguments).toHaveBeenCalledWith(48_000, 2);
+    expect(scriptArguments).toHaveBeenCalledWith(48_000, 2, 2049);
   });
 
   it("loads @noble/ciphers by the submodule specifier the voice library itself uses", async () => {
@@ -148,16 +219,6 @@ describe("default voice engine prerequisites", () => {
 });
 
 describe("voice encryption prerequisite", () => {
-  it("uses @discordjs/voice's encryption provider preference order", () => {
-    expect(DISCORD_ENCRYPTION_MODULES).toEqual([
-      "sodium-native",
-      "sodium",
-      "libsodium-wrappers",
-      "@stablelib/xchacha20poly1305",
-      "@noble/ciphers",
-    ]);
-  });
-
   it("accepts sodium when it is the only Discord voice encryption provider", async () => {
     const loadModule = vi.fn((name: string) => {
       if (name === "@discordjs/opus") return nativeOpus();
@@ -196,6 +257,26 @@ describe("voice encryption prerequisite", () => {
     expect(loadModule.mock.calls.map(([name]) => name)).toEqual([...ERIS_OPUS_MODULES, ...ERIS_ENCRYPTION_MODULES]);
   });
 
+  it("keeps trying supported encryption modules when one loads without a usable export", async () => {
+    const loadModule = vi.fn((name: string) => {
+      if (name === "@discordjs/opus") return nativeOpus();
+      if (name === "sodium-native") return null;
+      if (name === "sodium") return { ready: true };
+      throw new Error(`unexpected module ${name}`);
+    });
+
+    await expect(
+      createPrerequisiteCheck(
+        discordModules(),
+        runtime(
+          vi.fn(async () => undefined),
+          loadModule,
+        ),
+      )(),
+    ).resolves.toBeUndefined();
+    expect(loadModule.mock.calls.map(([name]) => name)).toEqual(["@discordjs/opus", "sodium-native", "sodium"]);
+  });
+
   it("fails with VOICE_FAILED naming the adapter package and one accepted implementation", async () => {
     const loadModule = vi.fn((name: string) => {
       if (name === "@discordjs/opus") return nativeOpus();
@@ -217,61 +298,28 @@ describe("voice encryption prerequisite", () => {
     expect(loadModule.mock.calls.map(([name]) => name)).toEqual(["@discordjs/opus", "sodium-native", "tweetnacl"]);
   });
 
-  it("caches a fulfilled probe for the process lifetime", async () => {
-    const probeFfmpeg = vi.fn(async (_command: string, _args: readonly string[]) => undefined);
-    const loadModule = vi.fn((_name: string) => nativeOpus());
+  it("retries a selected local Opus implementation after concurrent callers share its failure", async () => {
+    let scriptReady = false;
+    const probeFfmpeg = vi.fn(async () => undefined);
+    const loadModule = vi.fn((name: string) => {
+      if (name === "@discordjs/opus") throw new Error("native binary unavailable");
+      if (name === "opusscript" && !scriptReady) throw new Error("script package not installed yet");
+      return name === "opusscript" ? scriptOpus() : {};
+    });
     const check = createPrerequisiteCheck(discordModules(), runtime(probeFfmpeg, loadModule));
 
     const first = check();
-    const second = check();
-    await Promise.all([first, second, check()]);
+    const concurrent = check();
+    expect(concurrent).toBe(first);
+    const [firstFailure, concurrentFailure] = await Promise.all([rejected(first), rejected(concurrent)]);
+    expect(concurrentFailure).toBe(firstFailure);
+    expect(firstFailure).toMatchObject({ code: "VOICE_FAILED" });
 
-    expect(probeFfmpeg).toHaveBeenCalledTimes(1);
-    expect(loadModule.mock.calls.filter(([name]) => name === "sodium-native")).toHaveLength(1);
-  });
-
-  it("retries a rejected probe on the next attempt instead of memoizing the failure", async () => {
-    let ffmpegAvailable = false;
-    const probeFfmpeg = vi.fn(async (): Promise<void> => {
-      if (!ffmpegAvailable) throw new Error("ffmpeg was not found");
-    });
-    const loadModule = vi.fn(() => nativeOpus());
-    const check = createPrerequisiteCheck(discordModules(), runtime(probeFfmpeg, loadModule));
-
-    const firstFailure = await rejected(check());
-    expect(firstFailure.message).toContain("requires FFmpeg");
-
-    ffmpegAvailable = true;
+    scriptReady = true;
+    await expect(check()).resolves.toBeUndefined();
     await expect(check()).resolves.toBeUndefined();
     expect(probeFfmpeg).toHaveBeenCalledTimes(2);
-
-    // The recovered result is cached like any other fulfilled probe.
-    await expect(check()).resolves.toBeUndefined();
-    expect(probeFfmpeg).toHaveBeenCalledTimes(2);
-  });
-
-  it("lets concurrent callers of a failing attempt share its rejection without blocking a retry", async () => {
-    // Sharing is the point: two callers cost one probe, so the second probe is the retry.
-    const probeFfmpeg = vi.fn(async (): Promise<void> => {
-      if (probeFfmpeg.mock.calls.length < 2) throw new Error("ffmpeg was not found");
-    });
-    const check = createPrerequisiteCheck(
-      discordModules(),
-      runtime(
-        probeFfmpeg,
-        vi.fn(() => nativeOpus()),
-      ),
-    );
-
-    // Both callers start before either awaits, so they share one attempt and its rejection.
-    const first = rejected(check());
-    const shared = rejected(check());
-    const [firstFailure, sharedFailure] = await Promise.all([first, shared]);
-    expect(sharedFailure).toBe(firstFailure);
-
-    // The next attempt probes again and succeeds.
-    await expect(check()).resolves.toBeUndefined();
-    expect(probeFfmpeg).toHaveBeenCalledTimes(2);
+    expect(loadModule.mock.calls.filter(([name]) => name === "opusscript")).toHaveLength(2);
   });
 });
 

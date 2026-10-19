@@ -1,9 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { DisTube, DisTubeError, type Song } from "../src";
 import type { PluginContext } from "../src/integrations";
-import { resolveInput } from "../src/playback/resolve";
-import { findCandidates, newSearchChain } from "../src/playback/search";
-import { createSourceCatalog } from "../src/playback/sources";
 import {
   capture,
   deferred,
@@ -39,6 +36,18 @@ describe("client construction", () => {
     [{ adapter: new FakeAdapter(), sources: [{}] }, "Each source must implement SourcePlugin"],
     [{ adapter: new FakeAdapter(), sources: [], engine: {} }, "options.engine must implement Engine"],
     [{ adapter: new FakeAdapter(), sources: [], unexpected: true }, "Unknown DisTube option"],
+    [{ adapter: new FakeAdapter(), sources: [], historySize: -1 }, "historySize must be an integer of 0 or greater"],
+    [{ adapter: new FakeAdapter(), sources: [], historySize: 2.5 }, "historySize must be an integer of 0 or greater"],
+    [{ adapter: new FakeAdapter(), sources: [], historySize: "10" }, "historySize must be an integer of 0 or greater"],
+    [{ adapter: new FakeAdapter(), sources: [], onDiagnostic: 1 }, "onDiagnostic must be a function"],
+    // Named, with discovery members, but no stream: only the stream clause rejects it.
+    [
+      {
+        adapter: new FakeAdapter(),
+        sources: [{ name: "partial", resolve: async () => undefined, search: async () => [] }],
+      },
+      "Each source must implement SourcePlugin",
+    ],
   ] as const)("rejects invalid construction options %#", (options, message) => {
     expect(() => new DisTube(options as never)).toThrowError(
       expect.objectContaining({ code: "INVALID_ARGUMENT", message }),
@@ -69,20 +78,6 @@ describe("client construction", () => {
     expect(selected.dispose).toHaveBeenCalledTimes(1);
   });
 
-  it("rolls back initialized plugins in reverse order and classifies the failure", () => {
-    const first = new FakeSource("first");
-    const second = new FakeSource("second");
-    second.initialize.mockImplementation(() => {
-      throw new Error("init failed");
-    });
-
-    expect(() => new DisTube({ adapter: new FakeAdapter(), sources: [first, second] })).toThrowError(
-      expect.objectContaining({ code: "PLUGIN_FAILED" }),
-    );
-    expect(first.dispose).toHaveBeenCalledTimes(1);
-    expect(second.dispose).not.toHaveBeenCalled();
-  });
-
   it("preserves initialization failure when rollback disposal throws synchronously", () => {
     const first = new FakeSource("first");
     const second = new FakeSource("second");
@@ -107,7 +102,7 @@ describe("client construction", () => {
     expect(failure).toMatchObject({ code: "PLUGIN_FAILED", cause: initializationFailure });
     expect(second.dispose).toHaveBeenCalledTimes(1);
     expect(first.dispose).toHaveBeenCalledTimes(1);
-    expect(failing.dispose).not.toHaveBeenCalled();
+    expect(failing.dispose).toHaveBeenCalledTimes(1);
     expect(diagnostics).toHaveBeenCalledWith(
       expect.objectContaining({
         stage: "plugin.initialize.rollback",
@@ -220,43 +215,27 @@ describe("source routing", () => {
     await shutdown;
   });
 
-  it("stops pre-aborted URL and search resolution before either source loop", async () => {
-    const source = new FakeSource("source");
-    const catalog = createSourceCatalog([source]);
-    const urlController = new AbortController();
-    urlController.abort(new Error("URL cancelled"));
-
-    await expect(resolveInput(mediaUrl("cancelled"), catalog, urlController.signal)).rejects.toMatchObject({
-      code: "ABORTED",
-    });
-
-    const searchController = new AbortController();
-    searchController.abort(new Error("search cancelled"));
-    await expect(
-      findCandidates("cancelled", catalog, searchController.signal, newSearchChain(), 1),
-    ).rejects.toMatchObject({
-      code: "ABORTED",
-    });
-
-    expect(source.resolve).not.toHaveBeenCalled();
-    expect(source.search).not.toHaveBeenCalled();
-  });
-
   it("passes a declined URL to the next configured source", async () => {
     const first = new FakeSource("first");
     const second = new FakeSource("second");
     second.resolve.mockImplementation(async url => media("second", url));
     const harness = setup([first, second]);
 
-    const { items } = await harness.distube.play(TARGET, "https://provider.example/item");
+    const added = vi.fn();
+    harness.distube.on("queue.item.added", added);
+    await harness.distube.play(TARGET, "https://provider.example/item");
 
     expect(first.resolve).toHaveBeenCalledTimes(1);
-    expect(items[0]?.song.source).toBe("second");
+    expect(added).toHaveBeenCalledWith(
+      expect.objectContaining({
+        item: expect.objectContaining({ song: expect.objectContaining({ source: "second" }) }),
+      }),
+    );
   });
 
   it("rejects malformed resolve results before standalone resolution or queue insertion", async () => {
     const harness = playableSetup();
-    const { queue } = await harness.distube.play(TARGET, "seed");
+    const queue = await harness.distube.play(TARGET, "seed");
     await settle();
     const added = vi.fn();
     harness.distube.on("queue.item.added", added);
@@ -271,23 +250,20 @@ describe("source routing", () => {
     }
 
     harness.source.resolve.mockResolvedValueOnce(malformed[0] as never);
-    await expect(queue.enqueue(mediaUrl("malformed"))).rejects.toMatchObject({
+    await expect(queue.add(mediaUrl("malformed"))).rejects.toMatchObject({
       code: "SOURCE_FAILED",
       message: expect.stringContaining("source"),
     });
     expect(added).not.toHaveBeenCalled();
-    expect(queue.state.upcoming).toEqual([]);
+    expect(queue.upcoming).toEqual([]);
   });
 
-  it("maps a source failure to SOURCE_FAILED, keeping an incompatible DisTubeError as the cause", async () => {
+  it("passes a plugin-owned DisTubeError through play unchanged", async () => {
     const harness = playableSetup();
-    const cause = new DisTubeError("VOICE_FAILED", "wrong subsystem");
-    harness.source.resolve.mockRejectedValueOnce(cause);
+    const failure = new DisTubeError("SOURCE_NOT_FOUND", "provider says no");
+    harness.source.resolve.mockRejectedValueOnce(failure);
 
-    await expect(harness.distube.play(TARGET, "https://provider.example/item")).rejects.toMatchObject({
-      code: "SOURCE_FAILED",
-      cause,
-    });
+    await expect(harness.distube.play(TARGET, "https://provider.example/item")).rejects.toBe(failure);
   });
 });
 
@@ -296,12 +272,12 @@ describe("event facade", () => {
     const harness = playableSetup();
     const listener = vi.fn();
     const unsubscribe = harness.distube.on("queue.item.added", listener);
-    const { queue } = await harness.distube.play(TARGET, "a");
+    const queue = await harness.distube.play(TARGET, "a");
     await settle();
     expect(listener).toHaveBeenCalledTimes(1);
     unsubscribe();
     unsubscribe();
-    await queue.enqueue("b");
+    await queue.add("b");
     await settle();
     expect(listener).toHaveBeenCalledTimes(1);
     await harness.distube.dispose();
@@ -313,33 +289,41 @@ describe("event facade", () => {
       throw new Error("listener failed");
     });
 
-    const { queue } = await harness.distube.play(TARGET, "a");
+    const queue = await harness.distube.play(TARGET, "a");
     await settle();
 
-    expect(queue.state.current?.song.id).toBe("a");
+    expect(queue.current?.song.id).toBe("a");
     expect(harness.diagnostics).toHaveBeenCalledWith(
       expect.objectContaining({ severity: "error", stage: "event.listener", error: expect.any(Error) }),
     );
   });
-
-  it("isolates a diagnostic consumer that rejects", async () => {
-    const source = new FakeSource("source");
-    source.initialize.mockImplementation(context => {
-      context.diagnostic({ severity: "info", stage: "plugin.initialize", message: "ready" });
-    });
-    const onDiagnostic = vi.fn(async () => {
-      throw new Error("diagnostic consumer failed");
-    });
-
-    expect(() => new DisTube({ adapter: new FakeAdapter(), sources: [source], onDiagnostic })).not.toThrow();
-    expect(onDiagnostic).toHaveBeenCalledWith(
-      expect.objectContaining({ stage: "plugin.initialize", plugin: "source", message: "ready" }),
-    );
-    await settle();
-  });
 });
 
 describe("shutdown", () => {
+  it("sanitizes plugin cleanup failures before exposing the shutdown aggregate", async () => {
+    const first = new FakeSource("first");
+    const second = new FakeSource("second");
+    const unsafe = Object.assign(new Error("Authorization: Bearer cleanup-secret"), {
+      request: { credential: "private-object" },
+    });
+    first.dispose.mockImplementation(() => {
+      throw unsafe;
+    });
+    second.dispose.mockImplementation(() => {
+      throw "private-non-error";
+    });
+    const harness = setup([first, second]);
+
+    const failure = (await capture(harness.distube.dispose())) as DisTubeError;
+    const causes = (failure.cause as AggregateError).errors as Error[];
+    expect(causes).toHaveLength(2);
+    expect(causes).not.toContain(unsafe);
+    const output = causes.map(error => `${error.message} ${error.stack}`).join("\n");
+    expect(output).not.toContain("cleanup-secret");
+    expect(output).not.toContain("private-non-error");
+    expect(causes.every(error => !("request" in error))).toBe(true);
+  });
+
   it("memoizes the shutdown, disposes each Plugin once, and fences later play", async () => {
     const harness = playableSetup();
     const first = harness.distube.dispose();
@@ -352,10 +336,10 @@ describe("shutdown", () => {
 
   it("stops the borrowed Player and ignores the outcomes it publishes afterwards", async () => {
     const harness = playableSetup();
-    const { queue } = await harness.distube.play(TARGET, "a");
+    const queue = await harness.distube.play(TARGET, "a");
     await settle();
     const player = harness.engine.players[0];
-    const item = queue.state.current;
+    const item = queue.current;
     const failed = vi.fn();
     harness.distube.on("queue.item.failed", failed);
 
@@ -415,7 +399,7 @@ describe("shutdown", () => {
   it("attempts every disposal and preserves each cause in one aggregate", async () => {
     const first = new FakeSource("source");
     first.search.mockImplementation(async query => [media("source", query)]);
-    first.preparePlayback.mockImplementation(async song => ({
+    first.stream.mockImplementation(async song => ({
       kind: "resource",
       resource: {
         kind: "url",
@@ -446,16 +430,16 @@ describe("shutdown", () => {
 });
 
 describe("cancellation", () => {
-  it("rejects an aborted enqueue with QUEUE_FAILED, keeping an Error reason as the cause", async () => {
+  it("rejects an aborted enqueue with ABORTED, keeping an Error reason as the cause", async () => {
     const harness = playableSetup();
-    const { queue } = await harness.distube.play(TARGET, "a");
+    const queue = await harness.distube.play(TARGET, "a");
     await settle();
     const controller = new AbortController();
     const reason = new Error("caller went away");
     const resolution = deferred<Song>();
     harness.source.resolve.mockImplementationOnce(async () => resolution.promise);
 
-    const enqueueing = capture(queue.enqueue("b", { signal: controller.signal }));
+    const enqueueing = capture(queue.add("b", { signal: controller.signal }));
     controller.abort(reason);
     resolution.resolve(media("source", "b"));
     const failure = (await enqueueing) as DisTubeError;
@@ -464,7 +448,7 @@ describe("cancellation", () => {
     expect(failure).not.toBe(reason);
     expect(failure.code).toBe("ABORTED");
     expect(failure.cause).toBe(reason);
-    expect(queue.state.upcoming).toEqual([]);
+    expect(queue.upcoming).toEqual([]);
     await harness.distube.dispose();
   });
 

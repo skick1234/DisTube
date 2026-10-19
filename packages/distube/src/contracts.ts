@@ -1,4 +1,6 @@
+import type { Readable } from "node:stream";
 import type { Playlist, Song } from "./media";
+import type { VoiceChannelTarget } from "./voice/target";
 
 /** What core accepts wherever media enters the client. */
 export type ResolvableInput = string | Song | Playlist;
@@ -20,12 +22,6 @@ export interface PluginContext {
   readonly diagnostic: (diagnostic: PluginDiagnostic) => void;
 }
 
-export interface Plugin {
-  readonly name: string;
-  initialize(context: PluginContext): void;
-  dispose(): void | Promise<void>;
-}
-
 export interface SourceOperationOptions {
   readonly signal?: AbortSignal;
 }
@@ -43,47 +39,95 @@ export interface SearchOptions extends SourceOperationOptions {
   readonly offset?: number;
 }
 
+export type SuggestOptions = SourceOperationOptions;
+
 export interface PlaybackContext {
   readonly signal: AbortSignal;
 }
 
 export interface RelatedContext {
   readonly signal: AbortSignal;
+  /** Recently played Songs the provider should avoid repeating. */
+  readonly exclude: readonly Song[];
 }
 
 export interface UrlPlaybackResource {
   readonly kind: "url";
   readonly url: string;
-  dispose(): void | Promise<void>;
+  readonly headers?: Readonly<Record<string, string>>;
+  readonly seekable?: boolean;
+  dispose?(): void | Promise<void>;
+}
+
+export interface FilePlaybackResource {
+  readonly kind: "file";
+  readonly path: string;
+  dispose?(): void | Promise<void>;
+}
+
+export interface StreamPlaybackResource {
+  readonly kind: "stream";
+  readonly stream: Readable;
+  dispose?(): void | Promise<void>;
 }
 
 export interface EncodedPlaybackResource {
   readonly kind: "encoded";
+  readonly format: string;
   readonly encoded: string;
-  dispose(): void | Promise<void>;
+  readonly seekable?: boolean;
+  dispose?(): void | Promise<void>;
 }
 
 /** One prepared playable input. Engines document which kinds their Players accept. */
-export type PlaybackResource = UrlPlaybackResource | EncodedPlaybackResource;
+export type PlaybackResource =
+  | UrlPlaybackResource
+  | FilePlaybackResource
+  | StreamPlaybackResource
+  | EncodedPlaybackResource;
+
+export type PlaybackResourceKind = PlaybackResource["kind"];
+
+/** Copied engine configuration; individual resources may impose narrower limits. */
+export interface PlaybackCapabilities {
+  readonly seek: boolean;
+  readonly resourceKinds: readonly PlaybackResourceKind[];
+  readonly encodedFormats: readonly string[];
+}
 
 export type PlaybackPreparation =
   | Readonly<{ kind: "resource"; resource: PlaybackResource }>
   | Readonly<{ kind: "search"; query: string }>;
 
-export interface SourcePlugin extends Plugin {
+/**
+ * A media provider. `PluginData` types the `pluginData` slot of every Song it returns.
+ *
+ * `name` and `stream` are required, together with at least one of `resolve` or `search`.
+ * A constructor validates options; provider requests begin on first use.
+ */
+export interface SourcePlugin<PluginData = unknown> {
+  readonly name: string;
   /** Provider-ranked results for a query. An empty array declines; it is not an error. */
-  search(query: string, options?: SearchOptions): Promise<readonly Song[]>;
+  search?(query: string, options?: SearchOptions): Promise<readonly Song<PluginData>[]>;
   /** Resolves an input the plugin owns, or declines with `undefined`. */
-  resolve(url: string, options?: SourceOperationOptions): Promise<Song | Playlist | undefined>;
-  preparePlayback(song: Song, context: PlaybackContext): Promise<PlaybackPreparation>;
+  resolve?(url: string, options?: SourceOperationOptions): Promise<Song<PluginData> | Playlist<PluginData> | undefined>;
+  /** Prepares a Song this plugin owns: a fresh playback resource, or a query for another source to play. */
+  stream(song: Song<PluginData>, context: PlaybackContext): Promise<PlaybackPreparation>;
   /** Autoplay continuation for a Song this plugin owns. An absent member is treated as a decline. */
-  related?(song: Song, context: RelatedContext): Promise<Song | undefined>;
+  related?(song: Song<PluginData>, context: RelatedContext): Promise<Song<PluginData> | undefined>;
+  /** Provider completions for a partial query, at most 25. An absent member or empty list declines. */
+  suggest?(query: string, options?: SuggestOptions): Promise<readonly string[]>;
+  initialize?(context: PluginContext): void;
+  dispose?(): void | Promise<void>;
 }
+
+/** The `PluginData` a SourcePlugin instance declares, so `distube.search(q, { source })` types its results. */
+export type PluginDataOf<Source> = Source extends SourcePlugin<infer PluginData> ? PluginData : unknown;
 
 export type PlayerEvent =
   | Readonly<{ type: "finished"; itemId: string }>
   | Readonly<{ type: "failed"; itemId: string; error: Error; terminal?: true }>
-  /** A terminal backend loss between tracks. It deliberately has no QueueItem outcome. */
+  /** A terminal backend loss between tracks. It deliberately has no track outcome. */
   | Readonly<{ type: "terminal"; error: Error }>;
 
 export interface PlaybackRequest {
@@ -94,10 +138,10 @@ export interface PlaybackRequest {
 /**
  * The long-lived playback backend for one connected VoiceSession.
  *
- * A Player outlives the tracks it plays and the queues that borrow it. DisTubeVoice owns its terminal release.
+ * DisTubeVoice is its only caller and owns its terminal release. A Player outlives the tracks it plays.
  *
- * A capability the backend does not perform — seek or an `encoded` resource on a voice engine, a
- * filter it cannot render — SHALL reject with `DisTubeError(ErrorCode.UNSUPPORTED)`; every other
+ * A capability the backend does not perform, such as an `encoded` resource on a voice engine or a
+ * filter it cannot render, SHALL reject with `DisTubeError(ErrorCode.UNSUPPORTED)`; every other
  * rejection is a backend failure and core reports it as `VOICE_FAILED`.
  */
 export interface Player {
@@ -125,6 +169,7 @@ export interface Player {
 
 /** Gateway credentials an engine needs to attach to a voice connection, carrying no native objects. */
 export interface VoiceGatewayData {
+  readonly channelId: string;
   readonly sessionId: string;
   readonly token: string;
   readonly endpoint: string;
@@ -135,6 +180,12 @@ export type VoiceSessionEvent =
   | Readonly<{ type: "connected"; channelId: string; gateway: VoiceGatewayData }>
   /** The Adapter exhausted its recovery policy. Published exactly once per session. */
   | Readonly<{ type: "disconnected"; error?: Error }>;
+
+/** The bot's own voice state sent with a join. An omitted flag keeps the current one; core defaults are self-deaf on and self-mute off. */
+export interface JoinOptions {
+  readonly selfDeaf?: boolean;
+  readonly selfMute?: boolean;
+}
 
 /**
  * One guild's voice presence, owned by the Adapter.
@@ -150,26 +201,50 @@ export interface VoiceSession {
   readonly channelId: string;
   /** Current credentials, or `undefined` until the first connection settles. */
   readonly gateway?: VoiceGatewayData;
-  /** Joins `channelId`, or moves an existing session without recreating it. */
-  join(channelId: string): Promise<void>;
+  readonly selfDeaf: boolean;
+  readonly selfMute: boolean;
+  /** Joins `channelId`, or moves an existing session without recreating it, sending the requested voice state. */
+  join(channelId: string, options?: JoinOptions): Promise<void>;
+  /** Updates the bot's self-deaf state for the current channel and resolves after acknowledgement. */
+  setSelfDeaf(enabled: boolean): Promise<void>;
+  /** Updates the bot's self-mute state for the current channel and resolves after acknowledgement. */
+  setSelfMute(enabled: boolean): Promise<void>;
   /** Releases the connection. Overlapping callers share one teardown completion. */
   release(): Promise<void>;
   subscribe(listener: (event: VoiceSessionEvent) => void): () => void;
 }
 
-/** A preset definition: a complete engine-native payload, or a calculation from the entry's value. */
-export type FilterDefinition<TPayload = unknown> = TPayload | ((value?: number) => TPayload);
+/**
+ * One engine preset. `render` computes the engine-native payload; a preset that declares `default`,
+ * `min` or `max` accepts a numeric value clamped to its range, otherwise it is fixed.
+ */
+export interface FilterDefinition<TPayload = unknown> {
+  readonly render: (value?: number) => TPayload;
+  readonly default?: number;
+  readonly min?: number;
+  readonly max?: number;
+  /** Display text for `voice.filters.entries`; the preset name when absent. */
+  readonly label?: string | ((value?: number) => string);
+}
 
 /** Construction-time `filters` option: preset name to definition, merged over an engine's built-in defaults. */
 export type FilterDefinitions<TPayload = unknown> = Readonly<Record<string, FilterDefinition<TPayload>>>;
 
-/** One entry of a queue's ordered filter set. Core keeps the order and treats `payload` as opaque. */
-export interface FilterEntry<TPayload = unknown> {
+/** What an engine exposes about one merged preset, for command option building. */
+export interface FilterDefinitionInfo {
+  readonly default?: number;
+  readonly min?: number;
+  readonly max?: number;
+  /** Whether `voice.filters.set(name, value)` accepts a value for this preset. */
+  readonly acceptsValue: boolean;
+  label(value?: number): string;
+}
+
+/** One entry of a voice's ordered filter set. Core keeps the order; the engine renders. */
+export interface FilterEntry {
   readonly name: string;
-  /** Numeric argument handed to a calculation-form preset. */
+  /** Numeric argument for a ranged preset, already clamped to its declared range. */
   readonly value?: number;
-  /** Ad hoc engine-native payload supplied through `set(name, payload)` instead of a preset. */
-  readonly payload?: TPayload;
 }
 
 /**
@@ -178,7 +253,7 @@ export interface FilterEntry<TPayload = unknown> {
  * The engine owns filter definitions, rendering, and folding; core only names filters and keeps them ordered.
  */
 export interface Engine {
-  /** Optional lifecycle hooks must be supplied together. Core initializes and disposes each configured identity once, including dual source/engine objects. */
+  /** Hooks are independently optional. Core owns each configured identity once, including dual-role objects. */
   readonly name?: string;
   initialize?(context: PluginContext): void;
   dispose?(): void | Promise<void>;
@@ -186,19 +261,20 @@ export interface Engine {
   /**
    * The PlaybackResource kinds this engine's Players accept.
    *
-   * A Player rejects any other kind with `UNSUPPORTED` before native playback starts. Bot code reads this
+   * DisTubeVoice rejects any other kind with `UNSUPPORTED` before native playback starts. Bot code reads this
    * to know which sources an engine can play without waiting for a track to fail.
    */
   readonly accepts: ReadonlySet<PlaybackResource["kind"]>;
+  /** Required when accepting encoded input; format identity prevents incompatible engines from borrowing it. */
+  readonly encodedFormats?: ReadonlySet<string>;
+  /** Pure synchronous option check after kind/format checks, before Player creation. Omit to accept all options. */
+  supportsResource?(resource: PlaybackResource): boolean;
+  /** What the engine's Players can do. DisTubeVoice rejects `seek` with `UNSUPPORTED` when `seek` is false. */
+  readonly capabilities: Readonly<{ seek: boolean }>;
+  /** Merged preset metadata by name. A name present here renders, or the report is wrong. */
+  readonly filters: ReadonlyMap<string, FilterDefinitionInfo>;
   /** Creates the long-lived Player for a connected session. */
   createPlayer(session: VoiceSession): Promise<Player>;
-  /** Whether the engine can render `name` as a preset. A name reported here renders, or the report is wrong. */
-  resolvable(name: string): boolean;
-}
-
-export interface QueueBinding {
-  readonly queueId: string;
-  readonly guildId: string;
 }
 
 /** The guild and voice channel a DisTubeVoice occupies, in platform-neutral IDs. */
@@ -207,14 +283,19 @@ export interface VoiceTarget {
   readonly channelId: string;
 }
 
-export interface Adapter {
+export interface Adapter<Target = VoiceChannelTarget> {
   /**
-   * Validates `target` and completes Adapter-owned prerequisite preflight before native gateway work,
-   * then creates the guild's session already joined to `target.channelId`.
+   * Pure synchronous conversion. Core validates and copies these IDs before registering a queue; a throw
+   * rejects the caller with INVALID_ARGUMENT carrying the thrown error as `cause`.
    */
-  createVoiceSession(target: VoiceTarget): Promise<VoiceSession>;
+  normalizeTarget(target: Target): VoiceTarget;
+  /**
+   * Validates channel capability and guild membership, then creates a gateway session joined to the target.
+   * Audio transport and its prerequisites belong to the selected Engine.
+   */
+  createVoiceSession(target: VoiceTarget, options?: JoinOptions): Promise<VoiceSession>;
   /** The engine used unless an engine-capable Plugin is configured. */
-  readonly engine: Engine;
+  readonly engine?: Engine;
 }
 
 /** Structural engine detection, used for both the Adapter's default engine and engine-capable Plugins. */
@@ -223,18 +304,39 @@ export function isEngine(value: unknown): value is Engine {
   const record = value as Readonly<Record<PropertyKey, unknown>>;
   return (
     typeof record.createPlayer === "function" &&
-    typeof record.resolvable === "function" &&
-    record.accepts instanceof Set
+    isReadonlyCollection(record.accepts, "set") &&
+    isReadonlyCollection(record.filters, "map") &&
+    (record.encodedFormats === undefined || isReadonlyCollection(record.encodedFormats, "set")) &&
+    (record.supportsResource === undefined || typeof record.supportsResource === "function") &&
+    typeof record.capabilities === "object" &&
+    record.capabilities !== null &&
+    typeof (record.capabilities as Readonly<Record<string, unknown>>).seek === "boolean"
   );
 }
 
-export function isSourcePlugin(plugin: Plugin): plugin is SourcePlugin {
-  const candidate: unknown = plugin;
-  if (typeof candidate !== "object" || candidate === null) return false;
-  const record = candidate as Readonly<Record<PropertyKey, unknown>>;
+/** A source has at least one discovery operation; every supplied member must be callable. */
+export function isSourcePlugin(value: unknown): value is SourcePlugin {
+  if (typeof value !== "object" || value === null) return false;
+  const record = value as Readonly<Record<PropertyKey, unknown>>;
   return (
-    typeof record.resolve === "function" &&
-    typeof record.search === "function" &&
-    typeof record.preparePlayback === "function"
+    typeof record.name === "string" &&
+    typeof record.stream === "function" &&
+    (typeof record.resolve === "function" || typeof record.search === "function") &&
+    ["resolve", "search", "related", "suggest", "initialize", "dispose"].every(
+      member => record[member] === undefined || typeof record[member] === "function",
+    )
+  );
+}
+
+function isReadonlyCollection(value: unknown, kind: "map" | "set"): boolean {
+  if (typeof value !== "object" || value === null) return false;
+  const record = value as Readonly<Record<PropertyKey, unknown>>;
+  return (
+    typeof record.size === "number" &&
+    Number.isSafeInteger(record.size) &&
+    record.size >= 0 &&
+    [Symbol.iterator, "has", "keys", "values", "entries", "forEach", ...(kind === "map" ? ["get"] : [])].every(
+      member => typeof record[member] === "function",
+    )
   );
 }

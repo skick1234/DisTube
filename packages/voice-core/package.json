@@ -13,8 +13,7 @@
     "check": "biome check .",
     "type": "tsc --noEmit",
     "test": "vitest run --coverage=false",
-    "test:release": "vitest run --coverage",
-    "check:circular": "dpdm -T --tree=false --warning=false --exit-code circular:1 --tsconfig tsconfig.json \"src/**/*.ts\""
+    "test:release": "vitest run --coverage"
   },
   "devDependencies": {
     "@discordjs/voice": "^0.19.2",

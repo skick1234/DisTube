@@ -1,87 +1,87 @@
 import { randomUUID } from "node:crypto";
 import type { ResolvableInput, VoiceTarget } from "./contracts";
-import { type DisTubeGuild, GuildQueueImpl } from "./DisTubeGuild";
+import { type DisTubeQueue, QueueImpl } from "./DisTubeQueue";
 import { abortFailure, DisTubeError, ErrorCode } from "./errors";
 import type { DisTubeEventEmitter } from "./events";
 import { Playlist, type QueueItem, Song } from "./media";
 import { resolveInput } from "./playback/resolve";
 import type { SourceCatalog } from "./playback/sources";
 import { cleanupFailure } from "./queue/failures";
+import type { AddOptions } from "./queue/protocol";
 import type { QueueTerminalCause } from "./queue/terminal";
-import type { QueueVoice } from "./queue/voice";
 import { settleAll } from "./utils/dispose";
-import { normalizeChannel, type VoiceChannelTarget } from "./voice/target";
+import type { VoiceImpl } from "./voice/DisTubeVoice";
+import type { VoiceChannelTarget } from "./voice/target";
 
-/** Readonly view over the registered GuildQueues, published as `distube.queues`. */
-export type QueueCollection<Metadata = unknown> = Readonly<{
+/** Readonly view over the registered queues, published as `distube.queues`. */
+export type QueueCollection<Metadata = unknown, Target = VoiceChannelTarget> = Readonly<{
   readonly size: number;
-  [Symbol.iterator](): IterableIterator<DisTubeGuild<Metadata>>;
+  [Symbol.iterator](): IterableIterator<DisTubeQueue<Metadata, Target>>;
 }>;
 
-interface QueuePlayOptions {
-  readonly metadata?: unknown;
-  readonly signal?: AbortSignal;
-}
-
-interface QueuePlayResult {
-  readonly queue: DisTubeGuild;
+interface QueuePlayResult<Target = VoiceChannelTarget> {
+  readonly queue: DisTubeQueue<unknown, Target>;
   readonly items: readonly QueueItem[];
 }
 
-interface PlayInvocation {
+interface PlayInvocation<Target = VoiceChannelTarget> {
   readonly guildId: string;
-  readonly queue: GuildQueueImpl;
+  readonly queue: QueueImpl<Target>;
   readonly signal: AbortSignal;
   readonly release: () => void;
-  completion?: Promise<QueuePlayResult>;
+  completion?: Promise<QueuePlayResult<Target>>;
 }
 
-interface DeletionRecord {
-  readonly queues: readonly GuildQueueImpl[];
+interface DeletionRecord<Target = VoiceChannelTarget> {
+  readonly queues: readonly QueueImpl<Target>[];
   readonly completion: Promise<void>;
 }
 
+const ADD_OPTION_KEYS = ["metadata", "signal", "at", "next"];
+
 /** @internal */
-export class QueueManager {
-  readonly #moveVoice: (target: VoiceTarget) => Promise<QueueVoice>;
-  readonly #getVoice: (guildId: string) => QueueVoice | undefined;
+export class QueueManager<Target = VoiceChannelTarget> {
+  readonly #moveVoice: (target: VoiceTarget) => Promise<VoiceImpl<Target>>;
+  readonly #getVoice: (guildId: string) => VoiceImpl<Target> | undefined;
   readonly #assertVoiceJoinable: (guildId: string) => void;
-  readonly #releaseOwnedVoice: (voice: QueueVoice) => Promise<void>;
   readonly #sources: SourceCatalog;
-  readonly #events: DisTubeEventEmitter;
-  readonly #queues = new Map<string, GuildQueueImpl>();
+  readonly #events: DisTubeEventEmitter<Target>;
+  readonly #historySize: number;
+  readonly #normalizeTarget: (target: Target) => VoiceTarget;
+  readonly #queues = new Map<string, QueueImpl<Target>>();
   /** One promise tail per guild keeps play calls in invocation order. */
   readonly #lanes = new Map<string, Promise<void>>();
-  readonly #inFlight = new Set<PlayInvocation>();
+  readonly #inFlight = new Set<PlayInvocation<Target>>();
   /** Queue completions remain observable after synchronous unregistration. */
   readonly #cleanup = new Map<string, Set<Promise<void>>>();
   /** The current terminal join for a guild. A replacement queue gets its own record after the old one unregisters. */
-  readonly #deleting = new Map<string, DeletionRecord>();
-  readonly view: QueueCollection;
+  readonly #deleting = new Map<string, DeletionRecord<Target>>();
+  readonly view: QueueCollection<unknown, Target>;
   #fenced = false;
-  readonly #stops = new WeakMap<GuildQueueImpl, Promise<void>>();
-  readonly #unadoptedVoices = new Map<string, QueueVoice>();
+  readonly #stops = new WeakMap<QueueImpl<Target>, Promise<void>>();
 
   constructor(
-    moveVoice: (target: VoiceTarget) => Promise<QueueVoice>,
-    getVoice: (guildId: string) => QueueVoice | undefined,
+    moveVoice: (target: VoiceTarget) => Promise<VoiceImpl<Target>>,
+    getVoice: (guildId: string) => VoiceImpl<Target> | undefined,
     assertVoiceJoinable: (guildId: string) => void,
-    releaseOwnedVoice: (voice: QueueVoice) => Promise<void>,
     sources: SourceCatalog,
-    events: DisTubeEventEmitter,
+    events: DisTubeEventEmitter<Target>,
+    historySize: number,
+    normalizeTarget: (target: Target) => VoiceTarget,
   ) {
     this.#moveVoice = moveVoice;
     this.#getVoice = getVoice;
     this.#assertVoiceJoinable = assertVoiceJoinable;
-    this.#releaseOwnedVoice = releaseOwnedVoice;
     this.#sources = sources;
     this.#events = events;
+    this.#historySize = historySize;
+    this.#normalizeTarget = normalizeTarget;
     const queues = this.#queues;
     const view = {
       get size(): number {
         return queues.size;
       },
-      *[Symbol.iterator](): IterableIterator<DisTubeGuild> {
+      *[Symbol.iterator](): IterableIterator<DisTubeQueue<unknown, Target>> {
         for (const queue of queues.values()) yield queue.facade;
       },
     };
@@ -90,29 +90,25 @@ export class QueueManager {
   }
 
   /** Serializes all play work for a guild without exposing a transaction object publicly. */
-  play(target: VoiceChannelTarget, input: ResolvableInput, options: QueuePlayOptions = {}): Promise<QueuePlayResult> {
+  play(target: Target, input: ResolvableInput, options: AddOptions = {}): Promise<DisTubeQueue<unknown, Target>> {
     try {
       this.#assertReady();
-      const normalized = normalizeChannel(target);
+      const normalized = this.#normalizeTarget(target);
       validateInput(input, options);
       this.#assertVoiceJoinable(normalized.guildId);
       const queue = this.#queues.get(normalized.guildId) ?? this.#createQueue(normalized.guildId);
-      return this.#reserve(queue, input, options, normalized);
+      return this.#reserve(queue, input, options, normalized).then(result => result.queue);
     } catch (error: unknown) {
       return Promise.reject(error);
     }
   }
 
-  enqueue(
-    queue: GuildQueueImpl,
-    input: ResolvableInput,
-    options: QueuePlayOptions = {},
-  ): Promise<readonly QueueItem[]> {
+  add(queue: QueueImpl<Target>, input: ResolvableInput, options: AddOptions = {}): Promise<readonly QueueItem[]> {
     try {
       this.#assertReady();
       validateInput(input, options);
       if (this.#queues.get(queue.guildId) !== queue || !this.#getVoice(queue.guildId)) {
-        throw new DisTubeError("INVALID_STATE", "Enqueue requires this connected queue");
+        throw new DisTubeError("INVALID_STATE", "Adding requires this connected queue");
       }
       return this.#reserve(queue, input, options).then(result => result.items);
     } catch (error: unknown) {
@@ -136,14 +132,18 @@ export class QueueManager {
   }
 
   #reserve(
-    queue: GuildQueueImpl,
+    queue: QueueImpl<Target>,
     input: ResolvableInput,
-    options: QueuePlayOptions,
+    options: AddOptions,
     target?: VoiceTarget,
-  ): Promise<QueuePlayResult> {
+  ): Promise<QueuePlayResult<Target>> {
     const reservation = queue.reserve(options.signal);
-    const invocation: PlayInvocation = { guildId: queue.guildId, queue, ...reservation };
-    const invocationOptions = Object.freeze({ metadata: options.metadata, signal: invocation.signal });
+    const invocation: PlayInvocation<Target> = { guildId: queue.guildId, queue, ...reservation };
+    const invocationOptions: AddOptions = Object.freeze({
+      metadata: options.metadata,
+      signal: invocation.signal,
+      ...(options.next ? { at: 0 } : options.at === undefined ? {} : { at: options.at }),
+    });
     this.#inFlight.add(invocation);
     const operation = this.order(queue.guildId, () => this.#runPlay(input, invocationOptions, invocation, target));
     invocation.completion = operation;
@@ -154,7 +154,7 @@ export class QueueManager {
     });
   }
 
-  get(guildId: string): DisTubeGuild | undefined {
+  get(guildId: string): DisTubeQueue<unknown, Target> | undefined {
     return this.#queues.get(guildId)?.facade;
   }
 
@@ -176,7 +176,7 @@ export class QueueManager {
     for (const completion of started) void completion.catch(() => undefined);
 
     const completion = this.#completeDeletion(guildId, lane, started);
-    const record: DeletionRecord = Object.freeze({ queues, completion });
+    const record: DeletionRecord<Target> = Object.freeze({ queues, completion });
     this.#deleting.set(guildId, record);
     void completion
       .finally(() => {
@@ -207,10 +207,10 @@ export class QueueManager {
 
   async #runPlay(
     input: ResolvableInput,
-    options: QueuePlayOptions,
-    invocation: PlayInvocation,
+    options: AddOptions,
+    invocation: PlayInvocation<Target>,
     target?: VoiceTarget,
-  ): Promise<QueuePlayResult> {
+  ): Promise<QueuePlayResult<Target>> {
     const queue = invocation.queue;
     try {
       this.#assertReady();
@@ -218,52 +218,37 @@ export class QueueManager {
       const media = await resolveInput(input, this.#sources, invocation.signal);
       this.#assertReady();
       this.#assertInvocation(invocation);
-      // Old terminal effects finish before a new queue may borrow or reset this backend.
+      // Old terminal effects finish before a new queue may drive this voice.
       await Promise.all([...(this.#cleanup.get(queue.guildId) ?? [])]);
       this.#assertInvocation(invocation);
       if (target) {
         this.#assertVoiceJoinable(queue.guildId);
-        const previous = this.#getVoice(queue.guildId);
         const voice = await this.#moveVoice(target);
-        if (!previous && this.#getVoice(queue.guildId) === voice) this.#unadoptedVoices.set(queue.guildId, voice);
         this.#assertInvocation(invocation);
         queue.attachVoice(voice);
       }
       const items = await queue.insert(media, options);
-      this.#unadoptedVoices.delete(queue.guildId);
       return Object.freeze({ queue: queue.facade, items });
     } catch (error: unknown) {
       const superseded = queue.terminal;
-      const cleanupErrors: Error[] = [];
       invocation.release();
       if (queue.empty && this.#queues.get(queue.guildId) === queue) {
         try {
           await queue.destroy({ kind: "rollback" });
         } catch (cleanup: unknown) {
-          cleanupErrors.push(cleanup instanceof Error ? cleanup : new Error("Queue cleanup failed"));
+          throw new DisTubeError(
+            error instanceof DisTubeError ? error.code : ErrorCode.QUEUE_FAILED,
+            "Play failed and cleanup failed",
+            { cause: new AggregateError([error, cleanup], "Play and cleanup failures") },
+          );
         }
       }
-      const ownedVoice = this.#unadoptedVoices.get(queue.guildId);
-      if (ownedVoice && this.#getVoice(queue.guildId) === ownedVoice && !this.#queues.has(queue.guildId)) {
-        this.#unadoptedVoices.delete(queue.guildId);
-        try {
-          await this.#releaseOwnedVoice(ownedVoice);
-        } catch (cleanup: unknown) {
-          cleanupErrors.push(cleanup instanceof Error ? cleanup : new Error("Voice cleanup failed"));
-        }
-      }
-      if (cleanupErrors.length > 0)
-        throw new DisTubeError(
-          error instanceof DisTubeError ? error.code : "QUEUE_FAILED",
-          "Play failed and cleanup failed",
-          { cause: new AggregateError([error, ...cleanupErrors], "Play and cleanup failures") },
-        );
       if (superseded) throw new DisTubeError("INVALID_STATE", "Queue operation was superseded");
       throw error;
     }
   }
 
-  stop(queue: GuildQueueImpl): Promise<void> {
+  stop(queue: QueueImpl<Target>): Promise<void> {
     const existing = this.#stops.get(queue);
     if (existing) return existing;
     const work = [...this.#inFlight]
@@ -278,13 +263,13 @@ export class QueueManager {
     return completion;
   }
 
-  #createQueue(guildId: string): GuildQueueImpl {
-    const queue = new GuildQueueImpl(
-      { queueId: randomUUID(), guildId },
+  #createQueue(guildId: string): QueueImpl<Target> {
+    const queue: QueueImpl<Target> = new QueueImpl<Target>(
+      { queueId: randomUUID(), guildId, historySize: this.#historySize },
       this.#sources,
       this.#events,
       completion => this.#unregister(guildId, queue, completion),
-      (input, options) => this.enqueue(queue, input, options),
+      (input, options) => this.add(queue, input, options),
       () => this.stop(queue),
     );
     const voice = this.#getVoice(guildId);
@@ -294,7 +279,7 @@ export class QueueManager {
   }
 
   /** Frees a registered queue and records its cleanup before it begins settling. */
-  #unregister(guildId: string, queue: GuildQueueImpl, completion: Promise<void>): void {
+  #unregister(guildId: string, queue: QueueImpl<Target>, completion: Promise<void>): void {
     if (this.#queues.get(guildId) === queue) this.#queues.delete(guildId);
     const completions = this.#cleanup.get(guildId) ?? new Set<Promise<void>>();
     completions.add(completion);
@@ -329,7 +314,7 @@ export class QueueManager {
     if (failure) throw failure;
   }
 
-  #currentQueues(guildId: string): readonly GuildQueueImpl[] {
+  #currentQueues(guildId: string): readonly QueueImpl<Target>[] {
     const queue = this.#queues.get(guildId);
     return queue ? [queue] : [];
   }
@@ -340,7 +325,7 @@ export class QueueManager {
     }
   }
 
-  #assertInvocation(invocation: PlayInvocation): void {
+  #assertInvocation(invocation: PlayInvocation<Target>): void {
     if (invocation.queue.terminal) throw new DisTubeError("INVALID_STATE", "Queue operation was superseded");
     if (!invocation.signal.aborted) return;
     throw abortFailure(invocation.signal.reason);
@@ -355,11 +340,11 @@ export class QueueManager {
   }
 }
 
-function sameQueues(left: readonly GuildQueueImpl[], right: readonly GuildQueueImpl[]): boolean {
+function sameQueues<Target>(left: readonly QueueImpl<Target>[], right: readonly QueueImpl<Target>[]): boolean {
   return left.length === right.length && left.every((queue, index) => queue === right[index]);
 }
 
-function validateInput(input: ResolvableInput, options: QueuePlayOptions): void {
+function validateInput(input: ResolvableInput, options: AddOptions): void {
   if (
     !(input instanceof Song) &&
     !(input instanceof Playlist) &&
@@ -371,12 +356,21 @@ function validateInput(input: ResolvableInput, options: QueuePlayOptions): void 
     !options ||
     typeof options !== "object" ||
     Array.isArray(options) ||
-    Object.keys(options).some(key => !["metadata", "signal"].includes(key))
+    Object.keys(options).some(key => !ADD_OPTION_KEYS.includes(key))
   ) {
     throw new DisTubeError("INVALID_ARGUMENT", "Invalid play options");
   }
   if (options.signal !== undefined && !(options.signal instanceof AbortSignal)) {
     throw new DisTubeError("INVALID_ARGUMENT", "signal must be an AbortSignal");
+  }
+  if (options.next !== undefined && typeof options.next !== "boolean") {
+    throw new DisTubeError("INVALID_ARGUMENT", "next must be a boolean");
+  }
+  if (options.at !== undefined && (!Number.isInteger(options.at) || options.at < 0)) {
+    throw new DisTubeError("INVALID_ARGUMENT", "at must be a non-negative integer");
+  }
+  if (options.next !== undefined && options.at !== undefined) {
+    throw new DisTubeError("INVALID_ARGUMENT", "next and at are mutually exclusive");
   }
   if (options.signal?.aborted) throw abortFailure(options.signal.reason);
 }

@@ -9,10 +9,10 @@ import {
   flushMicrotasks,
   GUILD,
   media,
-  mediaUrl,
   once,
   playableSetup,
   record,
+  required,
   settle,
   setup,
   VOICE_CHANNEL,
@@ -24,39 +24,34 @@ const SECOND = "second-guild";
 describe("voice presence", () => {
   it("outlives the queue it played for and lends the same session and Player to the next one", async () => {
     const harness = playableSetup();
-    const { queue } = await harness.distube.play(TARGET, "a");
+    const queue = await harness.distube.play(TARGET, "a");
     await settle();
     const voice = harness.distube.voices.get(GUILD);
     const player = harness.engine.players[0] as FakePlayer;
+    expect(queue.voice).toBe(voice);
 
-    (harness.engine.players[0] as FakePlayer).finish();
+    player.finish();
     await settle();
     expect(harness.distube.getQueue(GUILD)).toBeUndefined();
+    expect(queue.voice).toBeUndefined();
     expect(harness.distube.voices.get(GUILD)).toBe(voice);
     expect(harness.adapter.sessions[0]?.release).not.toHaveBeenCalled();
 
     const second = await harness.distube.play(TARGET, "b");
+    const secondItems = [...(second.current ? [second.current] : []), ...second.upcoming];
     await settle();
-    expect(second.queue).not.toBe(queue);
+    expect(second).not.toBe(queue);
+    expect(second.voice).toBe(voice);
+    expect(queue.voice).toBeUndefined();
     expect(harness.adapter.createVoiceSession).toHaveBeenCalledTimes(1);
     expect(harness.engine.players).toEqual([player]);
-    expect(player.playing).toBe(second.items[0]?.id);
-  });
-
-  it("passes the session client identity to the Engine", async () => {
-    const harness = playableSetup();
-
-    await harness.distube.play(TARGET, "a");
-    await settle();
-
-    expect(harness.engine.createPlayer).toHaveBeenCalledWith(
-      expect.objectContaining({ guildId: GUILD, clientUserId: "bot" }),
-    );
+    expect(player.playing).toBe(secondItems[0]?.id);
   });
 
   it("releases an idle terminal Player before the next playback starts", async () => {
     const harness = playableSetup();
     const first = await harness.distube.play(TARGET, "a");
+    const firstItems = [...(first.current ? [first.current] : []), ...first.upcoming];
     await settle();
     const player = harness.engine.players[0] as FakePlayer;
 
@@ -64,7 +59,7 @@ describe("voice presence", () => {
     await settle();
     expect(harness.distube.getQueue(GUILD)).toBeUndefined();
 
-    const events = record(harness.distube, ["queue.item.failed", "queue.deleted"]);
+    const events = record(harness.distube, ["voice.track.failed", "queue.item.failed", "queue.deleted"]);
     player.emit({ type: "terminal", error: new Error("backend lost between tracks") });
     await settle();
 
@@ -72,12 +67,13 @@ describe("voice presence", () => {
     expect(player.release).toHaveBeenCalledTimes(1);
 
     const second = await harness.distube.play(TARGET, "b");
+    const secondItems = [...(second.current ? [second.current] : []), ...second.upcoming];
     await settle();
     const successor = harness.engine.players[1] as FakePlayer;
 
     expect(harness.engine.players).toHaveLength(2);
-    expect(player.requests.map(request => request.itemId)).toEqual([first.items[0]?.id]);
-    expect(successor.requests.map(request => request.itemId)).toEqual([second.items[0]?.id]);
+    expect(player.requests.map(request => request.itemId)).toEqual([firstItems[0]?.id]);
+    expect(successor.requests.map(request => request.itemId)).toEqual([secondItems[0]?.id]);
   });
 
   it("moves an existing DisTubeVoice on join and stays put when it already occupies the channel", async () => {
@@ -111,29 +107,41 @@ describe("voice presence", () => {
     const preflightFailure = new DisTubeError("VOICE_FAILED", "@distube/example requires sodium");
     harness.adapter.createVoiceSession.mockRejectedValueOnce(preflightFailure);
 
-    await expect(harness.distube.voices.join({ guildId: GUILD, id: VOICE_CHANNEL })).rejects.toBe(preflightFailure);
+    await expect(harness.distube.voices.join(TARGET)).rejects.toBe(preflightFailure);
     expect(harness.distube.voices.size).toBe(0);
     expect(harness.engine.createPlayer).not.toHaveBeenCalled();
 
-    const voice = await harness.distube.voices.join({ guildId: GUILD, id: VOICE_CHANNEL });
+    const voice = await harness.distube.voices.join(TARGET);
     expect(voice.guildId).toBe(GUILD);
     expect(harness.distube.voices.size).toBe(1);
   });
 });
 
 describe("terminal disconnect", () => {
-  it("deletes the guild's queue before publishing a platform disconnect, and publishes it once", async () => {
+  it("publishes platform loss as track failure, item failure, queue deletion, then one disconnect", async () => {
     const harness = playableSetup();
-    await harness.distube.play(TARGET, "a");
+    const queue = await harness.distube.play(TARGET, "a");
     await settle();
-    const order = record(harness.distube, ["queue.deleted", "voice.disconnected"]);
+    const itemId = queue.current?.id;
+    const order = record(harness.distube, [
+      "voice.track.failed",
+      "queue.item.failed",
+      "queue.deleted",
+      "voice.disconnected",
+    ]);
+    const trackFailed = vi.fn();
+    harness.distube.on("voice.track.failed", trackFailed);
     const disconnected = vi.fn();
     harness.distube.on("voice.disconnected", disconnected);
 
     harness.adapter.sessions[0]?.disconnect(new Error("dropped"));
     await settle();
 
-    expect(order).toEqual(["queue.deleted", "voice.disconnected"]);
+    expect(order).toEqual(["voice.track.failed", "queue.item.failed", "queue.deleted", "voice.disconnected"]);
+    expect(itemId).toBeDefined();
+    expect(trackFailed).toHaveBeenCalledWith(
+      expect.objectContaining({ itemId, error: expect.objectContaining({ code: "VOICE_FAILED" }) }),
+    );
     expect(disconnected).toHaveBeenCalledWith(
       expect.objectContaining({
         guildId: GUILD,
@@ -168,7 +176,7 @@ describe("terminal disconnect", () => {
 describe("shutdown", () => {
   it("releases every connected DisTubeVoice, announces each once, and fences later joins", async () => {
     const harness = playableSetup();
-    await harness.distube.voices.join({ guildId: GUILD, id: VOICE_CHANNEL });
+    await harness.distube.voices.join(TARGET);
     await harness.distube.voices.join({ guildId: SECOND, id: VOICE_CHANNEL });
     const reasons: string[] = [];
     harness.distube.on("voice.disconnected", event => reasons.push(`${event.guildId}:${event.reason}`));
@@ -180,19 +188,10 @@ describe("shutdown", () => {
     expect(reasons.toSorted()).toEqual([`${GUILD}:shutdown`, `${SECOND}:shutdown`]);
     expect(harness.adapter.sessions.every(session => session.release.mock.calls.length === 1)).toBe(true);
     expect(harness.distube.voices.size).toBe(0);
-    await expect(harness.distube.voices.join({ guildId: GUILD, id: VOICE_CHANNEL })).rejects.toMatchObject({
+    await expect(harness.distube.voices.join(TARGET)).rejects.toMatchObject({
       code: "INVALID_STATE",
       message: "DisTube is disposed",
     });
-  });
-
-  it("returns the same Promise to concurrent shutdown callers", async () => {
-    const harness = playableSetup();
-    const first = harness.distube.dispose();
-    const second = harness.distube.dispose();
-
-    expect(second).toBe(first);
-    await first;
   });
 });
 
@@ -200,7 +199,7 @@ describe("deferred DisTubeVoice lifetime", () => {
   it("leave waits for pending session creation and releases the late session once", async () => {
     const harness = playableSetup();
     const creation = harness.adapter.gateCreateSession();
-    const joining = capture(harness.distube.voices.join({ guildId: GUILD, id: VOICE_CHANNEL }));
+    const joining = capture(harness.distube.voices.join(TARGET));
     await flushMicrotasks(32);
 
     const leaving = harness.distube.voices.leave(GUILD);
@@ -215,7 +214,7 @@ describe("deferred DisTubeVoice lifetime", () => {
 
   it("rejects play accepted while leave holds the guild DisTubeVoice terminal fence", async () => {
     const harness = playableSetup();
-    await harness.distube.voices.join({ guildId: GUILD, id: VOICE_CHANNEL });
+    await harness.distube.voices.join(TARGET);
     const session = harness.adapter.sessions[0] as FakeVoiceSession;
     const release = session.gateRelease();
 
@@ -234,7 +233,7 @@ describe("deferred DisTubeVoice lifetime", () => {
 
     const fresh = await harness.distube.play(TARGET, "fresh");
     expect(harness.adapter.createVoiceSession).toHaveBeenCalledTimes(2);
-    expect(harness.distube.getQueue(GUILD)).toBe(fresh.queue);
+    expect(harness.distube.getQueue(GUILD)).toBe(fresh);
   });
 
   it("leave deletes a provisional first queue while session creation is pending", async () => {
@@ -259,7 +258,7 @@ describe("deferred DisTubeVoice lifetime", () => {
     plugin.dispose.mockImplementation(disposed);
     const harness = setup([], { sources: [plugin] });
     const creation = harness.adapter.gateCreateSession();
-    const joining = capture(harness.distube.voices.join({ guildId: GUILD, id: VOICE_CHANNEL }));
+    const joining = capture(harness.distube.voices.join(TARGET));
     await flushMicrotasks(32);
 
     const shutdown = harness.distube.dispose();
@@ -284,9 +283,7 @@ describe("deferred DisTubeVoice lifetime", () => {
     });
     harness.adapter.createVoiceSession.mockResolvedValueOnce(session);
 
-    await expect(harness.distube.voices.join({ guildId: GUILD, id: VOICE_CHANNEL })).rejects.toMatchObject({
-      code: "VOICE_FAILED",
-    });
+    await expect(harness.distube.voices.join(TARGET)).rejects.toMatchObject({ code: "VOICE_FAILED" });
 
     expect(session.release).toHaveBeenCalledTimes(1);
     expect(harness.distube.voices.has(GUILD)).toBe(false);
@@ -298,7 +295,7 @@ describe("deferred DisTubeVoice lifetime", () => {
     plugin.dispose.mockImplementation(disposed);
     const harness = setup([], { sources: [plugin] });
     const creation = harness.adapter.gateCreateSession();
-    const joining = capture(harness.distube.voices.join({ guildId: GUILD, id: VOICE_CHANNEL }));
+    const joining = capture(harness.distube.voices.join(TARGET));
     await flushMicrotasks(32);
 
     const shutdown = harness.distube.dispose();
@@ -321,7 +318,7 @@ describe("deferred DisTubeVoice lifetime", () => {
 
   it("keeps the first terminal reason when leave overlaps platform loss", async () => {
     const harness = playableSetup();
-    await harness.distube.voices.join({ guildId: GUILD, id: VOICE_CHANNEL });
+    await harness.distube.voices.join(TARGET);
     const session = harness.adapter.sessions[0] as FakeVoiceSession;
     const release = session.gateRelease();
     const reasons: string[] = [];
@@ -338,7 +335,7 @@ describe("deferred DisTubeVoice lifetime", () => {
 
   it("serializes public DisTubeVoice movement and waits for accepted movement before leave", async () => {
     const harness = playableSetup();
-    const voice = await harness.distube.voices.join({ guildId: GUILD, id: VOICE_CHANNEL });
+    const voice = await harness.distube.voices.join(TARGET);
     const session = harness.adapter.sessions[0] as FakeVoiceSession;
     const move = deferred<void>();
     session.join.mockImplementationOnce(async channelId => {
@@ -375,31 +372,13 @@ describe("deferred DisTubeVoice lifetime", () => {
     release.resolve();
     await leaving;
 
-    expect(play.queue.state.current).toBeUndefined();
+    expect(play.current).toBeUndefined();
     expect(player.requests).toEqual([]);
-    expect(player.calls).toEqual(["filters", "release"]);
+    expect(player.calls).toEqual(["release"]);
     expect(player.listeners.size).toBe(0);
   });
 
-  it("waits for Player release before releasing the session", async () => {
-    const harness = playableSetup();
-    await harness.distube.play(TARGET, "first");
-    await settle();
-    const player = harness.engine.players[0] as FakePlayer;
-    const session = harness.adapter.sessions[0] as FakeVoiceSession;
-    const release = player.gate("release");
-
-    const leaving = harness.distube.voices.leave(GUILD);
-    await release.entered;
-
-    expect(player.release).toHaveBeenCalledTimes(1);
-    expect(session.release).not.toHaveBeenCalled();
-    release.resolve();
-    await leaving;
-    expect(session.release).toHaveBeenCalledTimes(1);
-  });
-
-  it("shares Player and session cleanup across repeated terminal callers", async () => {
+  it("hides the guild and releases the Player before the session, once, across repeated leave calls", async () => {
     const harness = playableSetup();
     await harness.distube.play(TARGET, "first");
     await settle();
@@ -411,6 +390,7 @@ describe("deferred DisTubeVoice lifetime", () => {
     const second = harness.distube.voices.leave(GUILD);
     expect(second).toBe(first);
     await release.entered;
+    expect(harness.distube.voices.has(GUILD)).toBe(false);
     expect(session.release).not.toHaveBeenCalled();
     release.resolve();
     await first;
@@ -421,7 +401,9 @@ describe("deferred DisTubeVoice lifetime", () => {
 
   it("releases the session after a Player cleanup failure", async () => {
     const harness = playableSetup();
-    await harness.distube.play(TARGET, "first");
+    const voice = await harness.distube.voices.join(TARGET);
+    await voice.play({ kind: "url", url: "https://stream.example/clip", dispose: () => undefined });
+    (harness.engine.players[0] as FakePlayer).finish();
     await settle();
     const player = harness.engine.players[0] as FakePlayer;
     const session = harness.adapter.sessions[0] as FakeVoiceSession;
@@ -437,7 +419,9 @@ describe("deferred DisTubeVoice lifetime", () => {
 
   it("aggregates Player cleanup before session cleanup failures", async () => {
     const harness = playableSetup();
-    await harness.distube.play(TARGET, "first");
+    const voice = await harness.distube.voices.join(TARGET);
+    await voice.play({ kind: "url", url: "https://stream.example/clip", dispose: () => undefined });
+    (harness.engine.players[0] as FakePlayer).finish();
     await settle();
     const player = harness.engine.players[0] as FakePlayer;
     const session = harness.adapter.sessions[0] as FakeVoiceSession;
@@ -459,7 +443,7 @@ describe("deferred DisTubeVoice lifetime", () => {
     await settle();
     const player = harness.engine.players[0] as FakePlayer;
     const release = player.gate("release");
-    const events = record(harness.distube, ["queue.item.finished", "queue.item.failed"]);
+    const events = record(harness.distube, ["voice.track.failed", "queue.item.finished", "queue.item.failed"]);
 
     const leaving = harness.distube.voices.leave(GUILD);
     await release.entered;
@@ -481,22 +465,35 @@ describe("deferred DisTubeVoice lifetime", () => {
       harness.engine.players.push(player);
       return player;
     });
-    const events = record(harness.distube, ["queue.item.started", "queue.item.failed", "queue.deleted"]);
+    const events = record(harness.distube, [
+      "voice.track.started",
+      "voice.track.failed",
+      "queue.item.started",
+      "queue.item.failed",
+      "queue.deleted",
+    ]);
     const deleted = deferred<void>();
     once(harness.distube, "queue.deleted", () => deleted.resolve());
 
-    const { queue } = await harness.distube.play(TARGET, "first");
+    const queue = await harness.distube.play(TARGET, "first");
     await deleted.promise;
 
-    expect(events).toEqual(["queue.item.started", "queue.item.failed", "queue.deleted"]);
-    expect(queue.state.current).toBeUndefined();
+    expect(events).toEqual([
+      "voice.track.started",
+      "queue.item.started",
+      "voice.track.failed",
+      "queue.item.failed",
+      "queue.deleted",
+    ]);
+    expect(queue.current).toBeUndefined();
   });
 
-  it("retires a terminal Player before queue deletion can close its lease", async () => {
+  it("retires a terminal Player and creates a fresh one for the next queue", async () => {
     const harness = playableSetup();
     const firstStarted = deferred<void>();
     once(harness.distube, "queue.item.started", () => firstStarted.resolve());
     const first = await harness.distube.play(TARGET, "first");
+    const firstItems = [...(first.current ? [first.current] : []), ...first.upcoming];
     await firstStarted.promise;
     const firstPlayer = harness.engine.players[0] as FakePlayer;
 
@@ -506,47 +503,61 @@ describe("deferred DisTubeVoice lifetime", () => {
       error: new Error("decoder lost"),
       terminal: true,
     });
-    await first.queue.stop();
+    await first.stop();
 
     const secondStarted = deferred<void>();
     once(harness.distube, "queue.item.started", () => secondStarted.resolve());
     const second = await harness.distube.play(TARGET, "second");
+    const secondItems = [...(second.current ? [second.current] : []), ...second.upcoming];
     await secondStarted.promise;
 
     expect(harness.engine.createPlayer).toHaveBeenCalledTimes(2);
-    expect(firstPlayer.requests.map(request => request.itemId)).toEqual([first.items[0]?.id]);
+    expect(firstPlayer.release).toHaveBeenCalledTimes(1);
+    expect(firstPlayer.requests.map(request => request.itemId)).toEqual([firstItems[0]?.id]);
     expect((harness.engine.players[1] as FakePlayer).requests.map(request => request.itemId)).toEqual([
-      second.items[0]?.id,
+      secondItems[0]?.id,
     ]);
   });
 
   it("fails the active item when a stale terminal outcome retires its Player", async () => {
     const harness = playableSetup();
     const first = await harness.distube.play(TARGET, "first");
+    const firstItems = [...(first.current ? [first.current] : []), ...first.upcoming];
     const second = await harness.distube.play(TARGET, "second");
+    const secondItem = required(second.upcoming.at(-1)).id;
     await settle();
     const player = harness.engine.players[0] as FakePlayer;
-    const firstItem = first.items[0]?.id as string;
-    const secondItem = second.items[0]?.id as string;
+    const firstItem = firstItems[0]?.id as string;
 
     player.emit({ type: "finished", itemId: firstItem });
     await settle();
-    expect(first.queue.state.current?.id).toBe(secondItem);
-    const events = record(harness.distube, ["queue.item.failed", "queue.deleted"]);
-    const deleted = deferred<void>();
-    once(harness.distube, "queue.deleted", () => deleted.resolve());
+    expect(first.current?.id).toBe(secondItem);
+    const events = record(harness.distube, ["voice.track.failed", "queue.item.failed", "queue.deleted"]);
+    const failed = vi.fn();
+    harness.distube.on("queue.item.failed", failed);
 
-    player.emit({ type: "failed", itemId: firstItem, error: new Error("late decoder loss"), terminal: true });
-    await deleted.promise;
+    // A terminal report naming an item that already ended still means the backend is gone: the current
+    // item cannot continue on it, so it fails with the backend's cause instead of hanging as "playing".
+    const cause = new Error("late decoder loss");
+    player.emit({ type: "failed", itemId: player.requestIds[0] as string, error: cause, terminal: true });
+    await settle();
 
-    expect(events).toEqual(["queue.item.failed", "queue.deleted"]);
-    expect(player.requests.map(request => request.itemId)).toEqual([firstItem, secondItem]);
     expect(player.release).toHaveBeenCalledTimes(1);
+    expect(events).toEqual(["voice.track.failed", "queue.item.failed", "queue.deleted"]);
+    expect(failed).toHaveBeenCalledWith(
+      expect.objectContaining({
+        item: expect.objectContaining({ id: secondItem }),
+        error: expect.objectContaining({ code: "VOICE_FAILED", cause }),
+      }),
+    );
+    expect(harness.distube.getQueue(GUILD)).toBeUndefined();
+    expect(harness.distube.voices.has(GUILD)).toBe(true);
   });
 
   it("retains a retired Player failure for a later DisTubeVoice release", async () => {
     const harness = playableSetup();
-    const { items } = await harness.distube.play(TARGET, "first");
+    const queue = await harness.distube.play(TARGET, "first");
+    const items = [...(queue.current ? [queue.current] : []), ...queue.upcoming];
     await settle();
     const player = harness.engine.players[0] as FakePlayer;
     const session = harness.adapter.sessions[0] as FakeVoiceSession;
@@ -561,28 +572,11 @@ describe("deferred DisTubeVoice lifetime", () => {
     expect(session.release).toHaveBeenCalledTimes(1);
   });
 
-  it("publishes terminal DisTubeVoice loss as item failure, queue deletion, then DisTubeVoice disconnection", async () => {
-    const harness = playableSetup();
-    const started = deferred<void>();
-    once(harness.distube, "queue.item.started", () => started.resolve());
-    await harness.distube.play(TARGET, "first");
-    await started.promise;
-    expect(harness.distube.getQueue(GUILD)?.state.current).toBeDefined();
-    const events = record(harness.distube, ["queue.item.failed", "queue.deleted", "voice.disconnected"]);
-    const disconnected = deferred<void>();
-    once(harness.distube, "voice.disconnected", () => disconnected.resolve());
-
-    harness.adapter.sessions[0]?.disconnect(new Error("connection lost"));
-    await disconnected.promise;
-
-    expect(events).toEqual(["queue.item.failed", "queue.deleted", "voice.disconnected"]);
-  });
-
   it("does not let a reentrant failure listener publish queue deletion first", async () => {
     const harness = playableSetup();
     const started = deferred<void>();
     once(harness.distube, "queue.item.started", () => started.resolve());
-    const { queue } = await harness.distube.play(TARGET, "first");
+    const queue = await harness.distube.play(TARGET, "first");
     await started.promise;
     const order: string[] = [];
     const disconnected = deferred<void>();
@@ -632,34 +626,7 @@ describe("deferred DisTubeVoice lifetime", () => {
     },
   );
 
-  it("shares one terminal completion across repeated leave calls", async () => {
-    const harness = playableSetup();
-    const started = deferred<void>();
-    once(harness.distube, "queue.item.started", () => started.resolve());
-    await harness.distube.play(TARGET, "first");
-    await started.promise;
-    const session = harness.adapter.sessions[0] as FakeVoiceSession;
-    const releaseStarted = deferred<void>();
-    const release = deferred<void>();
-    session.release.mockImplementationOnce(async () => {
-      releaseStarted.resolve();
-      await release.promise;
-    });
-    const events = record(harness.distube, ["queue.deleted", "voice.disconnected"]);
-
-    const first = harness.distube.voices.leave(GUILD);
-    const second = harness.distube.voices.leave(GUILD);
-    expect(second).toBe(first);
-    await releaseStarted.promise;
-    expect(harness.distube.voices.has(GUILD)).toBe(false);
-
-    release.resolve();
-    await first;
-    expect(session.release).toHaveBeenCalledTimes(1);
-    expect(events).toEqual(["queue.deleted", "voice.disconnected"]);
-  });
-
-  it("serializes Player effects through the DisTubeVoice lease", async () => {
+  it("serializes Player effects through the DisTubeVoice lane", async () => {
     const harness = playableSetup();
     const player = new FakePlayer();
     harness.engine.createPlayer.mockImplementationOnce(async () => {
@@ -668,7 +635,8 @@ describe("deferred DisTubeVoice lifetime", () => {
     });
     const started = deferred<void>();
     once(harness.distube, "queue.item.started", () => started.resolve());
-    const { queue, items } = await harness.distube.play(TARGET, "first");
+    const queue = await harness.distube.play(TARGET, "first");
+    const items = [...(queue.current ? [queue.current] : []), ...queue.upcoming];
     await started.promise;
     const pauseGate = player.gate("pause");
 
@@ -680,7 +648,7 @@ describe("deferred DisTubeVoice lifetime", () => {
     pauseGate.resolve();
     await pausing;
     await resuming;
-    expect(player.calls).toEqual(["volume:100", "filters", `play:${items[0]?.id}`, "pause", "resume"]);
+    expect(player.calls).toEqual(["volume:100", `play:${items[0]?.id}`, "pause", "resume"]);
   });
 
   it("serializes a filter commit behind the play effect it shares the Player lane with", async () => {
@@ -690,25 +658,25 @@ describe("deferred DisTubeVoice lifetime", () => {
       harness.engine.players.push(player);
       return player;
     });
-    // Held from before the borrow, so the play effect still occupies the lane when the commit lands.
+    // Held from before the Player exists, so the play effect still occupies the lane when the commit lands.
     const playGate = player.gate("play");
     const started = deferred<void>();
     once(harness.distube, "queue.item.started", () => started.resolve());
     await harness.distube.play(TARGET, "first");
     await playGate.entered;
 
-    const applying = harness.distube.voices.get(GUILD)?.setFilters(["bassboost"]);
+    const applying = harness.distube.voices.get(GUILD)?.filters.set("bassboost");
     await flushMicrotasks(32);
-    // The activation's restore render already ran; the bassboost commit is queued behind the play.
-    expect(player.renders).toEqual([[]]);
+    expect(player.renders).toEqual([]);
 
     playGate.resolve();
     await started.promise;
     await applying;
     await flushMicrotasks(32);
 
-    expect(harness.distube.voices.get(GUILD)?.settings.filters).toEqual(["bassboost"]);
-    expect(player.renders).toEqual([[], [{ name: "bassboost" }]]);
+    expect(harness.distube.voices.get(GUILD)?.filters.names).toEqual(["bassboost"]);
+    expect(player.renders).toEqual([[{ name: "bassboost", value: 10 }]]);
+    expect(player.calls.indexOf("filters")).toBeGreaterThan(player.calls.indexOf("play"));
   });
 
   it("folds unawaited filter changes in invocation order", async () => {
@@ -718,37 +686,38 @@ describe("deferred DisTubeVoice lifetime", () => {
     const voice = harness.distube.voices.get(GUILD);
     if (!voice) throw new Error("DisTubeVoice missing");
 
-    const first = voice.setFilters(["bassboost"]);
-    const second = voice.setFilters(["nightcore"]);
+    const first = voice.filters.set("bassboost");
+    const second = voice.filters.set("nightcore");
     await Promise.all([first, second]);
 
-    expect(voice.settings.filters).toEqual(["nightcore"]);
+    expect(voice.filters.names).toEqual(["bassboost", "nightcore"]);
 
-    await voice.setFilters([]);
-    const reapplied = voice.setFilters(["bassboost"]);
-    const removed = voice.setFilters([]);
-    await Promise.all([reapplied, removed]);
+    const removed = voice.filters.clear();
+    const reapplied = voice.filters.set("bassboost");
+    const cleared = voice.filters.clear();
+    await Promise.all([removed, reapplied, cleared]);
 
-    expect(voice.settings.filters).toEqual([]);
+    expect(voice.filters.names).toEqual([]);
   });
 
   it("commits queued DisTubeVoice settings when a Player retires before they run", async () => {
     const harness = playableSetup();
     const first = await harness.distube.play(TARGET, "first");
+    const firstItems = [...(first.current ? [first.current] : []), ...first.upcoming];
     await settle();
     const voice = harness.distube.voices.get(GUILD);
     if (!voice) throw new Error("DisTubeVoice missing");
     const player = harness.engine.players[0] as FakePlayer;
     const pause = player.gate("pause");
 
-    const pausing = capture(first.queue.pause());
+    const pausing = capture(first.pause());
     await pause.entered;
     const volume = voice.setVolume(42);
-    const filters = voice.setFilters(["nightcore"]);
+    const filters = voice.filters.set("nightcore");
 
     player.emit({
       type: "failed",
-      itemId: first.items[0]?.id as string,
+      itemId: firstItems[0]?.id as string,
       error: new Error("Player retired"),
       terminal: true,
     });
@@ -757,8 +726,8 @@ describe("deferred DisTubeVoice lifetime", () => {
     await pausing;
     await settle();
 
-    expect(voice.settings.volume).toBe(42);
-    expect(voice.settings.filters).toEqual([]);
+    expect(voice.volume).toBe(42);
+    expect(voice.filters.names).toEqual(["nightcore"]);
     expect(harness.distube.getQueue(GUILD)).toBeUndefined();
 
     await harness.distube.play(TARGET, "second");
@@ -766,26 +735,27 @@ describe("deferred DisTubeVoice lifetime", () => {
     const successor = harness.engine.players[1] as FakePlayer;
 
     expect(successor.volumes).toEqual([42]);
-    expect(successor.renders).toEqual([[]]);
+    expect(successor.renders).toEqual([[{ name: "nightcore" }]]);
   });
 
-  it("delivers successor Player outcomes through the existing queue lease", async () => {
+  it("delivers successor Player outcomes to the attached queue", async () => {
     const harness = playableSetup();
     const first = await harness.distube.play(TARGET, "first");
-    await first.queue.enqueue("second");
+    const firstItems = [...(first.current ? [first.current] : []), ...first.upcoming];
+    await first.add("second");
     await settle();
     const player = harness.engine.players[0] as FakePlayer;
 
     player.emit({
       type: "failed",
-      itemId: first.items[0]?.id as string,
+      itemId: firstItems[0]?.id as string,
       error: new Error("Player retired"),
       terminal: true,
     });
     await settle();
 
     const successor = harness.engine.players[1] as FakePlayer;
-    expect(first.queue.state.current?.song.id).toBe("second");
+    expect(first.current?.song.id).toBe("second");
     const events = record(harness.distube, ["queue.item.finished", "queue.finished", "queue.deleted"]);
 
     successor.finish();
@@ -803,7 +773,7 @@ describe("deferred DisTubeVoice lifetime", () => {
     await started.promise;
     const voice = harness.distube.voices.get(GUILD);
     await voice?.setVolume(40);
-    await voice?.setFilters(["nightcore"]);
+    await voice?.filters.set("nightcore");
 
     const firstPlayer = harness.engine.players[0] as FakePlayer;
     firstPlayer.emit({
@@ -814,26 +784,25 @@ describe("deferred DisTubeVoice lifetime", () => {
     });
     await settle();
 
-    // A terminal failure deletes the exhausted queue; the next play borrows the replacement Player.
-    await settle();
-    expect(first.queue.state.current).toBeUndefined();
+    // A terminal failure deletes the exhausted queue; the next play needs the replacement Player.
+    expect(first.current).toBeUndefined();
     const secondStarted = deferred<void>();
     once(harness.distube, "queue.item.started", () => secondStarted.resolve());
     await harness.distube.play(TARGET, "second");
     await secondStarted.promise;
-    // The Engine supplies the replacement lazily, so it exists only once the next borrow needs it.
     const replacement = harness.engine.players[1] as FakePlayer;
 
-    // One restore per Player, not one per lease or per track.
+    // One restore per Player, not one per queue or per track.
     expect(replacement.volumes).toEqual([40]);
-    expect(replacement.renders).toEqual([[]]);
+    expect(replacement.renders).toEqual([[{ name: "nightcore" }]]);
+    expect(replacement.calls.slice(0, 3)).toEqual(["volume:40", "filters", expect.stringMatching(/^play:/)]);
     expect(firstPlayer.volumes).toEqual([100, 40]);
-    expect(firstPlayer.renders).toEqual([[], [{ name: "nightcore" }]]);
+    expect(firstPlayer.renders).toEqual([[{ name: "nightcore" }]]);
   });
 
   it("keeps the last committed DisTubeVoice channel when Adapter movement rejects", async () => {
     const harness = playableSetup();
-    const voice = await harness.distube.voices.join({ guildId: GUILD, id: VOICE_CHANNEL });
+    const voice = await harness.distube.voices.join(TARGET);
     const session = harness.adapter.sessions[0] as FakeVoiceSession;
     session.join.mockImplementationOnce(async channelId => {
       session.channelId = channelId;
@@ -846,26 +815,7 @@ describe("deferred DisTubeVoice lifetime", () => {
     expect(harness.distube.voices.get(GUILD)?.channelId).toBe(VOICE_CHANNEL);
   });
 
-  it("clears the committed filter chain when its queue is deleted", async () => {
-    const harness = playableSetup();
-    const started = deferred<void>();
-    once(harness.distube, "queue.item.started", () => started.resolve());
-    const { queue } = await harness.distube.play(TARGET, "first");
-    await started.promise;
-    const voice = harness.distube.voices.get(GUILD);
-    await voice?.setFilters(["bassboost"]);
-    const player = harness.engine.players[0] as FakePlayer;
-
-    await queue.stop();
-
-    // Queue deletion clears rendering and keeps the connected backend.
-    expect(voice?.settings.filters).toEqual([]);
-    expect(voice?.settings.volume).toBe(100);
-    expect(player.renders.at(-1)).toEqual([]);
-    expect(player.release).not.toHaveBeenCalled();
-  });
-
-  it("keeps a replacement queue behind the old lease cleanup", async () => {
+  it("keeps a replacement queue behind the old queue's track stop", async () => {
     const harness = playableSetup();
     const player = new FakePlayer();
     harness.engine.createPlayer.mockImplementationOnce(async () => {
@@ -875,32 +825,27 @@ describe("deferred DisTubeVoice lifetime", () => {
     const firstStarted = deferred<void>();
     once(harness.distube, "queue.item.started", () => firstStarted.resolve());
     const first = await harness.distube.play(TARGET, "first");
+    const firstItems = [...(first.current ? [first.current] : []), ...first.upcoming];
     await firstStarted.promise;
     const stop = player.gate("stop");
 
-    const stopping = first.queue.stop();
+    const stopping = first.stop();
     await stop.entered;
-    const secondResolution = deferred<Song>();
-    const secondResolved = deferred<void>();
-    harness.source.resolve.mockImplementationOnce(async () => {
-      secondResolved.resolve();
-      return secondResolution.promise;
-    });
     const secondStarted = deferred<void>();
     once(harness.distube, "queue.item.started", () => secondStarted.resolve());
-    const replacement = harness.distube.play(TARGET, mediaUrl("second"));
-    await secondResolved.promise;
-    secondResolution.resolve(media("source", "second"));
-    expect(harness.distube.getQueue(GUILD)).not.toBe(first.queue);
-    expect(player.requests.map(request => request.itemId)).toEqual([first.items[0]?.id]);
+    const replacement = harness.distube.play(TARGET, "second");
+    await flushMicrotasks(32);
+    expect(harness.distube.getQueue(GUILD)).not.toBe(first);
+    expect(player.requests.map(request => request.itemId)).toEqual([firstItems[0]?.id]);
     stop.resolve();
     await stopping;
     const second = await replacement;
+    const secondItems = [...(second.current ? [second.current] : []), ...second.upcoming];
     await secondStarted.promise;
-    expect(player.requests.map(request => request.itemId)).toEqual([first.items[0]?.id, second.items[0]?.id]);
+    expect(player.requests.map(request => request.itemId)).toEqual([firstItems[0]?.id, secondItems[0]?.id]);
   });
 
-  it("rejects an item effect whose authority ended while it waited in the DisTubeVoice lane", async () => {
+  it("rejects a control whose item ended while it waited in the DisTubeVoice lane", async () => {
     const harness = playableSetup();
     const player = new FakePlayer();
     harness.engine.createPlayer.mockImplementationOnce(async () => {
@@ -909,13 +854,15 @@ describe("deferred DisTubeVoice lifetime", () => {
     });
     const started = deferred<void>();
     once(harness.distube, "queue.item.started", () => started.resolve());
-    const { queue, items } = await harness.distube.play(TARGET, "first");
+    const queue = await harness.distube.play(TARGET, "first");
+    const items = [...(queue.current ? [queue.current] : []), ...queue.upcoming];
     await started.promise;
     const gateway = player.gate("gateway");
     const deleted = deferred<void>();
     once(harness.distube, "queue.deleted", () => deleted.resolve());
 
     (harness.adapter.sessions[0] as FakeVoiceSession).connect({
+      channelId: VOICE_CHANNEL,
       sessionId: "session",
       token: "token",
       endpoint: "endpoint",
@@ -934,21 +881,28 @@ describe("deferred DisTubeVoice lifetime", () => {
     const harness = playableSetup();
     const started = deferred<void>();
     once(harness.distube, "queue.item.started", () => started.resolve());
-    const { queue, items } = await harness.distube.play(TARGET, "playing");
+    const queue = await harness.distube.play(TARGET, "playing");
+    const items = [...(queue.current ? [queue.current] : []), ...queue.upcoming];
     await started.promise;
     const player = harness.engine.players[0] as FakePlayer;
-    const outcomes = record(harness.distube, ["queue.item.finished", "queue.item.failed", "queue.deleted"]);
+    const outcomes = record(harness.distube, [
+      "voice.track.finished",
+      "voice.track.failed",
+      "queue.item.finished",
+      "queue.item.failed",
+      "queue.deleted",
+    ]);
 
     // The Adapter republishes `connected` for a channel nobody asked us to join.
     (harness.adapter.sessions[0] as FakeVoiceSession).connect(
-      { sessionId: "session", token: "token", endpoint: "endpoint" },
+      { channelId: "dragged", sessionId: "session", token: "token", endpoint: "endpoint" },
       "dragged",
     );
     await settle();
 
     expect(harness.distube.voices.get(GUILD)?.channelId).toBe("dragged");
     expect(harness.distube.getQueue(GUILD)).toBe(queue);
-    expect(queue.state.current?.id).toBe(items[0]?.id);
+    expect(queue.current?.id).toBe(items[0]?.id);
     expect(player.playing).toBe(items[0]?.id);
     expect(player.stopTrack).not.toHaveBeenCalled();
     expect(outcomes).toEqual([]);

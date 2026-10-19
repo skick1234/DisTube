@@ -1,19 +1,7 @@
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { assertPreparedBuild, ensurePreparedBuild } from "./prepared-build";
 
 const root = resolve(import.meta.dir, "..");
-
-async function run(command: string[]): Promise<void> {
-  const child = Bun.spawn(command, { cwd: root, stdout: "inherit", stderr: "inherit" });
-  const code = await child.exited;
-  if (code !== 0) process.exit(code);
-}
-
-if (process.argv.includes("--prepared")) await assertPreparedBuild(root);
-else await ensurePreparedBuild(root);
-await run(["bun", "run", "api-extractor"]);
-await run(["bun", "scripts/clean-source-declarations.ts"]);
 
 interface ApiItem {
   readonly kind: string;
@@ -60,10 +48,3 @@ await writeFile(
     ...apiSections,
   ].join("\n"),
 );
-
-const docsDirectory = resolve(root, "docs");
-await rm(docsDirectory, { recursive: true, force: true });
-await run(["bunx", "vitepress", "build", "website", "--outDir", "docs"]);
-if (!(await Bun.file(resolve(docsDirectory, "index.html")).exists())) {
-  throw new Error("VitePress did not write docs/index.html");
-}

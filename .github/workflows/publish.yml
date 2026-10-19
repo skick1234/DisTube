@@ -1,82 +1,64 @@
-name: Publish DisTube packages
+name: Publish
+# Tag a verified commit as `<package>@<version>` (for example `distube@6.0.0` or
+# `@distube/discordjs@6.0.0`). CI verifies, packs that package and publishes it with provenance.
 on:
-  release:
-    types: [published]
+  push:
+    tags: ["*@*"]
 jobs:
   publish:
-    name: Validate and publish candidate archives
+    name: Verify, pack and publish
     runs-on: ubuntu-latest
     permissions:
       contents: read
       id-token: write
     steps:
-      - name: Checkout repository at the candidate workspace path
+      - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          path: DisTube
-
-      - name: Download the exact release candidate
-        env:
-          AUTHORIZED_RELEASE_CANDIDATE_ID: ${{ secrets.AUTHORIZED_RELEASE_CANDIDATE_ID }}
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          mkdir -p .candidate-download
-          gh release download "${{ github.event.release.tag_name }}" --repo "${{ github.repository }}" --pattern "candidate-${AUTHORIZED_RELEASE_CANDIDATE_ID}.tar.gz" --dir .candidate-download
-          test -f ".candidate-download/candidate-${AUTHORIZED_RELEASE_CANDIDATE_ID}.tar.gz"
-          python3 DisTube/scripts/extract-release-candidate.py ".candidate-download/candidate-${AUTHORIZED_RELEASE_CANDIDATE_ID}.tar.gz" .candidate-bundle
-          test -f .candidate-bundle/.artifacts/release-candidate/manifest.json
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.4.2
+          bun-version-file: package.json
 
-      - name: Verify release runtime
-        working-directory: DisTube
-        run: bun run check:runtime
-
-      - name: Verify committed stable release inputs
-        working-directory: DisTube
-        run: bun run check:release-inputs
-
-      - name: Install Node.js v22.12.0
+      # npm publish is the only publisher that supports --provenance (oven-sh/bun#15601).
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22.12.0
           registry-url: "https://registry.npmjs.org"
 
+      - name: Resolve package from tag
+        id: tag
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          if [[ ! "$TAG" =~ ^(distube|@distube/(discordjs|oceanic|eris))@([0-9A-Za-z.+-]+)$ ]]; then
+            echo "Tag must be <package>@<version>: $TAG" >&2
+            exit 1
+          fi
+          name="${BASH_REMATCH[1]}"
+          version="${BASH_REMATCH[3]}"
+          directory="packages/${name#@distube/}"
+          manifest_name="$(bun -e 'console.log((await Bun.file(process.argv[1]).json()).name)' "$directory/package.json")"
+          manifest_version="$(bun -e 'console.log((await Bun.file(process.argv[1]).json()).version)' "$directory/package.json")"
+          if [[ "$manifest_name" != "$name" || "$manifest_version" != "$version" ]]; then
+            echo "Tag $TAG does not match $manifest_name@$manifest_version" >&2
+            exit 1
+          fi
+          echo "directory=$directory" >> "$GITHUB_OUTPUT"
+
       - name: Install dependencies
-        working-directory: DisTube
         run: bun install --frozen-lockfile
 
-      - name: Run complete release verification
-        working-directory: DisTube
+      - name: Verify
         run: bun run verify
 
-      - name: Publish distube candidate archive
-        working-directory: DisTube
-        env:
-          AUTHORIZED_RELEASE_CANDIDATE_ID: ${{ secrets.AUTHORIZED_RELEASE_CANDIDATE_ID }}
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_PUBLISH_TOKEN }}
-        run: bun ./scripts/check-publish-authorization.ts --candidate-dir=../.candidate-bundle/.artifacts/release-candidate --package=distube --archive=../.candidate-bundle/.artifacts/release-candidate/core/archives/distube-6.0.0.tgz && npm publish ../.candidate-bundle/.artifacts/release-candidate/core/archives/distube-6.0.0.tgz --provenance
+      - name: Pack
+        working-directory: ${{ steps.tag.outputs.directory }}
+        run: npm pack --pack-destination "$RUNNER_TEMP"
 
-      - name: Publish discord.js adapter candidate archive
-        working-directory: DisTube
+      - name: Publish
+        working-directory: ${{ steps.tag.outputs.directory }}
         env:
-          AUTHORIZED_RELEASE_CANDIDATE_ID: ${{ secrets.AUTHORIZED_RELEASE_CANDIDATE_ID }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_PUBLISH_TOKEN }}
-        run: bun ./scripts/check-publish-authorization.ts --candidate-dir=../.candidate-bundle/.artifacts/release-candidate --package=@distube/discordjs --archive=../.candidate-bundle/.artifacts/release-candidate/core/archives/distube-discordjs-6.0.0.tgz && npm publish ../.candidate-bundle/.artifacts/release-candidate/core/archives/distube-discordjs-6.0.0.tgz --provenance --access public
-
-      - name: Publish Oceanic adapter candidate archive
-        working-directory: DisTube
-        env:
-          AUTHORIZED_RELEASE_CANDIDATE_ID: ${{ secrets.AUTHORIZED_RELEASE_CANDIDATE_ID }}
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_PUBLISH_TOKEN }}
-        run: bun ./scripts/check-publish-authorization.ts --candidate-dir=../.candidate-bundle/.artifacts/release-candidate --package=@distube/oceanic --archive=../.candidate-bundle/.artifacts/release-candidate/core/archives/distube-oceanic-6.0.0.tgz && npm publish ../.candidate-bundle/.artifacts/release-candidate/core/archives/distube-oceanic-6.0.0.tgz --provenance --access public
-
-      - name: Publish Eris adapter candidate archive
-        working-directory: DisTube
-        env:
-          AUTHORIZED_RELEASE_CANDIDATE_ID: ${{ secrets.AUTHORIZED_RELEASE_CANDIDATE_ID }}
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_PUBLISH_TOKEN }}
-        run: bun ./scripts/check-publish-authorization.ts --candidate-dir=../.candidate-bundle/.artifacts/release-candidate --package=@distube/eris --archive=../.candidate-bundle/.artifacts/release-candidate/core/archives/distube-eris-6.0.0.tgz && npm publish ../.candidate-bundle/.artifacts/release-candidate/core/archives/distube-eris-6.0.0.tgz --provenance --access public
+        run: npm publish "$RUNNER_TEMP"/*.tgz --provenance --access public

@@ -1,28 +1,10 @@
 import type {
-  ConnectionOptions,
   DiscordGatewayAdapterCreator,
-  JoinConfig,
+  DiscordGatewayAdapterLibraryMethods,
   VoiceConnection,
-  VoiceConnectionDisconnectedState,
-  VoiceConnectionState,
 } from "@discordjs/voice";
-import {
-  entersState,
-  joinVoiceChannel,
-  VoiceConnectionDisconnectReason,
-  VoiceConnectionStatus,
-} from "@discordjs/voice";
-import type { VoiceGatewayData, VoiceSession, VoiceSessionEvent } from "distube/integrations";
-import { cleanupAll } from "./cleanup";
-
-/** Discord severs the voice socket with this close code when it moves or removes the bot. */
-const MOVED_OR_REMOVED = 4014;
-
-/** How long a 4014 close counts as an in-progress move before it reads as a removal. */
-const MOVE_GRACE_MS = 5_000;
-
-/** Rejoin attempts a dropped connection gets before the session reports a terminal disconnect. */
-const RECONNECT_ATTEMPTS = 3;
+import { entersState, joinVoiceChannel, VoiceConnectionStatus } from "@discordjs/voice";
+import type { JoinOptions, VoiceGatewayData, VoiceSession, VoiceSessionEvent } from "distube/integrations";
 
 export interface DiscordVoiceSessionOptions {
   readonly guildId: string;
@@ -34,249 +16,257 @@ export interface DiscordVoiceSessionOptions {
   readonly connectionTimeoutMs: number;
 }
 
-/**
- * One guild's voice presence over `@discordjs/voice`.
- *
- * The session outlives the tracks and queues that play through it: recoverable drops are rejoined
- * here, and core learns of the connection only when it ends for good.
- */
+/** Gateway membership stays alive independently of the selected audio transport. */
 export class DiscordVoiceSession implements VoiceSession {
   readonly guildId: string;
   readonly clientUserId: string;
-  readonly #connection: VoiceConnection;
-  readonly #selfDeaf: boolean;
-  readonly #selfMute: boolean;
-  readonly #timeout: number;
+  readonly #options: DiscordVoiceSessionOptions;
+  readonly #gatewayAdapter: ReturnType<DiscordGatewayAdapterCreator>;
   readonly #listeners = new Set<(event: VoiceSessionEvent) => void>();
+  readonly #waiters = new Set<() => void>();
+  #transport?: DiscordGatewayAdapterLibraryMethods;
+  #connection?: VoiceConnection;
+  #state?: Parameters<DiscordGatewayAdapterLibraryMethods["onVoiceStateUpdate"]>[0];
+  #server?: Parameters<DiscordGatewayAdapterLibraryMethods["onVoiceServerUpdate"]>[0];
   #channelId: string;
   #gateway?: VoiceGatewayData;
-  #attempts = 0;
+  #selfDeaf: boolean;
+  #selfMute: boolean;
   #released = false;
   #releasePromise?: Promise<void>;
 
-  /** Joins `options.channelId` and resolves once the connection can carry audio. */
   static async connect(options: DiscordVoiceSessionOptions): Promise<DiscordVoiceSession> {
     const session = new DiscordVoiceSession(options);
     try {
-      await entersState(session.#connection, VoiceConnectionStatus.Ready, options.connectionTimeoutMs);
-    } catch (error: unknown) {
+      await session.join(options.channelId, options);
+    } catch (error) {
       await session.release().catch(() => undefined);
       throw error;
     }
-    session.#settle();
     return session;
   }
 
-  /** @internal The native connection, reachable only from this package's default engine. */
-  static connectionOf(session: VoiceSession): VoiceConnection | undefined {
-    return session instanceof DiscordVoiceSession ? session.#connection : undefined;
+  /** Private bridge used only by this package's local engine. */
+  static async connectionOf(session: VoiceSession): Promise<VoiceConnection | undefined> {
+    if (!(session instanceof DiscordVoiceSession) || session.#released) return undefined;
+    if (session.#connection) throw new Error("Discord audio transport is already attached");
+    const connection = joinVoiceChannel({
+      guildId: session.guildId,
+      channelId: session.channelId,
+      selfDeaf: session.selfDeaf,
+      selfMute: session.selfMute,
+      adapterCreator: transport => {
+        session.#transport = transport;
+        // Native construction must finish before replay can establish its socket.
+        queueMicrotask(() => {
+          if (session.#transport !== transport || session.#released) return;
+          if (session.#state) transport.onVoiceStateUpdate(session.#state);
+          if (session.#server) transport.onVoiceServerUpdate(session.#server);
+        });
+        return {
+          sendPayload: () => !session.#released,
+          destroy: () => {
+            if (session.#transport === transport) session.#transport = undefined;
+          },
+        };
+      },
+    });
+    session.#connection = connection;
+    try {
+      await entersState(connection, VoiceConnectionStatus.Ready, session.#options.connectionTimeoutMs);
+      if (session.#released || session.#connection !== connection) throw new Error("Voice session was released");
+    } catch (error) {
+      DiscordVoiceSession.detachConnection(session, connection);
+      throw error;
+    }
+    return connection;
+  }
+
+  /** The local Player retires its socket without changing gateway membership. */
+  static detachConnection(session: VoiceSession, connection: VoiceConnection): void {
+    if (!(session instanceof DiscordVoiceSession) || session.#connection !== connection) return;
+    session.#connection = undefined;
+    if (connection.state.status !== VoiceConnectionStatus.Destroyed) connection.destroy();
   }
 
   constructor(options: DiscordVoiceSessionOptions) {
+    this.#options = options;
     this.guildId = options.guildId;
     this.clientUserId = options.clientUserId;
     this.#channelId = options.channelId;
     this.#selfDeaf = options.selfDeaf;
     this.#selfMute = options.selfMute;
-    this.#timeout = options.connectionTimeoutMs;
-    this.#connection = joinVoiceChannel({
-      guildId: options.guildId,
-      channelId: options.channelId,
-      adapterCreator: options.adapterCreator,
-      selfDeaf: options.selfDeaf,
-      selfMute: options.selfMute,
+    this.#gatewayAdapter = options.adapterCreator({
+      onVoiceStateUpdate: state => {
+        if (this.#released || state.user_id !== this.clientUserId || state.guild_id !== this.guildId) return;
+        if (state.channel_id === null) {
+          this.#terminate(new Error("Discord removed the bot from voice"));
+          return;
+        }
+        if (
+          this.#state &&
+          (this.#state.channel_id !== state.channel_id || this.#state.session_id !== state.session_id)
+        ) {
+          this.#gateway = undefined;
+          this.#server = undefined;
+        }
+        this.#state = { ...state };
+        this.#selfDeaf = state.self_deaf;
+        this.#selfMute = state.self_mute;
+        this.#settle();
+      },
+      onVoiceServerUpdate: server => {
+        if (this.#released || server.guild_id !== this.guildId) return;
+        this.#server = { ...server };
+        if (!server.endpoint) this.#gateway = undefined;
+        this.#settle();
+      },
+      destroy: () => this.#terminate(new Error("Discord gateway adapter was destroyed")),
     });
-    this.#connection.on("stateChange", this.#onStateChange);
   }
 
-  /** The last channel that reached Ready and became the session's committed presence. */
   get channelId(): string {
     return this.#channelId;
   }
-
   get gateway(): VoiceGatewayData | undefined {
     return this.#gateway;
   }
-
-  async join(channelId: string): Promise<void> {
-    if (this.#released) throw new Error(`Discord voice session for guild ${this.guildId} was released`);
-    if (channelId === this.#channelId) return;
-    const previousConfig = { ...this.#connection.joinConfig };
-    const previousChannelId = this.#channelId;
-    const move = { channelId, selfDeaf: this.#selfDeaf, selfMute: this.#selfMute };
-    let accepted: boolean;
-    try {
-      accepted = this.#connection.rejoin(move);
-    } catch (error: unknown) {
-      this.#restoreOrTerminalize(previousConfig, previousChannelId, error);
-    }
-    if (!accepted) {
-      this.#restoreOrTerminalize(
-        previousConfig,
-        previousChannelId,
-        new Error(`Discord gateway is unavailable for guild ${this.guildId}`),
-      );
-    }
-    try {
-      await entersState(this.#connection, VoiceConnectionStatus.Ready, this.#timeout);
-      this.#settle();
-    } catch (error: unknown) {
-      this.#restoreOrTerminalize(previousConfig, previousChannelId, error);
-    }
+  get selfDeaf(): boolean {
+    return this.#selfDeaf;
+  }
+  get selfMute(): boolean {
+    return this.#selfMute;
   }
 
-  release(): Promise<void> {
-    this.#releasePromise ??= this.#performRelease();
-    return this.#releasePromise;
+  async join(channelId: string, options: JoinOptions = {}): Promise<void> {
+    if (this.#released) throw new Error("Voice session was released");
+    const selfDeaf = options.selfDeaf ?? this.#selfDeaf;
+    const selfMute = options.selfMute ?? this.#selfMute;
+    if (this.#gateway?.channelId === channelId && selfDeaf === this.selfDeaf && selfMute === this.selfMute) return;
+    const previous = { state: this.#state, server: this.#server, gateway: this.#gateway };
+    if (channelId !== this.channelId) {
+      this.#state = undefined;
+      this.#server = undefined;
+      this.#gateway = undefined;
+    }
+    const { promise, resolve, reject } = Promise.withResolvers<void>();
+    const timer = setTimeout(() => {
+      this.#waiters.delete(check);
+      reject(new Error("Discord gateway membership timed out"));
+    }, this.#options.connectionTimeoutMs);
+    const check = (): void => {
+      if (
+        !this.#released &&
+        !(this.#gateway?.channelId === channelId && this.selfDeaf === selfDeaf && this.selfMute === selfMute)
+      )
+        return;
+      clearTimeout(timer);
+      this.#waiters.delete(check);
+      if (this.#released) reject(new Error("Voice session was released"));
+      else resolve();
+    };
+    this.#waiters.add(check);
+    try {
+      if (
+        !this.#gatewayAdapter.sendPayload({
+          op: 4,
+          d: { guild_id: this.guildId, channel_id: channelId, self_deaf: selfDeaf, self_mute: selfMute },
+        })
+      )
+        throw new Error("Discord gateway is unavailable");
+    } catch (error) {
+      clearTimeout(timer);
+      this.#waiters.delete(check);
+      reject(error);
+    }
+    try {
+      await promise;
+    } catch (error) {
+      if (!this.#released && this.#gateway?.channelId !== channelId) {
+        this.#state = previous.state;
+        this.#server = previous.server;
+        this.#gateway = previous.gateway;
+      }
+      throw error;
+    }
   }
-
+  setSelfDeaf(value: boolean): Promise<void> {
+    return this.join(this.channelId, { selfDeaf: value });
+  }
+  setSelfMute(value: boolean): Promise<void> {
+    return this.join(this.channelId, { selfMute: value });
+  }
   subscribe(listener: (event: VoiceSessionEvent) => void): () => void {
     if (this.#released) return () => undefined;
     this.#listeners.add(listener);
     return () => this.#listeners.delete(listener);
   }
-
-  async #performRelease(): Promise<void> {
-    this.#terminalize();
-    await cleanupAll([
-      () => this.#connection.off("stateChange", this.#onStateChange),
-      () => {
-        if (this.#connection.state.status !== VoiceConnectionStatus.Destroyed) this.#connection.destroy();
-      },
-    ]);
-  }
-
-  /** Ends the session's authority synchronously, before any native teardown runs. */
-  #terminalize(): void {
+  release(): Promise<void> {
+    if (this.#releasePromise) return this.#releasePromise;
     this.#released = true;
     this.#gateway = undefined;
+    for (const check of this.#waiters) check();
     this.#listeners.clear();
+    this.#releasePromise = Promise.resolve().then(() => {
+      const failures: unknown[] = [];
+      for (const action of [
+        () => {
+          if (this.#connection) DiscordVoiceSession.detachConnection(this, this.#connection);
+        },
+        () =>
+          this.#gatewayAdapter.sendPayload({
+            op: 4,
+            d: { guild_id: this.guildId, channel_id: null, self_deaf: this.selfDeaf, self_mute: this.selfMute },
+          }),
+        () => this.#gatewayAdapter.destroy(),
+      ]) {
+        try {
+          action();
+        } catch (error) {
+          failures.push(error);
+        }
+      }
+      if (failures.length) throw new AggregateError(failures, "Voice session cleanup failed");
+    });
+    return this.#releasePromise;
   }
-
-  /** Reports the guild's presence as over, exactly once, and tears the connection down. */
   #terminate(error: Error): void {
     if (this.#released) return;
     const listeners = [...this.#listeners];
     void this.release().catch(() => undefined);
-    for (const listener of listeners) this.#deliver(listener, { type: "disconnected", error });
+    for (const listener of listeners) {
+      try {
+        listener({ type: "disconnected", error });
+      } catch {}
+    }
   }
-
-  readonly #onStateChange = (_previous: VoiceConnectionState, next: VoiceConnectionState): void => {
-    if (this.#released) return;
-    switch (next.status) {
-      case VoiceConnectionStatus.Ready:
-        this.#attempts = 0;
-        this.#settle();
-        return;
-      case VoiceConnectionStatus.Disconnected:
-        this.#onDisconnected(next);
-        return;
-      case VoiceConnectionStatus.Destroyed:
-        this.#terminate(new Error(`Discord voice connection for guild ${this.guildId} was destroyed`));
-        return;
-      default:
-        return;
-    }
-  };
-
-  /** Sorts a dropped connection into a recoverable rejoin, a pending move, or the end of the guild's presence. */
-  #onDisconnected(state: VoiceConnectionDisconnectedState): void {
-    if (state.reason === VoiceConnectionDisconnectReason.WebSocketClose && state.closeCode === MOVED_OR_REMOVED) {
-      void this.#awaitMove();
-      return;
-    }
-    if (state.reason === VoiceConnectionDisconnectReason.Manual) {
-      this.#terminate(new Error(`Discord voice connection for guild ${this.guildId} was disconnected`));
-      return;
-    }
-    if (state.reason === VoiceConnectionDisconnectReason.AdapterUnavailable) {
-      this.#terminate(new Error(`Discord gateway is unavailable for guild ${this.guildId}`));
-      return;
-    }
-    this.#recover();
-  }
-
-  /** A 4014 close is either the gateway moving us, which re-signals, or removing us, which is terminal. */
-  async #awaitMove(): Promise<void> {
-    const moved = await Promise.race([
-      entersState(this.#connection, VoiceConnectionStatus.Signalling, MOVE_GRACE_MS).then(
-        () => true,
-        () => false,
-      ),
-      entersState(this.#connection, VoiceConnectionStatus.Connecting, MOVE_GRACE_MS).then(
-        () => true,
-        () => false,
-      ),
-    ]);
-    if (!moved) this.#terminate(new Error(`Discord removed guild ${this.guildId} from its voice channel`));
-  }
-
-  /** Rejoins the current channel while attempts remain; exhausting them ends the session. */
-  #recover(): void {
-    if (this.#released) return;
-    if (this.#attempts >= RECONNECT_ATTEMPTS) {
-      this.#terminate(new Error(`Discord voice connection for guild ${this.guildId} could not be recovered`));
-      return;
-    }
-    this.#attempts++;
-    const rejoined = this.#connection.rejoin({
-      channelId: this.channelId,
-      selfDeaf: this.#selfDeaf,
-      selfMute: this.#selfMute,
-    });
-    if (!rejoined) this.#terminate(new Error(`Discord gateway is unavailable for guild ${this.guildId}`));
-  }
-
-  /** Restores the last committed native join state before reporting a failed move. */
-  #restoreOrTerminalize(previousConfig: JoinConfig, previousChannelId: string, error: unknown): never {
-    try {
-      Object.assign(this.#connection.joinConfig, previousConfig);
-      this.#channelId = previousChannelId;
-    } catch (restoreError: unknown) {
-      const original = error instanceof Error ? error : new Error(String(error));
-      const restoration = restoreError instanceof Error ? restoreError : new Error(String(restoreError));
-      const failure = new AggregateError(
-        [original, restoration],
-        `Discord voice session for guild ${this.guildId} could not restore its committed channel`,
-      );
-      this.#terminate(failure);
-      throw failure;
-    }
-    throw error;
-  }
-
-  /** Records the settled channel and credentials, publishing whenever either changed. */
   #settle(): void {
-    const options = this.#connectionOptions();
-    if (!options) return;
-    const channelId = this.#connection.joinConfig.channelId ?? options.channelId;
-    const gateway: VoiceGatewayData = {
-      sessionId: options.sessionId,
-      token: options.token,
-      endpoint: options.endpoint,
-    };
-    if (channelId === this.#channelId && this.#gateway && sameGateway(this.#gateway, gateway)) return;
-    this.#channelId = channelId;
+    const state = this.#state;
+    const server = this.#server;
+    if (!state?.channel_id || !state.session_id || !server?.endpoint || !server.token) return;
+    const gateway = Object.freeze({
+      channelId: state.channel_id,
+      sessionId: state.session_id,
+      token: server.token,
+      endpoint: server.endpoint,
+    });
+    const previous = this.#gateway;
     this.#gateway = gateway;
-    for (const listener of this.#listeners) this.#deliver(listener, { type: "connected", channelId, gateway });
-  }
-
-  #connectionOptions(): ConnectionOptions | undefined {
-    const state = this.#connection.state;
-    if (state.status !== VoiceConnectionStatus.Ready) return undefined;
-    const networking = state.networking.state;
-    return "connectionOptions" in networking ? networking.connectionOptions : undefined;
-  }
-
-  #deliver(listener: (event: VoiceSessionEvent) => void, event: VoiceSessionEvent): void {
-    try {
-      listener(event);
-    } catch {
-      // Subscriber failures are isolated; the session stays the connection authority.
+    this.#channelId = gateway.channelId;
+    this.#transport?.onVoiceStateUpdate(state);
+    this.#transport?.onVoiceServerUpdate(server);
+    for (const check of this.#waiters) check();
+    if (
+      previous &&
+      Object.keys(gateway).every(
+        key => previous[key as keyof VoiceGatewayData] === gateway[key as keyof VoiceGatewayData],
+      )
+    )
+      return;
+    for (const listener of this.#listeners) {
+      try {
+        listener({ type: "connected", channelId: this.channelId, gateway });
+      } catch {}
     }
   }
-}
-
-function sameGateway(left: VoiceGatewayData, right: VoiceGatewayData): boolean {
-  return left.sessionId === right.sessionId && left.token === right.token && left.endpoint === right.endpoint;
 }

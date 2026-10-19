@@ -49,7 +49,7 @@ We welcome contributions via pull requests!
 ## ⚙️ Development Environment
 
 - **Runtime**: Node.js >= 22.12.0
-- **Package Manager**: Bun 1.4.2 (the version pinned by the repository toolchain)
+- **Package Manager**: Bun 1.4.3 (the version pinned by the repository toolchain)
 - **Linter/Formatter**: [Biome](https://biomejs.dev/)
 
 ## 📂 Directory Structure
@@ -60,38 +60,26 @@ The codebase is organized by durable ownership:
 - `packages/discordjs/`: direct discord.js Adapter and Player with package-local tests.
 - `packages/oceanic/`: direct Oceanic Adapter and Player with package-local tests.
 - `packages/eris/`: direct Eris Adapter and Player with package-local tests.
-- `scripts/`: architecture, API, documentation, package, structural inventory, audit, and critical-coverage release gates.
+- `scripts/`: adapter build sanitizer and documentation generator.
 
 ### Scripts
-- `bun run build`: Build all four packages once and record fingerprinted prepared output
+- `bun run check`: Biome lint and format, including the core import boundary and import-cycle rules
+- `bun run type`: `tsc --noEmit` in every package
 - `bun run test`: Run the fast coverage-disabled unit tests
-- `bun run test:release`: Run the sole fail-closed coverage-enabled release test pass
-- `bun run check:circular`: Check for circular dependencies
-- `bun run check:write`: Fix linting/formatting issues
-- `bun run docs`: Generate the API Extractor model and build the VitePress documentation site
-- `bun run check:critical-quality`: Verify complete production-source coverage scopes and package-class floors without rerunning tests
-- `bun run check:packages:prepared`: Verify packed imports from the current fingerprinted build; the unsuffixed command prepares stale output
-- `bun run verify`: Run the complete non-publishing repository gate, including structural workflow parity
+- `bun run test:release`: Run the coverage-enabled test pass
+- `bun run build`: Build all four packages
+- `bun run docs`: Build, run API Extractor and build the VitePress documentation site
+- `bun run verify`: Run the whole gate above in order (no `docs`); CI runs exactly this
 
-## Dependency modernization
+## Dependencies
 
-Dependency changes begin with a dated registry inventory. Stable releases are selected by default; an intentional
-prerelease such as VitePress 2 alpha must be named in `dependency-policy.json` with focused build evidence. Update
-dependencies in risk groups (tooling, core, adapters), regenerate `bun.lock` only with the pinned Bun release, and
-run `bun run check:dependencies` after every group.
+Update dependencies in groups (tooling, core, adapters) and regenerate `bun.lock` only with the pinned Bun release.
+CI installs with `--frozen-lockfile`, so manifest or lock drift fails.
 
-Project-actionable deprecation warnings must be migrated. An upstream-only warning requires evidence, an owner, risk,
-and a dated recheck condition; false positives require proof. Peer ranges are support contracts and must match the
-lower/latest cases in `adapter-compatibility.json` rather than being mechanically pinned to one release.
+## Releasing
 
-For cross-repository work, verify and pack `distube` plus adapters first, record archive hashes, verify and pack media
-plugins against that core archive, then install all fingerprinted archives in the example. Never publish or commit
-the temporary archives.
-
-Workspace orchestration derives package, export, dependency, and test inventories from manifests and syntax. Its
-fingerprinted dependency DAG invalidates only downstream consumers when an input changes; it never becomes a hidden
-prerequisite for this repository's `verify` command. Any changed commit, declaration, archive, peer range, or lock
-invalidates the affected candidate evidence and resets publication authorization to false.
+See the [Releasing](../wiki/Releasing.md) wiki page. In short: `changeset version` on `main`, then push a
+`<package>@<version>` tag; CI verifies, `npm pack`s that package and publishes it with provenance.
 
 ## ⚖️ License
 

@@ -15,26 +15,41 @@ export function createSourceCatalog(sources: readonly SourcePlugin[]): SourceCat
 
 /** Validates a non-declined result returned by SourcePlugin.resolve. */
 export function validateResolvedMedia(value: unknown, source: SourcePlugin): Song | Playlist {
-  if (value instanceof Song || value instanceof Playlist) return value;
-  throw new DisTubeError(ErrorCode.SOURCE_FAILED, `${source.name} returned an invalid resolve result`);
+  if (!(value instanceof Song) && !(value instanceof Playlist)) {
+    throw new DisTubeError(ErrorCode.SOURCE_FAILED, `${source.name} returned an invalid resolve result`);
+  }
+  if (value.source !== source.name) {
+    throw new DisTubeError(ErrorCode.SOURCE_FAILED, `${source.name} returned media with mismatched source ownership`);
+  }
+  validateSourceSongs(value, source, "resolve");
+  return value;
 }
 
-/** Flattens a resolution or search result into the ordered Songs core enqueues. */
+/** Validates one discovery operation before normalizing its result into Songs. */
 export function validateSourceSongs(
-  value: Song | Playlist | readonly Song[],
+  value: unknown,
   source: SourcePlugin,
   operation: "resolve" | "search" | "related",
-  allowEmpty = false,
 ): readonly Song[] {
-  const songs =
-    value instanceof Song
-      ? [value]
-      : value instanceof Playlist
-        ? [...value.songs]
-        : Array.isArray(value)
-          ? [...value]
-          : [];
-  if ((!allowEmpty && songs.length === 0) || songs.some(song => !(song instanceof Song))) {
+  let songs: readonly Song[];
+  if (operation === "search") {
+    if (!Array.isArray(value)) {
+      throw new DisTubeError(ErrorCode.SOURCE_FAILED, `${source.name} returned invalid media from search`);
+    }
+    songs = [...value];
+  } else if (operation === "resolve") {
+    if (value instanceof Song) songs = [value];
+    else if (value instanceof Playlist) songs = value.songs;
+    else throw new DisTubeError(ErrorCode.SOURCE_FAILED, `${source.name} returned invalid media from resolve`);
+  } else {
+    if (!(value instanceof Song)) {
+      throw new DisTubeError(ErrorCode.SOURCE_FAILED, `${source.name} returned invalid media from related`);
+    }
+    songs = [value];
+  }
+
+  // No emptiness check: resolve and related always hold a Song, since Playlist refuses an empty list.
+  if (songs.some(song => !(song instanceof Song))) {
     throw new DisTubeError(ErrorCode.SOURCE_FAILED, `${source.name} returned invalid media from ${operation}`);
   }
   if (songs.some(song => song.source !== source.name)) {

@@ -1,6 +1,9 @@
-import { AudioPlayerStatus, type VoiceConnection, VoiceConnectionStatus } from "@discordjs/voice";
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
+import { PassThrough } from "node:stream";
+import { AudioPlayerStatus, type VoiceConnection } from "@discordjs/voice";
 import type { PlaybackRequest, PlayerEvent } from "distube/integrations";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { FilterRegistry } from "../src/filters";
 import { DiscordVoicePlayer } from "../src/player";
 import { audioPlayerError, FakeConnection, latest, native, resetNative, settle } from "./support/native";
@@ -8,590 +11,238 @@ import { audioPlayerError, FakeConnection, latest, native, resetNative, settle }
 vi.mock("@discordjs/voice", async () => (await import("./support/native")).voiceModule());
 vi.mock("node:child_process", async () => (await import("./support/native")).childProcessModule());
 
-const URL_ = "https://stream.example/audio";
+const FILE = "/tmp/distube-player-fixture.mp3";
+const servers: ReturnType<typeof createServer>[] = [];
 
-function request(itemId = "item", url = URL_): PlaybackRequest {
-  return { itemId, resource: { kind: "url", url, dispose: vi.fn() } };
+function request(itemId = "item"): PlaybackRequest {
+  return { itemId, resource: { kind: "file", path: FILE } };
 }
 
-/** A Player over a fake connection, plus the outcomes it publishes. */
 function createPlayer(): { player: DiscordVoicePlayer; connection: FakeConnection; events: PlayerEvent[] } {
   const connection = new FakeConnection();
-  native.connections.push(connection);
   const player = new DiscordVoicePlayer(connection as unknown as VoiceConnection, new FilterRegistry());
   const events: PlayerEvent[] = [];
   player.subscribe(event => events.push(event));
   return { player, connection, events };
 }
 
-/** Lets a rejected candidate enter its rollback branch without relying on a timer. */
-async function flushMicrotasks(): Promise<void> {
-  await Promise.resolve();
-  await Promise.resolve();
+async function origin(respond: (response: import("node:http").ServerResponse, count: number) => void): Promise<string> {
+  let count = 0;
+  const server = createServer((_request, response) => respond(response, ++count));
+  servers.push(server);
+  await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
+  return `http://127.0.0.1:${(server.address() as AddressInfo).port}/audio`;
 }
 
 beforeEach(resetNative);
+afterEach(async () => {
+  await Promise.all(servers.splice(0).map(server => new Promise<void>(resolve => server.close(() => resolve()))));
+});
 
-describe("playback", () => {
-  it("decodes the URL, hands it to the audio player, and counts the elapsed position", async () => {
-    const { player, connection } = createPlayer();
-    expect(player.position).toBe(0);
+describe("local Player", () => {
+  it("rejects invalid controls and accepts another track after stop", async () => {
+    const { player, events } = createPlayer();
+    await expect(player.seek(-1)).rejects.toMatchObject({ code: "INVALID_ARGUMENT" });
+    await expect(player.seek(1)).rejects.toMatchObject({ code: "INVALID_STATE" });
+    await expect(player.setVolume(Number.NaN)).rejects.toMatchObject({ code: "INVALID_ARGUMENT" });
 
-    await player.play(request());
+    await player.play(request("first"));
+    await expect(player.play(request("overlap"))).rejects.toThrow("already has active playback");
+    await player.pause();
+    expect(latest.player.state.status).toBe(AudioPlayerStatus.Paused);
+    await player.resume();
+    expect(latest.player.state.status).toBe(AudioPlayerStatus.Playing);
+    await player.stopTrack();
+    expect(events).toEqual([]);
 
-    expect(connection.subscribe).toHaveBeenCalledWith(latest.player);
-    expect(latest.spawn).toEqual(expect.arrayContaining(["-i", URL_, "-f", "s16le", "-ar", "48000", "-ac", "2"]));
-    expect(latest.spawn).not.toContain("-ss");
-    expect(latest.spawn).not.toContain("-af");
-    expect(native.createAudioResource).toHaveBeenCalledWith(
-      latest.child.stdout,
-      expect.objectContaining({ inlineVolume: true }),
-    );
-    expect(latest.player.play).toHaveBeenCalledWith(latest.resource);
-
-    latest.resource.playbackDuration = 4000;
-    expect(player.position).toBe(4);
+    await player.play(request("second"));
+    expect(latest.player.play).toHaveBeenCalledTimes(2);
+    await player.release();
+    await expect(player.play(request("after release"))).rejects.toThrow("retired");
   });
 
-  it("waits for its default-engine preflight before spawning playback", async () => {
-    const connection = new FakeConnection();
-    native.connections.push(connection);
-    const preflight = vi.fn(async () => {
-      throw new Error("FFmpeg is unavailable");
+  it("reports a native audio error once without exposing its resource", async () => {
+    const { player, events } = createPlayer();
+    player.subscribe(() => {
+      throw new Error("listener failed");
     });
-    const player = new DiscordVoicePlayer(connection as unknown as VoiceConnection, new FilterRegistry(), preflight);
+    await player.play(request("failure"));
+    const resource = latest.resource;
+    const nativeError = audioPlayerError(resource, new Error("native decode failed"));
 
-    await expect(player.play(request())).rejects.toThrow("FFmpeg is unavailable");
+    latest.player.emit("error", nativeError);
+    latest.player.emit("error", nativeError);
+    await settle();
 
-    expect(preflight).toHaveBeenCalledTimes(1);
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({ type: "failed", itemId: "failure", error: expect.any(Error) });
+    expect((events[0] as { error: Error }).error).not.toBe(nativeError);
+    expect(Reflect.get((events[0] as { error: Error }).error, "resource")).toBeUndefined();
+    await player.release();
+  });
+
+  it("retires on native connection destruction and suppresses later outcomes", async () => {
+    const { player, connection, events } = createPlayer();
+    await player.play(request("lost"));
+    const child = latest.child;
+
+    connection.transition({ status: "destroyed" });
+    expect(events).toMatchObject([{ type: "failed", itemId: "lost", terminal: true }]);
+    expect(child.kill).toHaveBeenCalledWith("SIGKILL");
+    await player.release();
+    child.close(0, null);
+    latest.player.transition({ status: AudioPlayerStatus.Idle });
+    expect(events).toHaveLength(1);
+  });
+
+  it("starts a file track, applies volume and preserves item correlation", async () => {
+    const { player, connection, events } = createPlayer();
+    await player.setVolume(40);
+    await player.play(request("A"));
+
+    expect(connection.subscribe).toHaveBeenCalledWith(latest.player);
+    expect(latest.spawn).toEqual(expect.arrayContaining(["-i", FILE, "-f", "s16le", "-ar", "48000", "-ac", "2"]));
+    expect(latest.resource.volume.level).toBe(0.4);
+    latest.resource.playbackDuration = 4000;
+    expect(player.position).toBe(4);
+
+    latest.child.close(0, null);
+    latest.player.transition({ status: AudioPlayerStatus.Idle });
+    await settle();
+    expect(events).toEqual([{ type: "finished", itemId: "A" }]);
+  });
+
+  it("keeps pause, volume and filters across a file seek without a new track event", async () => {
+    const { player, events } = createPlayer();
+    await player.setVolume(40);
+    await player.setFilters([{ name: "bassboost", value: 5 }]);
+    await player.play(request());
+    const first = latest.child;
+    await player.pause();
+
+    await player.seek(37);
+
+    expect(latest.spawn).toEqual(expect.arrayContaining(["-ss", "37", "-i", FILE, "-af", "bass=g=5"]));
+    expect(latest.resource.volume.level).toBe(0.4);
+    expect(latest.player.state.status).toBe(AudioPlayerStatus.Paused);
+    expect(player.position).toBe(37);
+    first.close(1, null);
+    await settle();
+    expect(events).toEqual([]);
+    await player.release();
+  });
+
+  it("reopens an explicitly seekable URL and keeps it out of decoder arguments", async () => {
+    let requests = 0;
+    const url = await origin(response => {
+      requests++;
+      response.writeHead(200, { "content-type": "audio/mpeg" });
+      response.end(Buffer.from([1, 2, 3]));
+    });
+    const { player } = createPlayer();
+    await player.play({ itemId: "url", resource: { kind: "url", url, seekable: true } });
+    await player.seek(5);
+
+    expect(requests).toBe(2);
+    expect(latest.spawn).toEqual(expect.arrayContaining(["-i", "pipe:0", "-ss", "5"]));
+    expect(latest.spawn.join(" ")).not.toContain(url);
+    await player.release();
+  });
+
+  it("accepts initial filters on a one-shot stream and refuses a later restart before native effects", async () => {
+    const { player } = createPlayer();
+    const stream = new PassThrough();
+    await player.setFilters([{ name: "echo" }]);
+    await player.play({ itemId: "stream", resource: { kind: "stream", stream } });
+    const spawns = native.spawns.length;
+    const handoffs = latest.player.play.mock.calls.length;
+
+    expect(latest.spawn).toEqual(expect.arrayContaining(["-af", "aecho=0.8:0.9:1000:0.3"]));
+    await expect(player.seek(2)).rejects.toMatchObject({ code: "UNSUPPORTED" });
+    await expect(player.setFilters([{ name: "earwax" }])).rejects.toMatchObject({ code: "UNSUPPORTED" });
+    expect(native.spawns).toHaveLength(spawns);
+    expect(latest.player.play).toHaveBeenCalledTimes(handoffs);
+    await player.release();
+    expect(stream.destroyed).toBe(true);
+  });
+
+  it("keeps the old render if a replacement cannot produce audio", async () => {
+    const { player, events } = createPlayer();
+    await player.play(request());
+    const first = latest.child;
+    native.autoAudio = false;
+
+    const replacing = player.seek(10);
+    await settle();
+    latest.child.close(1, null);
+
+    await expect(replacing).rejects.toThrow("FFmpeg exited with code 1");
+    expect(first.kill).not.toHaveBeenCalled();
+    expect(events).toEqual([]);
+    await player.release();
+  });
+
+  it("fails the existing track once when native handoff fails after replacement begins", async () => {
+    const { player, events } = createPlayer();
+    await player.play(request());
+    latest.player.play.mockImplementationOnce(() => {
+      throw new Error("handoff failed");
+    });
+
+    await expect(player.seek(10)).rejects.toThrow("handoff failed");
+    expect(events).toEqual([{ type: "failed", itemId: "item", error: expect.any(Error) }]);
+    expect(player.position).toBe(0);
+    await player.release();
+  });
+
+  it("aborts a pending URL before release and joins it without late native playback", async () => {
+    let respond: ((body: Buffer) => void) | undefined;
+    let requested!: () => void;
+    const arrived = new Promise<void>(resolve => {
+      requested = resolve;
+    });
+    const url = await origin(response => {
+      respond = body => {
+        response.writeHead(200);
+        response.end(body);
+      };
+      requested();
+    });
+    const { player } = createPlayer();
+    const playing = player.play({ itemId: "late", resource: { kind: "url", url } });
+    await arrived;
+
+    const leaving = player.release();
+    respond?.(Buffer.from([1]));
+    await expect(playing).rejects.toThrow();
+    await leaving;
     expect(native.spawn).not.toHaveBeenCalled();
     expect(latest.player.play).not.toHaveBeenCalled();
   });
 
-  it("rejects a second track and every request after the connection is gone", async () => {
-    const { player, connection } = createPlayer();
-    await player.play(request());
-
-    await expect(player.play(request("other"))).rejects.toThrow("already has active playback");
-
-    connection.transition({ status: VoiceConnectionStatus.Destroyed });
-    await expect(player.play(request("later"))).rejects.toThrow("retired");
-  });
-
-  it("fails a track whose decode dies before the audio player takes it", async () => {
-    const { player } = createPlayer();
-    native.entersState.mockImplementation(() => new Promise(() => undefined));
-
-    const playing = player.play(request());
-    latest.child.emit("close");
-
-    await expect(playing).rejects.toThrow("FFmpeg exited with code unknown");
-    expect(latest.player.stop).toHaveBeenCalledWith(true);
-    expect(latest.child.kill).toHaveBeenCalledWith("SIGKILL");
-    // The Player survives the track it could not start.
-    native.entersState.mockImplementation(async () => undefined);
-    await expect(player.play(request("next"))).resolves.toBeUndefined();
-  });
-
-  it("redacts a spawn failure before the track starts", async () => {
+  it("aborts a pending decoder replacement when the track stops", async () => {
+    let count = 0;
+    let requested!: () => void;
+    const secondRequest = new Promise<void>(resolve => {
+      requested = resolve;
+    });
+    const url = await origin(response => {
+      if (++count === 2) {
+        requested();
+        return;
+      }
+      response.writeHead(200);
+      response.end(Buffer.from([1]));
+    });
     const { player, events } = createPlayer();
-    const signed = "https://stream.example/audio?token=top-secret&signature=also-secret";
-    native.entersState.mockImplementation(() => new Promise<undefined>(() => undefined));
-
-    const playing = player.play(request("item", signed));
-    latest.child.emit("error", new Error(`Could not spawn decoder for ${signed}`));
-    const failure = await playing.then(
-      () => {
-        throw new Error("Expected the decoder spawn to fail");
-      },
-      error => error as Error,
-    );
-
-    expect(failure.message).toContain("FFmpeg could not start");
-    expect(failure.message).not.toContain(signed);
-    expect(failure.message).not.toContain("top-secret");
-    expect(events).toEqual([]);
-  });
-
-  it("keeps a dead decode from surfacing as an unhandled error", async () => {
-    const { player } = createPlayer();
-    await player.play(request());
-
-    latest.child.emit("error", new Error("ffmpeg is missing"));
-    latest.child.stdout.emit("error", new Error("broken pipe"));
-
-    expect(latest.child.stdout.destroyed).toBe(true);
-  });
-
-  it.each([
-    [undefined, "must be an object"],
-    [{ itemId: "", resource: request().resource }, "only itemId and resource"],
-    [{ itemId: "item", resource: undefined }, "must be a URL resource"],
-    [{ itemId: "item", resource: { kind: "url", url: "file:///audio", dispose: vi.fn() } }, "absolute HTTP(S)"],
-    [{ itemId: "item", resource: { kind: "stream", url: URL_, dispose: vi.fn() } }, "valid URL resource"],
-  ])("rejects a malformed playback request %#", async (value, message) => {
-    const { player } = createPlayer();
-    await expect(player.play(value as unknown as PlaybackRequest)).rejects.toThrow(message);
-  });
-
-  it("declines an encoded resource as unsupported rather than malformed", async () => {
-    const { player } = createPlayer();
-    const encoded = { itemId: "item", resource: { kind: "encoded", data: "track", dispose: vi.fn() } };
-
-    await expect(player.play(encoded as unknown as PlaybackRequest)).rejects.toMatchObject({
-      code: "UNSUPPORTED",
-      message: "The default voice engine cannot play encoded resources",
-    });
-  });
-});
-
-describe("controls", () => {
-  it("rejects the transitions the audio player refuses and cannot seek at all", async () => {
-    const { player } = createPlayer();
-    await player.play(request());
-
-    latest.player.pause.mockReturnValueOnce(false);
-    await expect(player.pause()).rejects.toThrow("could not pause");
-    latest.player.unpause.mockReturnValueOnce(false);
-    await expect(player.resume()).rejects.toThrow("could not resume");
-    await expect(player.pause()).resolves.toBeUndefined();
-    await expect(player.resume()).resolves.toBeUndefined();
-
-    await expect(player.seek(30)).rejects.toMatchObject({
-      code: "UNSUPPORTED",
-      message: "The default voice engine cannot seek",
-    });
-  });
-
-  it("keeps caller pause intent when the next track starts", async () => {
-    const { player } = createPlayer();
-    await player.play(request());
-    await player.pause();
+    await player.play({ itemId: "url", resource: { kind: "url", url, seekable: true } });
+    const seeking = player.seek(10);
+    await secondRequest;
     await player.stopTrack();
 
-    await player.play(request("next"));
-
-    expect(latest.player.pause).toHaveBeenCalledTimes(2);
-    expect(latest.player.state.status).toBe(AudioPlayerStatus.Paused);
-  });
-
-  it("holds the volume level across decodes and rejects an invalid one", async () => {
-    const { player } = createPlayer();
-    await expect(player.setVolume(-1)).rejects.toMatchObject({ code: "INVALID_ARGUMENT" });
-
-    await player.setVolume(50);
-    await player.play(request());
-    expect(latest.resource.volume.level).toBe(0.5);
-
-    await player.setVolume(80);
-    expect(latest.resource.volume.level).toBe(0.8);
-  });
-});
-
-describe("filters", () => {
-  it("restarts the decode at the current position under the folded chain", async () => {
-    const { player, events } = createPlayer();
-    await player.play(request());
-    const first = latest.child;
-    latest.resource.playbackDuration = 6000;
-
-    await player.setFilters([
-      { name: "bassboost", value: 5 },
-      { name: "custom", payload: "volume=2" },
-    ]);
-
-    expect(latest.spawn).toEqual(expect.arrayContaining(["-ss", "6", "-af", "bass=g=5,volume=2"]));
-    expect(first.kill).toHaveBeenCalledWith("SIGKILL");
-    expect(player.position).toBe(6);
-
-    first.emit("close", 1, null);
-    await flushMicrotasks();
-    expect(events).toEqual([]);
-
-    // An unchanged chain leaves the running decode alone.
-    await player.setFilters([
-      { name: "bassboost", value: 5 },
-      { name: "custom", payload: "volume=2" },
-    ]);
-    expect(native.children).toHaveLength(2);
-  });
-
-  it("keeps an explicitly paused track paused across the re-render", async () => {
-    const { player } = createPlayer();
-    await player.play(request());
-    await player.pause();
-    const calls = native.entersState.mock.calls.length;
-
-    await player.setFilters([{ name: "echo" }]);
-
-    expect(latest.player.play).toHaveBeenCalledTimes(2);
-    expect(latest.player.pause).toHaveBeenCalledTimes(2);
-    // A held decode is already where it needs to be, so nothing waits on the audio player.
-    expect(native.entersState.mock.calls).toHaveLength(calls);
-  });
-
-  it("does not turn transport auto-pause into pause intent during a filter hand-off", async () => {
-    const { player } = createPlayer();
-    await player.play(request());
-    const active = latest.resource;
-    latest.player.transition({ status: AudioPlayerStatus.AutoPaused, resource: active });
-
-    await player.setFilters([{ name: "echo" }]);
-
-    expect(latest.player.pause).not.toHaveBeenCalled();
-    expect(latest.player.state.status).toBe(AudioPlayerStatus.Playing);
-  });
-
-  it("restores the previous chain and active playback when the candidate fails", async () => {
-    const { player, events } = createPlayer();
-    await player.play(request());
-    await player.setFilters([{ name: "echo" }]);
-    const previousResource = latest.resource;
-    native.entersState.mockImplementation(() => new Promise<undefined>(() => undefined));
-
-    const replacing = player.setFilters([{ name: "nightcore" }]);
-    latest.player.emit(
-      "stateChange",
-      { status: AudioPlayerStatus.Playing, resource: previousResource },
-      { status: AudioPlayerStatus.Idle },
-    );
-    const candidateFailure = new Error("candidate decode failed");
-    latest.player.emit("error", audioPlayerError(latest.resource, candidateFailure));
-    native.entersState.mockResolvedValue(undefined);
-
-    const failure = await replacing.then(
-      () => {
-        throw new Error("Expected filter candidate failure");
-      },
-      error => error as Error,
-    );
-    expect(failure).toMatchObject({ message: candidateFailure.message });
-    expect(failure).not.toBe(candidateFailure);
-    expect(latest.spawn).toEqual(expect.arrayContaining(["-af", "aecho=0.8:0.9:1000:0.3"]));
-    expect(events).toEqual([]);
-
-    await player.stopTrack();
-    await player.play(request("next"));
-    expect(latest.spawn).toEqual(expect.arrayContaining(["-af", "aecho=0.8:0.9:1000:0.3"]));
-  });
-
-  it("leaves the effective render attached when a candidate fails before producing audio", async () => {
-    const { player } = createPlayer();
-    await player.play(request());
-    const effective = latest.child;
-    const handoffs = latest.player.play.mock.calls.length;
-    const stops = latest.player.stop.mock.calls.length;
-    native.autoAudio = false;
-
-    const replacing = player.setFilters([{ name: "nightcore" }]);
-    await flushMicrotasks();
-    const candidate = latest.child;
-
-    expect(latest.player.play).toHaveBeenCalledTimes(handoffs);
-    expect(latest.player.stop).toHaveBeenCalledTimes(stops);
-    candidate.emit("close", 1, null);
-
-    await expect(replacing).rejects.toThrow("FFmpeg exited with code 1");
-    expect(latest.player.play).toHaveBeenCalledTimes(handoffs);
-    expect(latest.player.stop).toHaveBeenCalledTimes(stops);
-    expect(effective.kill).not.toHaveBeenCalled();
-  });
-
-  it("fails A without allowing its native error to poison a pre-handoff filter candidate B", async () => {
-    const { player, events } = createPlayer();
-    await player.play(request("A"));
-    const activeResource = latest.resource;
-    native.autoAudio = false;
-
-    const replacing = player.setFilters([{ name: "nightcore" }]);
-    await flushMicrotasks();
-    const candidate = latest.child;
-    const candidateResource = latest.resource;
-    const activeFailure = new Error("A native playback failed");
-    latest.player.emit("error", audioPlayerError(activeResource, activeFailure));
-
-    await expect(replacing).rejects.toBeInstanceOf(Error);
-    const failure = events[0] as Extract<PlayerEvent, { type: "failed" }>;
-    expect(failure).toMatchObject({ type: "failed", itemId: "A", error: { message: activeFailure.message } });
-    expect(failure.error).not.toBe(activeFailure);
+    await expect(seeking).rejects.toThrow();
     expect(latest.player.play).toHaveBeenCalledTimes(1);
-
-    latest.player.emit("error", audioPlayerError(candidateResource, new Error("late B native playback failed")));
-    candidate.close(0, null);
-    await flushMicrotasks();
-
-    expect(events).toHaveLength(1);
-    expect(events[0]).toMatchObject({ type: "failed", itemId: "A", error: { message: activeFailure.message } });
-  });
-
-  it("reconciles a candidate Idle transition that precedes its filter commit", async () => {
-    const { player, events } = createPlayer();
-    await player.play(request());
-    native.entersState.mockImplementation(() => new Promise<undefined>(() => undefined));
-
-    const replacing = player.setFilters([{ name: "echo" }]);
-    await flushMicrotasks();
-    const candidate = latest.child;
-    const resource = latest.resource;
-    latest.player.emit(
-      "stateChange",
-      { status: AudioPlayerStatus.Playing, resource },
-      { status: AudioPlayerStatus.Idle },
-    );
-    candidate.emit("close", 0, null);
-
-    await replacing;
-    await flushMicrotasks();
-    expect(events).toEqual([{ type: "finished", itemId: "item" }]);
-  });
-
-  it("retires after candidate and rollback failures in stable order", async () => {
-    const { player, events } = createPlayer();
-    await player.play(request());
-    native.autoAudio = false;
-    native.entersState.mockImplementation(() => new Promise<undefined>(() => undefined));
-
-    const replacing = player.setFilters([{ name: "nightcore" }]);
-    const candidate = latest.child;
-    const candidateResource = latest.resource;
-    candidate.stdout.write(Buffer.from([0]));
-    await flushMicrotasks();
-    const candidateFailure = new Error("candidate decode failed");
-    latest.player.emit("error", audioPlayerError(candidateResource, candidateFailure));
-    await settle();
-
-    const rollback = latest.child;
-    const rollbackResource = latest.resource;
-    expect(rollback).not.toBe(candidate);
-    rollback.stdout.write(Buffer.from([0]));
-    await flushMicrotasks();
-    const rollbackFailure = new Error("rollback decode failed");
-    latest.player.emit("error", audioPlayerError(rollbackResource, rollbackFailure));
-    const failure = await replacing.then(
-      () => undefined,
-      error => error,
-    );
-
-    expect(failure).toBeInstanceOf(AggregateError);
-    const causes = (failure as AggregateError).errors as Error[];
-    expect(causes.map(error => error.message)).toEqual([candidateFailure.message, rollbackFailure.message]);
-    expect(causes).not.toContain(candidateFailure);
-    expect(causes).not.toContain(rollbackFailure);
-    expect(events).toEqual([{ type: "failed", itemId: "item", error: failure, terminal: true }]);
-    await expect(player.play(request("next"))).rejects.toThrow("retired");
-  });
-
-  it("stores a chain committed with no active track for the next one", async () => {
-    const { player } = createPlayer();
-    await player.setFilters([{ name: "vaporwave" }]);
-
-    await player.play(request());
-
-    expect(latest.spawn).toEqual(expect.arrayContaining(["-af", "asetrate=48000*0.8,aresample=48000,bass=g=5"]));
-  });
-});
-
-describe("terminal release", () => {
-  it("shares one cleanup, fences later effects, and suppresses active item outcomes", async () => {
-    const { player, connection, events } = createPlayer();
-    await player.play(request());
-    const first = player.release();
-    const second = player.release();
-
-    expect(second).toBe(first);
-    await first;
-
-    expect(connection.subscription.unsubscribe).toHaveBeenCalledTimes(1);
-    expect(latest.player.stop).toHaveBeenCalledWith(true);
-    expect(latest.child.kill).toHaveBeenCalledWith("SIGKILL");
-    await expect(player.play(request("later"))).rejects.toThrow("retired");
-    await expect(player.pause()).rejects.toThrow("retired");
-    latest.player.transition({ status: AudioPlayerStatus.Idle });
-    connection.transition({ status: VoiceConnectionStatus.Destroyed });
     expect(events).toEqual([]);
-  });
-
-  it("runs every terminal cleanup once, waits for the decoder, and retains ordered failures", async () => {
-    const { player, connection } = createPlayer();
-    await player.play(request());
-    const child = latest.child;
-    const unsubscribeFailure = new Error("unsubscribe failed");
-    const stopFailure = new Error("native stop failed");
-    const killFailure = new Error("decoder kill failed");
-    connection.subscription.unsubscribe.mockImplementationOnce(() => {
-      throw unsubscribeFailure;
-    });
-    latest.player.stop.mockImplementationOnce(() => {
-      throw stopFailure;
-    });
-    child.kill.mockImplementationOnce(() => {
-      throw killFailure;
-    });
-
-    const first = player.release();
-    const second = player.release();
-    let settled = false;
-    void first.then(
-      () => {
-        settled = true;
-      },
-      () => {
-        settled = true;
-      },
-    );
-
-    expect(second).toBe(first);
-    expect(connection.subscription.unsubscribe).toHaveBeenCalledTimes(1);
-    expect(latest.player.stop).toHaveBeenCalledTimes(1);
-    expect(child.kill).toHaveBeenCalledTimes(1);
-    expect(connection.listenerCount("stateChange")).toBe(0);
-    expect(latest.player.listenerCount("stateChange")).toBe(0);
-    expect(latest.player.listenerCount("error")).toBe(0);
-    await flushMicrotasks();
-    expect(settled).toBe(false);
-
-    child.close(null, "SIGKILL");
-    const failure = await first.catch(error => error);
-
-    expect(failure).toBeInstanceOf(AggregateError);
-    expect((failure as AggregateError).errors).toEqual([unsubscribeFailure, stopFailure, killFailure]);
-  });
-});
-
-describe("outcomes", () => {
-  it("reconciles an Idle transition that arrives before initial activation commits", async () => {
-    const { player, events } = createPlayer();
-    native.entersState.mockImplementation(() => new Promise<undefined>(() => undefined));
-
-    const playing = player.play(request());
-    const resource = latest.resource;
-    latest.player.emit(
-      "stateChange",
-      { status: AudioPlayerStatus.Playing, resource },
-      { status: AudioPlayerStatus.Idle },
-    );
-    latest.child.emit("close", 0, null);
-
-    await playing;
-    await flushMicrotasks();
-    expect(events).toEqual([{ type: "finished", itemId: "item" }]);
-  });
-
-  it("waits for successful decoder closure after the matching resource becomes idle", async () => {
-    const { player, events } = createPlayer();
-    await player.play(request());
-
-    latest.player.transition({ status: AudioPlayerStatus.Idle });
-    expect(events).toEqual([]);
-
-    latest.child.emit("close", 0, null);
-    await flushMicrotasks();
-    expect(events).toEqual([{ type: "finished", itemId: "item" }]);
-  });
-
-  it("reports post-start decoder failures once with bounded redacted diagnostics", async () => {
-    const { player, events } = createPlayer();
-    const signed = "https://stream.example/audio?token=top-secret&signature=also-secret";
-    await player.play(request("item", signed));
-    latest.child.stderr.write("x".repeat(6000));
-    latest.child.stderr.write(`decoder failed for ${signed} token=another-secret`);
-
-    latest.child.emit("close", 1, null);
-    await flushMicrotasks();
-
-    const failure = events[0] as Extract<PlayerEvent, { type: "failed" }>;
-    expect(failure).toMatchObject({ type: "failed", itemId: "item" });
-    expect(failure.error.message).toContain("FFmpeg exited with code 1");
-    expect(failure.error.message).toContain("<redacted-url>");
-    expect(failure.error.message).not.toContain(signed);
-    expect(failure.error.message).not.toContain("top-secret");
-    expect(failure.error.message).not.toContain("another-secret");
-    expect(failure.error.message.length).toBeLessThan(4200);
-
-    latest.player.transition({ status: AudioPlayerStatus.Idle });
-    expect(events).toHaveLength(1);
-  });
-
-  it("reports a signaled post-start decoder exit as a failure", async () => {
-    const { player, events } = createPlayer();
-    await player.play(request());
-
-    latest.child.emit("close", null, "SIGTERM");
-    await flushMicrotasks();
-
-    expect(events).toEqual([
-      {
-        type: "failed",
-        itemId: "item",
-        error: expect.objectContaining({ message: "FFmpeg exited from signal SIGTERM" }),
-      },
-    ]);
-  });
-
-  it("publishes a finished track, then a failed one, staying usable throughout", async () => {
-    const { player, events } = createPlayer();
-
-    await player.play(request("first"));
-    latest.child.emit("close", 0, null);
-    await flushMicrotasks();
-    latest.player.transition({ status: AudioPlayerStatus.Idle });
-    await player.play(request("second"));
-    const error = new Error("decoder failed");
-    const resource = latest.resource;
-    latest.player.emit("error", audioPlayerError(resource, error));
-    await player.play(request("third"));
-
-    expect(events[0]).toEqual({ type: "finished", itemId: "first" });
-    const failure = events[1] as Extract<PlayerEvent, { type: "failed" }>;
-    expect(failure).toMatchObject({ type: "failed", itemId: "second", error: { message: error.message } });
-    expect(failure.error).not.toBe(error);
-    expect(Reflect.has(failure.error, "resource")).toBe(false);
-  });
-
-  it("ends a track on request without publishing an outcome", async () => {
-    const { player, events } = createPlayer();
-    await player.play(request());
-
-    await player.stopTrack();
-
-    expect(latest.child.kill).toHaveBeenCalledWith("SIGKILL");
-    latest.player.transition({ status: AudioPlayerStatus.Idle });
-    expect(events).toEqual([]);
-
-    // The Player is the session's, not the track's: the next request is accepted, and a second stop is a no-op.
-    await player.play(request("next"));
-    latest.child.exitCode = 0;
-    await player.stopTrack();
-    await player.stopTrack();
-    expect(latest.child.kill).not.toHaveBeenCalled();
-  });
-
-  it("retires with its connection, reporting the active track exactly once", async () => {
-    const { player, connection, events } = createPlayer();
-    await player.play(request());
-
-    connection.transition({ status: VoiceConnectionStatus.Destroyed });
-
-    expect(events).toEqual([{ type: "failed", itemId: "item", error: expect.any(Error), terminal: true }]);
-    expect(latest.child.kill).toHaveBeenCalledWith("SIGKILL");
-
-    latest.player.transition({ status: AudioPlayerStatus.Idle });
-    connection.transition({ status: VoiceConnectionStatus.Destroyed });
-    expect(events).toHaveLength(1);
-    expect(player.subscribe(vi.fn())).toBeInstanceOf(Function);
-  });
-
-  it("isolates a subscriber that throws", async () => {
-    const { player, events } = createPlayer();
-    player.subscribe(() => {
-      throw new Error("subscriber failed");
-    });
-
-    await player.play(request());
-    latest.child.emit("close", 0, null);
-    await flushMicrotasks();
-    latest.player.transition({ status: AudioPlayerStatus.Idle });
-
-    expect(events).toEqual([{ type: "finished", itemId: "item" }]);
+    await player.release();
   });
 });

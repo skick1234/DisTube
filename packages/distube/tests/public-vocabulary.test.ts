@@ -1,25 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { DisTubeError, type ErrorCode, type PlaybackStatus, type RepeatMode } from "../src";
+import { DisTubeError, ErrorCode } from "../src";
 
 describe("public literal vocabulary", () => {
-  it("accepts literal codes without runtime enum members", () => {
-    const codes = [
-      "INVALID_ARGUMENT",
-      "INVALID_STATE",
-      "ABORTED",
-      "SOURCE_FAILED",
-      "VOICE_FAILED",
-      "PLUGIN_FAILED",
-      "QUEUE_FAILED",
-      "UNSUPPORTED",
-    ] satisfies ErrorCode[];
-    for (const code of codes) expect(new DisTubeError(code, "Operation failed").code).toBe(code);
-  });
-
-  it("accepts literal repeat modes and queue statuses", () => {
-    const modes = ["off", "song", "queue"] satisfies RepeatMode[];
-    const statuses = ["idle", "playing", "paused"] satisfies PlaybackStatus[];
-    expect(modes).toContain("song");
-    expect(statuses).toContain("paused");
+  it("narrows through DisTubeError.is for core and plugin-owned codes", () => {
+    const aborted: unknown = new DisTubeError(ErrorCode.ABORTED, "cancelled");
+    expect(DisTubeError.is(aborted, ErrorCode.ABORTED)).toBe(true);
+    expect(DisTubeError.is(aborted, ErrorCode.INVALID_STATE)).toBe(false);
+    expect(DisTubeError.is(new Error("plain"), ErrorCode.ABORTED)).toBe(false);
+    const plugin: unknown = new DisTubeError("SPOTIFY_NOT_FOUND", "not on Spotify");
+    expect(DisTubeError.is(plugin, "SPOTIFY_NOT_FOUND")).toBe(true);
   });
 });

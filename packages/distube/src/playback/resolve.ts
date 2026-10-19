@@ -3,7 +3,7 @@ import { asDisTubeError, DisTubeError, ErrorCode } from "../errors";
 import { Playlist, Song } from "../media";
 import { throwIfAborted } from "./abort";
 import { exhaustedChain, findCandidates, newSearchChain } from "./search";
-import { requireSongOwner, type SourceCatalog, validateResolvedMedia, validateSourceSongs } from "./sources";
+import { requireSongOwner, type SourceCatalog, validateResolvedMedia } from "./sources";
 
 /** How many of a source's ranked candidates query resolution consumes. */
 const QUERY_CANDIDATES = 1;
@@ -28,7 +28,11 @@ export async function resolveInput(
     return input;
   }
   if (input instanceof Playlist) {
-    for (const song of input.songs) requireSongOwner(song, sources);
+    const owner = sources.get(input.source);
+    if (!owner) {
+      throw new DisTubeError(ErrorCode.SOURCE_FAILED, "Playlist source does not name a configured SourcePlugin");
+    }
+    validateResolvedMedia(input, owner);
     throwIfAborted(signal);
     return input;
   }
@@ -51,8 +55,8 @@ function isAbsoluteUrl(input: string): boolean {
 }
 
 async function resolveUrl(url: string, sources: SourceCatalog, signal: AbortSignal): Promise<Song | Playlist> {
-  throwIfAborted(signal);
   for (const plugin of sources.ordered) {
+    if (!plugin.resolve) continue;
     let result: unknown;
     try {
       result = await plugin.resolve(url, { signal });
@@ -63,10 +67,9 @@ async function resolveUrl(url: string, sources: SourceCatalog, signal: AbortSign
     throwIfAborted(signal);
     if (result === undefined) continue;
     const media = validateResolvedMedia(result, plugin);
-    validateSourceSongs(media, plugin, "resolve");
     return media;
   }
-  throw new DisTubeError(ErrorCode.SOURCE_FAILED, "No SourcePlugin resolved the source");
+  throw new DisTubeError(ErrorCode.NO_RESULT, "No SourcePlugin resolved the source");
 }
 
 /** Exactly the first candidate of the first source that returns one; the rest never leave core. */

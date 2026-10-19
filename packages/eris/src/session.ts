@@ -1,289 +1,289 @@
-import { asError, collectCleanupFailures } from "@distube/voice-core/core";
-import type { VoiceGatewayData, VoiceSession, VoiceSessionEvent } from "distube/integrations";
-import type { Client, RawPacket, VoiceConnection } from "eris";
-// Reporting stays local: the aggregate names this package.
-import { throwCleanupFailures } from "./cleanup";
+import type { JoinOptions, VoiceGatewayData, VoiceSession, VoiceSessionEvent } from "distube/integrations";
+import type { Client, RawPacket } from "eris";
+import { VoiceConnection } from "eris";
 import { ensureErisErrorSink } from "./native-playback";
 
 export interface ErisVoiceSessionOptions {
-  readonly client: Client;
   readonly guildId: string;
   readonly channelId: string;
   readonly clientUserId: string;
+  readonly client: Client;
   readonly selfDeaf: boolean;
   readonly selfMute: boolean;
   readonly connectionTimeoutMs: number;
 }
 
-/**
- * One guild's voice presence over Eris.
- *
- * Eris recovers dropped sockets on its own and emits `disconnect` only once a connection is gone
- * for good, so that event is exactly the terminal outcome core is owed.
- */
+/** Gateway membership stays alive independently of the selected audio transport. */
 export class ErisVoiceSession implements VoiceSession {
   readonly guildId: string;
   readonly clientUserId: string;
-  readonly #client: Client;
-  readonly #selfDeaf: boolean;
-  readonly #selfMute: boolean;
-  readonly #timeout: number;
+  readonly #options: ErisVoiceSessionOptions;
+
   readonly #listeners = new Set<(event: VoiceSessionEvent) => void>();
+  readonly #waiters = new Set<() => void>();
+
   #connection?: VoiceConnection;
+  #state?: GatewayState;
+  #server?: GatewayServer;
   #channelId: string;
-  /** The channel the gateway last reported us in, which an external move changes without a join of ours. */
-  #observedChannelId?: string;
-  #sessionId?: string;
-  #token?: string;
-  #endpoint?: string;
   #gateway?: VoiceGatewayData;
+  #selfDeaf: boolean;
+  #selfMute: boolean;
   #released = false;
-  #joining?: string;
   #releasePromise?: Promise<void>;
 
-  /** Joins `options.channelId` and resolves once the connection can carry audio. */
   static async connect(options: ErisVoiceSessionOptions): Promise<ErisVoiceSession> {
     const session = new ErisVoiceSession(options);
     try {
-      await session.join(options.channelId);
-    } catch (error: unknown) {
+      await session.join(options.channelId, options);
+    } catch (error) {
       await session.release().catch(() => undefined);
       throw error;
     }
     return session;
   }
 
-  /** Validates a cached voice channel before a native join or move. */
   static assertTarget(client: Client, guildId: string, channelId: string): void {
     const channel = client.getChannel(channelId);
-    if (!channel) throw new Error(`Eris voice channel is unavailable: ${channelId}`);
-    if (channel.type !== 2 && channel.type !== 13) {
-      throw new Error(`Eris channel is not voice-capable: ${channelId}`);
-    }
-    if (channel.guild.id !== guildId) {
-      throw new Error(`Eris voice channel ${channelId} does not belong to guild ${guildId}`);
-    }
+    if (!channel || (channel.type !== 2 && channel.type !== 13) || channel.guild.id !== guildId)
+      throw new Error("Invalid Eris voice channel");
   }
 
-  /** @internal The native connection, reachable only from this package's default engine. */
-  static connectionOf(session: VoiceSession): VoiceConnection | undefined {
-    return session instanceof ErisVoiceSession ? session.#connection : undefined;
+  static async connectionOf(session: VoiceSession): Promise<VoiceConnection | undefined> {
+    if (!(session instanceof ErisVoiceSession) || session.#released || !session.gateway) return undefined;
+    if (session.#connection) throw new Error("Eris audio transport is already attached");
+    const connection = new VoiceConnection(session.guildId);
+    suppressTransportVoiceState(connection);
+    ensureErisErrorSink(connection);
+    session.#connection = connection;
+    const { promise, resolve, reject } = Promise.withResolvers<void>();
+    const timer = setTimeout(
+      () => reject(new Error("Eris transport readiness timed out")),
+      session.#options.connectionTimeoutMs,
+    );
+    const ready = (): void => resolve();
+    const failed = (error: Error): void => reject(new Error(error.message));
+    const disconnected = (): void => reject(new Error("Eris transport disconnected before it became ready"));
+    connection.once("ready", ready).once("error", failed).once("disconnect", disconnected);
+    try {
+      session.#refreshTransport();
+      await promise;
+      if (session.#released || session.#connection !== connection) throw new Error("Voice session was released");
+    } catch (error) {
+      ErisVoiceSession.detachConnection(session, connection);
+      throw error;
+    } finally {
+      clearTimeout(timer);
+      connection.off("ready", ready).off("error", failed).off("disconnect", disconnected);
+    }
+    return connection;
+  }
+
+  /** The local Player retires its socket without changing gateway membership. */
+  static detachConnection(session: VoiceSession, connection: VoiceConnection): void {
+    if (!(session instanceof ErisVoiceSession) || session.#connection !== connection) return;
+    session.#connection = undefined;
+    if (connection.ready || connection.connecting || connection.channelID !== null) connection.disconnect();
   }
 
   constructor(options: ErisVoiceSessionOptions) {
+    this.#options = options;
     this.guildId = options.guildId;
     this.clientUserId = options.clientUserId;
-    this.#client = options.client;
     this.#channelId = options.channelId;
     this.#selfDeaf = options.selfDeaf;
     this.#selfMute = options.selfMute;
-    this.#timeout = options.connectionTimeoutMs;
-    // Credentials are only ever on the wire, so the gateway is watched from before the first join.
-    this.#client.on("rawWS", this.#onRawWS);
+    options.client.on("rawWS", this.#onRaw);
+  }
+  readonly #onRaw = (packet: RawPacket): void => {
+    if (this.#released || typeof packet.d !== "object" || packet.d === null) return;
+    const data = packet.d as Record<string, unknown>;
+    if (data.guild_id !== this.guildId) return;
+    if (packet.t === "VOICE_STATE_UPDATE") {
+      if (data.user_id !== this.clientUserId) return;
+      if (data.channel_id === null) {
+        this.#terminate(new Error("Discord removed the bot from voice"));
+        return;
+      }
+      if (typeof data.channel_id !== "string" || typeof data.session_id !== "string") return;
+      if (this.#state && (this.#state.channel_id !== data.channel_id || this.#state.session_id !== data.session_id)) {
+        this.#gateway = undefined;
+        this.#server = undefined;
+      }
+      this.#state = { channel_id: data.channel_id, session_id: data.session_id };
+      if (typeof data.self_deaf === "boolean") this.#selfDeaf = data.self_deaf;
+      if (typeof data.self_mute === "boolean") this.#selfMute = data.self_mute;
+    } else if (packet.t === "VOICE_SERVER_UPDATE") {
+      if (typeof data.token !== "string") return;
+      this.#server = { token: data.token, endpoint: typeof data.endpoint === "string" ? data.endpoint : null };
+      if (!data.endpoint) this.#gateway = undefined;
+    } else return;
+    this.#settle();
+  };
+  #send(channelId: string | null, selfDeaf: boolean, selfMute: boolean): void {
+    const guild = this.#options.client.guilds.get(this.guildId);
+    if (!guild) throw new Error("Eris guild is unavailable");
+    guild.shard.sendWS(4, { guild_id: this.guildId, channel_id: channelId, self_deaf: selfDeaf, self_mute: selfMute });
+  }
+  #refreshTransport(): void {
+    const gateway = this.gateway;
+    if (!gateway || !this.#connection) return;
+    this.#connection.connect({
+      channel_id: gateway.channelId,
+      session_id: gateway.sessionId,
+      endpoint: gateway.endpoint,
+      token: gateway.token,
+      user_id: this.clientUserId,
+    });
   }
 
-  /** The last channel this session has positively confirmed as connected. */
   get channelId(): string {
     return this.#channelId;
   }
-
   get gateway(): VoiceGatewayData | undefined {
     return this.#gateway;
   }
+  get selfDeaf(): boolean {
+    return this.#selfDeaf;
+  }
+  get selfMute(): boolean {
+    return this.#selfMute;
+  }
 
-  async join(channelId: string): Promise<void> {
-    if (this.#released) throw new Error(`Eris voice session for guild ${this.guildId} was released`);
-    // A move is validated like the first join: Eris would otherwise follow the channel into its own guild.
-    ErisVoiceSession.assertTarget(this.#client, this.guildId, channelId);
-    const previousChannelId = this.#connection ? this.#channelId : undefined;
-    this.#joining = channelId;
+  async join(channelId: string, options: JoinOptions = {}): Promise<void> {
+    if (this.#released) throw new Error("Voice session was released");
+    ErisVoiceSession.assertTarget(this.#options.client, this.guildId, channelId);
+    const selfDeaf = options.selfDeaf ?? this.#selfDeaf;
+    const selfMute = options.selfMute ?? this.#selfMute;
+    if (this.#gateway?.channelId === channelId && selfDeaf === this.selfDeaf && selfMute === this.selfMute) return;
+    const previous = { state: this.#state, server: this.#server, gateway: this.#gateway };
+    if (channelId !== this.channelId) {
+      this.#state = undefined;
+      this.#server = undefined;
+      this.#gateway = undefined;
+    }
+    const { promise, resolve, reject } = Promise.withResolvers<void>();
+    const timer = setTimeout(() => {
+      this.#waiters.delete(check);
+      reject(new Error("Discord gateway membership timed out"));
+    }, this.#options.connectionTimeoutMs);
+    const check = (): void => {
+      if (
+        !this.#released &&
+        !(this.#gateway?.channelId === channelId && this.selfDeaf === selfDeaf && this.selfMute === selfMute)
+      )
+        return;
+      clearTimeout(timer);
+      this.#waiters.delete(check);
+      if (this.#released) reject(new Error("Voice session was released"));
+      else resolve();
+    };
+    this.#waiters.add(check);
     try {
-      const connection = await this.#connect(channelId);
-      if (this.#released) throw new Error(`Eris voice session for guild ${this.guildId} was released`);
-      this.#assertConnectedChannel(connection, channelId);
-      this.#adopt(connection);
-      this.#commitChannel(channelId);
-      this.#joining = undefined;
-      this.#settle();
-    } catch (error: unknown) {
-      this.#joining = undefined;
-      if (this.#released || !previousChannelId || this.#connection?.channelID === previousChannelId) throw error;
-      await this.#restore(previousChannelId, error);
+      this.#send(channelId, selfDeaf, selfMute);
+    } catch (error) {
+      clearTimeout(timer);
+      this.#waiters.delete(check);
+      reject(error);
+    }
+    try {
+      await promise;
+    } catch (error) {
+      if (!this.#released && this.#gateway?.channelId !== channelId) {
+        this.#state = previous.state;
+        this.#server = previous.server;
+        this.#gateway = previous.gateway;
+      }
       throw error;
     }
   }
-
-  release(): Promise<void> {
-    this.#releasePromise ??= this.#performRelease();
-    return this.#releasePromise;
+  setSelfDeaf(value: boolean): Promise<void> {
+    return this.join(this.channelId, { selfDeaf: value });
   }
-
+  setSelfMute(value: boolean): Promise<void> {
+    return this.join(this.channelId, { selfMute: value });
+  }
   subscribe(listener: (event: VoiceSessionEvent) => void): () => void {
     if (this.#released) return () => undefined;
     this.#listeners.add(listener);
     return () => this.#listeners.delete(listener);
   }
-
-  /** Joins or moves, failing the request rather than waiting forever on an unanswered gateway. */
-  async #connect(channelId: string): Promise<VoiceConnection> {
-    const join = this.#client.joinVoiceChannel(channelId, { selfDeaf: this.#selfDeaf, selfMute: this.#selfMute });
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    try {
-      return await Promise.race([
-        join,
-        new Promise<never>((_, reject) => {
-          timer = setTimeout(() => reject(new Error("Eris voice connection timed out")), this.#timeout);
-        }),
-      ]);
-    } catch (error: unknown) {
-      // A first join that never settled must not leave a connection behind; a move keeps the old one.
-      if (!this.#connection) {
-        this.#client.leaveVoiceChannel(channelId);
-        void join.then(
-          () => this.#client.leaveVoiceChannel(channelId),
-          () => undefined,
-        );
-      }
-      throw error;
-    } finally {
-      if (timer) clearTimeout(timer);
-    }
-  }
-
-  /** Reverses a native channel mutation that Eris made before rejecting or timing out a move. */
-  async #restore(channelId: string, moveError: unknown): Promise<void> {
-    this.#joining = channelId;
-    try {
-      const connection = await this.#connect(channelId);
-      if (this.#released) throw new Error(`Eris voice session for guild ${this.guildId} was released`);
-      this.#assertConnectedChannel(connection, channelId);
-      this.#adopt(connection);
-      this.#commitChannel(channelId);
-      this.#joining = undefined;
-      this.#settle();
-    } catch (restoreError: unknown) {
-      this.#joining = undefined;
-      const error = new AggregateError(
-        [asError(moveError), asError(restoreError)],
-        "Eris voice move restoration failed",
-      );
-      this.#terminate(error);
-      throw error;
-    }
-  }
-
-  /** `joinVoiceChannel` resolves only after Eris signals readiness; prove it still points at the requested channel. */
-  #assertConnectedChannel(connection: VoiceConnection, channelId: string): void {
-    if (connection.channelID !== channelId) {
-      throw new Error(`Eris voice connection did not enter channel ${channelId}`);
-    }
-  }
-
-  /** Takes ownership of the guild's connection, moving native listeners off any previous one. */
-  #adopt(connection: VoiceConnection): void {
-    if (this.#connection === connection) return;
-    this.#detach();
-    this.#connection = connection;
-    ensureErisErrorSink(connection);
-    connection.on("disconnect", this.#onDisconnect);
-  }
-
-  #detach(): void {
-    this.#connection?.off("disconnect", this.#onDisconnect);
-  }
-
-  async #performRelease(): Promise<void> {
-    const channelId = this.channelId;
-    this.#terminalize();
-    throwCleanupFailures(
-      collectCleanupFailures([
-        () => this.#client.off("rawWS", this.#onRawWS),
-        () => this.#detach(),
-        () => this.#client.leaveVoiceChannel(channelId),
-      ]),
-    );
-  }
-
-  /** Ends the session's authority synchronously, before any native teardown runs. */
-  #terminalize(): void {
+  release(): Promise<void> {
+    if (this.#releasePromise) return this.#releasePromise;
     this.#released = true;
     this.#gateway = undefined;
+    for (const check of this.#waiters) check();
     this.#listeners.clear();
+    this.#releasePromise = Promise.resolve().then(() => {
+      const failures: unknown[] = [];
+      for (const action of [
+        () => {
+          if (this.#connection) ErisVoiceSession.detachConnection(this, this.#connection);
+        },
+        () => this.#send(null, this.selfDeaf, this.selfMute),
+        () => this.#options.client.off("rawWS", this.#onRaw),
+      ]) {
+        try {
+          action();
+        } catch (error) {
+          failures.push(error);
+        }
+      }
+      if (failures.length) throw new AggregateError(failures, "Voice session cleanup failed");
+    });
+    return this.#releasePromise;
   }
-
-  /** Reports the guild's presence as over, exactly once, and tears the connection down. */
   #terminate(error: Error): void {
     if (this.#released) return;
     const listeners = [...this.#listeners];
     void this.release().catch(() => undefined);
-    for (const listener of listeners) this.#deliver(listener, { type: "disconnected", error });
-  }
-
-  readonly #onDisconnect = (error?: Error): void => {
-    this.#terminate(error ?? new Error(`Eris voice connection for guild ${this.guildId} was disconnected`));
-  };
-
-  /** Collects the voice-server and voice-state data an engine needs, straight off the gateway. */
-  readonly #onRawWS = (packet: RawPacket): void => {
-    if (this.#released) return;
-    const data = objectRecord(packet.d);
-    if (!data || data.guild_id !== this.guildId) return;
-    if (packet.t === "VOICE_SERVER_UPDATE") {
-      if (typeof data.token !== "string" || typeof data.endpoint !== "string") return;
-      this.#token = data.token;
-      this.#endpoint = data.endpoint;
-    } else if (packet.t === "VOICE_STATE_UPDATE") {
-      if (data.user_id !== this.clientUserId) return;
-      // A null channel is Discord removing us from voice, which no rejoin recovers.
-      if (data.channel_id === null) {
-        this.#terminate(new Error(`Discord removed guild ${this.guildId} from its voice channel`));
-        return;
-      }
-      if (typeof data.session_id !== "string") return;
-      // Someone with the permission can drag the bot to another channel. That is a move, not a disconnect.
-      if (typeof data.channel_id === "string") this.#observedChannelId = data.channel_id;
-      this.#sessionId = data.session_id;
-    } else {
-      return;
+    for (const listener of listeners) {
+      try {
+        listener({ type: "disconnected", error });
+      } catch {}
     }
-    this.#settle();
-  };
-
-  /** Records a channel this session confirmed, whether from a join of ours or the gateway's own report. */
-  #commitChannel(channelId: string): void {
-    this.#channelId = channelId;
-    this.#observedChannelId = channelId;
   }
-
-  /**
-   * Records the settled channel and credentials, publishing whenever either changed.
-   *
-   * The gateway's report wins over the last committed channel, so an external move republishes `connected`
-   * with the new channel. Core updates its Voice and the active track keeps playing; nothing disconnects.
-   */
   #settle(): void {
-    if (this.#released || this.#joining || !this.#sessionId || !this.#token || !this.#endpoint) return;
-    const channelId = this.#observedChannelId ?? this.#channelId;
-    const gateway: VoiceGatewayData = { sessionId: this.#sessionId, token: this.#token, endpoint: this.#endpoint };
-    if (channelId === this.#channelId && this.#gateway && sameGateway(this.#gateway, gateway)) return;
-    this.#commitChannel(channelId);
+    const state = this.#state;
+    const server = this.#server;
+    if (!state?.channel_id || !state.session_id || !server?.endpoint || !server.token) return;
+    const gateway = Object.freeze({
+      channelId: state.channel_id,
+      sessionId: state.session_id,
+      token: server.token,
+      endpoint: server.endpoint,
+    });
+    const previous = this.#gateway;
     this.#gateway = gateway;
-    for (const listener of this.#listeners) this.#deliver(listener, { type: "connected", channelId, gateway });
-  }
+    this.#channelId = gateway.channelId;
 
-  #deliver(listener: (event: VoiceSessionEvent) => void, event: VoiceSessionEvent): void {
-    try {
-      listener(event);
-    } catch {
-      // Subscriber failures are isolated; the session stays the connection authority.
+    for (const check of this.#waiters) check();
+    if (
+      previous &&
+      Object.keys(gateway).every(
+        key => previous[key as keyof VoiceGatewayData] === gateway[key as keyof VoiceGatewayData],
+      )
+    )
+      return;
+    this.#refreshTransport();
+    for (const listener of this.#listeners) {
+      try {
+        listener({ type: "connected", channelId: this.channelId, gateway });
+      } catch {}
     }
   }
 }
 
-function sameGateway(left: VoiceGatewayData, right: VoiceGatewayData): boolean {
-  return left.sessionId === right.sessionId && left.token === right.token && left.endpoint === right.endpoint;
+interface GatewayState {
+  channel_id: string;
+  session_id: string;
+}
+interface GatewayServer {
+  token: string;
+  endpoint: string | null;
 }
 
-function objectRecord(value: unknown): Record<string, unknown> | undefined {
-  return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : undefined;
+/** Eris disconnect calls this method with a null channel; only the session may send membership. */
+export function suppressTransportVoiceState(connection: VoiceConnection): void {
+  connection.updateVoiceState = () => undefined;
 }

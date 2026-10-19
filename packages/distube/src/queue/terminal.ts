@@ -1,4 +1,4 @@
-/** Package-private reasons a DisTubeGuild accepts terminal authority. */
+/** Package-private reasons a DisTubeQueue accepts terminal authority. */
 export type QueueTerminalCause =
   | Readonly<{ kind: "stop" }>
   | Readonly<{ kind: "finished" }>

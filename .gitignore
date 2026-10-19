@@ -13,3 +13,5 @@ node_modules
 /docs
 /website/api
 .turbo
+
+/reports

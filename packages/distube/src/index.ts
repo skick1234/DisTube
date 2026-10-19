@@ -1,18 +1,37 @@
-export type { Diagnostic, DiagnosticSeverity, ResolvableInput as PlayInput } from "./contracts";
-export { DisTube, type DisTubeOptions, type PlayOptions, type PlayResult } from "./DisTube";
-export type { DisTubeGuild, GuildState } from "./DisTubeGuild";
-export type { QueueStatus as PlaybackStatus, RepeatMode } from "./enums";
-export { DisTubeError, type ErrorCode } from "./errors";
+export type {
+  Diagnostic,
+  DiagnosticSeverity,
+  FilterDefinitionInfo,
+  FilterEntry,
+  JoinOptions,
+  PlaybackCapabilities,
+  PlaybackResourceKind,
+  PluginDataOf,
+  ResolvableInput as PlayInput,
+} from "./contracts";
+export {
+  DisTube,
+  type DisTubeOptions,
+  type PlayOptions,
+  type SearchRequest,
+} from "./DisTube";
+export type { DisTubeQueue } from "./DisTubeQueue";
+export type { QueueStatus, RepeatMode } from "./enums";
+export { type CoreErrorCode, DisTubeError, ErrorCode } from "./errors";
 export type {
   BaseQueueEvent,
+  BaseVoiceEvent,
   DisTubeEventListener,
   DisTubeEventMap,
   DisTubeEventName,
   VoiceDisconnectReason,
+  VoiceTrackEvent,
 } from "./events";
-export { Playlist, type PlaylistData, type QueueItem, Song, type SongData } from "./media";
+export { Playlist, type PlaylistData, type QueueItem, type QueueItemData, Song, type SongData } from "./media";
 export type { QueueCollection } from "./QueueManager";
-export type { EnqueueOptions } from "./queue/protocol";
-export type { DisTubeVoice, VoiceSettings } from "./voice/DisTubeVoice";
+export type { AddOptions, JumpOptions, RemoveTarget } from "./queue/protocol";
+export type { QueueState } from "./queue/state";
+export type { DisTubeVoice, PlayTrackOptions } from "./voice/DisTubeVoice";
+export type { FilterManager, FilterSelection } from "./voice/filters";
 export type { VoiceChannelTarget } from "./voice/target";
-export type { VoiceCollection, VoiceManager } from "./voice/VoiceManager";
+export type { VoiceCollection, VoiceJoinOptions, VoiceManager } from "./voice/VoiceManager";

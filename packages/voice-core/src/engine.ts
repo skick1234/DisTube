@@ -1,4 +1,4 @@
-import type { Engine, PlaybackResource, Player, VoiceSession } from "distube/integrations";
+import type { Engine, FilterDefinitionInfo, PlaybackResource, Player, VoiceSession } from "distube/integrations";
 import { type FfmpegFilterDefinitions, FilterRegistry } from "./filters";
 import { DiscordVoicePlayer } from "./player";
 import { createPrerequisiteCheck, DISCORD_ENCRYPTION_MODULES, DISCORD_OPUS_MODULES } from "./prerequisites";
@@ -31,26 +31,32 @@ export function discordPreflight(owner: string): () => Promise<void> {
 /**
  * The package's default voice engine: ffmpeg decoding and filtering over the platform voice connection.
  *
- * It plays `url` resources, owns the filter preset registry, and creates one long-lived Player per session.
+ * It plays local URL, file and stream resources and creates one Player per attached transport.
  */
 export class DiscordVoiceEngine implements Engine {
-  /** ffmpeg decodes a URL; a provider-encoded track means nothing to it. */
-  readonly accepts: ReadonlySet<PlaybackResource["kind"]> = new Set(["url" as const]);
+  /** ffmpeg decodes local input; a provider-encoded track means nothing to it. */
+  readonly accepts: ReadonlySet<PlaybackResource["kind"]> = new Set(["url", "file", "stream"]);
+  /** Seekable files and URLs restart a decoder at the requested position. */
+  readonly capabilities = Object.freeze({ seek: true });
+  readonly filters: ReadonlyMap<string, FilterDefinitionInfo>;
   readonly #filters: FilterRegistry;
   readonly #preflight: () => Promise<void>;
 
   constructor(filters?: FfmpegFilterDefinitions, preflight: () => Promise<void> = discordPreflight(DEFAULT_OWNER)) {
     this.#filters = new FilterRegistry(filters);
+    this.filters = this.#filters.definitions;
     this.#preflight = preflight;
   }
 
   async createPlayer(session: VoiceSession): Promise<Player> {
-    const connection = DiscordVoiceSession.connectionOf(session);
+    if (!(session instanceof DiscordVoiceSession)) {
+      throw new TypeError("This engine only plays through its own package's VoiceSession");
+    }
+    await this.#preflight();
+    const connection = await DiscordVoiceSession.connectionOf(session);
     if (!connection) throw new TypeError("This engine only plays through its own package's VoiceSession");
-    return new DiscordVoicePlayer(connection, this.#filters, this.#preflight);
-  }
-
-  resolvable(name: string): boolean {
-    return this.#filters.resolvable(name);
+    return new DiscordVoicePlayer(connection, this.#filters, () => {
+      DiscordVoiceSession.detachConnection(session, connection);
+    });
   }
 }

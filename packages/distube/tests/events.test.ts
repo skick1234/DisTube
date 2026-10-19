@@ -1,17 +1,25 @@
 import { describe, expect, it, vi } from "vitest";
-import type { Diagnostic, DisTubeGuild } from "../src";
+import type { Diagnostic, DisTubeQueue } from "../src";
 import { DisTubeEventEmitter } from "../src/events";
+import { FakeSource, setup } from "./support/harness";
 
 // The emitter never reads the payload, so a bare shape is enough to exercise delivery.
 const created = Object.freeze({
   guildId: "guild",
-  queue: {} as DisTubeGuild,
+  queue: {} as DisTubeQueue,
   timestamp: 1,
-  state: Object.freeze({ current: undefined, upcoming: Object.freeze([]), status: "idle" as const }),
+  state: Object.freeze({
+    current: undefined,
+    upcoming: Object.freeze([]),
+    history: Object.freeze([]),
+    status: "idle" as const,
+    repeat: "off" as const,
+    autoplay: false,
+  }),
 });
 
 describe("event delivery", () => {
-  it("returns an idempotent unsubscribe without exposing listener storage", async () => {
+  it("delivers after the commit and returns an idempotent unsubscribe", async () => {
     const emitter = new DisTubeEventEmitter(() => undefined);
     const listener = vi.fn();
     const unsubscribe = emitter.on("queue.created", listener);
@@ -73,15 +81,55 @@ describe("event delivery", () => {
   });
 
   it("isolates diagnostic consumers that throw or reject", async () => {
-    const synchronous = new DisTubeEventEmitter(() => {
+    const throwing = vi.fn<(diagnostic: Diagnostic) => void>(() => {
       throw new Error("observer failed");
     });
+    const synchronous = new DisTubeEventEmitter(throwing);
     expect(() => synchronous.report({ severity: "error", stage: "test", message: "diagnostic" })).not.toThrow();
+    expect(throwing).toHaveBeenCalledTimes(1);
+    expect(throwing).toHaveBeenCalledWith(expect.objectContaining({ stage: "test", message: "diagnostic" }));
 
-    const asynchronous = new DisTubeEventEmitter(async () => {
+    const rejecting = vi.fn<(diagnostic: Diagnostic) => Promise<void>>(async () => {
       throw new Error("observer rejected");
     });
+    const asynchronous = new DisTubeEventEmitter(rejecting);
     asynchronous.report({ severity: "warning", stage: "test", message: "diagnostic" });
     await Promise.resolve();
+    expect(rejecting).toHaveBeenCalledTimes(1);
+    expect(rejecting).toHaveBeenCalledWith(expect.objectContaining({ stage: "test", message: "diagnostic" }));
+  });
+
+  it("sanitizes plugin diagnostics before the public consumer sees them", async () => {
+    const source = new FakeSource("source");
+    const raw = Object.assign(new Error("Authorization: Bearer private-token"), {
+      headers: { token: "private-token" },
+    });
+    source.initialize.mockImplementation(context => {
+      context.diagnostic({
+        severity: "error",
+        stage: "source.resolve",
+        message: "Authorization: Bearer private-token",
+        error: raw,
+        detail: {
+          operation: "resolve",
+          status: 503,
+          token: "private-token",
+          native: { headers: { token: "private-token" } },
+        },
+      });
+    });
+    const harness = setup([source]);
+    const diagnostic = harness.diagnostics.mock.calls[0]?.[0];
+
+    expect(diagnostic).toMatchObject({
+      stage: "source.resolve",
+      message: "Authorization: [REDACTED]",
+      detail: { operation: "resolve", status: 503 },
+    });
+    expect(diagnostic?.error).not.toBe(raw);
+    expect(diagnostic?.error?.message).toBe("Authorization: [REDACTED]");
+    expect(diagnostic?.detail).toEqual({ operation: "resolve", status: 503 });
+    expect(Object.isFrozen(diagnostic?.detail)).toBe(true);
+    await harness.distube.dispose();
   });
 });

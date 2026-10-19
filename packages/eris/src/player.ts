@@ -1,4 +1,4 @@
-import type { FfmpegStream, FilterRegistry } from "@distube/voice-core/core";
+import type { FfmpegStream, FilterRegistry, LocalPlaybackResource } from "@distube/voice-core/core";
 import {
   asError,
   ffmpegFailure,
@@ -18,7 +18,7 @@ const VOICE_DATA_TIMEOUT_MS = 15_000;
 /** One track a Player holds, across however many decodes its filters need. */
 interface ActiveTrack {
   readonly itemId: string;
-  readonly url: string;
+  readonly input: LocalPlaybackResource;
   /** Seconds already played when the running decode started, so a re-render keeps the position. */
   offset: number;
   /** Whether Eris accepted the track, which is what makes a later end an item outcome. */
@@ -41,16 +41,18 @@ interface Replacement {
 /**
  * The long-lived playback backend for one connected Eris voice session.
  *
- * The Player outlives every track and queue that borrows it. Only its session's release retires it.
+ * The Player outlives tracks and queues until release or terminal transport failure.
  * This adapter owns each FFmpeg decode and hands Eris PCM after the decoder has started.
  */
 export class ErisVoicePlayer implements Player {
   readonly #connection: VoiceConnection;
   readonly #filters: FilterRegistry;
-  readonly #preflight?: () => Promise<void>;
+  readonly #releaseTransport?: () => void;
   readonly #listeners = new Set<(event: PlayerEvent) => void>();
   /** Decoders stopped by track work remain owned until their child process closes. */
   readonly #retiringStreams = new Set<FfmpegStream>();
+  readonly #decodeControllers = new Set<AbortController>();
+  readonly #pendingDecodes = new Set<Promise<void>>();
   #restoreStopPlaying?: () => void;
   #track?: ActiveTrack;
   /** The only pause authority this Player reads. Eris constructs its connection paused, so the
@@ -63,10 +65,10 @@ export class ErisVoicePlayer implements Player {
   #terminal = false;
   #releasePromise?: Promise<void>;
 
-  constructor(connection: VoiceConnection, filters: FilterRegistry, preflight?: () => Promise<void>) {
+  constructor(connection: VoiceConnection, filters: FilterRegistry, releaseTransport?: () => void) {
     this.#connection = connection;
     this.#filters = filters;
-    this.#preflight = preflight;
+    this.#releaseTransport = releaseTransport;
     ensureErisErrorSink(connection);
     this.#restoreStopPlaying = observeStopPlaying(connection, this.#onNativeStop);
     connection.on("disconnect", this.#onDisconnect);
@@ -82,13 +84,15 @@ export class ErisVoicePlayer implements Player {
     this.#assertOpen();
     if (this.#track) throw new Error("Eris Player already has active playback");
     const request = playbackRequest(value);
-    if (this.#preflight) await this.#preflight();
-    this.#assertOpen();
-    if (this.#track) throw new Error("Eris Player already has active playback");
-    const stream = this.#decode(request.resource.url, 0);
+    const stream = await this.#decode(request.resource, 0);
+    if (this.#terminal || this.#track) {
+      this.#retireStream(stream);
+      this.#assertOpen();
+      throw new Error("Eris Player already has active playback");
+    }
     const track: ActiveTrack = {
       itemId: request.itemId,
-      url: request.resource.url,
+      input: request.resource,
       offset: 0,
       started: false,
       stream,
@@ -98,6 +102,8 @@ export class ErisVoicePlayer implements Player {
     this.#track = track;
     try {
       await this.#awaitUsableAudio(stream);
+      this.#assertOpen();
+      if (this.#track !== track) throw new Error("Eris Player track was superseded");
       const nativeCurrent = this.#handOff(stream);
       track.nativeCurrent = nativeCurrent;
       track.started = true;
@@ -126,13 +132,16 @@ export class ErisVoicePlayer implements Player {
   /** Ends the active track, leaving the Player and its voice connection ready for the next one. */
   async stopTrack(): Promise<void> {
     this.#assertOpen();
+    this.#abortDecodes();
     const track = this.#track;
     if (track) this.#endTrack(track);
   }
 
-  async seek(_seconds: number): Promise<void> {
+  async seek(seconds: number): Promise<void> {
     this.#assertOpen();
-    throw new DisTubeError("UNSUPPORTED", "The default voice engine cannot seek");
+    if (!Number.isFinite(seconds) || seconds < 0)
+      throw new DisTubeError("INVALID_ARGUMENT", "seek position must be non-negative");
+    await this.#replace(seconds, this.#chain);
   }
 
   async setVolume(percent: number): Promise<void> {
@@ -155,13 +164,24 @@ export class ErisVoicePlayer implements Player {
       return;
     }
 
+    await this.#replace(this.position, chain);
+  }
+
+  async #replace(seconds: number, chain: string | undefined): Promise<void> {
+    const track = this.#track;
+    if (!track) throw new DisTubeError("INVALID_STATE", "Player has no active track");
+    if (track.input.kind === "stream" || (track.input.kind === "url" && track.input.seekable !== true)) {
+      throw new DisTubeError("UNSUPPORTED", "This resource cannot be restarted");
+    }
     // Eris replaces playback as soon as play() runs. Prove the candidate decoder has PCM first so a
     // pre-handoff failure leaves the audible render alone.
-    const previousChain = this.#chain;
-    const seconds = this.position;
     const previous = track.stream;
     const paused = this.#pauseIntent;
-    const candidate = this.#decode(track.url, seconds, chain);
+    const candidate = await this.#decode(track.input, seconds, chain);
+    if (this.#terminal || this.#track !== track) {
+      this.#retireStream(candidate);
+      throw new Error("Eris Player replacement was superseded");
+    }
     const replacement: Replacement = { track, stream: candidate, handedOff: false };
     this.#replacement = replacement;
 
@@ -195,33 +215,10 @@ export class ErisVoicePlayer implements Player {
       throw candidateError;
     }
 
-    let rollback: FfmpegStream | undefined;
-    try {
-      rollback = this.#decode(track.url, seconds, previousChain);
-      replacement.stream = rollback;
-      await this.#awaitUsableAudio(rollback);
-      this.#assertReplacement(track, replacement);
-      const nativeCurrent = this.#handOff(rollback, paused);
-      this.#assertReplacement(track, replacement);
-      track.stream = rollback;
-      track.nativeCurrent = nativeCurrent;
-      track.offset = seconds;
-      track.started = true;
-      track.ended = false;
-      track.decodeFinished = false;
-      this.#replacement = undefined;
-      this.#watchDecode(track, rollback);
-      this.#reconcileTrack(track);
-      this.#retireStream(previous);
-    } catch (rollbackError: unknown) {
-      if (rollback) this.#retireStream(rollback);
-      this.#replacement = undefined;
-      const failure = filterReplacementFailure(candidateError, rollbackError);
-      this.#retire(failure);
-      throw failure;
-    }
-
-    throw candidateError;
+    this.#replacement = undefined;
+    const failure = asError(candidateError);
+    this.#fail(track, failure);
+    throw failure;
   }
 
   release(): Promise<void> {
@@ -237,8 +234,31 @@ export class ErisVoicePlayer implements Player {
   }
 
   /** Starts one package-owned decode at `seconds` with its filter chain applied before Eris sees PCM. */
-  #decode(url: string, seconds: number, chain = this.#chain): FfmpegStream {
-    return spawnFfmpeg(url, seconds, chain);
+  async #decode(input: LocalPlaybackResource, seconds: number, chain = this.#chain): Promise<FfmpegStream> {
+    const controller = new AbortController();
+    this.#decodeControllers.add(controller);
+    const task = spawnFfmpeg(input, seconds, chain, controller.signal).then(stream => {
+      if (controller.signal.aborted || this.#terminal) {
+        this.#retireStream(stream);
+        throw new Error("Eris Player decoder was superseded");
+      }
+      return stream;
+    });
+    const settled = task.then(
+      () => undefined,
+      () => undefined,
+    );
+    this.#pendingDecodes.add(settled);
+    try {
+      return await task;
+    } finally {
+      this.#pendingDecodes.delete(settled);
+      this.#decodeControllers.delete(controller);
+    }
+  }
+
+  #abortDecodes(): void {
+    for (const controller of this.#decodeControllers) controller.abort();
   }
 
   /** Waits for a PCM frame without touching Eris's currently attached stream. */
@@ -250,22 +270,21 @@ export class ErisVoicePlayer implements Player {
         if (settled) return;
         settled = true;
         if (timer) clearTimeout(timer);
-        stream.stdout.off("data", onData);
+        stream.stdout.off("readable", onReadable);
         stream.stdout.off("error", onError);
         if (error) reject(error);
         else resolve();
       };
-      const onData = (chunk: string | Buffer): void => {
-        if ((typeof chunk === "string" ? Buffer.byteLength(chunk) : chunk.length) === 0) return;
-        stream.stdout.pause();
-        complete();
+      const onReadable = (): void => {
+        if (stream.stdout.readableLength > 0) complete();
       };
       const onError = (error: Error): void => complete(error);
       timer = setTimeout(
         () => complete(new Error("FFmpeg did not produce audio before the start timeout")),
         VOICE_DATA_TIMEOUT_MS,
       );
-      stream.stdout.on("data", onData);
+      stream.stdout.on("readable", onReadable);
+      onReadable();
       stream.stdout.once("error", onError);
       void stream.outcome.then(outcome => {
         if (!finishedFfmpeg(outcome)) complete(ffmpegFailure(outcome));
@@ -336,6 +355,7 @@ export class ErisVoicePlayer implements Player {
   /** Ends the track's audio without touching the Player, its listeners, or the connection. */
   #endTrack(track: ActiveTrack): void {
     if (this.#track !== track) return;
+    this.#abortDecodes();
     this.#track = undefined;
     const replacement = this.#replacement;
     this.#replacement = undefined;
@@ -389,12 +409,12 @@ export class ErisVoicePlayer implements Player {
   }
 
   async #cleanup(): Promise<void> {
+    this.#abortDecodes();
     const track = this.#track;
     const replacement = this.#replacement;
     const activeStreams = [track?.stream, replacement?.stream].filter(
       (stream): stream is FfmpegStream => stream !== undefined,
     );
-    const streams = new Set([...this.#retiringStreams, ...activeStreams]);
     this.#track = undefined;
     this.#replacement = undefined;
     this.#listeners.clear();
@@ -425,7 +445,14 @@ export class ErisVoicePlayer implements Player {
     }
     // A signal only asks the process to stop. Wait for every known decoder close before Voice releases
     // its Eris session, including a decoder a preceding queue stop already retired.
+    await Promise.all([...this.#pendingDecodes]);
+    const streams = new Set([...this.#retiringStreams, ...activeStreams]);
     await Promise.all([...streams].map(stream => stream.outcome));
+    try {
+      this.#releaseTransport?.();
+    } catch (error: unknown) {
+      failures.push(asError(error));
+    }
     if (failures.length === 1) throw failures[0];
     if (failures.length > 1) throw new AggregateError(failures, "Eris Player cleanup failures");
   }
@@ -446,11 +473,4 @@ function deliver(listener: (event: PlayerEvent) => void, event: PlayerEvent): vo
   } catch {
     // Player listeners are isolated; GuildQueue remains the state and diagnostic authority.
   }
-}
-
-function filterReplacementFailure(candidate: unknown, rollback: unknown): AggregateError {
-  return new AggregateError(
-    [asError(candidate), asError(rollback)],
-    "Eris Player filter replacement and rollback failed",
-  );
 }

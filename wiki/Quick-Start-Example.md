@@ -11,19 +11,27 @@ import { DisTube } from "distube";
 declare const client: Client;
 declare const voiceChannel: VoiceChannel;
 
+const youtube = new YouTubePlugin();
 const distube = new DisTube<{ requestedBy: string }>({
   adapter: new DiscordJSAdapter(client),
-  sources: [new YouTubePlugin(), new SpotifyPlugin(), new SoundCloudPlugin()],
+  sources: [youtube, new SpotifyPlugin(), new SoundCloudPlugin()],
 });
 const stopLogging = distube.on("queue.item.started", ({ item }) => console.log(item.song.name));
 const stopErrors = distube.on("queue.item.failed", ({ item, error }) => console.error(item.song.name, error.code));
 
-const pending = distube.play(voiceChannel, "https://open.spotify.com/track/example", {
+const queue = await distube.play(voiceChannel, "https://open.spotify.com/track/example", {
   metadata: { requestedBy: "user-id" },
 });
-const registered = distube.getQueue(voiceChannel.guildId);
-const { queue, items } = await pending;
-console.log(queue === registered, items[0]?.metadata?.requestedBy);
+console.log(queue.upcoming.length);
+
+await queue.add("lofi hip hop", { next: true });
+const voice = queue.voice;
+await voice?.setVolume(80);
+await voice?.filters.set("bassboost", 15);
+
+const suggestions = await distube.getSuggestions("lo", youtube);
+const results = await distube.search("lofi", { source: youtube, limit: 5 });
+console.log(suggestions[0], results[0]?.pluginData.views);
 
 // When the bot stops:
 stopLogging();
@@ -39,5 +47,6 @@ A Spotify Song keeps its canonical Spotify URL and identity while core privately
 for playback. No fallback candidate or signed stream URL enters public state or events.
 
 The runnable example repository handles Discord interaction replies, queue lookup, events and errors using public
-packages. Eris bots use `new ErisAdapter(client)` from `@distube/eris` and pass their native voice channel to `play`.
-Eris 0.18 requires an Opus implementation for voice; `queue.seek()` rejects with `UNSUPPORTED`.
+packages, one command per file. Eris bots use `new ErisAdapter(client)` from `@distube/eris` and pass their native
+voice channel to `play`. Eris 0.18 requires an Opus implementation for voice. Local engines seek files and explicitly seekable URLs. Read `queue.voice?.seekable` for the current track;
+one-shot streams reject seeking and active filter changes that need a decoder restart.

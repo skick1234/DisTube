@@ -1,201 +1,141 @@
-import { VoiceConnectionStatus } from "@discordjs/voice";
 import { DisTubeError } from "distube";
-import type { PlaybackRequest, VoiceSession } from "distube/integrations";
-import { ChannelTypes, type Client } from "oceanic.js";
+import { ChannelTypes, type Client, type VoiceChannel } from "oceanic.js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { OceanicAdapter } from "../src";
-import { CHANNEL, connection, GATEWAY, native, resetNative, settle } from "./support/native";
+import { GATEWAY, gatewayAdapter, native, resetNative } from "../../voice-core/tests/support/native";
+import { OceanicAdapter, type OceanicAdapterOptions } from "../src";
 
 const { preflight, preflightFactory } = vi.hoisted(() => {
   const preflight = vi.fn(async (): Promise<void> => undefined);
-  const preflightFactory = vi.fn((_owner: string) => preflight);
-  return { preflight, preflightFactory };
+  return { preflight, preflightFactory: vi.fn((_owner: string) => preflight) };
 });
 
-vi.mock("@discordjs/voice", async () => (await import("./support/native")).voiceModule());
+vi.mock("@discordjs/voice", async () => (await import("../../voice-core/tests/support/native")).voiceModule());
 vi.mock("@distube/voice-core/discord", async importOriginal => {
   const actual = await importOriginal<typeof import("@distube/voice-core/discord")>();
   return { ...actual, discordPreflight: preflightFactory };
 });
 
 const GUILD = "guild";
+const CHANNEL = "channel";
 const TARGET = { guildId: GUILD, channelId: CHANNEL };
-const CLIENT_USER_ID = "bot";
-const adapterCreator = () => ({});
 
-/** A cached Oceanic channel in the small shape the Adapter needs to validate. */
-function voiceChannel(guildID = GUILD): unknown {
-  return { guildID, type: ChannelTypes.GUILD_VOICE };
-}
-
-function textChannel(guildID = GUILD): unknown {
-  return { guildID, type: ChannelTypes.GUILD_TEXT };
-}
-
-function guild(channels: Iterable<[string, unknown]> = [[CHANNEL, voiceChannel()]]): unknown {
-  return { voiceAdapterCreator: adapterCreator, channels: new Map(channels) };
-}
-
-/** A client that owns exactly one cached guild, channel, and connected bot identity. */
-function client(guilds: Iterable<[string, unknown]> = [[GUILD, guild()]]): Client {
-  return { user: { id: CLIENT_USER_ID }, guilds: new Map(guilds) } as unknown as Client;
+function fixture(
+  channel: unknown = { id: CHANNEL, guildID: GUILD, guild: { id: GUILD }, type: ChannelTypes.GUILD_VOICE },
+  user: unknown = { id: "bot" },
+  options?: OceanicAdapterOptions,
+) {
+  const gateway = gatewayAdapter();
+  const client = {
+    user,
+    guilds: new Map([
+      [
+        GUILD,
+        {
+          voiceAdapterCreator: gateway.creator,
+          channels: new Map([[CHANNEL, channel]]),
+        },
+      ],
+    ]),
+  } as unknown as Client;
+  return { gateway, adapter: new OceanicAdapter(client, options) };
 }
 
 beforeEach(() => {
   resetNative();
   preflight.mockReset();
   preflight.mockResolvedValue(undefined);
-  preflightFactory.mockClear();
 });
 
-describe("adapter", () => {
-  it("requires a client and a positive connection timeout", () => {
-    expect(() => new OceanicAdapter(undefined as unknown as Client)).toThrow("requires an Oceanic Client");
-    expect(() => new OceanicAdapter(client(), { connectionTimeoutMs: 0 })).toThrow("must be positive");
-    expect(() => new OceanicAdapter(client(), { connectionTimeoutMs: 1.5 })).toThrow("must be positive");
-  });
-
-  it("refuses a guild the client does not have before touching voice", async () => {
-    await expect(new OceanicAdapter(client([])).createVoiceSession(TARGET)).rejects.toThrow(
-      `Oceanic guild is unavailable: ${GUILD}`,
+describe("OceanicAdapter", () => {
+  it("normalizes a native channel synchronously and rejects conflicting guild identity", () => {
+    const { adapter, gateway } = fixture();
+    expect(adapter.normalizeTarget({ id: CHANNEL, guildID: GUILD, guild: { id: GUILD } } as VoiceChannel)).toEqual(
+      TARGET,
     );
-    expect(native.joinVoiceChannel).not.toHaveBeenCalled();
+    expect(() =>
+      adapter.normalizeTarget({ id: CHANNEL, guildID: GUILD, guild: { id: "other" } } as VoiceChannel),
+    ).toThrow("conflicting guild");
+    expect(gateway.sendPayload).not.toHaveBeenCalled();
   });
 
-  it("validates missing, text, and cross-guild channels before touching voice", async () => {
-    const cases: readonly [Iterable<[string, unknown]>, string][] = [
-      [[], `Oceanic voice channel is unavailable: ${CHANNEL}`],
-      [[[CHANNEL, textChannel()]], `Oceanic channel is not voice-capable: ${CHANNEL}`],
-      [[[CHANNEL, voiceChannel("other-guild")]], `does not belong to guild ${GUILD}`],
-    ];
-
-    for (const [channels, message] of cases) {
-      const adapter = new OceanicAdapter(client([[GUILD, guild(channels)]]));
-      await expect(adapter.createVoiceSession(TARGET)).rejects.toThrow(message);
-    }
-
-    expect(native.joinVoiceChannel).not.toHaveBeenCalled();
+  it.each([0, 1.5])("refuses connectionTimeoutMs %s at construction", connectionTimeoutMs => {
+    expect(() => fixture(undefined, undefined, { connectionTimeoutMs })).toThrow(
+      "connectionTimeoutMs must be positive",
+    );
   });
 
-  it("runs prerequisite preflight before creating a native voice connection", async () => {
+  it.each([
+    {
+      label: "missing channel",
+      channelId: "missing",
+      channel: undefined,
+      user: undefined,
+      message: "Oceanic voice channel is unavailable",
+    },
+    {
+      label: "text channel",
+      channelId: CHANNEL,
+      channel: { id: CHANNEL, guildID: GUILD, type: ChannelTypes.GUILD_TEXT },
+      user: undefined,
+      message: "is not voice-capable",
+    },
+    {
+      label: "foreign channel",
+      channelId: CHANNEL,
+      channel: { id: CHANNEL, guildID: "other", type: ChannelTypes.GUILD_VOICE },
+      user: undefined,
+      message: "does not belong to guild",
+    },
+    {
+      label: "missing client user",
+      channelId: CHANNEL,
+      channel: undefined,
+      user: null,
+      message: "Oceanic client user is unavailable",
+    },
+  ])("rejects a $label before gateway changes", async ({ channelId, channel, user, message }) => {
+    const { adapter, gateway } = fixture(channel, user);
+
+    await expect(adapter.createVoiceSession({ guildId: GUILD, channelId })).rejects.toThrow(message);
+    expect(gateway.sendPayload).not.toHaveBeenCalled();
+  });
+
+  it("joins gateway only, with complete credentials and acknowledged self flags", async () => {
+    const { adapter, gateway } = fixture();
+    const session = await adapter.createVoiceSession(TARGET, { selfDeaf: false, selfMute: true });
+
+    expect(session.gateway).toEqual(GATEWAY);
+    expect(session.selfDeaf).toBe(false);
+    expect(session.selfMute).toBe(true);
+    expect(native.joinVoiceChannel).not.toHaveBeenCalled();
+    expect(preflight).not.toHaveBeenCalled();
+    expect(preflightFactory).toHaveBeenCalledWith("@distube/oceanic");
+    await session.setSelfMute(false);
+    expect(gateway.sendPayload).toHaveBeenLastCalledWith({
+      op: 4,
+      d: { guild_id: GUILD, channel_id: CHANNEL, self_deaf: false, self_mute: false },
+    });
+    await session.release();
+  });
+
+  it("checks local prerequisites only when its selected engine creates audio", async () => {
+    const { adapter } = fixture();
+    const session = await adapter.createVoiceSession(TARGET);
     const failure = new DisTubeError("VOICE_FAILED", "@distube/oceanic requires sodium");
     preflight.mockRejectedValueOnce(failure);
-    const adapter = new OceanicAdapter(client());
 
-    await expect(adapter.createVoiceSession(TARGET)).rejects.toBe(failure);
+    await expect(adapter.engine.createPlayer(session)).rejects.toBe(failure);
     expect(native.joinVoiceChannel).not.toHaveBeenCalled();
-  });
-
-  it("joins with the guild's adapter creator and publishes the settled gateway data", async () => {
-    const adapter = new OceanicAdapter(client(), { connectionTimeoutMs: 200 });
-
-    const session = await adapter.createVoiceSession(TARGET);
-
-    expect(native.joinVoiceChannel).toHaveBeenCalledWith({
-      guildId: GUILD,
-      channelId: CHANNEL,
-      adapterCreator,
-      selfDeaf: true,
-      selfMute: false,
-    });
-    expect(native.entersState).toHaveBeenCalledWith(connection(), VoiceConnectionStatus.Ready, 200);
-    expect(session.guildId).toBe(GUILD);
-    expect(session.clientUserId).toBe(CLIENT_USER_ID);
-    expect(session.gateway).toEqual(GATEWAY);
-  });
-});
-
-describe("session lifetime", () => {
-  it("moves one session between channels rather than rejoining voice", async () => {
-    const adapter = new OceanicAdapter(client());
-    const session = await adapter.createVoiceSession(TARGET);
-
-    await session.join("other");
-
-    expect(connection().rejoin).toHaveBeenCalledWith({ channelId: "other", selfDeaf: true, selfMute: false });
-    expect(native.joinVoiceChannel).toHaveBeenCalledTimes(1);
-    expect(session.channelId).toBe("other");
-  });
-
-  it("restores the committed channel when native rejoin is refused", async () => {
-    const adapter = new OceanicAdapter(client());
-    const session = await adapter.createVoiceSession(TARGET);
-    connection().rejoin.mockImplementationOnce(config => {
-      connection().joinConfig.channelId = config.channelId;
-      return false;
-    });
-
-    await expect(session.join("other")).rejects.toThrow("Discord gateway is unavailable");
-
-    expect(session.channelId).toBe(CHANNEL);
-    expect(connection().joinConfig.channelId).toBe(CHANNEL);
-  });
-
-  it("restores the committed channel when readiness rejects after native rejoin", async () => {
-    const adapter = new OceanicAdapter(client());
-    const session = await adapter.createVoiceSession(TARGET);
-    native.entersState.mockRejectedValueOnce(new Error("ready timeout"));
-
-    await expect(session.join("other")).rejects.toThrow("ready timeout");
-
-    expect(session.channelId).toBe(CHANNEL);
-    expect(connection().joinConfig.channelId).toBe(CHANNEL);
-  });
-
-  it("shares one completion between concurrent releases and goes quiet afterwards", async () => {
-    const adapter = new OceanicAdapter(client());
-    const session = await adapter.createVoiceSession(TARGET);
-    const listener = vi.fn();
-    session.subscribe(listener);
-
-    await Promise.all([session.release(), session.release()]);
-
-    expect(connection().destroy).toHaveBeenCalledTimes(1);
-    // The listener came off with the connection, so its own destruction reaches nobody.
-    connection().transition({ status: VoiceConnectionStatus.Destroyed });
-    await settle();
-    expect(listener).not.toHaveBeenCalled();
-  });
-});
-
-describe("engine", () => {
-  it("plays through its own session only, and retires that player when the session ends", async () => {
-    const adapter = new OceanicAdapter(client());
-    const session = await adapter.createVoiceSession(TARGET);
-
     const player = await adapter.engine.createPlayer(session);
-    expect(connection().subscribe).toHaveBeenCalled();
-    // Nothing is playing, so ending a track is a no-op rather than an error.
-    await expect(player.stopTrack()).resolves.toBeUndefined();
-
+    expect(native.joinVoiceChannel).toHaveBeenCalledTimes(1);
+    await player.release();
     await session.release();
-    await expect(player.play(urlRequest())).rejects.toThrow("retired");
-
-    await expect(adapter.engine.createPlayer({ guildId: GUILD } as unknown as VoiceSession)).rejects.toThrow(
-      "only plays through its own package's VoiceSession",
-    );
   });
 
-  it("declines the resources and controls ffmpeg decoding cannot offer", async () => {
-    const adapter = new OceanicAdapter(client());
-    const player = await adapter.engine.createPlayer(await adapter.createVoiceSession(TARGET));
-
-    const encoded = { itemId: "item", resource: { kind: "encoded", data: "track", dispose: vi.fn() } };
-    await expect(player.play(encoded as unknown as PlaybackRequest)).rejects.toMatchObject({
-      code: "UNSUPPORTED",
+  it("passes its configured filter presets to its engine", () => {
+    const { adapter } = fixture(undefined, undefined, {
+      filters: { house: { render: () => "volume=2", label: "House" } },
     });
-    await expect(player.seek(10)).rejects.toMatchObject({ code: "UNSUPPORTED" });
-  });
-
-  it("resolves its built-in filters alongside the presets it was configured with", () => {
-    const adapter = new OceanicAdapter(client(), { filters: { house: "volume=2" } });
-
-    expect(adapter.engine.resolvable("nightcore")).toBe(true);
-    expect(adapter.engine.resolvable("house")).toBe(true);
-    expect(adapter.engine.resolvable("unknown")).toBe(false);
+    expect(adapter.engine.filters.get("house")?.label()).toBe("House");
   });
 });
-
-function urlRequest(): PlaybackRequest {
-  return { itemId: "item", resource: { kind: "url", url: "https://stream.example/audio", dispose: vi.fn() } };
-}

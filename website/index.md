@@ -4,7 +4,7 @@ layout: home
 hero:
   name: DisTube v6
   text: Discord audio orchestration
-  tagline: Platform-neutral queues, direct adapters, and provider-owned source plugins.
+  tagline: Play a query, then control its queue and attached voice.
   actions:
     - theme: brand
       text: API reference
@@ -14,8 +14,8 @@ hero:
       link: https://github.com/skick1234/DisTube/wiki
 
 features:
-  - title: Explicit ownership
-    details: DisTubeGuild owns queue state, DisTubeVoice owns connections and settings, and DisTube starts playback directly.
+  - title: Music commands first
+    details: distube.play(channel, input) returns the queue after insertion. The queue controls playback and exposes its attached voice.
   - title: Public contracts
     details: Applications import distube; adapters, sources and engines use type-only distube/integrations contracts.
   - title: Independent releases

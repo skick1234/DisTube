@@ -1,10 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import type { ErrorCode, Song } from "../src";
-import type { PlaybackPreparation, PlaybackRequest, Player } from "../src/integrations";
+import { Playlist } from "../src";
+import type { PlaybackPreparation, PlaybackRequest, PlaybackResource, Player } from "../src/integrations";
 import {
   capture,
   deferred,
-  type FakeEngine,
+  FakeEngine,
   FakePlayer,
   FakeSource,
   GUILD,
@@ -43,25 +44,25 @@ function prepared(url: string): { preparation: PlaybackPreparation; dispose: Ret
 describe("enqueue commitment", () => {
   it("advances the commit cursor past an earlier resolution failure", async () => {
     const harness = playableSetup();
-    const { queue } = await harness.distube.play(TARGET, "seed");
+    const queue = await harness.distube.play(TARGET, "seed");
     await settle();
     const first = deferred<Song>();
     const second = deferred<Song>();
     harness.source.resolve.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
-    const failed = capture(queue.enqueue(mediaUrl("first")));
-    const succeeds = queue.enqueue(mediaUrl("second"));
+    const failed = capture(queue.add(mediaUrl("first")));
+    const succeeds = queue.add(mediaUrl("second"));
 
     second.resolve(media("source", "second"));
     first.reject(new Error("first failed"));
 
     expect(await failed).toMatchObject({ code: "SOURCE_FAILED" });
     const [item] = await succeeds;
-    expect(queue.state.upcoming[0] ?? queue.state.current).toBe(item);
+    expect(queue.upcoming[0] ?? queue.current).toBe(item);
   });
 
   it("rejects a ready enqueue after a listener stops the queue", async () => {
     const harness = playableSetup();
-    const { queue } = await harness.distube.play(TARGET, "seed");
+    const queue = await harness.distube.play(TARGET, "seed");
     await settle();
     const first = deferred<Song>();
     const second = deferred<Song>();
@@ -74,8 +75,8 @@ describe("enqueue commitment", () => {
     });
     harness.distube.on("queue.deleted", () => events.push("deleted"));
 
-    const firstEnqueue = queue.enqueue(mediaUrl("first"));
-    const secondEnqueue = capture(queue.enqueue(mediaUrl("second")));
+    const firstEnqueue = queue.add(mediaUrl("first"));
+    const secondEnqueue = capture(queue.add(mediaUrl("second")));
     second.resolve(media("source", "second"));
     first.resolve(media("source", "first"));
 
@@ -92,10 +93,11 @@ describe("playback preparation", () => {
     const source = new FakeSource("youtube");
     const song = media("youtube");
     const { preparation, dispose } = prepared("https://stream.example/fresh?signature=private");
-    source.preparePlayback.mockResolvedValue(preparation);
+    source.stream.mockResolvedValue(preparation);
     const harness = setup([source]);
 
-    const { items } = await harness.distube.play(TARGET, song);
+    const queue = await harness.distube.play(TARGET, song);
+    const items = [...(queue.current ? [queue.current] : []), ...queue.upcoming];
     await settle();
     const player = harness.engine.players[0] as FakePlayer;
 
@@ -104,7 +106,7 @@ describe("playback preparation", () => {
       resource: expect.objectContaining({ url: "https://stream.example/fresh?signature=private" }),
     });
     expect(requestUrl(player.requests[0])).not.toBe(song.url);
-    expect(source.preparePlayback.mock.calls[0]?.[1].signal).toBeInstanceOf(AbortSignal);
+    expect(source.stream.mock.calls[0]?.[1].signal).toBeInstanceOf(AbortSignal);
 
     player.finish();
     await settle();
@@ -115,7 +117,7 @@ describe("playback preparation", () => {
     const source = new FakeSource("source");
     const secret = "file:///private/audio?token=secret";
     const dispose = vi.fn();
-    source.preparePlayback.mockResolvedValue({ kind: "resource", resource: { kind: "url", url: secret, dispose } });
+    source.stream.mockResolvedValue({ kind: "resource", resource: { kind: "url", url: secret, dispose } });
     const harness = setup([source]);
     const failed = vi.fn();
     harness.distube.on("queue.item.failed", failed);
@@ -129,12 +131,102 @@ describe("playback preparation", () => {
     expect(failed.mock.calls[0]?.[0].error.message).not.toContain(secret);
   });
 
+  it("retains a malformed source failure and its disposer failure once", async () => {
+    const source = new FakeSource("source");
+    const url = "file:///private/audio?token=secret";
+    const dispose = vi.fn(() => {
+      throw new Error(`cleanup failed for ${url}`);
+    });
+    source.stream.mockResolvedValue({ kind: "resource", resource: { kind: "url", url, dispose } });
+    const harness = setup([source]);
+    const failed = vi.fn();
+    harness.distube.on("queue.item.failed", failed);
+
+    await harness.distube.play(TARGET, media("source"));
+    await settle();
+
+    expect(dispose).toHaveBeenCalledOnce();
+    const error = failed.mock.calls[0]?.[0].error;
+    expect(error).toMatchObject({ code: "SOURCE_FAILED", cause: expect.any(AggregateError) });
+    expect(error.cause.errors).toHaveLength(2);
+    expect(error.cause.errors[0]).toMatchObject({ code: "SOURCE_FAILED" });
+    expect(error.cause.errors[1].message).toContain("cleanup failed");
+    expect(error.cause.errors[1].message).not.toContain(url);
+  });
+
+  it("joins a rejected prepared resource's cleanup before failing or advancing", async () => {
+    const source = new FakeSource("source");
+    const gate = deferred<void>();
+    const dispose = vi.fn(() => gate.promise);
+    source.stream.mockImplementation(async song =>
+      song.id === "first"
+        ? { kind: "resource", resource: { kind: "url", url: "https://stream.example/first", dispose } }
+        : source.resourceFor(song),
+    );
+    const engine = Object.assign(new FakeEngine(), {
+      supportsResource: (resource: PlaybackResource) => resource.kind !== "url" || !resource.url.endsWith("/first"),
+    });
+    const harness = setup([source], { engine });
+    const failed = vi.fn();
+    const started = vi.fn();
+    harness.distube.on("queue.item.failed", failed);
+    harness.distube.on("queue.item.started", started);
+
+    await harness.distube.play(
+      TARGET,
+      new Playlist({
+        id: "batch",
+        name: "batch",
+        url: "https://source.example/batch",
+        source: "source",
+        songs: [media("source", "first"), media("source", "second")],
+      }),
+    );
+    await settle();
+    expect(dispose).toHaveBeenCalledOnce();
+    expect(failed).not.toHaveBeenCalled();
+    expect(source.stream).toHaveBeenCalledTimes(1);
+
+    gate.reject(new Error("cleanup failed"));
+    await settle();
+    const error = failed.mock.calls[0]?.[0].error;
+    expect(error).toMatchObject({ code: "UNSUPPORTED", cause: expect.any(AggregateError) });
+    expect(error.cause.errors).toHaveLength(2);
+    expect(error.cause.errors[0]).toMatchObject({ code: "UNSUPPORTED" });
+    expect(error.cause.errors[1].message).toContain("cleanup failed");
+    expect(dispose).toHaveBeenCalledOnce();
+    expect(source.stream).toHaveBeenCalledTimes(2);
+    expect(started.mock.calls[0]?.[0].item.song.id).toBe("second");
+    expect(harness.diagnostics).not.toHaveBeenCalled();
+  });
+
+  it("joins a terminal rejection cleanup once when stop overlaps it", async () => {
+    const source = new FakeSource("source");
+    const gate = deferred<void>();
+    const dispose = vi.fn(() => gate.promise);
+    source.stream.mockResolvedValue({
+      kind: "resource",
+      resource: { kind: "url", url: "https://stream.example/rejected", dispose },
+    });
+    const engine = Object.assign(new FakeEngine(), { supportsResource: () => false });
+    const harness = setup([source], { engine });
+    const queue = await harness.distube.play(TARGET, media("source"));
+    await settle();
+
+    const stopping = capture(queue.stop());
+    gate.reject(new Error("terminal cleanup failed"));
+    const failure = await stopping;
+    expect(failure).toMatchObject({ code: "VOICE_FAILED" });
+    expect((failure as Error & { cause: Error }).cause.message).toBe("Playback resource cleanup failed");
+    expect(dispose).toHaveBeenCalledOnce();
+  });
+
   it("reports a post-terminal disposal failure diagnostically without rewriting item history", async () => {
     const source = new FakeSource("source");
     const dispose = vi.fn(async () => {
       throw new Error("dispose failed");
     });
-    source.preparePlayback.mockResolvedValue({
+    source.stream.mockResolvedValue({
       kind: "resource",
       resource: { kind: "url", url: "https://stream.example/disposal", dispose },
     });
@@ -160,13 +252,13 @@ describe("playback preparation", () => {
     const disposal = deferred<void>();
     const disposalError = new Error("dispose failed");
     const dispose = vi.fn(() => disposal.promise);
-    harness.source.preparePlayback.mockResolvedValue({
+    harness.source.stream.mockResolvedValue({
       kind: "resource",
       resource: { kind: "url", url: "https://stream.example/disposal", dispose },
     });
     const deleted = vi.fn();
     harness.distube.on("queue.deleted", deleted);
-    const { queue } = await harness.distube.play(TARGET, "a");
+    const queue = await harness.distube.play(TARGET, "a");
     await settle();
 
     (harness.engine.players[0] as FakePlayer).finish();
@@ -181,7 +273,14 @@ describe("playback preparation", () => {
     expect(settled).toBe(false);
 
     disposal.reject(disposalError);
-    await expect(stopping).rejects.toMatchObject({ code: "VOICE_FAILED", cause: disposalError });
+    const failure = await stopping.catch((error: unknown) => error);
+    expect(failure).toMatchObject({ code: "VOICE_FAILED" });
+    const causes = (error: unknown): readonly unknown[] => {
+      if (error instanceof AggregateError) return error.errors.flatMap(causes);
+      if (error instanceof Error && "cause" in error) return [error, ...causes(error.cause)];
+      return [error];
+    };
+    expect(causes(failure)).toContain(disposalError);
     expect(deleted).toHaveBeenCalledTimes(1);
   });
 });
@@ -192,13 +291,14 @@ describe("explicit fallback", () => {
     const youtube = new FakeSource("youtube");
     const soundcloud = new FakeSource("soundcloud");
     const original = media("spotify", "original");
-    spotify.preparePlayback.mockResolvedValue({ kind: "search", query: "Title Artist One Artist Two" });
+    spotify.stream.mockResolvedValue({ kind: "search", query: "Title Artist One Artist Two" });
     soundcloud.search.mockResolvedValue([media("soundcloud", "candidate")]);
     const harness = setup([spotify, youtube, soundcloud]);
     const started = vi.fn();
     harness.distube.on("queue.item.started", started);
 
-    const { items } = await harness.distube.play(TARGET, original);
+    const queue = await harness.distube.play(TARGET, original);
+    const items = [...(queue.current ? [queue.current] : []), ...queue.upcoming];
     await settle();
     const player = harness.engine.players[0] as FakePlayer;
 
@@ -207,41 +307,43 @@ describe("explicit fallback", () => {
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
     expect(soundcloud.search).toHaveBeenCalledWith("Title Artist One Artist Two", expect.anything());
-    expect(soundcloud.preparePlayback.mock.calls[0]?.[0].id).toBe("candidate");
+    expect(soundcloud.stream.mock.calls[0]?.[0].id).toBe("candidate");
     expect(player.requests[0]?.itemId).toBe(items[0]?.id);
     expect(requestUrl(player.requests[0])).toBe("https://stream.example/candidate");
-    expect(started).toHaveBeenCalledWith(expect.objectContaining({ item: items[0] }));
+    expect(started).toHaveBeenCalledOnce();
+    expect(started.mock.calls[0]?.[0].item).toBe(items[0]);
     // The item still carries the Song the caller asked for; only the stream came from elsewhere.
-    expect(harness.distube.getQueue(GUILD)?.state.current?.song).toBe(original);
+    expect(harness.distube.getQueue(GUILD)?.current?.song).toBe(original);
   });
 
-  it("follows one nested fallback without revisiting a source", async () => {
+  it("keeps later sources on the original fallback query", async () => {
     const spotify = new FakeSource("spotify");
     const youtube = new FakeSource("youtube");
     const soundcloud = new FakeSource("soundcloud");
-    spotify.preparePlayback.mockResolvedValue({ kind: "search", query: "first query" });
+    spotify.stream.mockResolvedValue({ kind: "search", query: "first query" });
     youtube.search.mockResolvedValue([media("youtube", "candidate")]);
-    youtube.preparePlayback.mockResolvedValue({ kind: "search", query: "nested query" });
+    youtube.stream.mockResolvedValue({ kind: "search", query: "nested query" });
     soundcloud.search.mockResolvedValue([media("soundcloud", "nested")]);
     const harness = setup([spotify, youtube, soundcloud]);
 
     await harness.distube.play(TARGET, media("spotify", "original"));
     await settle();
 
-    expect(soundcloud.search).toHaveBeenCalledWith("nested query", expect.anything());
+    expect(soundcloud.search).toHaveBeenCalledWith("first query", expect.anything());
     expect(spotify.search).not.toHaveBeenCalled();
     expect(youtube.search).toHaveBeenCalledTimes(1);
+    expect(soundcloud.stream).toHaveBeenCalledTimes(1);
   });
 
   it("tries only five ranked candidates and preserves the ordered causes", async () => {
     const spotify = new FakeSource("spotify");
     const youtube = new FakeSource("youtube");
     const soundcloud = new FakeSource("soundcloud");
-    spotify.preparePlayback.mockResolvedValue({ kind: "search", query: "query" });
+    spotify.stream.mockResolvedValue({ kind: "search", query: "query" });
     youtube.search.mockRejectedValue(new Error("youtube search"));
     const candidates = Array.from({ length: 7 }, (_, index) => media("soundcloud", `candidate-${index}`));
     soundcloud.search.mockResolvedValue(candidates);
-    soundcloud.preparePlayback.mockImplementation(async song => {
+    soundcloud.stream.mockImplementation(async song => {
       throw new Error(`prepare ${song.id}`);
     });
     const harness = setup([spotify, youtube, soundcloud]);
@@ -251,7 +353,7 @@ describe("explicit fallback", () => {
     await harness.distube.play(TARGET, media("spotify", "original"));
     await settle();
 
-    expect(soundcloud.preparePlayback).toHaveBeenCalledTimes(5);
+    expect(soundcloud.stream).toHaveBeenCalledTimes(5);
     const error = failed.mock.calls[0]?.[0].error;
     expect(error).toMatchObject({ code: "SOURCE_FAILED", cause: expect.any(AggregateError) });
     expect((error.cause as AggregateError).errors.map((cause: Error) => cause.message)).toEqual([
@@ -265,10 +367,10 @@ describe("explicit fallback", () => {
     const youtube = new FakeSource("youtube");
     const soundcloud = new FakeSource("soundcloud");
     const repeated = new Error("shared provider failure");
-    spotify.preparePlayback.mockResolvedValue({ kind: "search", query: "query" });
+    spotify.stream.mockResolvedValue({ kind: "search", query: "query" });
     youtube.search.mockRejectedValue(repeated);
     soundcloud.search.mockResolvedValue([media("soundcloud", "candidate")]);
-    soundcloud.preparePlayback.mockRejectedValue(repeated);
+    soundcloud.stream.mockRejectedValue(repeated);
     const harness = setup([spotify, youtube, soundcloud]);
     const failed = vi.fn();
     harness.distube.on("queue.item.failed", failed);
@@ -281,27 +383,10 @@ describe("explicit fallback", () => {
     expect((error.cause as AggregateError).errors).toEqual([repeated]);
   });
 
-  it("asks for five candidates where query resolution asks for one", async () => {
-    const spotify = new FakeSource("spotify");
-    const youtube = new FakeSource("youtube");
-    spotify.preparePlayback.mockResolvedValueOnce({ kind: "search", query: "fallback query" });
-    spotify.search.mockResolvedValue([media("spotify", "queried")]);
-    youtube.search.mockResolvedValue([media("youtube", "candidate")]);
-    const harness = setup([spotify, youtube]);
-
-    await harness.distube.play(TARGET, media("spotify", "original"));
-    await settle();
-    await harness.distube.getQueue(GUILD)?.enqueue("a query");
-
-    // One shared rule, two callers: the only thing that differs is how many candidates each consumes.
-    expect(youtube.search).toHaveBeenCalledWith("fallback query", expect.objectContaining({ limit: 5 }));
-    expect(spotify.search).toHaveBeenCalledWith("a query", expect.objectContaining({ limit: 1 }));
-  });
-
   it("rejects a candidate whose owner is not the searching source", async () => {
     const spotify = new FakeSource("spotify");
     const youtube = new FakeSource("youtube");
-    spotify.preparePlayback.mockResolvedValue({ kind: "search", query: "query" });
+    spotify.stream.mockResolvedValue({ kind: "search", query: "query" });
     youtube.search.mockResolvedValue([media("spotify", "wrong-owner")]);
     const harness = setup([spotify, youtube]);
     const failed = vi.fn();
@@ -310,14 +395,14 @@ describe("explicit fallback", () => {
     await harness.distube.play(TARGET, media("spotify", "original"));
     await settle();
 
-    expect(youtube.preparePlayback).not.toHaveBeenCalled();
+    expect(youtube.stream).not.toHaveBeenCalled();
     expect(failed.mock.calls[0]?.[0].error.code).toBe("SOURCE_FAILED");
   });
 
   it("never falls back when the owning source itself fails to prepare", async () => {
     const original = new FakeSource("original");
     const other = new FakeSource("other");
-    original.preparePlayback.mockRejectedValueOnce(new Error("provider failed"));
+    original.stream.mockRejectedValueOnce(new Error("provider failed"));
     const harness = setup([original, other]);
     const failures: ErrorCode[] = [];
     harness.distube.on("queue.item.failed", event => failures.push(event.error.code));
@@ -333,7 +418,7 @@ describe("explicit fallback", () => {
     const original = new FakeSource("original");
     const other = new FakeSource("other");
     const { preparation, dispose } = prepared("https://stream.example/failure");
-    original.preparePlayback.mockResolvedValueOnce(preparation);
+    original.stream.mockResolvedValueOnce(preparation);
     const harness = setup([original, other]);
     armPlayer(harness.engine, player => player.play.mockRejectedValueOnce(new Error("voice failed")));
     const failures: ErrorCode[] = [];
@@ -351,26 +436,26 @@ describe("explicit fallback", () => {
 describe("terminal authority", () => {
   it("clears logical state at once and hands the guild to a fresh queue", async () => {
     const harness = playableSetup();
-    const { queue } = await harness.distube.play(TARGET, "a");
+    const queue = await harness.distube.play(TARGET, "a");
     await settle();
     const teardown = deferred<void>();
     (harness.engine.players[0] as FakePlayer).stopTrack.mockReturnValueOnce(teardown.promise);
 
     const stopping = queue.stop();
-    expect(queue.state.upcoming).toEqual([]);
-    expect(queue.state.current).toBeUndefined();
+    expect(queue.upcoming).toEqual([]);
+    expect(queue.current).toBeUndefined();
     expect(harness.distube.getQueue(GUILD)).toBeUndefined();
     teardown.resolve();
     await stopping;
 
     const second = await harness.distube.play(TARGET, "b");
     // Queues have no public ID; a fresh queue is a different facade object.
-    expect(second.queue).not.toBe(queue);
+    expect(second).not.toBe(queue);
   });
 
   it("unregisters the guild even when terminal cleanup rejects", async () => {
     const harness = playableSetup();
-    const { queue } = await harness.distube.play(TARGET, "a");
+    const queue = await harness.distube.play(TARGET, "a");
     await settle();
     (harness.engine.players[0] as FakePlayer).stopTrack.mockRejectedValue(new Error("cleanup failed"));
 
@@ -381,13 +466,13 @@ describe("terminal authority", () => {
   it("waits for a Player activation accepted before deletion, then disposes it exactly once", async () => {
     const harness = playableSetup();
     const { preparation, dispose } = prepared("https://stream.example/late-player");
-    harness.source.preparePlayback.mockResolvedValue(preparation);
+    harness.source.stream.mockResolvedValue(preparation);
     const activation = deferred<void>();
     armPlayer(harness.engine, player => player.play.mockReturnValueOnce(activation.promise));
     const started = vi.fn();
     harness.distube.on("queue.item.started", started);
     const call = harness.distube.play(TARGET, "a");
-    const { queue } = await call;
+    const queue = await call;
     await settle();
 
     let settled = false;
@@ -401,7 +486,7 @@ describe("terminal authority", () => {
 
     expect(dispose).toHaveBeenCalledTimes(1);
     expect(started).not.toHaveBeenCalled();
-    expect(queue.state.current).toBeUndefined();
+    expect(queue.current).toBeUndefined();
   });
 
   it("waits for a Player created before deletion and keeps it free of queue effects", async () => {
@@ -410,7 +495,7 @@ describe("terminal authority", () => {
     const late = new FakePlayer();
     harness.engine.createPlayer.mockReturnValueOnce(creation.promise);
     const call = harness.distube.play(TARGET, "a");
-    const { queue } = await call;
+    const queue = await call;
     await settle();
 
     let settled = false;
@@ -426,32 +511,33 @@ describe("terminal authority", () => {
     expect(late.requests).toHaveLength(0);
     expect(late.stopTrack).not.toHaveBeenCalled();
     expect(late.listeners.size).toBe(1);
-    expect(queue.state.current).toBeUndefined();
+    expect(queue.current).toBeUndefined();
   });
 
   it("aborts preparation for a removed item and disposes its late resource once", async () => {
     const harness = playableSetup();
     const preparation = deferred<PlaybackPreparation>();
     let signal: AbortSignal | undefined;
-    harness.source.preparePlayback.mockImplementation(async (_song, context) => {
+    harness.source.stream.mockImplementation(async (_song, context) => {
       signal = context.signal;
       return preparation.promise;
     });
     const failed = vi.fn();
     harness.distube.on("queue.item.failed", failed);
-    const { queue, items } = await harness.distube.play(TARGET, "selected");
+    const queue = await harness.distube.play(TARGET, "selected");
+    const items = [...(queue.current ? [queue.current] : []), ...queue.upcoming];
     await settle();
-    const player = harness.engine.players[0] as FakePlayer;
 
     await queue.remove(items[0]?.id as string);
-    expect(queue.state.upcoming.some(item => item.id === items[0]?.id)).toBe(false);
+    expect(queue.upcoming.some(item => item.id === items[0]?.id)).toBe(false);
     expect(signal?.aborted).toBe(true);
     const { preparation: late, dispose } = prepared("https://stream.example/late");
     preparation.resolve(late);
     await settle();
 
     expect(dispose).toHaveBeenCalledTimes(1);
-    expect(player.requests).toHaveLength(0);
+    // The voice creates its Player on the first accepted play, and no play was ever accepted.
+    expect(harness.engine.players.flatMap(player => player.requests)).toHaveLength(0);
     expect(failed).not.toHaveBeenCalled();
   });
 
@@ -459,11 +545,11 @@ describe("terminal authority", () => {
     const harness = playableSetup();
     const disposal = deferred<void>();
     const dispose = vi.fn(() => disposal.promise);
-    harness.source.preparePlayback.mockResolvedValue({
+    harness.source.stream.mockResolvedValue({
       kind: "resource",
       resource: { kind: "url", url: "https://stream.example/slow", dispose },
     });
-    const { queue } = await harness.distube.play(TARGET, "a");
+    const queue = await harness.distube.play(TARGET, "a");
     await settle();
 
     let settled = false;

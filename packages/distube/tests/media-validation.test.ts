@@ -24,15 +24,6 @@ describe("media value validation", () => {
     );
   });
 
-  it("rejects a non-Song QueueItem owner", () => {
-    expect(() => new QueueItem({ song: {} as Song })).toThrowError(
-      expect.objectContaining<Partial<DisTubeError>>({
-        code: "INVALID_ARGUMENT",
-        message: "QueueItem song must be a Song",
-      }),
-    );
-  });
-
   it("accepts optional duration and display fields", () => {
     const { duration: _, ...withoutDuration } = valid;
     expect(new Song(withoutDuration).duration).toBeUndefined();
@@ -87,6 +78,42 @@ describe("media value validation", () => {
       }),
     );
     expect(new Playlist({ ...data, songs: [new Song(valid)], thumbnail: "cover.jpg" }).thumbnail).toBe("cover.jpg");
+  });
+
+  it("stores provider-owned pluginData by reference without cloning or freezing it", () => {
+    const data = { views: 1 };
+    expect(new Song({ ...valid, pluginData: data }).pluginData).toBe(data);
+    expect(Object.isFrozen(data)).toBe(false);
+    expect(new Song(valid).pluginData).toBeUndefined();
+  });
+
+  it("formats Song durations as m:ss or h:mm:ss, and Live without a duration", () => {
+    expect(new Song({ ...valid, duration: 245 }).formattedDuration).toBe("4:05");
+    expect(new Song({ ...valid, duration: 3665 }).formattedDuration).toBe("1:01:05");
+    expect(new Song({ ...valid, duration: 0 }).formattedDuration).toBe("Live");
+    const { duration: _, ...withoutDuration } = valid;
+    expect(new Song(withoutDuration).formattedDuration).toBe("Live");
+  });
+
+  it("sums Playlist durations, treating an unknown duration as 0, and keeps its own pluginData", () => {
+    const { duration: _, ...withoutDuration } = valid;
+    const pluginData = { channel: "owner" };
+    const playlist = new Playlist({
+      id: "list",
+      name: "List",
+      url: "https://provider.example/list",
+      source: "provider",
+      songs: [
+        new Song({ ...valid, id: "a", duration: 3600 }),
+        new Song({ ...valid, id: "b", duration: 65 }),
+        new Song({ ...withoutDuration, id: "c" }),
+      ],
+      pluginData,
+    });
+    expect(playlist.duration).toBe(3665);
+    expect(playlist.formattedDuration).toBe("1:01:05");
+    expect(playlist.pluginData).toBe(pluginData);
+    expect(new Playlist({ ...playlist, songs: playlist.songs }).pluginData).toBe(pluginData);
   });
 
   it("keeps occurrence dates defensive and generates a new identity each time", () => {

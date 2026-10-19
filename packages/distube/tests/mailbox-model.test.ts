@@ -1,204 +1,299 @@
 import { describe, expect, it } from "vitest";
+import type { DisTubeEventName } from "../src";
+import { type FakePlayer, GUILD, playableSetup, settle, VOICE_CHANNEL } from "./support/harness";
 
-type ModelAction =
-  | "resolve-a"
-  | "resolve-b"
-  | "select"
-  | "prepare"
-  | "start"
-  | "remove"
-  | "pause"
-  | "resume"
-  | "seek"
-  | "skip"
-  | "finish"
-  | "failure"
-  | "cleanup"
-  | "stop"
-  | "destroy"
-  | "shutdown";
+const TARGET = { guildId: GUILD, id: VOICE_CHANNEL };
 
-interface ModelState {
-  readonly waiting: readonly string[];
-  readonly current?: string;
-  readonly selected?: string;
+/**
+ * A reference decision model for the layered owners.
+ *
+ * The model queue is a scheduler over a model voice: it holds current, upcoming, history and status and
+ * asks the voice to play or end a track. The real DisTubeQueue must produce the same observable state and
+ * the same event order for the same operation sequence.
+ */
+
+type ModelOperation =
+  | Readonly<{ kind: "add"; id: string }>
+  | Readonly<{ kind: "finish" }>
+  | Readonly<{ kind: "skip" }>
+  | Readonly<{ kind: "remove"; position: number }>
+  | Readonly<{ kind: "previous" }>
+  | Readonly<{ kind: "jump"; position: number }>
+  | Readonly<{ kind: "stop" }>;
+
+interface Snapshot {
+  readonly current: string | undefined;
+  readonly upcoming: readonly string[];
+  readonly history: readonly string[];
   readonly status: "idle" | "playing" | "paused";
-  readonly terminal: boolean;
-  readonly aborted: readonly string[];
-  readonly events: readonly string[];
-  readonly disposals: Readonly<Record<string, number>>;
 }
 
-const initial: ModelState = Object.freeze({
-  waiting: Object.freeze([]),
-  status: "idle",
-  terminal: false,
-  aborted: Object.freeze([]),
-  events: Object.freeze([]),
-  disposals: Object.freeze({}),
-});
+const OBSERVED: readonly DisTubeEventName[] = [
+  "queue.item.added",
+  "queue.item.started",
+  "queue.item.finished",
+  "queue.history.added",
+  "queue.finished",
+  "queue.deleted",
+];
 
-function apply(state: ModelState, action: ModelAction): ModelState {
-  const waiting = [...state.waiting];
-  const aborted = [...state.aborted];
-  const events = [...state.events];
-  const disposals = { ...state.disposals };
-  let current = state.current;
-  let selected = state.selected;
-  let status = state.status;
-  let terminal = state.terminal;
-  const dispose = (id: string | undefined) => {
-    if (id) disposals[id] = Math.min(1, (disposals[id] ?? 0) + 1);
-  };
+class ModelVoice {
+  playing?: string;
 
-  if (terminal && !["cleanup", "destroy", "shutdown"].includes(action)) return state;
-  switch (action) {
-    case "resolve-a":
-    case "resolve-b": {
-      const id = action.at(-1) as string;
-      if (!waiting.includes(id) && current !== id) {
-        waiting.push(id);
-        events.push(`added:${id}`);
-      }
-      break;
-    }
-    case "select":
-      selected ??= current ? undefined : waiting[0];
-      break;
-    case "prepare":
-      break;
-    case "start":
-      if (selected && waiting[0] === selected) {
-        current = waiting.shift();
-        status = "playing";
-        events.push(`started:${current}`);
-        selected = undefined;
-      }
-      break;
-    case "remove":
-      if (selected) {
-        waiting.splice(waiting.indexOf(selected), 1);
-        aborted.push(selected);
-        dispose(selected);
-        selected = undefined;
-      }
-      break;
-    case "pause":
-      if (current) status = "paused";
-      break;
-    case "resume":
-      if (current) status = "playing";
-      break;
-    case "seek":
-      break;
-    case "skip":
-    case "finish":
-    case "failure":
-      if (current) {
-        events.push(`${action === "failure" ? "failed" : "finished"}:${current}`);
-        dispose(current);
-        current = undefined;
-        status = "idle";
-      }
-      break;
-    case "cleanup":
-      dispose(current ?? selected);
-      break;
-    case "stop":
-      if (selected) aborted.push(selected);
-      dispose(current);
-      dispose(selected);
-      waiting.length = 0;
-      current = undefined;
-      selected = undefined;
-      status = "idle";
-      break;
-    case "destroy":
-    case "shutdown":
-      if (selected) aborted.push(selected);
-      dispose(current);
-      dispose(selected);
-      waiting.length = 0;
-      current = undefined;
-      selected = undefined;
-      status = "idle";
-      terminal = true;
-      break;
+  play(id: string): void {
+    this.playing = id;
   }
-  return Object.freeze({
-    waiting: Object.freeze(waiting),
-    ...(current ? { current } : {}),
-    ...(selected ? { selected } : {}),
-    status,
-    terminal,
-    aborted: Object.freeze(aborted),
-    events: Object.freeze(events),
-    disposals: Object.freeze(disposals),
+
+  endTrack(): void {
+    this.playing = undefined;
+  }
+}
+
+class ModelQueue {
+  current?: string;
+  upcoming: string[] = [];
+  history: string[] = [];
+  deleted = false;
+  readonly events: string[] = [];
+  readonly #voice: ModelVoice;
+
+  constructor(voice: ModelVoice) {
+    this.#voice = voice;
+  }
+
+  get status(): Snapshot["status"] {
+    return this.current ? "playing" : "idle";
+  }
+
+  snapshot(): Snapshot {
+    return { current: this.current, upcoming: [...this.upcoming], history: [...this.history], status: this.status };
+  }
+
+  apply(operation: ModelOperation): void {
+    if (this.deleted) return;
+    switch (operation.kind) {
+      case "add":
+        this.upcoming.push(operation.id);
+        this.events.push("queue.item.added");
+        this.#start();
+        return;
+      case "finish":
+        if (!this.current) return;
+        this.#end(this.current);
+        this.#remember(this.current);
+        this.current = undefined;
+        this.#start();
+        return;
+      case "skip":
+        if (!this.current) return;
+        this.#end(this.current);
+        this.#remember(this.current);
+        this.current = undefined;
+        this.#start();
+        return;
+      case "remove":
+        this.upcoming.splice(operation.position - 1, 1);
+        return;
+      case "previous": {
+        const replay = this.history.pop() as string;
+        this.#voice.endTrack();
+        this.upcoming.unshift(...(this.current ? [replay, this.current] : [replay]));
+        this.current = undefined;
+        this.#start();
+        return;
+      }
+      case "jump": {
+        // The ended current item and the items before the target enter history without a finished event.
+        this.#voice.endTrack();
+        const skipped = [...(this.current ? [this.current] : []), ...this.upcoming.splice(0, operation.position - 1)];
+        this.current = undefined;
+        for (const id of skipped) this.#remember(id);
+        this.#start();
+        return;
+      }
+      case "stop":
+        this.#voice.endTrack();
+        this.#delete();
+        return;
+    }
+  }
+
+  #start(): void {
+    if (this.current) return;
+    const next = this.upcoming.shift();
+    if (!next) {
+      this.events.push("queue.finished");
+      this.#delete();
+      return;
+    }
+    this.current = next;
+    this.#voice.play(next);
+    this.events.push("queue.item.started");
+  }
+
+  #end(id: string): void {
+    this.#voice.endTrack();
+    this.events.push("queue.item.finished");
+    void id;
+  }
+
+  #remember(id: string): void {
+    this.history.push(id);
+    this.events.push("queue.history.added");
+  }
+
+  #delete(): void {
+    this.deleted = true;
+    this.current = undefined;
+    this.upcoming = [];
+    this.history = [];
+    this.events.push("queue.deleted");
+  }
+}
+
+/** Songs are addressed by id; `previous` and repeat create new occurrences of the same Song. */
+function realSnapshot(
+  queue: Readonly<{
+    current?: { song: { id: string } };
+    upcoming: readonly { song: { id: string } }[];
+    history: readonly { song: { id: string } }[];
+    status: Snapshot["status"];
+  }>,
+): Snapshot {
+  return {
+    current: queue.current?.song.id,
+    upcoming: queue.upcoming.map(item => item.song.id),
+    history: queue.history.map(item => item.song.id),
+    status: queue.status,
+  };
+}
+
+/** Runs one sequence against a fresh client, comparing state after every step and the event order at the end. */
+async function check(sequence: readonly ModelOperation[]): Promise<void> {
+  const harness = playableSetup();
+  const disposals: number[] = [];
+  harness.source.stream.mockImplementation(async song => {
+    const index = disposals.push(0) - 1;
+    return {
+      kind: "resource",
+      resource: {
+        kind: "url",
+        url: `https://stream.example/${song.id}`,
+        dispose: () => {
+          disposals[index] = (disposals[index] ?? 0) + 1;
+          harness.source.disposed.push(song.id);
+        },
+      },
+    };
   });
+  const events: string[] = [];
+  for (const name of OBSERVED) harness.distube.on(name, () => events.push(name));
+  const voice = new ModelVoice();
+  const model = new ModelQueue(voice);
+  const first = sequence[0];
+  if (first?.kind !== "add") throw new Error("A sequence starts with add");
+
+  const queue = await harness.distube.play(TARGET, first.id);
+  model.apply(first);
+  await settle();
+  const player = harness.engine.players[0] as FakePlayer;
+  expect(realSnapshot(queue)).toEqual(model.snapshot());
+
+  for (const operation of sequence.slice(1)) {
+    switch (operation.kind) {
+      case "add":
+        await queue.add(operation.id);
+        break;
+      case "finish":
+        player.finish();
+        break;
+      case "skip":
+        await queue.skip();
+        break;
+      case "remove":
+        await queue.remove(operation.position);
+        break;
+      case "previous":
+        await queue.previous();
+        break;
+      case "jump":
+        await queue.jump(operation.position);
+        break;
+      case "stop":
+        await queue.stop();
+        break;
+    }
+    model.apply(operation);
+    await settle();
+    expect(realSnapshot(queue), `after ${JSON.stringify(operation)} in ${JSON.stringify(sequence)}`).toEqual(
+      model.snapshot(),
+    );
+    expect(player.playing).toBe(voice.playing === undefined ? undefined : queue.current?.id);
+    expect(disposals.every(count => count <= 1)).toBe(true);
+  }
+
+  expect(harness.distube.getQueue(GUILD)).toBeUndefined();
+  expect(events, JSON.stringify(sequence)).toEqual(model.events);
+  await harness.distube.dispose();
+  expect(disposals).toEqual(disposals.map(() => 1));
+  expect([...harness.source.disposed].sort()).toEqual(harness.source.stream.mock.calls.map(([song]) => song.id).sort());
 }
 
-function permutations<Value>(values: readonly Value[]): readonly (readonly Value[])[] {
-  if (values.length < 2) return [values];
-  return values.flatMap((value, index) =>
-    permutations(values.toSpliced(index, 1)).map(rest => Object.freeze([value, ...rest])),
-  );
+/** A small deterministic PRNG so a failing sequence reproduces from its seed. */
+function random(seed: number): () => number {
+  let state = seed >>> 0;
+  return () => {
+    state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+    return state / 0x100000000;
+  };
 }
 
-function permutationCases(values: readonly ModelAction[]): readonly (readonly [readonly ModelAction[]])[] {
-  return permutations(values).map(actions => [actions] as const);
+/** Generates an operation sequence that only asks for what the model state allows, ending at deletion. */
+function generate(seed: number, length: number): ModelOperation[] {
+  const next = random(seed);
+  const pick = <Value>(values: readonly Value[]): Value => values[Math.floor(next() * values.length)] as Value;
+  const model = new ModelQueue(new ModelVoice());
+  const sequence: ModelOperation[] = [];
+  let ids = 0;
+  const push = (operation: ModelOperation): void => {
+    sequence.push(operation);
+    model.apply(operation);
+  };
+  push({ kind: "add", id: `s${ids++}` });
+  while (sequence.length < length && !model.deleted) {
+    const choices: ModelOperation[] = [{ kind: "add", id: `s${ids}` }];
+    if (model.current) choices.push({ kind: "finish" }, { kind: "skip" });
+    if (model.upcoming.length > 0) {
+      choices.push({ kind: "remove", position: 1 + Math.floor(next() * model.upcoming.length) });
+      choices.push({ kind: "jump", position: 1 + Math.floor(next() * model.upcoming.length) });
+    }
+    if (model.history.length > 0) choices.push({ kind: "previous" });
+    if (sequence.length > 2) choices.push({ kind: "stop" });
+    const operation = pick(choices);
+    if (operation.kind === "add") ids += 1;
+    push(operation);
+  }
+  if (!model.deleted) push({ kind: "stop" });
+  return sequence;
 }
 
-describe("reference DisTubeGuild decision model", () => {
-  it.each(permutationCases(["resolve-a", "resolve-b", "stop"]))(
-    "keeps terminal stop authoritative for enqueue ordering: %j",
-    actions => {
-      const state = actions.reduce(apply, initial);
-      expect(state.current).toBeUndefined();
-      expect(state.status).toBe("idle");
-      const added = state.events.filter(event => event.startsWith("added:"));
-      expect(new Set(added).size).toBe(added.length);
-    },
-  );
-
-  it.each(permutationCases(["select", "prepare", "remove", "start"]))(
-    "fences selected removal against preparation/start: %j",
-    actions => {
-      const seeded = apply(initial, "resolve-a");
-      const state = actions.reduce(apply, seeded);
-      expect(state.events.filter(event => event === "started:a")).toHaveLength(state.current === "a" ? 1 : 0);
-      expect(state.disposals.a ?? 0).toBeLessThanOrEqual(1);
-    },
-  );
-
-  it.each(["skip", "finish", "failure"] as const)("terminalizes active playback exactly once for %s", action => {
-    const setup: readonly ModelAction[] = ["resolve-a", "select", "prepare", "start"];
-    const actions: readonly ModelAction[] = [action, "cleanup", action];
-    const started = setup.reduce(apply, initial);
-    const state = actions.reduce(apply, started);
-    expect(state.current).toBeUndefined();
-    expect(state.disposals.a).toBe(1);
-    expect(state.events.filter(event => /^(?:finished|failed):a$/u.test(event))).toHaveLength(1);
+describe("reference scheduler model", () => {
+  it("matches the model over a fixed operation sequence", async () => {
+    await check([
+      { kind: "add", id: "a" },
+      { kind: "add", id: "b" },
+      { kind: "add", id: "c" },
+      { kind: "add", id: "d" },
+      { kind: "finish" },
+      { kind: "skip" },
+      { kind: "remove", position: 1 },
+      { kind: "previous" },
+      { kind: "jump", position: 1 },
+      { kind: "finish" },
+    ]);
   });
 
-  it.each(permutationCases(["pause", "resume", "seek", "stop"]))(
-    "serializes controls with terminal stop: %j",
-    actions => {
-      const setup: readonly ModelAction[] = ["resolve-a", "select", "start"];
-      const started = setup.reduce(apply, initial);
-      const state = actions.reduce(apply, started);
-      expect(state.current).toBeUndefined();
-      expect(state.status).toBe("idle");
-    },
-  );
-
-  it.each(["destroy", "shutdown"] as const)("makes %s terminal across late work and repeated cleanup", terminal => {
-    const setup: readonly ModelAction[] = ["resolve-a", "select", "prepare"];
-    const actions: readonly ModelAction[] = [terminal, "start", "failure", "cleanup", terminal];
-    const selected = setup.reduce(apply, initial);
-    const state = actions.reduce(apply, selected);
-    expect(state.terminal).toBe(true);
-    expect(state.current).toBeUndefined();
-    expect(state.events).not.toContain("started:a");
-    expect(state.disposals.a).toBe(1);
+  it("matches the model over generated sequences of adds, finishes, skips, edits, jumps, previous and stop", async () => {
+    for (let seed = 1; seed <= 40; seed += 1) await check(generate(seed, 12));
   });
 });

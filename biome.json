@@ -7,16 +7,7 @@
   },
   "files": {
     "ignoreUnknown": true,
-    "includes": [
-      "**",
-      "!!**/dist",
-      "!!**/docs",
-      "!!**/coverage",
-      "!!**/node_modules",
-      "!!**/reports",
-      "!!**/.stryker-tmp",
-      "!!**/stryker-setup-*.js"
-    ]
+    "includes": ["**", "!!**/dist", "!!**/docs", "!!**/coverage", "!!**/node_modules", "!!**/reports"]
   },
   "formatter": {
     "enabled": true,
@@ -54,7 +45,8 @@
         "noAssignInExpressions": "error",
         "useIterableCallbackReturn": "error",
         "noCommentText": "warn",
-        "noDebugger": "error"
+        "noDebugger": "error",
+        "noImportCycles": "error"
       },
       "complexity": {
         "noForEach": "warn"
@@ -79,6 +71,37 @@
         "rules": {
           "suspicious": {
             "noExplicitAny": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["packages/distube/src/**/*.ts"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": [
+                      "discord.js",
+                      "discord.js/**",
+                      "oceanic.js",
+                      "oceanic.js/**",
+                      "eris",
+                      "eris/**",
+                      "@discordjs/voice",
+                      "@discordjs/voice/**",
+                      "@distube/*",
+                      "@distube/**"
+                    ],
+                    "message": "Core depends on integration contracts only, never on adapters, sources or native platform packages."
+                  }
+                ]
+              }
+            }
           }
         }
       }

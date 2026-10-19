@@ -1,6 +1,5 @@
-import { joinVoiceChannel, VoiceConnectionStatus } from "@discordjs/voice";
-import { DISCORD_ENCRYPTION_MODULES, DISCORD_OPUS_MODULES, FilterRegistry } from "@distube/voice-core/core";
-import { discordPreflight } from "@distube/voice-core/discord";
+import { generateDependencyReport, joinVoiceChannel, VoiceConnectionStatus } from "@discordjs/voice";
+import { DISCORD_ENCRYPTION_MODULES, FilterRegistry } from "@distube/voice-core/core";
 
 import { afterAll, describe, expect, it } from "vitest";
 // The Player is package-internal; a real session cannot reach Ready without a Discord socket, so the
@@ -18,6 +17,7 @@ import { DiscordJSAdapter } from "../src";
 
 // Nothing is mocked here: the real @discordjs/voice, the real ffmpeg binary, and a real HTTP origin.
 // The mocked suites prove our own logic; this one proves the library still behaves the way that logic assumes.
+// The Oceanic adapter drives the same @discordjs/voice connection and voice-core Player, so these cover it too.
 
 const origin: AudioOrigin = await serveAudio();
 afterAll(() => origin.stop());
@@ -68,16 +68,14 @@ describe("real @discordjs/voice", () => {
     }
   });
 
-  it("reads the voice adapter seam off a real discord.js Guild", async () => {
+  it("exposes voiceAdapterCreator on a real discord.js Guild and refuses an absent guild", async () => {
     const { Client, GatewayIntentBits, Guild } = await import("discord.js");
     const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates] });
     const guild = Reflect.construct(Guild, [client, { id: REAL_GUILD, unavailable: false, name: "Real" }]) as {
       voiceAdapterCreator: unknown;
     };
-    client.guilds.cache.set(REAL_GUILD, guild as never);
 
-    // `DiscordJSAdapter.createVoiceSession` reads exactly these two members and nothing else.
-    expect(client.guilds.cache.get(REAL_GUILD)).toBe(guild);
+    // `DiscordJSAdapter.createVoiceSession` hands this member to @discordjs/voice as the gateway adapter.
     expect(typeof guild.voiceAdapterCreator).toBe("function");
 
     await new DiscordJSAdapter(client).createVoiceSession({ guildId: "absent", channelId: REAL_CHANNEL }).then(
@@ -86,21 +84,15 @@ describe("real @discordjs/voice", () => {
     );
   });
 
-  it("names this package and an accepted module when a voice prerequisite is missing", async () => {
-    // Not a hand-built probe: this is the exact one the shipped adapter installs on its engine, so the
-    // package name asserted below is the one a real operator would read.
-    const check = discordPreflight("@distube/discordjs");
+  it("preflights the encryption modules @discordjs/voice reports, in its order", () => {
+    // The report lists each module the library probes; the native crypto line is not an installable module.
+    const lines = generateDependencyReport().split("\n");
+    const start = lines.indexOf("Encryption Libraries") + 1;
+    const reported = lines
+      .slice(start, lines.indexOf("", start))
+      .filter(line => !line.includes("native crypto support"))
+      .map(line => line.replace(/^- /, "").replace(/: .*$/, ""));
 
-    // Whether the optional modules are installed is a property of the machine, so both outcomes are asserted.
-    const failure = await check().then(
-      () => undefined,
-      (error: unknown) => error as { code?: string; message?: string },
-    );
-    if (!failure) return;
-
-    expect(failure.code).toBe("VOICE_FAILED");
-    expect(failure.message).toContain("@distube/discordjs");
-    const named = [...DISCORD_ENCRYPTION_MODULES, ...DISCORD_OPUS_MODULES];
-    expect(named.some(module => failure.message?.includes(module))).toBe(true);
+    expect(reported).toEqual([...DISCORD_ENCRYPTION_MODULES]);
   });
 });

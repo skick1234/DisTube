@@ -5,26 +5,23 @@ import { vi } from "vitest";
 
 export const GUILD = "guild";
 export const CHANNEL = "channel";
-export const GATEWAY = { sessionId: "session", token: "token", endpoint: "voice.example" };
+export const GATEWAY = { channelId: CHANNEL, sessionId: "session", token: "token", endpoint: "voice.example" };
 
 /** An Eris voice connection: playing, pausing, and the elapsed clock all follow its own calls. */
 export class FakeVoiceConnection extends EventEmitter {
-  channelID = CHANNEL;
+  channelID: string | null = CHANNEL;
   playing = false;
   paused = false;
   ready = true;
-  reconnecting = false;
   current: { playTime: number } | undefined;
   readonly play = vi.fn((_source: unknown, _options?: unknown) => {
     this.playing = true;
     this.current = { playTime: 0 };
   });
-  /** The original native stop function remains inspectable after Player installs its private wrapper. */
-  readonly nativeStopPlaying = vi.fn(() => {
+  stopPlaying = vi.fn(() => {
     this.playing = false;
     this.current = undefined;
   });
-  stopPlaying = this.nativeStopPlaying;
   readonly pause = vi.fn(() => {
     this.paused = true;
   });
@@ -37,31 +34,11 @@ export class FakeVoiceConnection extends EventEmitter {
   finishCurrent(): void {
     this.stopPlaying();
   }
-
-  /** Recovery state is test-driven, never inferred from a timer. */
-  beginRecovery(): void {
-    this.ready = false;
-    this.reconnecting = true;
-  }
-
-  /** Marks the native connection ready after an explicit recovery transition. */
-  becomeReady(): void {
-    this.ready = true;
-    this.reconnecting = false;
-  }
-
-  /** Raw native events remain untagged and must never classify a Player outcome. */
-  emitRawEnd(): void {
-    this.emit("end");
-  }
-
-  emitRawError(error: Error): void {
-    this.emit("error", error);
-  }
 }
 
 /** A package-owned FFmpeg child whose lifecycle tests drive without a real process. */
 export class FakeChild extends EventEmitter {
+  readonly stdin = new PassThrough();
   readonly stdout = new PassThrough();
   readonly stderr = new PassThrough();
   exitCode: number | null = null;
@@ -106,16 +83,6 @@ export function finishCurrent(connection: FakeVoiceConnection): void {
   connection.finishCurrent();
 }
 
-/** Emits an untagged Eris end callback without changing native playback state. */
-export function emitRawEnd(connection: FakeVoiceConnection): void {
-  connection.emitRawEnd();
-}
-
-/** Emits an untagged Eris error callback without changing native playback state. */
-export function emitRawError(connection: FakeVoiceConnection, error: Error): void {
-  connection.emitRawError(error);
-}
-
 export function resetNative(): void {
   vi.resetAllMocks();
   native.children.length = 0;
@@ -133,18 +100,25 @@ export function voiceChannel(guildId = GUILD): unknown {
   return { type: 2, join: () => undefined, guild: { id: guildId } };
 }
 
-/** An Eris client holding one guild's voice channel and, once joined, one connection. */
+/** An Eris client holding one guild's voice channel, whose shard echoes each voice state update. */
 export class FakeClient extends EventEmitter {
   readonly user = { id: "bot" };
   readonly channels = new Map<string, unknown>([[CHANNEL, voiceChannel()]]);
-  connection = new FakeVoiceConnection();
-  /** How the next join settles; a pending promise lets a test drive the connect timeout. */
-  join: (channelId: string) => Promise<FakeVoiceConnection> = async channelId => {
-    this.connection.channelID = channelId;
-    return this.connection;
-  };
-  readonly joinVoiceChannel = vi.fn((channelId: string, _options?: unknown) => this.join(channelId));
-  readonly leaveVoiceChannel = vi.fn((_channelId: string) => undefined);
+  readonly sendWS = vi.fn(
+    (_op: number, payload: { channel_id: string | null; self_deaf: boolean; self_mute: boolean }) => {
+      if (payload.channel_id)
+        queueMicrotask(() => {
+          announceState(this, GATEWAY, GUILD, payload.channel_id, {
+            self_deaf: payload.self_deaf,
+            self_mute: payload.self_mute,
+          });
+          announceServer(this);
+        });
+    },
+  );
+  readonly guilds = new Map([[GUILD, { shard: { sendWS: this.sendWS } }]]);
+  /** Sessions join through the shard; tests assert this native join stays unused. */
+  readonly joinVoiceChannel = vi.fn((_channelId: string) => undefined);
   readonly getChannel = vi.fn((id: string) => this.channels.get(id));
 }
 
@@ -166,7 +140,13 @@ export function announceServer(client: FakeClient, gateway = GATEWAY, guildId = 
  * Pass `channelId` to report the channel Discord put the bot in, which is how an external move and a
  * removal (`null`) both reach the session.
  */
-export function announceState(client: FakeClient, gateway = GATEWAY, guildId = GUILD, channelId?: string | null): void {
+export function announceState(
+  client: FakeClient,
+  gateway = GATEWAY,
+  guildId = GUILD,
+  channelId?: string | null,
+  flags: { self_mute?: boolean; self_deaf?: boolean } = {},
+): void {
   client.emit("rawWS", {
     t: "VOICE_STATE_UPDATE",
     d: {
@@ -174,13 +154,9 @@ export function announceState(client: FakeClient, gateway = GATEWAY, guildId = G
       user_id: client.user.id,
       session_id: gateway.sessionId,
       ...(channelId === undefined ? {} : { channel_id: channelId }),
+      ...flags,
     },
   });
-}
-
-export function announce(client: FakeClient, gateway = GATEWAY, guildId = GUILD): void {
-  announceServer(client, gateway, guildId);
-  announceState(client, gateway, guildId);
 }
 
 /** Lets every pending microtask and detached teardown run before the test asserts. */

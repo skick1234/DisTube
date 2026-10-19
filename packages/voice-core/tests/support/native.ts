@@ -1,12 +1,57 @@
 import { EventEmitter } from "node:events";
 import { PassThrough } from "node:stream";
-import type { AudioPlayerError } from "@discordjs/voice";
+import type {
+  AudioPlayerError,
+  DiscordGatewayAdapterCreator,
+  DiscordGatewayAdapterLibraryMethods,
+} from "@discordjs/voice";
 import { type Mock, vi } from "vitest";
 
 /** Credentials a Ready connection exposes, which the session republishes as its gateway data. */
-export const GATEWAY = { sessionId: "session", token: "token", endpoint: "voice.example" };
+export const GATEWAY = { channelId: "channel", sessionId: "session", token: "token", endpoint: "voice.example" };
 
 export const CHANNEL = "channel";
+
+/** The platform gateway half, shared by remote-only and late local-transport tests. */
+export function gatewayAdapter(userId = "bot"): {
+  readonly creator: DiscordGatewayAdapterCreator;
+  readonly sendPayload: ReturnType<typeof vi.fn>;
+  readonly destroy: ReturnType<typeof vi.fn>;
+  state(channelId: string | null, sessionId?: string, selfDeaf?: boolean, selfMute?: boolean): void;
+  server(token?: string, endpoint?: string | null): void;
+} {
+  let methods: DiscordGatewayAdapterLibraryMethods | undefined;
+  const state = (channelId: string | null, sessionId = GATEWAY.sessionId, selfDeaf = true, selfMute = false): void => {
+    methods?.onVoiceStateUpdate({
+      guild_id: "guild",
+      user_id: userId,
+      channel_id: channelId,
+      session_id: sessionId,
+      self_deaf: selfDeaf,
+      self_mute: selfMute,
+    } as Parameters<DiscordGatewayAdapterLibraryMethods["onVoiceStateUpdate"]>[0]);
+  };
+  const server = (token = GATEWAY.token, endpoint: string | null = GATEWAY.endpoint): void => {
+    methods?.onVoiceServerUpdate({ guild_id: "guild", token, endpoint });
+  };
+  const sendPayload = vi.fn(
+    (payload: { d?: { channel_id?: string | null; self_deaf?: boolean; self_mute?: boolean } }) => {
+      const channelId = payload.d?.channel_id;
+      if (channelId)
+        queueMicrotask(() => {
+          state(channelId, GATEWAY.sessionId, payload.d?.self_deaf, payload.d?.self_mute);
+          server();
+        });
+      return true;
+    },
+  );
+  const destroy = vi.fn();
+  const creator: DiscordGatewayAdapterCreator = bridge => {
+    methods = bridge;
+    return { sendPayload, destroy };
+  };
+  return { creator, sendPayload, destroy, state, server };
+}
 
 /** A Ready native state carrying `connectionOptions`, the only shape the session reads credentials from. */
 export function readyState(gateway: Partial<typeof GATEWAY> = {}, channelId = CHANNEL): Record<string, unknown> {
@@ -74,6 +119,7 @@ export class FakeAudioPlayer extends EventEmitter {
 
 /** A running ffmpeg decode, without the process. */
 export class FakeChild extends EventEmitter {
+  readonly stdin = new PassThrough();
   readonly stdout = new PassThrough();
   readonly stderr = new PassThrough();
   exitCode: number | null = null;
@@ -97,13 +143,28 @@ export const native = {
   players: [] as FakeAudioPlayer[],
   resources: [] as FakeResource[],
   children: [] as FakeChild[],
+  transports: [] as {
+    state: ReturnType<typeof vi.fn>;
+    server: ReturnType<typeof vi.fn>;
+    sendPayload: (payload: unknown) => boolean;
+  }[],
   /** Argument lists handed to `spawn`, one per decode. */
   spawns: [] as string[][],
   /** Candidate filter decodes normally produce one frame without a real FFmpeg process. */
   autoAudio: true,
 
   entersState: vi.fn(async (_target: unknown, _status: string, _timeout: number) => undefined),
-  joinVoiceChannel: vi.fn((options: { channelId: string }) => {
+  joinVoiceChannel: vi.fn((options: { channelId: string; adapterCreator?: DiscordGatewayAdapterCreator }) => {
+    if (options.adapterCreator) {
+      const state = vi.fn();
+      const server = vi.fn();
+      const bridge = options.adapterCreator({
+        onVoiceStateUpdate: state,
+        onVoiceServerUpdate: server,
+        destroy: vi.fn(),
+      });
+      native.transports.push({ state, server, sendPayload: bridge.sendPayload });
+    }
     const connection = new FakeConnection();
     connection.joinConfig = { channelId: options.channelId };
     connection.state = readyState({}, options.channelId);
@@ -163,6 +224,7 @@ export function resetNative(): void {
   native.players.length = 0;
   native.resources.length = 0;
   native.children.length = 0;
+  native.transports.length = 0;
   native.spawns.length = 0;
   native.autoAudio = true;
 }
