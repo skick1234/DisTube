@@ -1,3 +1,4 @@
+import type * as NodeChildProcess from "node:child_process";
 import { EventEmitter } from "node:events";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createPrerequisiteCheck } from "../src/prerequisites";
@@ -5,7 +6,7 @@ import { createPrerequisiteCheck } from "../src/prerequisites";
 const processMock = vi.hoisted(() => ({ spawn: vi.fn() }));
 
 vi.mock("node:child_process", async importOriginal => ({
-  ...(await importOriginal<typeof import("node:child_process")>()),
+  ...(await importOriginal<typeof NodeChildProcess>()),
   spawn: processMock.spawn,
 }));
 

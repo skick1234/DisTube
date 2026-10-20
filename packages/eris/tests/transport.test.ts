@@ -1,4 +1,5 @@
 import type { VoiceSession } from "distube/integrations";
+import type * as ErisModule from "eris";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ErisVoiceEngine } from "../src/engine";
 import { ErisVoiceSession } from "../src/session";
@@ -12,7 +13,7 @@ interface CapturedTransport {
 const captured = vi.hoisted(() => ({ transports: [] as CapturedTransport[], autoReady: true }));
 
 vi.mock("eris", async () => {
-  const actual = await vi.importActual<typeof import("eris")>("eris");
+  const actual = await vi.importActual<typeof ErisModule>("eris");
   const { EventEmitter } = await import("node:events");
   class Transport extends EventEmitter {
     readonly credentials: unknown[] = [];

@@ -124,7 +124,7 @@ export class DisTube<Metadata = unknown, Target = VoiceChannelTarget> {
       };
       const visited = new Set<unknown>(entered);
       const cleanup: Promise<unknown>[] = [];
-      for (const plugin of [...entered].reverse()) {
+      for (const plugin of entered.toReversed()) {
         try {
           cleanup.push(
             Promise.resolve(plugin.dispose?.()).catch(disposeError => reportRollbackFailure(plugin, disposeError)),
@@ -281,9 +281,9 @@ export class DisTube<Metadata = unknown, Target = VoiceChannelTarget> {
     this.#voiceManager.fence();
     const queueFailures = await this.#queues.deleteAll({ kind: "shutdown" });
     const voiceFailures = await this.#voiceManager.releaseAll();
-    await Promise.allSettled([...this.#resolutions.values()]);
+    await Promise.allSettled(this.#resolutions.values());
     const pluginFailures = await settleAll(
-      [...(this.#plugins as readonly Lifecycle[])].reverse().map(plugin => () => plugin.dispose?.()),
+      (this.#plugins as readonly Lifecycle[]).toReversed().map(plugin => () => plugin.dispose?.()),
     );
     for (const integration of this.#plugins) ownedIntegrations.delete(integration);
     const failures = [

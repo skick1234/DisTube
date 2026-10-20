@@ -94,7 +94,7 @@ describe("client construction", () => {
 
     let failure: unknown;
     try {
-      new DisTube({ adapter: new FakeAdapter(), sources: [first, second, failing], onDiagnostic: diagnostics });
+      void new DisTube({ adapter: new FakeAdapter(), sources: [first, second, failing], onDiagnostic: diagnostics });
     } catch (error: unknown) {
       failure = error;
     }

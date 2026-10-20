@@ -8,38 +8,38 @@ line per row. This page summarises the model.
 
 ## Application API changes
 
-| Earlier API | Replacement |
-| --- | --- |
-| `new DisTube(client, { plugins })` | `new DisTube({ adapter, sources, engine?, historySize? })`; source order is explicit |
-| Automatic engine discovery in `plugins` | Pass the engine instance as `engine`, also in `sources` when it resolves media |
-| `play({ guildId, voiceChannelId }, input)` | `play(voiceChannel, input, { metadata, signal, next, at })`; a structural target has `id` and `guildId` or `guild.id` |
-| `const { queue, items } = await distube.play(...)` | `const queue = await distube.play(...)`; exact occurrences arrive in addition events |
-| Guild lookup for a queue's voice | `queue.voice`, optional and bound to that queue's attachment |
-| Queue factory, mandatory guild selector | Call `play`; use `getQueue(guildId)` or its returned `queue` |
-| `GuildQueue`, `DisTubeGuild`, `Voice` | `DisTubeQueue`, `DisTubeVoice`, supplied by the client |
-| `queue.songs`, `queue.state.upcoming` | `queue.current` and `queue.upcoming`; the current occurrence is separate |
-| `queue.previousSongs` | `queue.history`, bounded by `historySize`, newest last |
-| Queue ID lookup | `getQueue(guildId)`; queues have `guildId`, no random public queue ID |
-| Index-only removal, `songs.splice` | `remove(itemId | index | { from, to })`, `move(itemId, beforeItemId?)` |
-| `jump`, `previous`, `shuffle`, `clear` | Same names on `DisTubeQueue`; `jump(target, { requeue })` takes an ID or a one-based position |
-| `addRelatedSong` | `queue.addRelated()` |
-| `queue.setVolume`, `queue.volume` | `voice.setVolume`, `voice.volume` |
-| `setRepeatMode`, `toggleAutoplay`, `voice.setRepeat` | `queue.setRepeat("off" | "song" | "queue")`, `queue.setAutoplay(boolean)` |
-| `queue.filters.add(name)`, `voice.setFilters(names)` | `voice.filters.set(name, value?)`, `toggle`, `remove`, `clear`, `has`, `names`, `entries`, `definitions` |
-| Runtime `RepeatMode`, `QueueStatus`, `Filters` enums | Literal modes, statuses and preset names |
-| `Song.title`, `Playlist.title` | `name` |
-| `song.views`, `song.uploader`, `song.isLive` | `song.pluginData` typed by the owning plugin (`YouTubeData.views`, `uploader`, `live`) |
-| Mutable `queue.metadata`, `queue.textChannel` | Application-owned storage keyed by guild ID |
-| Reassignable occurrence metadata | Readonly optional binding to caller-owned contents; use `DisTube<Metadata>` |
-| `shutdown()` | `await distube.dispose()` |
-| Runtime `Events` members | Typed dotted names such as `"queue.item.started"` |
-| Chained `on`, `once`, `off`, `removeAllListeners` | Store the unsubscribe function returned by each `on` registration |
-| `ErrorCode` enum, `errorCode`, `error.code === "..."` | `DisTubeError.is(error, ErrorCode.X)` and plugin codes such as `YouTubeErrorCode.NOT_FOUND` |
-| Cancellation reported as `QUEUE_FAILED` | `ABORTED` for caller cancellation before commit |
-| Bad-state `INVALID_ARGUMENT` with `reason` | `INVALID_STATE`; malformed values still use `INVALID_ARGUMENT` |
-| Plugin errors reclassified to `SOURCE_FAILED` | Safe plugin `DisTubeError`s retain their code and cause; unsafe details are sanitized; an exhausted search is `NO_RESULT` |
-| `distube.search(query, { type })`, `plugin.search` | `distube.search(query, { source, limit, offset })`, `distube.getSuggestions(query, source?)` |
-| `ErisAdapter` `selfDeaf`/`selfMute` options | `voices.join(channel, { selfDeaf, selfMute })`, `voice.setSelfDeaf`, `voice.setSelfMute` |
+| Earlier API                                           | Replacement                                                                                                               |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `new DisTube(client, { plugins })`                    | `new DisTube({ adapter, sources, engine?, historySize? })`; source order is explicit                                      |
+| Automatic engine discovery in `plugins`               | Pass the engine instance as `engine`, also in `sources` when it resolves media                                            |
+| `play({ guildId, voiceChannelId }, input)`            | `play(voiceChannel, input, { metadata, signal, next, at })`; a structural target has `id` and `guildId` or `guild.id`     |
+| `const { queue, items } = await distube.play(...)`    | `const queue = await distube.play(...)`; exact occurrences arrive in addition events                                      |
+| Guild lookup for a queue's voice                      | `queue.voice`, optional and bound to that queue's attachment                                                              |
+| Queue factory, mandatory guild selector               | Call `play`; use `getQueue(guildId)` or its returned `queue`                                                              |
+| `GuildQueue`, `DisTubeGuild`, `Voice`                 | `DisTubeQueue`, `DisTubeVoice`, supplied by the client                                                                    |
+| `queue.songs`, `queue.state.upcoming`                 | `queue.current` and `queue.upcoming`; the current occurrence is separate                                                  |
+| `queue.previousSongs`                                 | `queue.history`, bounded by `historySize`, newest last                                                                    |
+| Queue ID lookup                                       | `getQueue(guildId)`; queues have `guildId`, no random public queue ID                                                     |
+| Index-only removal, `songs.splice`                    | `remove(itemId                                                                                                            | index  | { from, to })`, `move(itemId, beforeItemId?)` |
+| `jump`, `previous`, `shuffle`, `clear`                | Same names on `DisTubeQueue`; `jump(target, { requeue })` takes an ID or a one-based position                             |
+| `addRelatedSong`                                      | `queue.addRelated()`                                                                                                      |
+| `queue.setVolume`, `queue.volume`                     | `voice.setVolume`, `voice.volume`                                                                                         |
+| `setRepeatMode`, `toggleAutoplay`, `voice.setRepeat`  | `queue.setRepeat("off"                                                                                                    | "song" | "queue")`, `queue.setAutoplay(boolean)`       |
+| `queue.filters.add(name)`, `voice.setFilters(names)`  | `voice.filters.set(name, value?)`, `toggle`, `remove`, `clear`, `has`, `names`, `entries`, `definitions`                  |
+| Runtime `RepeatMode`, `QueueStatus`, `Filters` enums  | Literal modes, statuses and preset names                                                                                  |
+| `Song.title`, `Playlist.title`                        | `name`                                                                                                                    |
+| `song.views`, `song.uploader`, `song.isLive`          | `song.pluginData` typed by the owning plugin (`YouTubeData.views`, `uploader`, `live`)                                    |
+| Mutable `queue.metadata`, `queue.textChannel`         | Application-owned storage keyed by guild ID                                                                               |
+| Reassignable occurrence metadata                      | Readonly optional binding to caller-owned contents; use `DisTube<Metadata>`                                               |
+| `shutdown()`                                          | `await distube.dispose()`                                                                                                 |
+| Runtime `Events` members                              | Typed dotted names such as `"queue.item.started"`                                                                         |
+| Chained `on`, `once`, `off`, `removeAllListeners`     | Store the unsubscribe function returned by each `on` registration                                                         |
+| `ErrorCode` enum, `errorCode`, `error.code === "..."` | `DisTubeError.is(error, ErrorCode.X)` and plugin codes such as `YouTubeErrorCode.NOT_FOUND`                               |
+| Cancellation reported as `QUEUE_FAILED`               | `ABORTED` for caller cancellation before commit                                                                           |
+| Bad-state `INVALID_ARGUMENT` with `reason`            | `INVALID_STATE`; malformed values still use `INVALID_ARGUMENT`                                                            |
+| Plugin errors reclassified to `SOURCE_FAILED`         | Safe plugin `DisTubeError`s retain their code and cause; unsafe details are sanitized; an exhausted search is `NO_RESULT` |
+| `distube.search(query, { type })`, `plugin.search`    | `distube.search(query, { source, limit, offset })`, `distube.getSuggestions(query, source?)`                              |
+| `ErisAdapter` `selfDeaf`/`selfMute` options           | `voices.join(channel, { selfDeaf, selfMute })`, `voice.setSelfDeaf`, `voice.setSelfMute`                                  |
 
 The root exports application values and method-facing types. Extension authors use type-only imports from
 `distube/integrations`; separate SDK/testkit packages and private implementation imports remain unsupported.

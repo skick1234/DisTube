@@ -73,7 +73,7 @@ describe("event delivery", () => {
 
     await vi.waitFor(() => expect(diagnostics).toHaveLength(2));
     expect(diagnostics.map(diagnostic => diagnostic.stage)).toEqual(["event.listener", "event.listener"]);
-    expect(diagnostics.map(diagnostic => diagnostic.error?.message).sort()).toEqual([
+    expect(diagnostics.map(diagnostic => diagnostic.error?.message).toSorted()).toEqual([
       "Operation failed with a non-Error value",
       "async failure",
     ]);

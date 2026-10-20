@@ -152,7 +152,7 @@ function validateHeaders(value: unknown, code: ErrorCode): Readonly<Record<strin
   const headers: Record<string, string> = Object.create(null);
   for (const [name, headerValue] of Object.entries(record)) {
     // HTTP permits tabs; playback headers reject all control characters.
-    // biome-ignore lint/suspicious/noControlCharactersInRegex: reject HTTP header controls
+    // oxlint-disable-next-line no-control-regex -- reject HTTP header controls
     if (typeof headerValue !== "string" || /[\x00-\x1f\x7f]/u.test(headerValue)) {
       throw malformedValue(code, "URL playback resource contains an invalid header value");
     }

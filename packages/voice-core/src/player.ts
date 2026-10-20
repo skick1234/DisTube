@@ -522,7 +522,7 @@ export class DiscordVoicePlayer implements Player {
     }
     // A killed child can still hold FFmpeg resources until its close event. Voice must not release its
     // session before every active or already-retiring decoder has reported that terminal state.
-    await Promise.all([...this.#pendingDecodes]);
+    await Promise.all(this.#pendingDecodes);
     const streams = new Set([...this.#retiringStreams, ...activeStreams]);
     await Promise.all([...streams].map(stream => stream.outcome));
     try {

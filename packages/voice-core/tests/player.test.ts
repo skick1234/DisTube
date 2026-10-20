@@ -1,4 +1,4 @@
-import { createServer } from "node:http";
+import { createServer, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 import { PassThrough } from "node:stream";
 import { AudioPlayerStatus, type VoiceConnection } from "@discordjs/voice";
@@ -26,7 +26,7 @@ function createPlayer(): { player: DiscordVoicePlayer; connection: FakeConnectio
   return { player, connection, events };
 }
 
-async function origin(respond: (response: import("node:http").ServerResponse, count: number) => void): Promise<string> {
+async function origin(respond: (response: ServerResponse, count: number) => void): Promise<string> {
   let count = 0;
   const server = createServer((_request, response) => respond(response, ++count));
   servers.push(server);

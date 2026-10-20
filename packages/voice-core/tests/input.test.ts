@@ -1,4 +1,5 @@
 import { EventEmitter } from "node:events";
+import type * as NodeHttp from "node:http";
 import { PassThrough } from "node:stream";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { killFfmpeg, spawnFfmpeg, URL_READY_TIMEOUT_MS } from "../src/ffmpeg";
@@ -7,7 +8,7 @@ import { latest, native, resetNative } from "./support/native";
 vi.mock("node:child_process", async () => (await import("./support/native")).childProcessModule());
 const http = vi.hoisted(() => ({ request: vi.fn() }));
 vi.mock("node:http", async importOriginal => ({
-  ...(await importOriginal<typeof import("node:http")>()),
+  ...(await importOriginal<typeof NodeHttp>()),
   request: http.request,
 }));
 vi.mock("node:https", () => ({ request: http.request }));

@@ -59,22 +59,22 @@ owns every derived native audio resource, listener, timer, and connection. Keep 
 connections, and platform events inside the adapter package. Never inspect Song or QueueItem, resolve providers,
 mutate queue state, dispose a source resource, or send bot messages.
 
-| Stage | Owner action |
-| --- | --- |
-| Construction | Adapter and engine validate local options; optional hooks perform no provider or gateway request |
-| Target normalization | Adapter returns plain guild and channel IDs synchronously |
-| Voice join | Adapter creates one gateway session with the requested voice state |
-| First track | Selected engine creates one Player for that voice; the Player borrows each submitted resource |
-| Track end | Player ends native playback; core releases the accepted resource after backend access ends |
-| Voice leave | Voice releases Player, then Adapter session; a later queue cannot reuse either |
+| Stage                | Owner action                                                                                     |
+| -------------------- | ------------------------------------------------------------------------------------------------ |
+| Construction         | Adapter and engine validate local options; optional hooks perform no provider or gateway request |
+| Target normalization | Adapter returns plain guild and channel IDs synchronously                                        |
+| Voice join           | Adapter creates one gateway session with the requested voice state                               |
+| First track          | Selected engine creates one Player for that voice; the Player borrows each submitted resource    |
+| Track end            | Player ends native playback; core releases the accepted resource after backend access ends       |
+| Voice leave          | Voice releases Player, then Adapter session; a later queue cannot reuse either                   |
 
-| Adapter or engine outcome | Public result |
-| --- | --- |
-| Malformed target IDs or constructor configuration | `INVALID_ARGUMENT` |
-| Resource kind, encoded format, resource options, seek or filter unsupported by the selected engine | `UNSUPPORTED` before native work where core can decide it |
-| Gateway state update or Player effect fails | `VOICE_FAILED` with safe causal detail |
-| Optional engine lifecycle hook fails | `PLUGIN_FAILED`; core still attempts entered disposers |
-| Accepted resource cleanup fails | The accepting boundary reports cleanup causes after ending backend access |
+| Adapter or engine outcome                                                                          | Public result                                                             |
+| -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| Malformed target IDs or constructor configuration                                                  | `INVALID_ARGUMENT`                                                        |
+| Resource kind, encoded format, resource options, seek or filter unsupported by the selected engine | `UNSUPPORTED` before native work where core can decide it                 |
+| Gateway state update or Player effect fails                                                        | `VOICE_FAILED` with safe causal detail                                    |
+| Optional engine lifecycle hook fails                                                               | `PLUGIN_FAILED`; core still attempts entered disposers                    |
+| Accepted resource cleanup fails                                                                    | The accepting boundary reports cleanup causes after ending backend access |
 
 ```ts
 import { DisTubeError, ErrorCode } from "distube";

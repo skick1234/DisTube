@@ -1,7 +1,7 @@
 # Releasing packages
 
 The repository publishes `distube`, `@distube/discordjs`, `@distube/oceanic` and `@distube/eris` independently.
-The only gate is `bun run verify`: Biome (including the import-boundary and import-cycle rules), `tsc --noEmit`,
+The only gate is `bun run verify`: oxlint and oxfmt (including the import-boundary and import-cycle rules), `tsc --noEmit`,
 vitest with coverage and the package builds. CI runs exactly that command on every push and pull request to `main`
 and on every release tag. There is no freeze, fingerprint or release-candidate step.
 

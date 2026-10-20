@@ -4,17 +4,17 @@ Public failures use `DisTubeError` with a string `code`. Core codes are the memb
 object; plugins export their own prefixed codes. Core preserves safe plugin errors. If a message or nested cause
 contains a secret, core sanitizes the error graph while retaining its code and causal relationships.
 
-| Code | Meaning |
-| --- | --- |
-| `INVALID_ARGUMENT` | Malformed input or configuration |
-| `INVALID_STATE` | Well-formed operation forbidden now: a deleted queue, a released voice, direct voice playback while a queue is attached, stale work or a disposed client |
-| `ABORTED` | Caller cancellation observed before commit |
-| `NO_RESULT` | Every consulted source declined the query |
-| `SOURCE_FAILED` | Provider resolution, malformed resolution results, preparation or explicit fallback exhaustion failed with a non-DisTube error |
-| `VOICE_FAILED` | Voice connection, backend effect or native cleanup failed |
-| `PLUGIN_FAILED` | Integration initialization or disposal failed |
-| `QUEUE_FAILED` | Queue decision logic failed |
-| `UNSUPPORTED` | The engine cannot perform the capability: an undeclared resource kind, an unknown filter preset, seek on an engine whose `capabilities.seek` is false |
+| Code               | Meaning                                                                                                                                                  |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `INVALID_ARGUMENT` | Malformed input or configuration                                                                                                                         |
+| `INVALID_STATE`    | Well-formed operation forbidden now: a deleted queue, a released voice, direct voice playback while a queue is attached, stale work or a disposed client |
+| `ABORTED`          | Caller cancellation observed before commit                                                                                                               |
+| `NO_RESULT`        | Every consulted source declined the query                                                                                                                |
+| `SOURCE_FAILED`    | Provider resolution, malformed resolution results, preparation or explicit fallback exhaustion failed with a non-DisTube error                           |
+| `VOICE_FAILED`     | Voice connection, backend effect or native cleanup failed                                                                                                |
+| `PLUGIN_FAILED`    | Integration initialization or disposal failed                                                                                                            |
+| `QUEUE_FAILED`     | Queue decision logic failed                                                                                                                              |
+| `UNSUPPORTED`      | The engine cannot perform the capability: an undeclared resource kind, an unknown filter preset, seek on an engine whose `capabilities.seek` is false    |
 
 ```ts
 import { DisTubeError, ErrorCode } from "distube";

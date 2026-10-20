@@ -31,6 +31,16 @@ function song(owner: string): Song {
   });
 }
 
+function playlist(owner: string, entry: Song): Playlist {
+  return new Playlist({
+    id: "list",
+    name: "List",
+    url: "https://provider.example/list",
+    source: owner,
+    songs: [entry],
+  });
+}
+
 describe("private source catalog", () => {
   it("rejects an unconfigured direct Song owner", () => {
     expect(() => requireSongOwner(song("spotify"), createSourceCatalog([source("youtube")]))).toThrowError(
@@ -40,8 +50,6 @@ describe("private source catalog", () => {
 
   it("requires a direct Playlist and its Songs to share one configured owner", async () => {
     const catalog = createSourceCatalog([source("youtube"), source("soundcloud")]);
-    const playlist = (owner: string, entry: Song) =>
-      new Playlist({ id: "list", name: "List", url: "https://provider.example/list", source: owner, songs: [entry] });
     const signal = new AbortController().signal;
     const valid = playlist("youtube", song("youtube"));
 
@@ -58,8 +66,6 @@ describe("private source catalog", () => {
     const youtube = source("youtube");
     const media = song("youtube");
     expect(validateResolvedMedia(media, youtube)).toBe(media);
-    const playlist = (owner: string, entry: Song) =>
-      new Playlist({ id: "list", name: "List", url: "https://provider.example/list", source: owner, songs: [entry] });
     const valid = playlist("youtube", media);
     expect(validateResolvedMedia(valid, youtube)).toBe(valid);
     for (const invalid of [playlist("foreign", media), playlist("youtube", song("foreign"))]) {

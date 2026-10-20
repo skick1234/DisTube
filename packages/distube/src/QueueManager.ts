@@ -219,7 +219,7 @@ export class QueueManager<Target = VoiceChannelTarget> {
       this.#assertReady();
       this.#assertInvocation(invocation);
       // Old terminal effects finish before a new queue may drive this voice.
-      await Promise.all([...(this.#cleanup.get(queue.guildId) ?? [])]);
+      await Promise.all(this.#cleanup.get(queue.guildId) ?? []);
       this.#assertInvocation(invocation);
       if (target) {
         this.#assertVoiceJoinable(queue.guildId);

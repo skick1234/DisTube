@@ -552,8 +552,8 @@ export class QueueImpl<Target = VoiceChannelTarget> implements TrackOwner {
             this.#sources,
             attempt.controller.signal,
             (error, stage) => this.#report(error, stage),
-            (resource, stage) => this.#disposeResource(resource, stage, true),
-            resource => this.#voice?.assertResourceCompatible(resource),
+            (owned, stage) => this.#disposeResource(owned, stage, true),
+            owned => this.#voice?.assertResourceCompatible(owned),
           );
           if (!this.#isCurrentAttempt(attempt)) {
             await this.#disposeResource(resource, "stale playback preparation", this.#destroyRequested);
@@ -623,21 +623,21 @@ export class QueueImpl<Target = VoiceChannelTarget> implements TrackOwner {
   #rejectPreparedResource(attempt: PlaybackAttempt, resource: OwnedPlaybackResource, primary: DisTubeError): void {
     attempt.resource = resource;
     const cleanup = this.#work.start(async () => {
-      let cleanupFailure: Error | undefined;
+      let disposeFailure: Error | undefined;
       try {
         await resource.dispose();
       } catch (error: unknown) {
-        cleanupFailure = asError(error, resourceErrorContext(resource.resource));
+        disposeFailure = asError(error, resourceErrorContext(resource.resource));
       }
       attempt.resource = undefined;
       this.#preAcceptanceCleanups.delete(attempt);
       if (!this.#currentAttempt(attempt)) {
-        if (cleanupFailure) throw cleanupFailure;
+        if (disposeFailure) throw disposeFailure;
         return;
       }
-      const failure = cleanupFailure
+      const failure = disposeFailure
         ? new DisTubeError(primary.code, "Playback rejection and cleanup failed", {
-            cause: new AggregateError([primary, cleanupFailure], "Playback rejection cleanup failures"),
+            cause: new AggregateError([primary, disposeFailure], "Playback rejection cleanup failures"),
           })
         : primary;
       this.#mailbox.post({ type: "preparation.completed", attempt, error: failure });

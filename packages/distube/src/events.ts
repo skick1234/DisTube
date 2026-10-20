@@ -107,7 +107,7 @@ export class DisTubeEventEmitter<Target = VoiceChannelTarget> {
 
   emit<Name extends DisTubeEventName>(name: Name, event: DisTubeEventMap<unknown, Target>[Name]): void {
     const deliver = (): void => {
-      for (const listener of [...(this.#listeners.get(name) ?? [])]) {
+      for (const listener of Array.from(this.#listeners.get(name) ?? [])) {
         try {
           void Promise.resolve(listener(event as never)).catch(error => this.#report(error, name));
         } catch (error: unknown) {

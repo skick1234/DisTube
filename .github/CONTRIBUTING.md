@@ -19,11 +19,13 @@ We use GitHub Issues to track bugs and feature requests.
 We welcome contributions via pull requests!
 
 1.  **Fork the repository** and create a new branch from `main`:
+
     ```bash
     git checkout -b feature/your-feature-name
     ```
 
 2.  **Install dependencies** using [bun](https://bun.sh/):
+
     ```bash
     bun install
     ```
@@ -31,14 +33,15 @@ We welcome contributions via pull requests!
 3.  **Make your changes** in the owning package or runtime domain.
 
 4.  **Verify your changes**:
+
     ```bash
     bun run verify
     ```
 
-    Use the globally installed `gitnexus status` and `gitnexus analyze` commands for graph freshness. Run tooling with
-    Bun/Bunx; do not invoke project tools through Node, npm, or npx command runners.
+    Run tooling with Bun/Bunx; do not invoke project tools through Node, npm, or npx command runners.
 
 5.  **Commit your changes** using [Conventional Commits](https://www.conventionalcommits.org/):
+
     ```bash
     git commit -m "feat(Queue): add shuffle method"
     git commit -m "fix(Voice): handle reconnection error"
@@ -50,7 +53,7 @@ We welcome contributions via pull requests!
 
 - **Runtime**: Node.js >= 22.12.0
 - **Package Manager**: Bun 1.4.3 (the version pinned by the repository toolchain)
-- **Linter/Formatter**: [Biome](https://biomejs.dev/)
+- **Linter/Formatter**: [oxlint](https://oxc.rs/docs/guide/usage/linter) and [oxfmt](https://oxc.rs/docs/guide/usage/formatter)
 
 ## 📂 Directory Structure
 
@@ -63,7 +66,8 @@ The codebase is organized by durable ownership:
 - `scripts/`: adapter build sanitizer and documentation generator.
 
 ### Scripts
-- `bun run check`: Biome lint and format, including the core import boundary and import-cycle rules
+
+- `bun run check`: oxlint and oxfmt, including the core import boundary and import-cycle rules
 - `bun run type`: `tsc --noEmit` in every package
 - `bun run test`: Run the fast coverage-disabled unit tests
 - `bun run test:release`: Run the coverage-enabled test pass

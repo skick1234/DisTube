@@ -155,12 +155,12 @@ export class VoiceImpl<Target = VoiceChannelTarget> {
       encodedFormats: Object.freeze([...(engine.encodedFormats ?? [])]),
     });
     this.#sessionUnsubscribe = session.subscribe(event => this.#onSessionEvent(event));
-    const self = this;
     const filters = createFilterManager(
       engine,
-      () => self.#entries,
-      change => self.commitFilters(change),
+      () => this.#entries,
+      change => this.commitFilters(change),
     );
+    const self = this;
     const facade: DisTubeVoice<Target> = {
       get guildId(): string {
         return self.guildId;
@@ -594,7 +594,7 @@ export class VoiceImpl<Target = VoiceChannelTarget> {
       }
     }
     this.#fencedStop = this.#stopTracks([...this.#accepted]);
-    void this.#fencedStop.catch(error => this.#report(asError(error), "voice.track.stop"));
+    void this.#fencedStop.catch(stopError => this.#report(asError(stopError), "voice.track.stop"));
   }
 
   /** Releases the session after every already-accepted Player operation and late Player creation settle. */

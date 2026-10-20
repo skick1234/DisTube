@@ -2,22 +2,22 @@
 
 Subscribe to typed dotted names on the client:
 
-| Event | Additional payload |
-| --- | --- |
-| `queue.created` | Registration of an empty queue |
-| `queue.item.added` | `item` |
-| `queue.playlist.added` | `playlist`, `items` |
-| `queue.item.started` | `item` |
-| `queue.item.finished` | `item` |
-| `queue.item.failed` | `item`, `error` |
-| `queue.history.added` | `item`, after the item's terminal outcome event |
-| `queue.finished` | Natural exhaustion |
-| `queue.autoplay.failed` | `song`, `error` |
-| `queue.deleted` | Terminal queue deletion |
-| `voice.track.started` | `voice`, optional `itemId` |
-| `voice.track.finished` | `voice`, optional `itemId` |
-| `voice.track.failed` | `voice`, optional `itemId`, `error` |
-| `voice.disconnected` | `voice`, `channelId`, `reason`, optional `error` |
+| Event                   | Additional payload                               |
+| ----------------------- | ------------------------------------------------ |
+| `queue.created`         | Registration of an empty queue                   |
+| `queue.item.added`      | `item`                                           |
+| `queue.playlist.added`  | `playlist`, `items`                              |
+| `queue.item.started`    | `item`                                           |
+| `queue.item.finished`   | `item`                                           |
+| `queue.item.failed`     | `item`, `error`                                  |
+| `queue.history.added`   | `item`, after the item's terminal outcome event  |
+| `queue.finished`        | Natural exhaustion                               |
+| `queue.autoplay.failed` | `song`, `error`                                  |
+| `queue.deleted`         | Terminal queue deletion                          |
+| `voice.track.started`   | `voice`, optional `itemId`                       |
+| `voice.track.finished`  | `voice`, optional `itemId`                       |
+| `voice.track.failed`    | `voice`, optional `itemId`, `error`              |
+| `voice.disconnected`    | `voice`, `channelId`, `reason`, optional `error` |
 
 Queue events carry `guildId`, the originating `queue`, captured `state` (`current`, `upcoming`, `history`, `status`,
 `repeat`, `autoplay`) and commit `timestamp`. A later queue for that guild is a different owner. Voice events carry

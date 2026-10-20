@@ -1,3 +1,4 @@
+import type * as DiscordPreflight from "@distube/voice-core/discord";
 import { DisTubeError } from "distube";
 import { ChannelTypes, type Client, type VoiceChannel } from "oceanic.js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -5,13 +6,13 @@ import { GATEWAY, gatewayAdapter, native, resetNative } from "../../voice-core/t
 import { OceanicAdapter, type OceanicAdapterOptions } from "../src";
 
 const { preflight, preflightFactory } = vi.hoisted(() => {
-  const preflight = vi.fn(async (): Promise<void> => undefined);
-  return { preflight, preflightFactory: vi.fn((_owner: string) => preflight) };
+  const check = vi.fn(async (): Promise<void> => undefined);
+  return { preflight: check, preflightFactory: vi.fn((_owner: string) => check) };
 });
 
 vi.mock("@discordjs/voice", async () => (await import("../../voice-core/tests/support/native")).voiceModule());
 vi.mock("@distube/voice-core/discord", async importOriginal => {
-  const actual = await importOriginal<typeof import("@distube/voice-core/discord")>();
+  const actual = await importOriginal<typeof DiscordPreflight>();
   return { ...actual, discordPreflight: preflightFactory };
 });
 

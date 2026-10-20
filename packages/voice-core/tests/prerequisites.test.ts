@@ -18,6 +18,7 @@ function runtime(
 
 function nativeOpus(dispose = vi.fn()): unknown {
   return {
+    // oxlint-disable-next-line typescript/no-extraneous-class -- fake native constructor
     OpusEncoder: class {
       delete(): void {
         dispose();
@@ -106,6 +107,7 @@ describe("default voice engine prerequisites", () => {
     const loadModule = vi.fn((name: string) => {
       if (name === "@discordjs/opus") {
         return {
+          // oxlint-disable-next-line typescript/no-extraneous-class -- fake native constructor
           OpusEncoder: class {
             constructor() {
               throw new Error("native binary cannot initialize");
@@ -141,6 +143,7 @@ describe("default voice engine prerequisites", () => {
     const nativeArguments = vi.fn();
     const scriptArguments = vi.fn();
     const native = {
+      // oxlint-disable-next-line typescript/no-extraneous-class -- fake native constructor
       OpusEncoder: class {
         constructor(rate: number, channels: number) {
           nativeArguments(rate, channels);

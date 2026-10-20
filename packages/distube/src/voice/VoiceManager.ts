@@ -203,7 +203,7 @@ export class VoiceManagerImpl<Target = VoiceChannelTarget> implements VoiceManag
 
   /** Completes every shutdown-fenced slot in generation order. */
   releaseAll(): Promise<readonly Error[]> {
-    const slots = [...this.#slots.values()].sort((left, right) => left.generation - right.generation);
+    const slots = [...this.#slots.values()].toSorted((left, right) => left.generation - right.generation);
     const completions = slots.map(slot => {
       if (slot.terminal) return slot.terminal.completion;
       return this.#acceptTerminal(slot, "shutdown", undefined, { kind: "shutdown" });
@@ -263,7 +263,7 @@ export class VoiceManagerImpl<Target = VoiceChannelTarget> implements VoiceManag
             error,
             detail: Object.freeze({ guildId: slot.guildId, slotGeneration: slot.generation }),
           }),
-        target => this.#normalizeTarget(target),
+        value => this.#normalizeTarget(value),
       );
       slot.voice = voice;
       if (slot.phase !== "open") voice.fence();

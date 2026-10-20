@@ -99,7 +99,7 @@ function playbackHeaders(value: unknown): Readonly<Record<string, string>> | und
   const snapshot: Record<string, string> = Object.create(null);
   for (const [name, headerValue] of Object.entries(headers)) {
     // HTTP validation permits tabs, but playback headers disallow every control character.
-    // biome-ignore lint/suspicious/noControlCharactersInRegex: reject HTTP header controls
+    // oxlint-disable-next-line no-control-regex -- reject HTTP header controls
     if (typeof headerValue !== "string" || /[\x00-\x1f\x7f]/u.test(headerValue))
       throw new TypeError("URL playback resource header values must be strings");
     try {

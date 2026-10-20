@@ -2,6 +2,12 @@
   "name": "@distube/eris",
   "version": "6.0.0",
   "description": "Eris Adapter and Player for DisTube",
+  "license": "MIT",
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md"
+  ],
   "type": "module",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.mts",
@@ -13,11 +19,6 @@
       }
     }
   },
-  "files": [
-    "dist",
-    "LICENSE",
-    "README.md"
-  ],
   "scripts": {
     "check": "biome check .",
     "type": "tsc --noEmit",
@@ -26,16 +27,15 @@
     "build": "tsdown && bun ../../scripts/sanitize-adapter-output.ts",
     "prepack": "bun run build"
   },
-  "peerDependencies": {
-    "distube": "^6.0.0",
-    "eris": "^0.18.0"
-  },
   "devDependencies": {
     "distube": "workspace:*",
     "eris": "^0.18.0"
   },
+  "peerDependencies": {
+    "distube": "^6.0.0",
+    "eris": "^0.18.0"
+  },
   "engines": {
     "node": ">=22.12.0"
-  },
-  "license": "MIT"
+  }
 }

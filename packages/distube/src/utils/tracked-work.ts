@@ -97,7 +97,7 @@ export class TrackedWork {
       () => {
         const batch = [...this.#slots.values()]
           .filter(slot => slot.order >= cursor)
-          .sort((left, right) => left.order - right.order);
+          .toSorted((left, right) => left.order - right.order);
         const last = batch.at(-1);
         if (last) cursor = last.order + 1;
         return batch.map(slot => slot.result);

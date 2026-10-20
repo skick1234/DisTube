@@ -9,12 +9,7 @@ export type {
   PluginDataOf,
   ResolvableInput as PlayInput,
 } from "./contracts";
-export {
-  DisTube,
-  type DisTubeOptions,
-  type PlayOptions,
-  type SearchRequest,
-} from "./DisTube";
+export { DisTube, type DisTubeOptions, type PlayOptions, type SearchRequest } from "./DisTube";
 export type { DisTubeQueue } from "./DisTubeQueue";
 export type { QueueStatus, RepeatMode } from "./enums";
 export { type CoreErrorCode, DisTubeError, ErrorCode } from "./errors";

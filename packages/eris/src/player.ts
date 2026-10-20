@@ -445,7 +445,7 @@ export class ErisVoicePlayer implements Player {
     }
     // A signal only asks the process to stop. Wait for every known decoder close before Voice releases
     // its Eris session, including a decoder a preceding queue stop already retired.
-    await Promise.all([...this.#pendingDecodes]);
+    await Promise.all(this.#pendingDecodes);
     const streams = new Set([...this.#retiringStreams, ...activeStreams]);
     await Promise.all([...streams].map(stream => stream.outcome));
     try {

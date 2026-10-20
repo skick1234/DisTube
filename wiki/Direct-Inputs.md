@@ -40,12 +40,12 @@ Queue inputs remain strings, Songs and Playlists. A path passed to `distube.play
 A small application SourcePlugin can map public clip IDs to private fresh resources when clips need scheduling.
 Keep private paths and playback credentials out of Song fields, pluginData and events.
 
-| Kind | Required data | Resource seekability |
-| --- | --- | --- |
-| `url` | Absolute HTTP(S) `url`; optional string `headers` | Only with `seekable: true` |
-| `file` | Absolute host-platform `path` | Seekable by form |
-| `stream` | Node `Readable` in `stream` | Never seekable; one shot |
-| `encoded` | Non-empty `format` and `encoded` | Only with `seekable: true` |
+| Kind      | Required data                                     | Resource seekability       |
+| --------- | ------------------------------------------------- | -------------------------- |
+| `url`     | Absolute HTTP(S) `url`; optional string `headers` | Only with `seekable: true` |
+| `file`    | Absolute host-platform `path`                     | Seekable by form           |
+| `stream`  | Node `Readable` in `stream`                       | Never seekable; one shot   |
+| `encoded` | Non-empty `format` and `encoded`                  | Only with `seekable: true` |
 
 The resource union lives at the type-only `distube/integrations` entry. Resources are plain objects, with no
 runtime constructor. `voice.capabilities` reports the selected engine's copied `seek`, `resourceKinds` and

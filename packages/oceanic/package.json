@@ -2,6 +2,12 @@
   "name": "@distube/oceanic",
   "version": "6.0.0",
   "description": "Oceanic Adapter and Player for DisTube",
+  "license": "MIT",
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md"
+  ],
   "type": "module",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.mts",
@@ -13,11 +19,6 @@
       }
     }
   },
-  "files": [
-    "dist",
-    "LICENSE",
-    "README.md"
-  ],
   "scripts": {
     "check": "biome check .",
     "type": "tsc --noEmit",
@@ -26,18 +27,17 @@
     "build": "tsdown && bun ../../scripts/sanitize-adapter-output.ts",
     "prepack": "bun run build"
   },
-  "peerDependencies": {
-    "@discordjs/voice": "^0.19.0",
-    "distube": "^6.0.0",
-    "oceanic.js": "^1.14.0"
-  },
   "devDependencies": {
     "@discordjs/voice": "^0.19.2",
     "distube": "workspace:*",
     "oceanic.js": "^1.14.0"
   },
+  "peerDependencies": {
+    "@discordjs/voice": "^0.19.0",
+    "distube": "^6.0.0",
+    "oceanic.js": "^1.14.0"
+  },
   "engines": {
     "node": "^22.22.2 || ^24.15.0 || >=26.0.0"
-  },
-  "license": "MIT"
+  }
 }

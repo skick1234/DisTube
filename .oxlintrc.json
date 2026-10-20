@@ -1,0 +1,64 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript", "unicorn", "oxc", "import", "node"],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "warn"
+  },
+  "ignorePatterns": ["dist", "docs", "coverage", "reports", "website/api"],
+  "rules": {
+    "typescript/consistent-type-imports": "error",
+    "prefer-template": "error",
+    "typescript/no-non-null-assertion": "error",
+    "no-unused-vars": "error",
+    "typescript/no-explicit-any": "error",
+    "no-console": "error",
+    "no-debugger": "error",
+    "array-callback-return": "error",
+    "no-cond-assign": "error",
+    "import/no-cycle": "error",
+    "typescript/no-this-alias": ["error", { "allowedNames": ["self"] }],
+    "unicorn/no-array-for-each": "warn"
+  },
+  "overrides": [
+    {
+      "files": ["packages/*/tests/types.ts", "packages/*/tests/**/*.types.ts"],
+      "rules": { "no-unused-expressions": "off", "no-new": "off" }
+    },
+    {
+      "files": ["packages/*/tests/types.ts"],
+      "rules": { "import/namespace": "off" }
+    },
+    {
+      "files": ["packages/voice-core/src/worker-pool.ts"],
+      "rules": { "unicorn/require-post-message-target-origin": "off" }
+    },
+    {
+      "files": ["packages/distube/src/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "discord.js",
+                  "discord.js/**",
+                  "oceanic.js",
+                  "oceanic.js/**",
+                  "eris",
+                  "eris/**",
+                  "@discordjs/voice",
+                  "@discordjs/voice/**",
+                  "@distube/*",
+                  "@distube/**"
+                ],
+                "message": "Core depends on integration contracts only, never on adapters, sources or native platform packages."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

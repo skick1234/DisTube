@@ -53,13 +53,16 @@ export class Song<PluginData = unknown> {
   }
 }
 
+function pad(value: number): string {
+  return String(value).padStart(2, "0");
+}
+
 /** Deterministic, locale-independent clock rendering of whole seconds. */
 export function formatDuration(seconds: number): string {
   const total = Math.floor(seconds);
   const hours = Math.floor(total / 3600);
   const minutes = Math.floor((total % 3600) / 60);
   const rest = total % 60;
-  const pad = (value: number): string => String(value).padStart(2, "0");
   return hours > 0 ? `${hours}:${pad(minutes)}:${pad(rest)}` : `${minutes}:${pad(rest)}`;
 }
 

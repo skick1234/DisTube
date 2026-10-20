@@ -90,7 +90,7 @@ function isError(value: unknown): value is Error {
 }
 
 function redactionValues(context: ErrorContext | undefined): readonly string[] {
-  return [...new Set(context?.sensitiveValues?.filter(value => value.length > 0) ?? [])].sort(
+  return [...new Set(context?.sensitiveValues?.filter(value => value.length > 0) ?? [])].toSorted(
     (left, right) => right.length - left.length,
   );
 }

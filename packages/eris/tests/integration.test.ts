@@ -7,6 +7,7 @@ import type {
   SourceOperationOptions,
   SourcePlugin,
 } from "distube/integrations";
+import type * as ErisModule from "eris";
 import type { VoiceChannel } from "eris";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -16,12 +17,13 @@ interface Transport extends FakeVoiceConnection {
 }
 
 const { preflight, preflightFactory, transports } = vi.hoisted(() => {
-  const preflight = vi.fn(async (): Promise<void> => undefined);
-  const preflightFactory = vi.fn((_owner: string) => preflight);
-  return { preflight, preflightFactory, transports: [] as Transport[] };
+  const check = vi.fn(async (): Promise<void> => undefined);
+  const factory = vi.fn((_owner: string) => check);
+  return { preflight: check, preflightFactory: factory, transports: [] as Transport[] };
 });
 
 import { ErisAdapter } from "../src";
+import type * as ErisEngine from "../src/engine";
 import {
   announceState,
   asClient,
@@ -39,12 +41,12 @@ import {
 
 vi.mock("node:child_process", async () => (await import("./support/eris")).childProcessModule());
 vi.mock("../src/engine", async importOriginal => {
-  const actual = await importOriginal<typeof import("../src/engine")>();
+  const actual = await importOriginal<typeof ErisEngine>();
   return { ...actual, erisPreflight: preflightFactory };
 });
 /** The local audio socket the session attaches: ready once given credentials, cleared by disconnect. */
 vi.mock("eris", async () => {
-  const actual = await vi.importActual<typeof import("eris")>("eris");
+  const actual = await vi.importActual<typeof ErisModule>("eris");
   const { FakeVoiceConnection } = await import("./support/eris");
   class VoiceConnection extends FakeVoiceConnection implements Transport {
     readonly credentials: unknown[] = [];

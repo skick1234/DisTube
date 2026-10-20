@@ -196,7 +196,7 @@ describe("queue termination frees the voice synchronously", () => {
     player.finish();
     await settle();
 
-    expect(await await direct.promise).toBeUndefined();
+    expect(await direct.promise).toBeUndefined();
     expect(started).toEqual([undefined]);
     expect(queueLog.slice(0, 3)).toEqual(["queue.item.finished", "queue.history.added", "queue.finished"]);
     expect(queueLog.at(-1)).toBe("queue.deleted");

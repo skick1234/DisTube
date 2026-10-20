@@ -2,6 +2,12 @@
   "name": "distube",
   "version": "6.0.0",
   "description": "Minimal queue and playback orchestration for Discord audio",
+  "license": "MIT",
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md"
+  ],
   "type": "module",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.mts",
@@ -16,13 +22,8 @@
       "types": "./dist/integrations.d.mts"
     }
   },
-  "files": [
-    "dist",
-    "LICENSE",
-    "README.md"
-  ],
   "scripts": {
-    "check": "biome check .",
+    "check": "oxlint --deny-warnings && oxfmt --check",
     "type": "tsc --noEmit",
     "test": "vitest run --coverage=false",
     "test:release": "vitest run --coverage",
@@ -32,7 +33,6 @@
   "engines": {
     "node": "^22.22.2 || ^24.15.0 || >=26.0.0"
   },
-  "license": "MIT",
   "sourceEntries": {
     ".": "./src/index.ts",
     "./integrations": "./src/integrations.ts"

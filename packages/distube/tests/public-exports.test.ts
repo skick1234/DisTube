@@ -4,7 +4,7 @@ import * as integrations from "../src/integrations";
 
 describe("public entry points", () => {
   it("exports exactly the application runtime values from the root", () => {
-    expect(Object.keys(root).sort()).toEqual(["DisTube", "DisTubeError", "ErrorCode", "Playlist", "Song"]);
+    expect(Object.keys(root).toSorted()).toEqual(["DisTube", "DisTubeError", "ErrorCode", "Playlist", "Song"]);
   });
 
   it("exports only types from distube/integrations", () => {

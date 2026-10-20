@@ -2,6 +2,7 @@ import { vi } from "vitest";
 import {
   type Diagnostic,
   DisTube,
+  type DisTubeEventListener,
   type DisTubeEventName,
   type Playlist,
   Song,
@@ -87,8 +88,8 @@ export class FakeSource implements SourcePlugin {
     async (_url: string, _options?: SourceOperationOptions): Promise<Song | Playlist | undefined> => undefined,
   );
   readonly related = vi.fn(async (_song: Song, _context: RelatedContext): Promise<Song | undefined> => undefined);
-  readonly stream = vi.fn(
-    async (song: Song, _context: PlaybackContext): Promise<PlaybackPreparation> => this.resourceFor(song),
+  readonly stream = vi.fn(async (song: Song, _context: PlaybackContext): Promise<PlaybackPreparation> =>
+    this.resourceFor(song),
   );
 
   constructor(readonly name: string) {}
@@ -232,7 +233,7 @@ export class FakePlayer implements Player {
     if (this.#terminal) return;
     const outcome = event.type === "terminal" ? event : { ...event, itemId: this.#requestIdFor(event.itemId) };
     if (outcome.type !== "terminal" && this.#currentItem === outcome.itemId) this.#currentItem = undefined;
-    for (const listener of [...this.listeners]) listener(outcome);
+    for (const listener of Array.from(this.listeners)) listener(outcome);
   }
 
   /** Reports the active track as finished, the way a backend does when it runs out of media. */
@@ -316,12 +317,12 @@ export class FakeVoiceSession implements VoiceSession {
   /** Publishes renewed platform gateway data. */
   connect(gateway: VoiceGatewayData, channelId = this.channelId): void {
     this.channelId = channelId;
-    for (const listener of [...this.listeners]) listener({ type: "connected", channelId, gateway });
+    for (const listener of Array.from(this.listeners)) listener({ type: "connected", channelId, gateway });
   }
 
   /** Reports the terminal disconnect the Adapter would publish once its recovery policy is spent. */
   disconnect(error?: Error): void {
-    for (const listener of [...this.listeners]) listener({ type: "disconnected", ...(error ? { error } : {}) });
+    for (const listener of Array.from(this.listeners)) listener({ type: "disconnected", ...(error ? { error } : {}) });
   }
 }
 
@@ -469,7 +470,7 @@ export function playableSetup(name = "source"): Harness & { readonly source: Fak
 export function once<Name extends DisTubeEventName>(
   distube: DisTube,
   name: Name,
-  listener: import("../../src").DisTubeEventListener<Name>,
+  listener: DisTubeEventListener<Name>,
 ): () => void {
   const unsubscribe = distube.on(name, event => {
     unsubscribe();

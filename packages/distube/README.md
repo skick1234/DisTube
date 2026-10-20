@@ -209,17 +209,17 @@ async function playCommand(input: string): Promise<void> {
 }
 ```
 
-| Code | Meaning |
-| --- | --- |
-| `INVALID_ARGUMENT` | Malformed input or configuration |
-| `INVALID_STATE` | A valid operation the current state forbids: a deleted queue, a released voice, direct voice playback while a queue is attached, a disposed client |
-| `ABORTED` | The caller's signal aborted before commit |
-| `NO_RESULT` | Every consulted source declined the query |
-| `SOURCE_FAILED` | A provider failed with a non-DisTube error |
-| `VOICE_FAILED` | The connection or backend effect failed |
-| `PLUGIN_FAILED` | Integration initialization or disposal failed |
-| `QUEUE_FAILED` | Queue decision logic failed |
-| `UNSUPPORTED` | The engine cannot do it: an undeclared resource kind, an unknown filter, seek on an engine without it |
+| Code               | Meaning                                                                                                                                            |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `INVALID_ARGUMENT` | Malformed input or configuration                                                                                                                   |
+| `INVALID_STATE`    | A valid operation the current state forbids: a deleted queue, a released voice, direct voice playback while a queue is attached, a disposed client |
+| `ABORTED`          | The caller's signal aborted before commit                                                                                                          |
+| `NO_RESULT`        | Every consulted source declined the query                                                                                                          |
+| `SOURCE_FAILED`    | A provider failed with a non-DisTube error                                                                                                         |
+| `VOICE_FAILED`     | The connection or backend effect failed                                                                                                            |
+| `PLUGIN_FAILED`    | Integration initialization or disposal failed                                                                                                      |
+| `QUEUE_FAILED`     | Queue decision logic failed                                                                                                                        |
+| `UNSUPPORTED`      | The engine cannot do it: an undeclared resource kind, an unknown filter, seek on an engine without it                                              |
 
 `DisTubeError.is(error, code)` narrows to `DisTubeError<typeof code>`. A `switch` on `error.code` needs a default
 branch because plugin codes are open strings.
@@ -229,22 +229,22 @@ branch because plugin codes are open strings.
 `distube.on(name, listener)` returns an unsubscribe function. Listeners run after the producing commit, in order
 per guild. Throws and rejections are isolated and reported through `onDiagnostic`.
 
-| Event | Payload beyond `guildId`, `timestamp` |
-| --- | --- |
-| `queue.created` | `queue`, `state` |
-| `queue.item.added` | `queue`, `state`, `item` |
-| `queue.playlist.added` | `queue`, `state`, `playlist`, `items` |
-| `queue.item.started` | `queue`, `state`, `item` |
-| `queue.item.finished` | `queue`, `state`, `item` |
-| `queue.item.failed` | `queue`, `state`, `item`, `error` |
-| `queue.history.added` | `queue`, `state`, `item` |
-| `queue.finished` | `queue`, `state`; the queue deletes itself next |
-| `queue.autoplay.failed` | `queue`, `state`, `song`, `error` |
-| `queue.deleted` | `queue`, `state` |
-| `voice.track.started` | `voice`, optional `itemId` |
-| `voice.track.finished` | `voice`, optional `itemId` |
-| `voice.track.failed` | `voice`, optional `itemId`, `error` |
-| `voice.disconnected` | `voice`, `channelId`, `reason` (`left`, `platform`, `shutdown`), optional `error` |
+| Event                   | Payload beyond `guildId`, `timestamp`                                             |
+| ----------------------- | --------------------------------------------------------------------------------- |
+| `queue.created`         | `queue`, `state`                                                                  |
+| `queue.item.added`      | `queue`, `state`, `item`                                                          |
+| `queue.playlist.added`  | `queue`, `state`, `playlist`, `items`                                             |
+| `queue.item.started`    | `queue`, `state`, `item`                                                          |
+| `queue.item.finished`   | `queue`, `state`, `item`                                                          |
+| `queue.item.failed`     | `queue`, `state`, `item`, `error`                                                 |
+| `queue.history.added`   | `queue`, `state`, `item`                                                          |
+| `queue.finished`        | `queue`, `state`; the queue deletes itself next                                   |
+| `queue.autoplay.failed` | `queue`, `state`, `song`, `error`                                                 |
+| `queue.deleted`         | `queue`, `state`                                                                  |
+| `voice.track.started`   | `voice`, optional `itemId`                                                        |
+| `voice.track.finished`  | `voice`, optional `itemId`                                                        |
+| `voice.track.failed`    | `voice`, optional `itemId`, `error`                                               |
+| `voice.disconnected`    | `voice`, `channelId`, `reason` (`left`, `platform`, `shutdown`), optional `error` |
 
 Queue events capture `state` (`current`, `upcoming`, `history`, `status`, `repeat`, `autoplay`) as of the commit.
 Voice track events publish for direct and scheduled playback alike and precede the derived `queue.item.*` event

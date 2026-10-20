@@ -10,45 +10,45 @@ maintain a plugin or an adapter.
 
 ## From v5
 
-| v5 | This release |
-| --- | --- |
-| `new DisTube(client, { plugins: [new YouTubePlugin()] })` | `new DisTube({ adapter: new DiscordJSAdapter(client), sources: [new YouTubePlugin()] })` |
-| `distube.play(voiceChannel, song, { member, textChannel, message })` | `const queue = await distube.play(voiceChannel, input, { metadata: { requestedBy: member.id } })` |
-| `queue.songs[0]` | `queue.current?.song` |
-| `queue.songs.slice(1)` | `queue.upcoming.map(item => item.song)` |
-| `queue.previousSongs` | `queue.history.map(item => item.song)` |
-| `queue.jump(2)` | `await queue.jump(2)` (one-based position in `upcoming`, or an item ID) |
-| `queue.previous()` | `await queue.previous()` |
-| `queue.shuffle()` | `await queue.shuffle()` |
-| `queue.songs.splice(index, 1)` | `await queue.remove(index)` or `await queue.remove({ from: 2, to: 4 })` |
-| `queue.addRelatedSong()` | `await queue.addRelated()` |
-| `distube.play(channel, song, { position: 1 })` | `await queue.add(input, { next: true })` or `{ at: 0 }` |
-| `queue.filters.add("bassboost")` | `await voice.filters.set("bassboost", 15)` |
-| `queue.filters.remove("bassboost")` | `await voice.filters.remove("bassboost")` |
-| `queue.filters.clear()` | `await voice.filters.clear()` |
-| `queue.filters.names` | `voice.filters.names` |
-| `queue.setVolume(50)` | `await voice.setVolume(50)` |
-| `queue.volume` | `voice.volume` |
-| `queue.setRepeatMode(RepeatMode.SONG)` | `await queue.setRepeat("song")` |
-| `queue.repeatMode` | `queue.repeat` |
-| `queue.toggleAutoplay()` | `await queue.setAutoplay(!queue.autoplay)` |
-| `queue.currentTime` | `queue.position` |
-| `queue.paused`, `queue.playing` | `queue.status === "paused"`, `queue.status === "playing"` |
-| `song.views` | `song.pluginData.views` (typed when the Song came from `distube.search(q, { source: youtube })`) |
-| `song.uploader.name` | `song.pluginData.uploader` |
-| `song.isLive` | `song.pluginData.live` |
-| `song.formattedDuration` | `song.formattedDuration` (unchanged; `Live` when the duration is unknown) |
-| `distube.search(query, { limit, type })` | `await distube.search(query, { source: youtube, limit })` |
-| `distube.on(Events.PLAY_SONG, (queue, song) => ...)` | `distube.on("queue.item.started", ({ queue, item }) => ...)` |
-| `distube.on(Events.ADD_SONG, ...)` | `distube.on("queue.item.added", ({ item }) => ...)` |
-| `distube.on(Events.FINISH, ...)` | `distube.on("queue.finished", ({ queue }) => ...)` |
-| `distube.on(Events.ERROR, (channel, error) => ...)` | `catch` the rejection of `play`, plus `distube.on("queue.item.failed", ({ error }) => ...)` |
-| `queue.textChannel` | `textChannels.set(queue.guildId, channel)` in your own `Map` |
-| `distube.voices.join(channel)` | `await distube.voices.join(channel, { selfDeaf: true, selfMute: false })` |
-| `voice.setSelfDeaf(true)` | `await voice.setSelfDeaf(true)` (voice from `distube.voices.get(guildId)`) |
-| `error.errorCode === "SPOTIFY_NOT_FOUND"` | `DisTubeError.is(error, SpotifyErrorCode.NOT_FOUND)` |
-| `leaveOnEmpty`, `leaveOnFinish` options | `distube.on("queue.finished", ({ guildId }) => distube.voices.leave(guildId))` |
-| `queue.voice.leave()`, `distube.voices.leave(guildId)` | `await voice.leave()` or `await distube.voices.leave(guildId)`; both delete an attached queue first |
+| v5                                                                   | This release                                                                                        |
+| -------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `new DisTube(client, { plugins: [new YouTubePlugin()] })`            | `new DisTube({ adapter: new DiscordJSAdapter(client), sources: [new YouTubePlugin()] })`            |
+| `distube.play(voiceChannel, song, { member, textChannel, message })` | `const queue = await distube.play(voiceChannel, input, { metadata: { requestedBy: member.id } })`   |
+| `queue.songs[0]`                                                     | `queue.current?.song`                                                                               |
+| `queue.songs.slice(1)`                                               | `queue.upcoming.map(item => item.song)`                                                             |
+| `queue.previousSongs`                                                | `queue.history.map(item => item.song)`                                                              |
+| `queue.jump(2)`                                                      | `await queue.jump(2)` (one-based position in `upcoming`, or an item ID)                             |
+| `queue.previous()`                                                   | `await queue.previous()`                                                                            |
+| `queue.shuffle()`                                                    | `await queue.shuffle()`                                                                             |
+| `queue.songs.splice(index, 1)`                                       | `await queue.remove(index)` or `await queue.remove({ from: 2, to: 4 })`                             |
+| `queue.addRelatedSong()`                                             | `await queue.addRelated()`                                                                          |
+| `distube.play(channel, song, { position: 1 })`                       | `await queue.add(input, { next: true })` or `{ at: 0 }`                                             |
+| `queue.filters.add("bassboost")`                                     | `await voice.filters.set("bassboost", 15)`                                                          |
+| `queue.filters.remove("bassboost")`                                  | `await voice.filters.remove("bassboost")`                                                           |
+| `queue.filters.clear()`                                              | `await voice.filters.clear()`                                                                       |
+| `queue.filters.names`                                                | `voice.filters.names`                                                                               |
+| `queue.setVolume(50)`                                                | `await voice.setVolume(50)`                                                                         |
+| `queue.volume`                                                       | `voice.volume`                                                                                      |
+| `queue.setRepeatMode(RepeatMode.SONG)`                               | `await queue.setRepeat("song")`                                                                     |
+| `queue.repeatMode`                                                   | `queue.repeat`                                                                                      |
+| `queue.toggleAutoplay()`                                             | `await queue.setAutoplay(!queue.autoplay)`                                                          |
+| `queue.currentTime`                                                  | `queue.position`                                                                                    |
+| `queue.paused`, `queue.playing`                                      | `queue.status === "paused"`, `queue.status === "playing"`                                           |
+| `song.views`                                                         | `song.pluginData.views` (typed when the Song came from `distube.search(q, { source: youtube })`)    |
+| `song.uploader.name`                                                 | `song.pluginData.uploader`                                                                          |
+| `song.isLive`                                                        | `song.pluginData.live`                                                                              |
+| `song.formattedDuration`                                             | `song.formattedDuration` (unchanged; `Live` when the duration is unknown)                           |
+| `distube.search(query, { limit, type })`                             | `await distube.search(query, { source: youtube, limit })`                                           |
+| `distube.on(Events.PLAY_SONG, (queue, song) => ...)`                 | `distube.on("queue.item.started", ({ queue, item }) => ...)`                                        |
+| `distube.on(Events.ADD_SONG, ...)`                                   | `distube.on("queue.item.added", ({ item }) => ...)`                                                 |
+| `distube.on(Events.FINISH, ...)`                                     | `distube.on("queue.finished", ({ queue }) => ...)`                                                  |
+| `distube.on(Events.ERROR, (channel, error) => ...)`                  | `catch` the rejection of `play`, plus `distube.on("queue.item.failed", ({ error }) => ...)`         |
+| `queue.textChannel`                                                  | `textChannels.set(queue.guildId, channel)` in your own `Map`                                        |
+| `distube.voices.join(channel)`                                       | `await distube.voices.join(channel, { selfDeaf: true, selfMute: false })`                           |
+| `voice.setSelfDeaf(true)`                                            | `await voice.setSelfDeaf(true)` (voice from `distube.voices.get(guildId)`)                          |
+| `error.errorCode === "SPOTIFY_NOT_FOUND"`                            | `DisTubeError.is(error, SpotifyErrorCode.NOT_FOUND)`                                                |
+| `leaveOnEmpty`, `leaveOnFinish` options                              | `distube.on("queue.finished", ({ guildId }) => distube.voices.leave(guildId))`                      |
+| `queue.voice.leave()`, `distube.voices.leave(guildId)`               | `await voice.leave()` or `await distube.voices.leave(guildId)`; both delete an attached queue first |
 
 Use `const voice = queue.voice` when the queue is attached. It becomes `undefined` before attachment and after
 detachment. A retained queue never points at a later voice for that guild. `distube.voices.get(queue.guildId)` is
@@ -58,35 +58,35 @@ at commit time, so a concurrent insert cannot make `remove(3)` delete the wrong 
 
 ## From the v6 pre-release
 
-| v6 pre-release | This release |
-| --- | --- |
-| `DisTubeGuild` | `DisTubeQueue` |
-| `queue.enqueue(input, options)` | `await queue.add(input, { metadata, signal, next, at })` |
-| `const { queue, items } = await distube.play(channel, input)` | `const queue = await distube.play(channel, input)`; read exact occurrences from committed addition events |
-| Guild lookup for an attached voice | `queue.voice`, optional and bound to that queue's attachment |
-| `queue.state.current`, `queue.state.upcoming`, `queue.state.status` | `queue.current`, `queue.upcoming`, `queue.status` (event payloads still carry a captured `state`) |
-| `GuildState` | `QueueState`, now with `history`, `repeat` and `autoplay` |
-| `voice.setRepeat("song")` | `await queue.setRepeat("song")` |
-| `voice.setAutoplay(true)` | `await queue.setAutoplay(true)` |
-| `voice.settings.volume`, `voice.settings.repeat` | `voice.volume`, `queue.repeat` |
-| `VoiceSettings` | removed; read `voice.volume`, `voice.filters`, `voice.selfDeaf`, `voice.selfMute` |
-| `voice.setFilters(["bassboost", "nightcore"])` | `await voice.filters.set("bassboost", 15); await voice.filters.set("nightcore")` |
-| `voice.setFilters([])` | `await voice.filters.clear()` |
-| `voice.settings.filters` | `voice.filters.entries` |
-| Filters cleared by `queue.stop()` | filters persist; `distube.on("queue.deleted", ({ guildId }) => distube.voices.get(guildId)?.filters.clear())` if you want the old behaviour |
-| `queue.remove(itemId)` | `await queue.remove(itemId)` (unchanged) plus `remove(index)` and `remove({ from, to })` |
-| no jump, previous, shuffle, clear, history | `queue.jump`, `queue.previous`, `queue.shuffle`, `queue.clear`, `queue.history` |
-| `youtube.search(query, { limit })` | `await distube.search(query, { source: youtube, limit })` |
-| no suggestions | `await distube.getSuggestions(query, youtube)` |
-| `new ErisAdapter(client, { selfDeaf, selfMute })` | `new ErisAdapter(client)` then `distube.voices.join(channel, { selfDeaf, selfMute })` |
-| no direct voice playback | `await voice.play({ kind: "url", url, dispose })` when no queue is attached |
-| `distube.voices.leave(guildId)` only | `await voice.leave()` added as the same operation on the facade |
-| `error.code === "SOURCE_FAILED"` for a provider miss | `DisTubeError.is(error, YouTubeErrorCode.NOT_FOUND)`; safe plugin errors retain their code and cause |
-| `error.code === "SOURCE_FAILED"` for an exhausted search | `DisTubeError.is(error, ErrorCode.NO_RESULT)` |
-| string literal codes only | `ErrorCode.INVALID_STATE` and friends exported as a `const` object |
-| `song.duration` only | `song.formattedDuration`, `playlist.duration`, `playlist.formattedDuration` |
-| `preparePlayback(song, context)` | `stream(song, context)` |
-| `new DisTube({ adapter, sources, engine, onDiagnostic })` | same, plus `historySize` (default 10) |
+| v6 pre-release                                                      | This release                                                                                                                                |
+| ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DisTubeGuild`                                                      | `DisTubeQueue`                                                                                                                              |
+| `queue.enqueue(input, options)`                                     | `await queue.add(input, { metadata, signal, next, at })`                                                                                    |
+| `const { queue, items } = await distube.play(channel, input)`       | `const queue = await distube.play(channel, input)`; read exact occurrences from committed addition events                                   |
+| Guild lookup for an attached voice                                  | `queue.voice`, optional and bound to that queue's attachment                                                                                |
+| `queue.state.current`, `queue.state.upcoming`, `queue.state.status` | `queue.current`, `queue.upcoming`, `queue.status` (event payloads still carry a captured `state`)                                           |
+| `GuildState`                                                        | `QueueState`, now with `history`, `repeat` and `autoplay`                                                                                   |
+| `voice.setRepeat("song")`                                           | `await queue.setRepeat("song")`                                                                                                             |
+| `voice.setAutoplay(true)`                                           | `await queue.setAutoplay(true)`                                                                                                             |
+| `voice.settings.volume`, `voice.settings.repeat`                    | `voice.volume`, `queue.repeat`                                                                                                              |
+| `VoiceSettings`                                                     | removed; read `voice.volume`, `voice.filters`, `voice.selfDeaf`, `voice.selfMute`                                                           |
+| `voice.setFilters(["bassboost", "nightcore"])`                      | `await voice.filters.set("bassboost", 15); await voice.filters.set("nightcore")`                                                            |
+| `voice.setFilters([])`                                              | `await voice.filters.clear()`                                                                                                               |
+| `voice.settings.filters`                                            | `voice.filters.entries`                                                                                                                     |
+| Filters cleared by `queue.stop()`                                   | filters persist; `distube.on("queue.deleted", ({ guildId }) => distube.voices.get(guildId)?.filters.clear())` if you want the old behaviour |
+| `queue.remove(itemId)`                                              | `await queue.remove(itemId)` (unchanged) plus `remove(index)` and `remove({ from, to })`                                                    |
+| no jump, previous, shuffle, clear, history                          | `queue.jump`, `queue.previous`, `queue.shuffle`, `queue.clear`, `queue.history`                                                             |
+| `youtube.search(query, { limit })`                                  | `await distube.search(query, { source: youtube, limit })`                                                                                   |
+| no suggestions                                                      | `await distube.getSuggestions(query, youtube)`                                                                                              |
+| `new ErisAdapter(client, { selfDeaf, selfMute })`                   | `new ErisAdapter(client)` then `distube.voices.join(channel, { selfDeaf, selfMute })`                                                       |
+| no direct voice playback                                            | `await voice.play({ kind: "url", url, dispose })` when no queue is attached                                                                 |
+| `distube.voices.leave(guildId)` only                                | `await voice.leave()` added as the same operation on the facade                                                                             |
+| `error.code === "SOURCE_FAILED"` for a provider miss                | `DisTubeError.is(error, YouTubeErrorCode.NOT_FOUND)`; safe plugin errors retain their code and cause                                        |
+| `error.code === "SOURCE_FAILED"` for an exhausted search            | `DisTubeError.is(error, ErrorCode.NO_RESULT)`                                                                                               |
+| string literal codes only                                           | `ErrorCode.INVALID_STATE` and friends exported as a `const` object                                                                          |
+| `song.duration` only                                                | `song.formattedDuration`, `playlist.duration`, `playlist.formattedDuration`                                                                 |
+| `preparePlayback(song, context)`                                    | `stream(song, context)`                                                                                                                     |
+| `new DisTube({ adapter, sources, engine, onDiagnostic })`           | same, plus `historySize` (default 10)                                                                                                       |
 
 Events gained `voice.track.started`, `voice.track.finished`, `voice.track.failed` and `queue.history.added`. Queue
 payloads name their owner `queue: DisTubeQueue`. `voice.play`, `voice.stop`, `voice.pause`, `voice.resume` and
@@ -134,7 +134,10 @@ export class ExamplePlugin implements SourcePlugin<ExampleData> {
   }
   async stream(song: Song<ExampleData>, context: PlaybackContext): Promise<PlaybackPreparation> {
     context.signal.throwIfAborted();
-    return { kind: "resource", resource: { kind: "url", url: `https://cdn.example/${song.id}`, dispose: () => undefined } };
+    return {
+      kind: "resource",
+      resource: { kind: "url", url: `https://cdn.example/${song.id}`, dispose: () => undefined },
+    };
   }
   async related(_song: Song<ExampleData>, _context: RelatedContext): Promise<Song<ExampleData> | undefined> {
     return undefined;

@@ -51,7 +51,6 @@ This resolve-only example serves one catalog entry. A real provider reacquires i
 For a search-only catalog, implement `search` and omit `resolve`. Explicit public search on a resolve-only
 source rejects `UNSUPPORTED`.
 
-
 `search(query, options?)` takes `SearchOptions`: an `AbortSignal`, a `limit`, and a zero-based `offset`. Document your
 own default and maximum `limit` in the package README, reject a `limit` or `offset` outside those bounds with
 `INVALID_ARGUMENT` before issuing any provider request, and never return more than the effective limit. Return results
@@ -60,12 +59,12 @@ how you decline a query, and it is not an error.
 
 Discovery and preparation have different failure policies:
 
-| Operation | Missing method or decline | Exception or malformed result |
-| --- | --- | --- |
-| URL resolution | Skip absent `resolve`; continue on `undefined` | Reject |
-| Query used by `play`, `add` or `resolve` | Skip absent `search`; continue on `[]` | Record safe failure and try the next source |
-| Public `search` | Implicit search skips absent methods; explicit source rejects `UNSUPPORTED`; `[]` is valid | Reject immediately |
-| Explicit playback fallback | Skip origin and absent `search`; continue on `[]` | Record safe failure and continue within bounds |
+| Operation                                | Missing method or decline                                                                  | Exception or malformed result                  |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------ | ---------------------------------------------- |
+| URL resolution                           | Skip absent `resolve`; continue on `undefined`                                             | Reject                                         |
+| Query used by `play`, `add` or `resolve` | Skip absent `search`; continue on `[]`                                                     | Record safe failure and try the next source    |
+| Public `search`                          | Implicit search skips absent methods; explicit source rejects `UNSUPPORTED`; `[]` is valid | Reject immediately                             |
+| Explicit playback fallback               | Skip origin and absent `search`; continue on `[]`                                          | Record safe failure and continue within bounds |
 
 Search must return an array of Songs owned by that source. A Song, Playlist, object or `undefined` is malformed.
 Ordinary query resolution takes the first candidate from the first non-empty answer. It does not fall back if
@@ -106,14 +105,14 @@ a plugin `DisTubeError` code and safe message/cause, sanitizing unsafe nested da
 a safe cause. Malformed constructor options use `INVALID_ARGUMENT`; `initialize` and `dispose` failures
 use `PLUGIN_FAILED`. Messages must never carry credentials, signed URLs or encoded track data.
 
-| Source outcome | Public result |
-| --- | --- |
-| URL or query outside this source | `undefined` from `resolve`, or `[]` from `search` |
-| Every queried source declines | `NO_RESULT` from core |
-| Invalid `limit` or `offset` | `INVALID_ARGUMENT` before a provider request |
-| Known provider failure | Your prefixed `DisTubeError` code, with safe details |
-| Malformed result or unexpected provider failure | `SOURCE_FAILED` with a safe cause |
-| Initialization or disposal failure | `PLUGIN_FAILED`; core still attempts the other owned disposers |
+| Source outcome                                  | Public result                                                  |
+| ----------------------------------------------- | -------------------------------------------------------------- |
+| URL or query outside this source                | `undefined` from `resolve`, or `[]` from `search`              |
+| Every queried source declines                   | `NO_RESULT` from core                                          |
+| Invalid `limit` or `offset`                     | `INVALID_ARGUMENT` before a provider request                   |
+| Known provider failure                          | Your prefixed `DisTubeError` code, with safe details           |
+| Malformed result or unexpected provider failure | `SOURCE_FAILED` with a safe cause                              |
+| Initialization or disposal failure              | `PLUGIN_FAILED`; core still attempts the other owned disposers |
 
 ## Song and playlist fields
 
@@ -152,13 +151,13 @@ integration instance may be owned by two live clients.
 
 ## Lifecycle and data ownership
 
-| Stage | Author obligation | Core behavior |
-| --- | --- | --- |
-| Constructor | Validate local options; no provider requests | Validate supplied callable members before hooks |
-| `initialize`, if present | Return synchronously, never a Promise | Reserve all configured identities before the first hook |
-| Initialization failure | Allow cleanup even after partial initialization | Dispose entered identities, including the failing one, in reverse order |
-| `stream` | Honor cancellation and return a fresh resource | Own late results and cleanup after cancellation |
-| `dispose`, if present | Join owned work and release provider resources | Call once per entered identity; finish track cleanup first |
+| Stage                    | Author obligation                               | Core behavior                                                           |
+| ------------------------ | ----------------------------------------------- | ----------------------------------------------------------------------- |
+| Constructor              | Validate local options; no provider requests    | Validate supplied callable members before hooks                         |
+| `initialize`, if present | Return synchronously, never a Promise           | Reserve all configured identities before the first hook                 |
+| Initialization failure   | Allow cleanup even after partial initialization | Dispose entered identities, including the failing one, in reverse order |
+| `stream`                 | Honor cancellation and return a fresh resource  | Own late results and cleanup after cancellation                         |
+| `dispose`, if present    | Join owned work and release provider resources  | Call once per entered identity; finish track cleanup first              |
 
 A dispose-only source is valid. A shared source/engine instance enters lifecycle once. Another live client cannot
 claim it until disposal or rollback settles. Unvisited reservations are released without calling their disposer.

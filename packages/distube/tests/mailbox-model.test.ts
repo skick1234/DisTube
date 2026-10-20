@@ -236,7 +236,9 @@ async function check(sequence: readonly ModelOperation[]): Promise<void> {
   expect(events, JSON.stringify(sequence)).toEqual(model.events);
   await harness.distube.dispose();
   expect(disposals).toEqual(disposals.map(() => 1));
-  expect([...harness.source.disposed].sort()).toEqual(harness.source.stream.mock.calls.map(([song]) => song.id).sort());
+  expect([...harness.source.disposed].toSorted()).toEqual(
+    harness.source.stream.mock.calls.map(([song]) => song.id).toSorted(),
+  );
 }
 
 /** A small deterministic PRNG so a failing sequence reproduces from its seed. */
