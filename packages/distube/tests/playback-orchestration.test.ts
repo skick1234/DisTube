@@ -131,6 +131,27 @@ describe("playback preparation", () => {
     expect(failed.mock.calls[0]?.[0].error.message).not.toContain(secret);
   });
 
+  it.each([
+    { kind: "reader", size: -1, container: "webm", read: () => undefined },
+    { kind: "timed", container: "ogg", open: () => undefined },
+  ])("disposes a malformed $kind resource once", async malformed => {
+    const source = new FakeSource("source");
+    const dispose = vi.fn();
+    source.stream.mockResolvedValue({
+      kind: "resource",
+      resource: { ...malformed, dispose } as unknown as PlaybackResource,
+    });
+    const harness = setup([source]);
+    const failed = vi.fn();
+    harness.distube.on("queue.item.failed", failed);
+
+    await harness.distube.play(TARGET, media("source"));
+    await settle();
+
+    expect(dispose).toHaveBeenCalledTimes(1);
+    expect(failed.mock.calls[0]?.[0].error).toMatchObject({ code: "SOURCE_FAILED" });
+  });
+
   it("retains a malformed source failure and its disposer failure once", async () => {
     const source = new FakeSource("source");
     const url = "file:///private/audio?token=secret";

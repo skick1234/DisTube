@@ -24,7 +24,7 @@ describe("engine", () => {
     const session = await DiscordVoiceSession.connect(OPTIONS);
     const player = await engine.createPlayer(session);
 
-    expect([...engine.accepts]).toEqual(["url", "file", "stream"]);
+    expect([...engine.accepts]).toEqual(["url", "file", "stream", "reader", "timed"]);
 
     // The declaration is only worth something if the Player enforces it.
     const encoded = { itemId: "item", resource: { kind: "encoded", encoded: "track", dispose: vi.fn() } };
@@ -63,7 +63,7 @@ describe("engine", () => {
 });
 
 describe("filter registry", () => {
-  it("folds the ordered set into one ffmpeg chain", () => {
+  it("folds the ordered set into one libavfilter chain", () => {
     const registry = new FilterRegistry();
 
     expect(registry.render([])).toBeUndefined();

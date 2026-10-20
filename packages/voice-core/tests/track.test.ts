@@ -1,0 +1,893 @@
+import { createReadStream } from "node:fs";
+import { readFile, writeFile } from "node:fs/promises";
+import { createServer, type Server } from "node:http";
+import type { AddressInfo } from "node:net";
+import { join } from "node:path";
+import { PassThrough, Readable } from "node:stream";
+import type { ReaderPlaybackResource } from "distube/integrations";
+import { AVERROR_DECODER_NOT_FOUND, AVERROR_INVALIDDATA } from "node-av";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { DEFAULT_FILTERS } from "../src/filters";
+import { URL_READY_TIMEOUT_MS } from "../src/input";
+import { Track, type TrackSettings } from "../src/track";
+import type { LocalPlaybackResource } from "../src/validation";
+import { bitrate, createMedia, fileReader, type MediaFixtures, peak, sourcePackets, take } from "./support/media";
+
+const PLAIN: TrackSettings = { volume: 100, chain: undefined };
+const NIGHTCORE = DEFAULT_FILTERS.nightcore?.render(1.25);
+
+let media: MediaFixtures;
+let opusPackets: Buffer[];
+const servers: Server[] = [];
+beforeAll(async () => {
+  media = await createMedia();
+  opusPackets = await sourcePackets(media.opus);
+}, 30_000);
+afterAll(async () => {
+  await Promise.all(servers.map(server => new Promise(resolve => server.close(resolve))));
+  await media.cleanup();
+});
+
+function causes(error: unknown): Error[] {
+  const chain: Error[] = [];
+  for (let current = error; current instanceof Error; current = current.cause) chain.push(current);
+  return chain;
+}
+
+function open(
+  resource: LocalPlaybackResource,
+  settings = PLAIN,
+  signal = new AbortController().signal,
+): Promise<Track> {
+  return Track.open(resource, settings, signal);
+}
+
+async function serveRanges(path: string): Promise<string> {
+  const body = await readFile(path);
+  const server = createServer((request, response) => {
+    const range = request.headers.range?.match(/^bytes=(\d+)-(\d+)$/u);
+    if (!range) {
+      response.writeHead(200, { "content-length": String(body.length) });
+      response.end(body);
+      return;
+    }
+    const start = Number(range[1]);
+    const end = Math.min(Number(range[2]), body.length - 1);
+    response.writeHead(206, { "content-range": `bytes ${start}-${end}/${body.length}` });
+    response.end(body.subarray(start, end + 1));
+  });
+  servers.push(server);
+  await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
+  return `http://127.0.0.1:${(server.address() as AddressInfo).port}/audio`;
+}
+
+function failingRange(): Readable {
+  return new Readable({
+    read() {
+      this.destroy(new Error("range read failed"));
+    },
+  });
+}
+
+async function drain(track: Track): Promise<Buffer[]> {
+  return await take(track.packets, Number.POSITIVE_INFINITY);
+}
+
+/** Whether a packet is one 20 ms CELT fullband frame, which is what libopus emits in audio mode (RFC 6716). */
+function celt20(packet: Buffer): boolean {
+  const toc = packet[0] ?? 0;
+  return toc >> 3 === 31 && (toc & 3) === 0;
+}
+
+describe("Track passthrough and transcode", () => {
+  it("sends WebM Opus packets byte-identical to the source at default settings", async () => {
+    const track = await open({ kind: "file", path: media.opus });
+
+    const sent = await drain(track);
+
+    expect(sent).toHaveLength(opusPackets.length);
+    expect(sent.every((packet, index) => packet.equals(opusPackets[index] as Buffer))).toBe(true);
+    await expect(track.outcome).resolves.toEqual({ type: "ended" });
+    await track.close();
+  });
+
+  it("transcodes during a volume change and passes the source through again after it, from one input", async () => {
+    const reader = await fileReader(media.opus);
+    const track = await open(reader.resource);
+
+    const before = await take(track.packets, 50);
+    track.setVolume(50);
+    const quieter = await take(track.packets, 100);
+    track.setVolume(100);
+    const after = await drain(track);
+
+    expect(before.every((packet, index) => packet.equals(opusPackets[index] as Buffer))).toBe(true);
+    expect(quieter.some(packet => !opusPackets.some(source => source.equals(packet)))).toBe(true);
+    expect(Math.abs(before.length + quieter.length + after.length - opusPackets.length)).toBeLessThanOrEqual(2);
+    const tail = opusPackets.slice(-100);
+    expect(after.slice(-100).every((packet, index) => packet.equals(tail[index] as Buffer))).toBe(true);
+    expect(reader.ranges[0]?.[0]).toBe(0);
+    expect(reader.ranges.slice(1).every(([start], index) => start > (reader.ranges[index]?.[0] ?? 0))).toBe(true);
+    await expect(track.outcome).resolves.toEqual({ type: "ended" });
+    await track.close();
+  });
+
+  it("re-encodes Opus in 60 ms packets into 20 ms packets", async () => {
+    const source = await sourcePackets(media.opus60);
+    const track = await open({ kind: "file", path: media.opus60 });
+
+    const sent = await drain(track);
+
+    expect(sent.every(celt20)).toBe(true);
+    expect(sent.length).toBeGreaterThanOrEqual(3 * source.length - 3);
+    expect(sent.length).toBeLessThanOrEqual(3 * source.length + 3);
+    await track.close();
+  });
+
+  it("encodes AAC at the source bitrate", async () => {
+    const reader = await fileReader(media.aac);
+    const track = await open(reader.resource);
+
+    const sent = await drain(track);
+
+    expect(sent.length).toBeGreaterThanOrEqual(245);
+    expect(sent.length).toBeLessThanOrEqual(255);
+    expect(sent.every(celt20)).toBe(true);
+    expect(bitrate(sent)).toBeGreaterThan(0.85 * 160_000);
+    expect(bitrate(sent)).toBeLessThanOrEqual(1.05 * 160_000);
+    await track.close();
+  });
+
+  it("encodes at 128 kbps when neither the stream nor the container reports a bitrate", async () => {
+    const track = await open({ kind: "timed", container: "webm", open: () => createReadStream(media.flac) });
+
+    const sent = await drain(track);
+
+    expect(bitrate(sent)).toBeGreaterThan(0.85 * 128_000);
+    expect(bitrate(sent)).toBeLessThanOrEqual(1.05 * 128_000);
+    await track.close();
+  });
+
+  it.each([
+    ["file", (): LocalPlaybackResource => ({ kind: "file", path: media.pcm })],
+    ["stream", (): LocalPlaybackResource => ({ kind: "stream", stream: createReadStream(media.pcm) })],
+  ])("plays PCM in 192,000-byte packets to the end from a %s", async (_kind, resource) => {
+    const track = await open(resource());
+
+    const sent = await drain(track);
+
+    expect(sent.length).toBeGreaterThanOrEqual(249);
+    expect(sent.length).toBeLessThanOrEqual(251);
+    await expect(track.outcome).resolves.toEqual({ type: "ended" });
+    await track.close();
+  });
+});
+
+describe("Track position", () => {
+  it("reports the source time of the last packet the platform played, not of the last one queued", async () => {
+    const track = await open({ kind: "file", path: media.opus });
+    let played = 0;
+    track.setPlayedCounter(() => played);
+    await take(track.packets, 100);
+    const before = track.position;
+
+    played = 30;
+    const thirtieth = track.position;
+    played = 80;
+
+    expect(before).toBe(0);
+    expect(thirtieth).toBeGreaterThan(0.56);
+    expect(thirtieth).toBeLessThan(0.59);
+    expect(track.position - thirtieth).toBeCloseTo(1, 2);
+    await track.close();
+  });
+});
+
+describe("Track threads", () => {
+  it("keeps the event loop free while another track transcodes a heavy chain", async () => {
+    const heavy = await open((await fileReader(media.hour)).resource, {
+      volume: 100,
+      chain: "anlmdn=s=0.001:p=0.1:r=0.3,anlmdn=s=0.001:p=0.1:r=0.3",
+    });
+    const light = await open({ kind: "file", path: media.opus });
+    const consumption = new AbortController();
+    let transcoded = 0;
+    const consuming = (async () => {
+      while (!consumption.signal.aborted) transcoded += (await take(heavy.packets, 5)).length;
+    })();
+    const delays: number[] = [];
+
+    const until = performance.now() + 1000;
+    while (performance.now() < until) {
+      const start = performance.now();
+      light.setVolume(delays.length % 2 === 0 ? 50 : 100);
+      await new Promise(resolve => setTimeout(resolve, 0));
+      delays.push(performance.now() - start);
+    }
+    consumption.abort();
+    await consuming;
+
+    expect(transcoded).toBeGreaterThan(0);
+    expect(Math.max(...delays)).toBeLessThan(50);
+    await Promise.all([heavy.close(), light.close()]);
+  });
+});
+
+describe("Track volume and filters", () => {
+  it("applies a filter to a one-shot stream without reopening it", async () => {
+    const stream = createReadStream(media.opus);
+    const track = await open({ kind: "stream", stream });
+
+    const before = await take(track.packets, 20);
+    await track.setFilters(DEFAULT_FILTERS.bassboost?.render(10));
+    const after = await drain(track);
+
+    expect(before.every((packet, index) => packet.equals(opusPackets[index] as Buffer))).toBe(true);
+    expect(after.length).toBeGreaterThan(250);
+    expect(after.slice(10).every(packet => !opusPackets.some(source => source.equals(packet)))).toBe(true);
+    await expect(track.outcome).resolves.toEqual({ type: "ended" });
+    await track.close();
+    expect(stream.destroyed).toBe(true);
+  });
+
+  it("reports source time under nightcore and keeps it when the filter is removed", async () => {
+    const track = await open((await fileReader(media.hour)).resource, { volume: 100, chain: NIGHTCORE });
+
+    await take(track.packets, 500);
+    const sped = track.position;
+    await track.setFilters(undefined);
+    await take(track.packets, 50);
+
+    expect(sped).toBeGreaterThan(12.4);
+    expect(sped).toBeLessThan(12.8);
+    expect(track.position).toBeGreaterThan(sped + 0.8);
+    expect(track.position).toBeLessThan(sped + 1.3);
+    await track.close();
+  });
+
+  it("rejects a chain libavfilter cannot build and keeps the committed one", async () => {
+    const track = await open({ kind: "file", path: media.opus });
+
+    const rejected = await track.setFilters("nonexistent_filter=1").then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+    expect(rejected).toMatchObject({ code: "INVALID_ARGUMENT", cause: expect.any(Error) });
+    expect(String(((rejected as Error).cause as Error).stack)).not.toContain("node-av");
+    const sent = await drain(track);
+
+    expect(sent.every((packet, index) => packet.equals(opusPackets[index] as Buffer))).toBe(true);
+    await track.close();
+  });
+});
+
+describe("Track filter races", () => {
+  it("keeps the committed chain running when a new one is rejected", async () => {
+    const track = await open({ kind: "file", path: media.opus }, { volume: 100, chain: "volume=0" });
+    await take(track.packets, 10);
+
+    await expect(track.setFilters("nonexistent_filter=1")).rejects.toMatchObject({ code: "INVALID_ARGUMENT" });
+    const queued = track.packets.readableLength;
+    const after = (await take(track.packets, queued + 52)).slice(queued + 2);
+
+    expect(await peak(opusPackets.slice(10, 60), media.opus)).toBeGreaterThan(0.3);
+    expect(after).toHaveLength(50);
+    expect(await peak(after, media.opus)).toBeLessThan(0.001);
+    await track.close();
+  });
+
+  it("settles filter changes in order while a seek is pending and plays the committed chain after it", async () => {
+    const gate = new PassThrough();
+    const track = await open({
+      kind: "timed",
+      container: "webm",
+      open: seconds => (seconds === 0 ? createReadStream(media.hour) : gate),
+    });
+    await take(track.packets, 5);
+    let seeked = false;
+    const seeking = track.seek(30).then(() => {
+      seeked = true;
+    });
+    await new Promise(resolve => setImmediate(resolve));
+
+    await expect(track.setFilters("volume=0")).resolves.toBeUndefined();
+    await expect(track.setFilters("nonexistent_filter=1")).rejects.toMatchObject({ code: "INVALID_ARGUMENT" });
+    const pendingAfterFilters = !seeked;
+    createReadStream(media.hour).pipe(gate);
+    await seeking;
+    const queued = track.packets.readableLength;
+    const after = (await take(track.packets, queued + 52)).slice(queued + 2);
+
+    expect(pendingAfterFilters).toBe(true);
+    expect(track.position).toBeGreaterThanOrEqual(30);
+    expect(after).toHaveLength(50);
+    expect(await peak(after, media.opus)).toBeLessThan(0.001);
+    await track.close();
+  });
+
+  it("settles filter changes sent before close in order and ignores one sent after it", async () => {
+    const track = await open({ kind: "file", path: media.opus });
+    await take(track.packets, 5);
+
+    const applied = track.setFilters(NIGHTCORE);
+    const rejected = track.setFilters("nonexistent_filter=1");
+    const closing = track.close();
+    const late = track.setFilters(NIGHTCORE);
+
+    await expect(applied).resolves.toBeUndefined();
+    await expect(rejected).rejects.toMatchObject({ code: "INVALID_ARGUMENT" });
+    await expect(late).resolves.toBeUndefined();
+    await closing;
+    await expect(track.outcome).resolves.toEqual({ type: "closed" });
+  });
+});
+
+describe("Track seek", () => {
+  it("seeks to the start while the platform still plays the final packets, without ending", async () => {
+    const track = await open({ kind: "file", path: media.opus });
+    let played = 0;
+    track.setPlayedCounter(() => played);
+    let outcome: string | undefined;
+    void track.outcome.then(settled => {
+      outcome = settled.type;
+    });
+    await take(track.packets, opusPackets.length);
+    played = opusPackets.length - 10;
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    await track.seek(0);
+
+    expect(track.position).toBe(0);
+    expect(await take(track.packets, 5)).toEqual(opusPackets.slice(0, 5));
+    expect(outcome).toBeUndefined();
+    await track.close();
+  });
+
+  it("starts the filter graph fresh, so an echo from before a seek does not play after it", async () => {
+    const track = await open(
+      { kind: "file", path: media.toneThenSilence },
+      { volume: 100, chain: "aecho=0.8:0.9:1000:0.5" },
+    );
+    const tone = await take(track.packets, 50);
+
+    await track.seek(6);
+    const queued = track.packets.readableLength;
+    const afterSeek = (await take(track.packets, queued + 52)).slice(queued + 2);
+
+    expect(await peak(tone, media.opus)).toBeGreaterThan(0.3);
+    expect(afterSeek).toHaveLength(50);
+    expect(await peak(afterSeek, media.opus)).toBeLessThan(0.01);
+    await track.close();
+  });
+
+  it("seeks late in an hour-long reader with a small fraction of the bytes before the target", async () => {
+    const reader = await fileReader(media.hour);
+    const track = await open(reader.resource);
+    await take(track.packets, 10);
+    const deliveredBefore = reader.delivered;
+
+    await track.seek(48 * 60 + 2.5);
+    await take(track.packets, 10);
+
+    expect(track.position).toBeGreaterThanOrEqual(48 * 60 + 2.5);
+    expect(track.position).toBeLessThan(48 * 60 + 3);
+    expect(reader.delivered - deliveredBefore).toBeLessThan(0.1 * reader.resource.size * 0.8);
+    await track.close();
+  });
+
+  it("opens a timed resource at the target and reports it after the switch", async () => {
+    const opened: number[] = [];
+    const track = await open({
+      kind: "timed",
+      container: "webm",
+      open: seconds => {
+        opened.push(seconds);
+        return createReadStream(media.hour);
+      },
+    });
+    await take(track.packets, 10);
+
+    await track.seek(90);
+
+    expect(opened).toEqual([0, 90]);
+    expect(track.position).toBeGreaterThanOrEqual(90);
+    expect(track.position).toBeLessThan(90.1);
+    await track.close();
+  });
+
+  it("keeps playing from the old input when the seek target cannot be read", async () => {
+    const reader = await fileReader(media.hour, start => (start > 0 ? failingRange() : undefined));
+    const track = await open(reader.resource);
+    await take(track.packets, 1000);
+    const position = track.position;
+
+    const failure = await track.seek(30 * 60).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+    const later = await take(track.packets, 50);
+
+    expect(failure).toBeInstanceOf(Error);
+    expect(later).toHaveLength(50);
+    expect(track.position).toBeGreaterThan(position);
+    expect(track.position).toBeLessThan(position + 1.2);
+    expect(reader.readables.every(readable => readable.destroyed || reader.readables.at(0) === readable)).toBe(true);
+    await track.close();
+  });
+
+  it("refuses to seek a one-shot stream before touching it", async () => {
+    const stream = new PassThrough();
+    stream.write(await readFile(media.hour).then(bytes => bytes.subarray(0, 400_000)));
+    const track = await open({ kind: "stream", stream });
+    await take(track.packets, 5);
+
+    await expect(track.seek(2)).rejects.toMatchObject({ code: "UNSUPPORTED" });
+    expect(stream.destroyed).toBe(false);
+    expect(await take(track.packets, 5)).toHaveLength(5);
+    await track.close();
+  });
+
+  it("plays on from the target when the input ends while a backward seek is pending", async () => {
+    const bytes = await readFile(media.opus);
+    const gates: { stream: PassThrough; start: number; end: number }[] = [];
+    let gated = false;
+    const reader = await fileReader(media.opus, (start, end) => {
+      if (!gated) return undefined;
+      const stream = new PassThrough();
+      gates.push({ stream, start, end });
+      return stream;
+    });
+    const track = await open(reader.resource);
+    await take(track.packets, opusPackets.length - 11);
+    gated = true;
+
+    const seeking = track.seek(1);
+    const draining = take(track.packets, 11);
+    await vi.waitFor(() => expect(track.position).toBeGreaterThan(5.9));
+    const settled = await Promise.race([
+      track.outcome.then(() => true),
+      new Promise(resolve => setTimeout(() => resolve(false), 50)),
+    ]);
+    gated = false;
+    for (const gate of gates) gate.stream.end(bytes.subarray(gate.start, gate.end + 1));
+    await seeking;
+    const sent = [...(await draining), ...(await drain(track))];
+
+    expect(settled).toBe(false);
+    expect(sent.length).toBeGreaterThan(11 + 240);
+    const tail = opusPackets.slice(-100);
+    expect(sent.slice(-100).every((packet, index) => packet.equals(tail[index] as Buffer))).toBe(true);
+    await expect(track.outcome).resolves.toEqual({ type: "ended" });
+    await track.close();
+  });
+
+  it("ends normally when the input ends while a seek is pending and the seek fails", async () => {
+    const gates: PassThrough[] = [];
+    let gated = false;
+    const reader = await fileReader(media.opus, () => {
+      if (!gated) return undefined;
+      const stream = new PassThrough();
+      gates.push(stream);
+      return stream;
+    });
+    const track = await open(reader.resource);
+    await take(track.packets, opusPackets.length - 11);
+    gated = true;
+
+    const seeking = track.seek(1).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+    const draining = take(track.packets, Number.POSITIVE_INFINITY);
+    await vi.waitFor(() => expect(gates).toHaveLength(1));
+    await vi.waitFor(() => expect(track.position).toBeGreaterThan(5.9));
+    gates[0]?.destroy(new Error("range failed"));
+
+    expect(await seeking).toBeInstanceOf(Error);
+    expect(await draining).toHaveLength(11);
+    await expect(track.outcome).resolves.toEqual({ type: "ended" });
+    await track.close();
+  });
+
+  it("aborts the signal a timed resource opened with once that input closes", async () => {
+    const signals: AbortSignal[] = [];
+    const track = await open({
+      kind: "timed",
+      container: "webm",
+      open: (_seconds, signal) => {
+        signals.push(signal);
+        return createReadStream(media.hour);
+      },
+    });
+    await take(track.packets, 5);
+
+    await track.seek(30);
+    await vi.waitFor(() => expect(signals[0]?.aborted).toBe(true));
+    const current = signals[1]?.aborted;
+    await track.close();
+
+    expect(current).toBe(false);
+    expect(signals[1]?.aborted).toBe(true);
+  });
+
+  it("aborts the signals handed to a reader once the seek retires their input, and the rest on close", async () => {
+    const signals: AbortSignal[] = [];
+    const base = (await fileReader(media.hour)).resource;
+    const reader: ReaderPlaybackResource = {
+      ...base,
+      read: (start, end, signal) => {
+        signals.push(signal);
+        return base.read(start, end, signal);
+      },
+    };
+    const track = await open(reader);
+    await take(track.packets, 5);
+    const first = [...signals];
+    const live = first.some(signal => !signal.aborted);
+
+    await track.seek(30 * 60);
+    await vi.waitFor(() => expect(first.every(signal => signal.aborted)).toBe(true));
+    const seeked = signals.slice(first.length);
+    const liveAfterSeek = seeked.some(signal => !signal.aborted);
+    await track.close();
+
+    expect(live).toBe(true);
+    expect(liveAfterSeek).toBe(true);
+    expect(signals.every(signal => signal.aborted)).toBe(true);
+  });
+
+  it("keeps sending packets from the old input while a seek is pending", async () => {
+    const gate = new PassThrough();
+    const track = await open({
+      kind: "timed",
+      container: "webm",
+      open: seconds => (seconds === 0 ? createReadStream(media.hour) : gate),
+    });
+    await take(track.packets, 5);
+
+    let seeked = false;
+    const seeking = track.seek(30).then(() => {
+      seeked = true;
+    });
+    const during = await take(track.packets, 50);
+    const pending = !seeked;
+    createReadStream(media.hour).pipe(gate);
+    await seeking;
+
+    expect(during).toHaveLength(50);
+    expect(pending).toBe(true);
+    expect(track.position).toBeGreaterThanOrEqual(30);
+    await track.close();
+  });
+
+  it.each([
+    ["its header", () => true],
+    ["its target", (start: number) => start > 0],
+  ])("fences a seek stalled reading %s on close and joins every input", async (_stage, stallsAt) => {
+    const stalls: PassThrough[] = [];
+    let stalling = false;
+    const reader = await fileReader(media.hour, start => {
+      if (!stalling || !stallsAt(start)) return undefined;
+      const stalled = new PassThrough();
+      stalls.push(stalled);
+      return stalled;
+    });
+    const track = await open(reader.resource);
+    await take(track.packets, 5);
+    stalling = true;
+
+    const seeking = track.seek(40 * 60);
+    const failure = seeking.then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+    await vi.waitFor(() => expect(stalls.length).toBeGreaterThan(0));
+    await track.close();
+
+    expect(await failure).toBeInstanceOf(Error);
+    expect(reader.readables.every(readable => readable.destroyed)).toBe(true);
+    await expect(track.outcome).resolves.toEqual({ type: "closed" });
+  });
+});
+
+describe("Track failures", () => {
+  it.each(["reader", "file", "stream"] as const)(
+    "rejects a %s that is not media with libav's error text and code as cause",
+    async kind => {
+      const garbage = Buffer.alloc(100_000, "not media ");
+      const path = join(media.dir, "garbage.bin");
+      await writeFile(path, garbage);
+      const resource: LocalPlaybackResource =
+        kind === "reader"
+          ? {
+              kind,
+              size: garbage.length,
+              container: "webm",
+              read: (start, end) => Readable.from([garbage.subarray(start, end + 1)]),
+            }
+          : kind === "file"
+            ? { kind, path }
+            : { kind, stream: Readable.from([garbage]) };
+
+      const failure = await open(resource).then(
+        () => undefined,
+        (error: unknown) => error,
+      );
+
+      expect(failure).toBeInstanceOf(Error);
+      expect((failure as Error).message).toContain("Decode failed during open");
+      expect(causes(failure)).toContainEqual(
+        expect.objectContaining({
+          message: expect.stringContaining("Invalid data found when processing input"),
+          code: AVERROR_INVALIDDATA,
+        }),
+      );
+    },
+  );
+
+  it("reports one failure with a safe cause when a stream errors after start", async () => {
+    const bytes = await readFile(media.hour);
+    const stream = new PassThrough();
+    stream.write(bytes.subarray(0, 400_000));
+    const track = await open({ kind: "stream", stream });
+    await take(track.packets, 5);
+
+    stream.emit("error", new Error("socket reset at /private/audio.webm"));
+    await take(track.packets, Number.POSITIVE_INFINITY);
+    const outcome = await track.outcome;
+
+    expect(outcome.type).toBe("failed");
+    const error = outcome.type === "failed" ? outcome.error : undefined;
+    expect(error?.message).toContain("Decode failed during read");
+    expect(JSON.stringify([error?.message, (error?.cause as Error)?.message])).not.toContain("/private/audio.webm");
+    expect(stream.destroyed).toBe(true);
+    await track.close();
+  });
+
+  it("rejects audio libav has no decoder for with the libav open error as cause", async () => {
+    const failure = await open({ kind: "file", path: media.undecodable }).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+
+    expect((failure as Error).message).toContain("Decode failed during open");
+    expect(causes(failure)).toContainEqual(expect.objectContaining({ code: AVERROR_DECODER_NOT_FOUND }));
+  });
+});
+
+describe("Track input idle limits", () => {
+  it("fails one-shot opens whose sources never write and lets an open waiting for their permits proceed", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      const permits = Math.max(1, (Number(process.env.UV_THREADPOOL_SIZE) || 4) - 1);
+      const stalls = Array.from({ length: permits }, () => new PassThrough());
+      const reads = stalls.map(stall => vi.spyOn(stall, "read"));
+      const failures = stalls.map(stall =>
+        open({ kind: "timed", container: "webm", open: () => stall }).then(
+          () => undefined,
+          (error: unknown) => error,
+        ),
+      );
+      const waiting = open({ kind: "file", path: media.opus });
+      await vi.waitFor(() => {
+        for (const read of reads) expect(read.mock.calls).toContainEqual([]);
+      });
+
+      await vi.advanceTimersByTimeAsync(URL_READY_TIMEOUT_MS);
+
+      for (const failure of failures) {
+        expect(causes(await failure).map(error => error.message)).toContainEqual(
+          expect.stringContaining("stopped sending bytes"),
+        );
+      }
+      const track = await waiting;
+      expect(await take(track.packets, 5)).toHaveLength(5);
+      await track.close();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not time out a one-shot source whose bytes keep arriving within the limit", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      const bytes = await readFile(media.opus);
+      const stream = new PassThrough();
+      stream.write(bytes.subarray(0, 64_000));
+      const track = await open({ kind: "stream", stream });
+      const draining = drain(track);
+
+      for (let offset = 64_000; offset < bytes.length; offset += 32_000) {
+        await vi.advanceTimersByTimeAsync(URL_READY_TIMEOUT_MS * 0.6);
+        stream.write(bytes.subarray(offset, offset + 32_000));
+      }
+      stream.end();
+
+      expect(await draining).toHaveLength(opusPackets.length);
+      await expect(track.outcome).resolves.toEqual({ type: "ended" });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not time out a one-shot source while its packets back up and the worker stops asking", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      const bytes = await readFile(media.hour);
+      let produced = 0;
+      const stream = new Readable({
+        read(size) {
+          const chunk = bytes.subarray(produced, produced + size);
+          produced += chunk.length;
+          this.push(chunk);
+        },
+      });
+      const track = await open({ kind: "stream", stream });
+      await take(track.packets, 5);
+
+      await vi.advanceTimersByTimeAsync(URL_READY_TIMEOUT_MS * 2);
+
+      expect(await take(track.packets, 4000)).toHaveLength(4000);
+      expect(produced).toBeGreaterThan(400_000);
+      expect(track.settled).toBe(false);
+      await track.close();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe("Track input contract", () => {
+  it("fails an open whose reader window stops sending bytes", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      const stalled = new PassThrough();
+      const reader = await fileReader(media.hour, () => stalled);
+      const failure = open(reader.resource).then(
+        () => undefined,
+        (error: unknown) => error,
+      );
+      await vi.waitFor(() => expect(reader.readables).toContain(stalled));
+
+      await vi.advanceTimersByTimeAsync(URL_READY_TIMEOUT_MS);
+
+      expect(causes(await failure).map(error => error.message)).toContainEqual(
+        expect.stringContaining("stopped sending bytes"),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("fails a reader whose range ends early with a safe cause", async () => {
+    const reader = await fileReader(media.hour, start => {
+      if (start > 0) return undefined;
+      const short = new PassThrough();
+      short.write(Buffer.alloc(100_000));
+      setTimeout(() => short.end(), 50);
+      return short;
+    });
+
+    const failure = await open(reader.resource).then(
+      () => undefined,
+      (error: unknown) => error as Error,
+    );
+
+    expect(failure?.message).toContain("Decode failed during open");
+    expect(failure?.message).toContain("ended before its byte range");
+  });
+
+  it("bounds a cyclic and oversized error graph from a failing stream", async () => {
+    const stream = new PassThrough();
+    stream.write((await readFile(media.hour)).subarray(0, 400_000));
+    const track = await open({ kind: "stream", stream });
+    await take(track.packets, 5);
+    const cycle = new Error("token=private");
+    Object.defineProperty(cycle, "cause", { value: cycle });
+    const nativeError = new AggregateError(
+      Array.from({ length: 30 }, (_, index) =>
+        Object.assign(new Error(`error ${index} secret=private`), { code: "EIO" }),
+      ),
+      "many input failures",
+      { cause: cycle },
+    );
+
+    stream.destroy(nativeError);
+    await take(track.packets, Number.POSITIVE_INFINITY);
+    const outcome = await track.outcome;
+
+    const errors: Error[] = [];
+    const visit = (value: unknown): void => {
+      if (!(value instanceof Error) || errors.includes(value) || errors.length > 100) return;
+      errors.push(value);
+      visit(value.cause);
+      if (value instanceof AggregateError) for (const child of value.errors) visit(child);
+    };
+    visit(outcome.type === "failed" ? outcome.error : undefined);
+    const aggregate = errors.find(error => error instanceof AggregateError) as AggregateError | undefined;
+    expect(aggregate).toBeDefined();
+    expect(aggregate).not.toBe(nativeError);
+    expect(aggregate?.errors.length).toBeLessThan(12);
+    expect(errors.length).toBeLessThanOrEqual(16);
+    expect(errors.some(error => error.message === "Cyclic error cause")).toBe(true);
+    expect(errors.every(error => !error.message.includes("private"))).toBe(true);
+    await track.close();
+  });
+});
+
+describe("Track input bounds", () => {
+  it.each(["stream", "url"] as const)(
+    "plays a %s whose packets are larger than the read-ahead to its end",
+    async kind => {
+      const resource: LocalPlaybackResource =
+        kind === "stream"
+          ? { kind, stream: createReadStream(media.huge) }
+          : { kind, url: await serveRanges(media.huge), seekable: true };
+      const track = await open(resource);
+
+      const packets = await drain(track);
+
+      expect(await track.outcome).toEqual({ type: "ended" });
+      expect(packets.length).toBeGreaterThanOrEqual(819);
+    },
+  );
+
+  it("yields the first packet of a stream fed at 128 kbps within 1 s of its first bytes", async () => {
+    const bytes = await readFile(media.opus);
+    const stream = new PassThrough();
+    const started = performance.now();
+    let fed = 0;
+    const feeder = setInterval(() => {
+      stream.write(bytes.subarray(fed, fed + 1600));
+      fed += 1600;
+    }, 100);
+    try {
+      stream.write(bytes.subarray(0, 1600));
+      fed = 1600;
+      const track = await open({ kind: "stream", stream });
+      const [first] = await take(track.packets, 1);
+      const elapsed = performance.now() - started;
+
+      expect(first).toEqual(opusPackets[0]);
+      expect(elapsed).toBeLessThan(1000);
+      await track.close();
+    } finally {
+      clearInterval(feeder);
+    }
+  });
+
+  it("pauses a fast one-shot source instead of buffering it whole", async () => {
+    const bytes = await readFile(media.hour);
+    let produced = 0;
+    const stream = new Readable({
+      read(size) {
+        const chunk = bytes.subarray(produced, produced + size);
+        produced += chunk.length;
+        this.push(chunk.length > 0 ? chunk : null);
+      },
+    });
+    const track = await open({ kind: "stream", stream });
+
+    await take(track.packets, 50);
+    await new Promise(resolve => setImmediate(resolve));
+
+    expect(produced).toBeLessThan(1024 * 1024);
+    await track.close();
+  });
+
+  it("creates, encodes, closes and collects pipelines repeatedly", async () => {
+    const collect = (globalThis as { gc?: () => void }).gc;
+    expect(collect).toBeTypeOf("function");
+    for (let round = 0; round < 20; round += 1) {
+      const track = await open((await fileReader(media.opus)).resource, { volume: 50, chain: NIGHTCORE });
+      expect(await take(track.packets, 25)).toHaveLength(25);
+      await track.seek(2);
+      track.setVolume(100);
+      expect(await take(track.packets, 25)).toHaveLength(25);
+      await track.close();
+      collect?.();
+    }
+    await new Promise(resolve => setImmediate(resolve));
+    collect?.();
+  });
+});

@@ -1,13 +1,7 @@
-import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
 import { DisTubeError } from "distube";
 
-import { ffmpegCommand } from "./ffmpeg";
-
 const require = createRequire(import.meta.url);
-
-/** Opus implementations supported by @discordjs/voice, in its native-first preference order. */
-export const DISCORD_OPUS_MODULES = ["@discordjs/opus", "opusscript"] as const;
 
 /** Encryption implementations @discordjs/voice probes, in its own preference order. */
 export const DISCORD_ENCRYPTION_MODULES = [
@@ -18,9 +12,6 @@ export const DISCORD_ENCRYPTION_MODULES = [
   "@noble/ciphers",
 ] as const;
 
-/** Eris selects its native encoder before the JavaScript one, and sodium-native before tweetnacl. */
-export const ERIS_OPUS_MODULES = ["@discordjs/opus", "opusscript"] as const;
-
 /** Eris loads these inside its VoiceConnection constructor, in this order, once per process. */
 export const ERIS_ENCRYPTION_MODULES = ["sodium-native", "tweetnacl"] as const;
 
@@ -28,12 +19,11 @@ export const ERIS_ENCRYPTION_MODULES = ["sodium-native", "tweetnacl"] as const;
 export interface PrerequisiteModules {
   readonly owner: string;
   readonly encryption: readonly string[];
-  readonly opus: readonly string[];
 }
 
 /** Private runtime seam for deterministic prerequisite coverage. */
 export interface PrerequisiteRuntime {
-  probeFfmpeg(command: string, args: readonly string[]): Promise<void>;
+  loadDecoder(): Promise<unknown>;
   loadModule(name: string): unknown;
 }
 
@@ -57,28 +47,11 @@ export function createPrerequisiteCheck(
 
 async function verifyPrerequisites(modules: PrerequisiteModules, runtime: PrerequisiteRuntime): Promise<void> {
   try {
-    await runtime.probeFfmpeg(ffmpegCommand(), ["-version"]);
+    await runtime.loadDecoder();
   } catch {
     throw new DisTubeError(
       "VOICE_FAILED",
-      `${modules.owner} requires FFmpeg. Install FFmpeg, expose it as ffmpeg, or set FFMPEG_PATH.`,
-    );
-  }
-
-  let opus = false;
-  for (const module of modules.opus) {
-    try {
-      validateOpusModule(module, runtime.loadModule(module));
-      opus = true;
-      break;
-    } catch {
-      // Try the next supported implementation. Its loader or constructor can reject an unavailable native binary.
-    }
-  }
-  if (!opus) {
-    throw new DisTubeError(
-      "VOICE_FAILED",
-      `${modules.owner} requires an Opus implementation. Install one of: ${modules.opus.join(", ")}.`,
+      `${modules.owner} requires the node-av native binding, which runs on glibc 2.28 or newer (musl hosts such as Alpine are unsupported). Reinstall node-av on a supported host.`,
     );
   }
 
@@ -96,25 +69,6 @@ async function verifyPrerequisites(modules: PrerequisiteModules, runtime: Prereq
   );
 }
 
-/** Checks the constructor the supported voice engines need, then disposes the short-lived probe. */
-function validateOpusModule(name: string, loaded: unknown): void {
-  if (name === "@discordjs/opus") {
-    const encoder = construct(readMember(loaded, "OpusEncoder"), [48_000, 2]);
-    disposeEncoder(encoder);
-    return;
-  }
-  if (name === "opusscript") {
-    const application = readMember(loaded, "Application");
-    const audio = readMember(application, "AUDIO");
-    if (typeof audio !== "number") throw new TypeError("opusscript does not expose Application.AUDIO");
-    const encoder = construct(loaded, [48_000, 2, audio]);
-    disposeEncoder(encoder);
-    return;
-  }
-  throw new TypeError(`Unsupported Opus implementation "${name}"`);
-}
-
-/** Loading the module is the probe: the voice libraries accept whichever import succeeds. */
 /**
  * The specifier each accepted implementation is loaded by, where it differs from its package name.
  *
@@ -129,41 +83,8 @@ function validateEncryptionModule(name: string, loaded: unknown): void {
   if (!loaded) throw new TypeError(`Encryption implementation "${name}" exposed no usable module`);
 }
 
-function readMember(value: unknown, member: PropertyKey): unknown {
-  if ((typeof value !== "object" || value === null) && typeof value !== "function") return undefined;
-  return Reflect.get(value, member);
-}
-
-function construct(value: unknown, arguments_: readonly unknown[]): unknown {
-  if (typeof value !== "function") throw new TypeError("Opus implementation does not expose a constructor");
-  return Reflect.construct(value, arguments_);
-}
-
-function disposeEncoder(encoder: unknown): void {
-  const dispose = readMember(encoder, "delete") ?? readMember(encoder, "destroy");
-  if (dispose !== undefined) {
-    if (typeof dispose !== "function") throw new TypeError("Opus encoder disposal is not callable");
-    Reflect.apply(dispose, encoder, []);
-  }
-}
-
 const systemRuntime: PrerequisiteRuntime = {
-  probeFfmpeg(command, args): Promise<void> {
-    return new Promise((resolve, reject) => {
-      let child: ReturnType<typeof spawn>;
-      try {
-        child = spawn(command, args, { stdio: "ignore", windowsHide: true });
-      } catch (error: unknown) {
-        reject(error);
-        return;
-      }
-      child.once("error", reject);
-      child.once("close", (code, signal) => {
-        if (code === 0 && signal === null) resolve();
-        else reject(new Error(`FFmpeg probe exited with code ${code ?? "unknown"}${signal ? ` (${signal})` : ""}`));
-      });
-    });
-  },
+  loadDecoder: () => import("node-av"),
   loadModule(name): unknown {
     return require(name);
   },

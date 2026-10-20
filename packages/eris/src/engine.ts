@@ -1,10 +1,5 @@
 import type { FfmpegFilterDefinitions } from "@distube/voice-core/core";
-import {
-  createPrerequisiteCheck,
-  ERIS_ENCRYPTION_MODULES,
-  ERIS_OPUS_MODULES,
-  FilterRegistry,
-} from "@distube/voice-core/core";
+import { createPrerequisiteCheck, ERIS_ENCRYPTION_MODULES, FilterRegistry } from "@distube/voice-core/core";
 import type { Engine, FilterDefinitionInfo, PlaybackResource, Player, VoiceSession } from "distube/integrations";
 import { ErisVoicePlayer } from "./player";
 import { ErisVoiceSession } from "./session";
@@ -15,11 +10,7 @@ const preflights = new Map<string, () => Promise<void>>();
 export function erisPreflight(owner: string): () => Promise<void> {
   const existing = preflights.get(owner);
   if (existing) return existing;
-  const check = createPrerequisiteCheck({
-    owner,
-    encryption: ERIS_ENCRYPTION_MODULES,
-    opus: ERIS_OPUS_MODULES,
-  });
+  const check = createPrerequisiteCheck({ owner, encryption: ERIS_ENCRYPTION_MODULES });
   preflights.set(owner, check);
   return check;
 }
@@ -30,9 +21,9 @@ export function erisPreflight(owner: string): () => Promise<void> {
  * It owns the filter vocabulary, so core keeps the ordered named set and this side renders it.
  */
 export class ErisVoiceEngine implements Engine {
-  /** ffmpeg decodes local input; a provider-encoded track means nothing to it. */
-  readonly accepts: ReadonlySet<PlaybackResource["kind"]> = new Set(["url", "file", "stream"]);
-  /** Seekable files and URLs restart a decoder at the requested position. */
+  /** libav decodes local input; a provider-encoded track means nothing to it. */
+  readonly accepts: ReadonlySet<PlaybackResource["kind"]> = new Set(["url", "file", "stream", "reader", "timed"]);
+  /** Files, seekable URLs, readers and timed resources open a second input at the requested position. */
   readonly capabilities = Object.freeze({ seek: true });
   readonly filters: ReadonlyMap<string, FilterDefinitionInfo>;
   readonly #filters: FilterRegistry;

@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises";
+import { PassThrough } from "node:stream";
 import { DisTube, Song } from "distube";
 import type {
   Adapter,
@@ -9,9 +11,10 @@ import type {
   VoiceSession,
   VoiceTarget,
 } from "distube/integrations";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { DiscordVoiceEngine } from "../src/engine";
 import { DiscordVoiceSession } from "../src/session";
+import { createMedia, fileReader, type MediaFixtures } from "./support/media";
 import {
   audioPlayerError,
   type FakeConnection,
@@ -23,7 +26,6 @@ import {
 } from "./support/native";
 
 vi.mock("@discordjs/voice", async () => (await import("./support/native")).voiceModule());
-vi.mock("node:child_process", async () => (await import("./support/native")).childProcessModule());
 
 const GUILD = "guild";
 const CHANNEL_A = "channel-a";
@@ -35,6 +37,16 @@ interface AdapterLifecycleBridge {
 }
 
 const gateway = gatewayAdapter();
+let media: MediaFixtures;
+let hour: Buffer;
+/** The stream resource a song with this ID plays instead of the hour-long file. */
+const streams = new Map<string, PassThrough>();
+
+beforeAll(async () => {
+  media = await createMedia();
+  hour = await readFile(media.hour);
+}, 30_000);
+afterAll(() => media.cleanup());
 
 /** The gateway session every Discord adapter returns, joined through the fake native library. */
 function createBridge(): AdapterLifecycleBridge {
@@ -86,7 +98,6 @@ describe("DiscordVoiceSession queue lifecycle", () => {
     await distube.play({ guildId: GUILD, id: CHANNEL_A }, song("A"));
     await started;
     const connection = bridge.connection();
-    const decoder = latest.child;
     const order: string[] = [];
     const outcomes: string[] = [];
     distube.on("queue.item.finished", () => outcomes.push("finished"));
@@ -103,39 +114,37 @@ describe("DiscordVoiceSession queue lifecycle", () => {
         order.push("release stop");
         return true;
       });
-    decoder.kill.mockImplementationOnce(signal => {
-      order.push("kill");
-      decoder.signalCode = signal;
-      queueMicrotask(() => decoder.close(null, signal));
-      return true;
-    });
-    decoder.once("close", () => order.push("close"));
+    const inputs = readers.at(-1)?.readables ?? [];
+    expect(inputs.some(readable => !readable.destroyed)).toBe(true);
     connection.destroy.mockImplementationOnce(() => {
-      order.push("destroy");
+      order.push(inputs.every(readable => readable.destroyed) ? "destroy after inputs" : "destroy");
       connection.transition({ status: "destroyed" });
     });
 
     await distube.voices.leave(GUILD);
 
-    expect(order).toEqual(["queue stop", "kill", "close", "unsubscribe", "release stop", "destroy"]);
+    expect(order).toEqual(["queue stop", "unsubscribe", "release stop", "destroy after inputs"]);
     expect(distube.getQueue(GUILD)).toBeUndefined();
     latest.player.transition({ status: "idle" });
-    decoder.close(0, null);
     await settle();
     expect(outcomes).toEqual([]);
   });
 
-  it("publishes one failed item for a post-start FFmpeg exit and never finishes it", async () => {
+  it("publishes one failed item for a post-start input failure and never finishes it", async () => {
     const bridge = createBridge();
     const distube = createDisTube(bridge);
     const started = waitForStart(distube);
     const failed = waitForFailure(distube);
     const finished = vi.fn();
     distube.on("queue.item.finished", finished);
-    await distube.play({ guildId: GUILD, id: CHANNEL_A }, song("A"));
+    const stream = new PassThrough();
+    stream.write(hour.subarray(0, 400_000));
+    streams.set("S", stream);
+    await distube.play({ guildId: GUILD, id: CHANNEL_A }, song("S"));
     await started;
 
-    latest.child.close(1, null);
+    stream.destroy(new Error("socket reset"));
+    latest.resource.input.resume();
     await failed;
     await settle();
 
@@ -162,6 +171,8 @@ describe("DiscordVoiceSession queue lifecycle", () => {
   });
 });
 
+const readers: Awaited<ReturnType<typeof fileReader>>[] = [];
+
 function createDisTube(bridge: AdapterLifecycleBridge): DisTube {
   const adapter: Adapter = {
     normalizeTarget: target => ({
@@ -181,14 +192,18 @@ function localSource(): SourcePlugin {
     dispose: (): void => undefined,
     search: async (_query: string, _options?: SourceOperationOptions): Promise<readonly Song[]> => [],
     resolve: async (_url: string, _options?: SourceOperationOptions): Promise<undefined> => undefined,
-    stream: async (value: Song, _context: PlaybackContext): Promise<PlaybackPreparation> => ({
-      kind: "resource",
-      resource: {
-        kind: "file",
-        path: `/tmp/distube-fixture-${value.id}.mp3`,
-        dispose: (): void => undefined,
-      },
-    }),
+    stream: async (value: Song, _context: PlaybackContext): Promise<PlaybackPreparation> => {
+      const stream = streams.get(value.id);
+      if (stream) return { kind: "resource", resource: { kind: "stream", stream } };
+      // No range completes, so the track holds an open input until it is closed.
+      const reader = await fileReader(media.hour, start => {
+        const partial = new PassThrough();
+        partial.write(hour.subarray(start, start + 100_000));
+        return partial;
+      });
+      readers.push(reader);
+      return { kind: "resource", resource: reader.resource };
+    },
   };
 }
 

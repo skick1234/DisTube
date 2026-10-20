@@ -3,7 +3,6 @@ import type {
   Diagnostic,
   Engine,
   FilterDefinitionInfo,
-  PlaybackResourceKind,
   PluginContext,
   PluginDataOf,
   ResolvableInput,
@@ -22,6 +21,7 @@ import {
 import type { Playlist, Song } from "./media";
 import { throwIfAborted } from "./playback/abort";
 import { resolveInput } from "./playback/resolve";
+import { PLAYBACK_RESOURCE_KINDS } from "./playback/resource";
 import { searchSongs, suggestQueries } from "./playback/search";
 import { createSourceCatalog, type SourceCatalog } from "./playback/sources";
 import { validateSourceName } from "./playback/validation";
@@ -401,9 +401,8 @@ const ownedIntegrations = new WeakSet<object>();
 /** Capture configuration before hooks run while preserving the selected integration's method receiver. */
 function snapshotEngine(engine: Engine): Engine {
   try {
-    const kinds = new Set<PlaybackResourceKind>(["url", "file", "stream", "encoded"]);
     const accepts = new Set(engine.accepts);
-    if (accepts.size === 0 || [...accepts].some(kind => !kinds.has(kind))) {
+    if (accepts.size === 0 || [...accepts].some(kind => !PLAYBACK_RESOURCE_KINDS.has(kind))) {
       throw new DisTubeError("INVALID_ARGUMENT", "Engine accepts must contain supported resource kinds");
     }
     const encodedFormats = new Set(engine.encodedFormats ?? []);

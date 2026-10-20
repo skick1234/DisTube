@@ -1,5 +1,5 @@
 import { EventEmitter } from "node:events";
-import { PassThrough } from "node:stream";
+import type { Readable } from "node:stream";
 import type {
   AudioPlayerError,
   DiscordGatewayAdapterCreator,
@@ -81,8 +81,10 @@ export class FakeConnection extends EventEmitter {
 }
 
 export interface FakeResource {
+  /** The Opus packet stream the Player handed over. */
+  readonly input: Readable;
+  readonly inputType: unknown;
   playbackDuration: number;
-  readonly volume: { level: number; setVolume: (level: number) => void };
 }
 
 /** Builds an AudioPlayer error that names the resource whose native work failed. */
@@ -117,41 +119,15 @@ export class FakeAudioPlayer extends EventEmitter {
   }
 }
 
-/** A running ffmpeg decode, without the process. */
-export class FakeChild extends EventEmitter {
-  readonly stdin = new PassThrough();
-  readonly stdout = new PassThrough();
-  readonly stderr = new PassThrough();
-  exitCode: number | null = null;
-  signalCode: string | null = null;
-  readonly kill = vi.fn((signal: string) => {
-    this.signalCode = signal;
-    queueMicrotask(() => this.close(null, signal));
-    return true;
-  });
-
-  /** Settles the fake process exactly as a child process close callback would. */
-  close(code: number | null = this.exitCode, signal: string | null = this.signalCode): void {
-    this.exitCode = code;
-    this.signalCode = signal;
-    this.emit("close", code, signal);
-  }
-}
-
 export const native = {
   connections: [] as FakeConnection[],
   players: [] as FakeAudioPlayer[],
   resources: [] as FakeResource[],
-  children: [] as FakeChild[],
   transports: [] as {
     state: ReturnType<typeof vi.fn>;
     server: ReturnType<typeof vi.fn>;
     sendPayload: (payload: unknown) => boolean;
   }[],
-  /** Argument lists handed to `spawn`, one per decode. */
-  spawns: [] as string[][],
-  /** Candidate filter decodes normally produce one frame without a real FFmpeg process. */
-  autoAudio: true,
 
   entersState: vi.fn(async (_target: unknown, _status: string, _timeout: number) => undefined),
   joinVoiceChannel: vi.fn((options: { channelId: string; adapterCreator?: DiscordGatewayAdapterCreator }) => {
@@ -176,25 +152,16 @@ export const native = {
     native.players.push(player);
     return player;
   }),
-  createAudioResource: vi.fn(() => {
-    const resource: FakeResource = {
-      playbackDuration: 0,
-      volume: {
-        level: 1,
-        setVolume(level: number) {
-          this.level = level;
-        },
-      },
+  createAudioResource: vi.fn((input: Readable, options?: { inputType?: unknown }) => {
+    const resource: FakeResource = { input, inputType: options?.inputType, playbackDuration: 0 };
+    const read = input.read.bind(input);
+    input.read = (size?: number) => {
+      const chunk: unknown = read(size);
+      if (chunk !== null) resource.playbackDuration += 20;
+      return chunk;
     };
     native.resources.push(resource);
     return resource;
-  }),
-  spawn: vi.fn((_command: string, args: string[]) => {
-    native.spawns.push(args);
-    const child = new FakeChild();
-    native.children.push(child);
-    if (native.autoAudio) queueMicrotask(() => child.stdout.write(Buffer.from([0])));
-    return child;
   }),
 };
 
@@ -209,12 +176,6 @@ export const latest = {
   get resource(): FakeResource {
     return native.resources.at(-1) as FakeResource;
   },
-  get child(): FakeChild {
-    return native.children.at(-1) as FakeChild;
-  },
-  get spawn(): string[] {
-    return native.spawns.at(-1) as string[];
-  },
 };
 
 export function resetNative(): void {
@@ -223,10 +184,7 @@ export function resetNative(): void {
   native.connections.length = 0;
   native.players.length = 0;
   native.resources.length = 0;
-  native.children.length = 0;
   native.transports.length = 0;
-  native.spawns.length = 0;
-  native.autoAudio = true;
 }
 
 /** Lets every pending microtask and detached teardown run before the test asserts. */
@@ -244,10 +202,4 @@ export async function voiceModule(): Promise<unknown> {
     entersState: native.entersState,
     joinVoiceChannel: native.joinVoiceChannel,
   };
-}
-
-/** `node:child_process` with `spawn` replaced, so ffmpeg's argument list stays under test. */
-export async function childProcessModule(): Promise<unknown> {
-  const actual = await vi.importActual<Record<string, unknown>>("node:child_process");
-  return { ...actual, spawn: native.spawn };
 }

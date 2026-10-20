@@ -12,8 +12,17 @@ bun add distube @distube/discordjs @distube/youtube discord.js @discordjs/voice
 ```
 
 Use `OceanicAdapter` from `@distube/oceanic` for oceanic.js or `ErisAdapter` from `@distube/eris` for Eris 0.18.
-Local playback needs FFmpeg, an Opus implementation and a supported encryption implementation. See
-[Installation](wiki/Installation.md) for platform requirements. Local engines seek files and URLs explicitly marked seekable. One-shot streams cannot seek.
+The official adapters install `node-av`, pinned to `6.2.0-beta.33`, so nothing extra is needed for decoding.
+Local playback needs glibc 2.28 or newer, such as `node:22-slim`, Debian or Ubuntu, and a supported encryption
+implementation. Alpine and other musl hosts are unsupported. System FFmpeg, `FFMPEG_PATH`, `@discordjs/opus` and
+`opusscript` are no longer needed. See [Installation](wiki/Installation.md) for platform requirements.
+
+`node-av` bundles FFmpeg built with GPLv3 and runs it in-process. Distributing a bot image or binary carries GPLv3
+obligations. DisTube's packages remain MIT. A remote engine such as Lavalink needs none of the local prerequisites.
+
+Seek and filter changes apply in-process without starting a decoder process. Local engines seek files, URLs
+explicitly marked seekable, byte-addressable readers and time-addressable resources. One-shot streams cannot seek,
+but support filter changes.
 
 ## Create and play
 
@@ -147,7 +156,7 @@ See the [authoring guide](wiki/Plugin-Authoring.md), [Adapter authoring](wiki/Ad
 ## Files, streams and authenticated URLs
 
 For sound effects or generated audio, use direct `voice.play` with a fresh resource. Local engines accept
-absolute files, Node readable streams and progressive HTTP(S) URLs with optional headers. Read
-`voice.capabilities` for engine support and `voice.seekable` for the active track. Streams cannot seek; URL seeks
-reopen the request and decode/discard to the offset. Each resource and readable is single-use, even after a
+absolute files, Node readable streams, progressive HTTP(S) URLs with optional headers, byte-addressable readers
+and time-addressable resources. Read `voice.capabilities` for engine support and `voice.seekable` for the active
+track. Streams and URLs not marked seekable cannot seek. Each resource and readable is single-use, even after a
 later compatibility rejection. See [direct inputs](wiki/Direct-Inputs.md) for copyable examples and cleanup rules.

@@ -1,43 +1,44 @@
-import { createServer, type ServerResponse } from "node:http";
+import { readFile } from "node:fs/promises";
+import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
-import { PassThrough } from "node:stream";
-import { AudioPlayerStatus, type VoiceConnection } from "@discordjs/voice";
+import { PassThrough, Readable } from "node:stream";
+import { AudioPlayerStatus, StreamType, type VoiceConnection } from "@discordjs/voice";
 import type { PlaybackRequest, PlayerEvent } from "distube/integrations";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { FilterRegistry } from "../src/filters";
 import { DiscordVoicePlayer } from "../src/player";
+import { createMedia, fileReader, type MediaFixtures, peak, sourcePackets, take } from "./support/media";
 import { audioPlayerError, FakeConnection, latest, native, resetNative, settle } from "./support/native";
 
 vi.mock("@discordjs/voice", async () => (await import("./support/native")).voiceModule());
-vi.mock("node:child_process", async () => (await import("./support/native")).childProcessModule());
 
-const FILE = "/tmp/distube-player-fixture.mp3";
 const servers: ReturnType<typeof createServer>[] = [];
+let media: MediaFixtures;
 
-function request(itemId = "item"): PlaybackRequest {
-  return { itemId, resource: { kind: "file", path: FILE } };
-}
-
-function createPlayer(): { player: DiscordVoicePlayer; connection: FakeConnection; events: PlayerEvent[] } {
-  const connection = new FakeConnection();
-  const player = new DiscordVoicePlayer(connection as unknown as VoiceConnection, new FilterRegistry());
-  const events: PlayerEvent[] = [];
-  player.subscribe(event => events.push(event));
-  return { player, connection, events };
-}
-
-async function origin(respond: (response: ServerResponse, count: number) => void): Promise<string> {
-  let count = 0;
-  const server = createServer((_request, response) => respond(response, ++count));
-  servers.push(server);
-  await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
-  return `http://127.0.0.1:${(server.address() as AddressInfo).port}/audio`;
-}
-
+beforeAll(async () => {
+  media = await createMedia();
+}, 30_000);
+afterAll(() => media.cleanup());
 beforeEach(resetNative);
 afterEach(async () => {
   await Promise.all(servers.splice(0).map(server => new Promise<void>(resolve => server.close(() => resolve()))));
 });
+
+function request(itemId = "item", path = media.opus): PlaybackRequest {
+  return { itemId, resource: { kind: "file", path } };
+}
+
+function createPlayer(filters = new FilterRegistry()): {
+  player: DiscordVoicePlayer;
+  connection: FakeConnection;
+  events: PlayerEvent[];
+} {
+  const connection = new FakeConnection();
+  const player = new DiscordVoicePlayer(connection as unknown as VoiceConnection, filters);
+  const events: PlayerEvent[] = [];
+  player.subscribe(event => events.push(event));
+  return { player, connection, events };
+}
 
 describe("local Player", () => {
   it("rejects invalid controls and accepts another track after stop", async () => {
@@ -52,13 +53,82 @@ describe("local Player", () => {
     expect(latest.player.state.status).toBe(AudioPlayerStatus.Paused);
     await player.resume();
     expect(latest.player.state.status).toBe(AudioPlayerStatus.Playing);
+    const first = latest.resource.input;
     await player.stopTrack();
     expect(events).toEqual([]);
+    expect(first.destroyed).toBe(true);
 
     await player.play(request("second"));
     expect(latest.player.play).toHaveBeenCalledTimes(2);
     await player.release();
     await expect(player.play(request("after release"))).rejects.toThrow("retired");
+  });
+
+  it("hands Discord the source Opus packets and finishes once after the last one and Idle", async () => {
+    const { player, events } = createPlayer();
+    await player.play(request("A"));
+
+    expect(latest.resource.inputType).toBe(StreamType.Opus);
+    const sent = await take(latest.resource.input, Number.POSITIVE_INFINITY);
+    const source = await sourcePackets(media.opus);
+    expect(sent.every((packet, index) => packet.equals(source[index] as Buffer))).toBe(true);
+    expect(sent).toHaveLength(source.length);
+    expect(player.position).toBeGreaterThan(5.5);
+    expect(events).toEqual([]);
+
+    latest.player.transition({ status: AudioPlayerStatus.Idle });
+    latest.player.transition({ status: AudioPlayerStatus.Idle });
+    await settle();
+    expect(events).toEqual([{ type: "finished", itemId: "A" }]);
+    await player.release();
+  });
+
+  it("fails the item once when Discord stops consuming and goes Idle before the track ends", async () => {
+    const { player, events } = createPlayer();
+    await player.play(request("A", media.hour));
+    await take(latest.resource.input, 5);
+
+    latest.player.transition({ status: AudioPlayerStatus.Idle });
+    latest.player.transition({ status: AudioPlayerStatus.Idle });
+    await settle();
+
+    expect(events).toEqual([
+      { type: "failed", itemId: "A", error: expect.objectContaining({ message: expect.stringContaining("stopped") }) },
+    ]);
+    await player.play(request("B"));
+    expect(latest.player.play).toHaveBeenCalledTimes(2);
+    await player.release();
+  });
+
+  it("fails the item when Discord goes Idle while the final packets of an ended input are unplayed", async () => {
+    const { player, events } = createPlayer();
+    await player.play(request("A"));
+    const source = await sourcePackets(media.opus);
+    await take(latest.resource.input, source.length - 3);
+    await vi.waitFor(() => expect(latest.resource.input.readableLength).toBe(3));
+    await settle();
+
+    latest.player.transition({ status: AudioPlayerStatus.Idle });
+    await settle();
+
+    expect(latest.resource.input.readableEnded).toBe(false);
+    expect(events).toEqual([
+      { type: "failed", itemId: "A", error: expect.objectContaining({ message: expect.stringContaining("stopped") }) },
+    ]);
+    await player.release();
+  });
+
+  it("rejects play when Discord goes Idle before the track started or ended", async () => {
+    native.entersState.mockImplementation(() => new Promise(() => undefined));
+    const { player, events } = createPlayer();
+    const playing = player.play(request("A", media.hour));
+    await vi.waitFor(() => expect(latest.player.play).toHaveBeenCalled());
+
+    latest.player.transition({ status: AudioPlayerStatus.Idle });
+
+    await expect(playing).rejects.toThrow("stopped before the track ended");
+    expect(events).toEqual([]);
+    await player.release();
   });
 
   it("reports a native audio error once without exposing its resource", async () => {
@@ -67,8 +137,7 @@ describe("local Player", () => {
       throw new Error("listener failed");
     });
     await player.play(request("failure"));
-    const resource = latest.resource;
-    const nativeError = audioPlayerError(resource, new Error("native decode failed"));
+    const nativeError = audioPlayerError(latest.resource, new Error("native decode failed"));
 
     latest.player.emit("error", nativeError);
     latest.player.emit("error", nativeError);
@@ -81,118 +150,135 @@ describe("local Player", () => {
     await player.release();
   });
 
-  it("retires on native connection destruction and suppresses later outcomes", async () => {
+  it("retires on native connection destruction, closes the track and suppresses later outcomes", async () => {
     const { player, connection, events } = createPlayer();
     await player.play(request("lost"));
-    const child = latest.child;
+    const input = latest.resource.input;
 
     connection.transition({ status: "destroyed" });
     expect(events).toMatchObject([{ type: "failed", itemId: "lost", terminal: true }]);
-    expect(child.kill).toHaveBeenCalledWith("SIGKILL");
     await player.release();
-    child.close(0, null);
+    expect(input.destroyed).toBe(true);
     latest.player.transition({ status: AudioPlayerStatus.Idle });
+    await settle();
     expect(events).toHaveLength(1);
   });
 
-  it("starts a file track, applies volume and preserves item correlation", async () => {
-    const { player, connection, events } = createPlayer();
-    await player.setVolume(40);
-    await player.play(request("A"));
+  it("reports one failure with a safe cause when the stream input fails after start", async () => {
+    const { player, events } = createPlayer();
+    const stream = new PassThrough();
+    stream.write((await readFile(media.hour)).subarray(0, 400_000));
+    await player.play({ itemId: "stream", resource: { kind: "stream", stream } });
+    await take(latest.resource.input, 5);
 
-    expect(connection.subscribe).toHaveBeenCalledWith(latest.player);
-    expect(latest.spawn).toEqual(expect.arrayContaining(["-i", FILE, "-f", "s16le", "-ar", "48000", "-ac", "2"]));
-    expect(latest.resource.volume.level).toBe(0.4);
-    latest.resource.playbackDuration = 4000;
-    expect(player.position).toBe(4);
+    stream.destroy(new Error("socket reset at /private/audio.webm"));
+    await take(latest.resource.input, Number.POSITIVE_INFINITY);
+    await vi.waitFor(() => expect(events).toHaveLength(1));
 
-    latest.child.close(0, null);
-    latest.player.transition({ status: AudioPlayerStatus.Idle });
-    await settle();
-    expect(events).toEqual([{ type: "finished", itemId: "A" }]);
+    expect(events[0]).toMatchObject({ type: "failed", itemId: "stream" });
+    expect((events[0] as { error: Error }).error.message).not.toContain("/private/audio.webm");
+    await player.release();
   });
 
-  it("keeps pause, volume and filters across a file seek without a new track event", async () => {
+  it("keeps pause, volume, filters and the native resource across a seek without a track event", async () => {
     const { player, events } = createPlayer();
     await player.setVolume(40);
     await player.setFilters([{ name: "bassboost", value: 5 }]);
-    await player.play(request());
-    const first = latest.child;
+    await player.play(request("item", media.hour));
+    await take(latest.resource.input, 5);
     await player.pause();
 
     await player.seek(37);
 
-    expect(latest.spawn).toEqual(expect.arrayContaining(["-ss", "37", "-i", FILE, "-af", "bass=g=5"]));
-    expect(latest.resource.volume.level).toBe(0.4);
+    expect(player.position).toBeGreaterThanOrEqual(37);
+    expect(player.position).toBeLessThan(37.1);
     expect(latest.player.state.status).toBe(AudioPlayerStatus.Paused);
-    expect(player.position).toBe(37);
-    first.close(1, null);
-    await settle();
+    expect(native.createAudioResource).toHaveBeenCalledTimes(1);
+    expect(await take(latest.resource.input, 5)).toHaveLength(5);
     expect(events).toEqual([]);
     await player.release();
   });
 
-  it("reopens an explicitly seekable URL and keeps it out of decoder arguments", async () => {
-    let requests = 0;
-    const url = await origin(response => {
-      requests++;
-      response.writeHead(200, { "content-type": "audio/mpeg" });
-      response.end(Buffer.from([1, 2, 3]));
-    });
-    const { player } = createPlayer();
-    await player.play({ itemId: "url", resource: { kind: "url", url, seekable: true } });
-    await player.seek(5);
+  it("keeps the committed chain for the next track when a new chain is rejected", async () => {
+    const { player } = createPlayer(
+      new FilterRegistry({ mute: { render: () => "volume=0" }, broken: { render: () => "nonexistent_filter=1" } }),
+    );
+    await player.play(request("first"));
+    await player.setFilters([{ name: "mute" }]);
 
-    expect(requests).toBe(2);
-    expect(latest.spawn).toEqual(expect.arrayContaining(["-i", "pipe:0", "-ss", "5"]));
-    expect(latest.spawn.join(" ")).not.toContain(url);
+    await expect(player.setFilters([{ name: "broken" }])).rejects.toMatchObject({ code: "INVALID_ARGUMENT" });
+    await player.stopTrack();
+    await player.play(request("second"));
+
+    expect(await peak((await take(latest.resource.input, 52)).slice(2), media.opus)).toBeLessThan(0.001);
     await player.release();
   });
 
-  it("accepts initial filters on a one-shot stream and refuses a later restart before native effects", async () => {
+  it("applies a filter to a running one-shot stream and refuses to seek it before native effects", async () => {
     const { player } = createPlayer();
     const stream = new PassThrough();
-    await player.setFilters([{ name: "echo" }]);
+    stream.write((await readFile(media.hour)).subarray(0, 400_000));
     await player.play({ itemId: "stream", resource: { kind: "stream", stream } });
-    const spawns = native.spawns.length;
-    const handoffs = latest.player.play.mock.calls.length;
+    await take(latest.resource.input, 5);
 
-    expect(latest.spawn).toEqual(expect.arrayContaining(["-af", "aecho=0.8:0.9:1000:0.3"]));
+    await player.setFilters([{ name: "echo" }]);
     await expect(player.seek(2)).rejects.toMatchObject({ code: "UNSUPPORTED" });
-    await expect(player.setFilters([{ name: "earwax" }])).rejects.toMatchObject({ code: "UNSUPPORTED" });
-    expect(native.spawns).toHaveLength(spawns);
-    expect(latest.player.play).toHaveBeenCalledTimes(handoffs);
+
+    expect(await take(latest.resource.input, 20)).toHaveLength(20);
+    expect(latest.player.play).toHaveBeenCalledTimes(1);
+    expect(stream.destroyed).toBe(false);
     await player.release();
     expect(stream.destroyed).toBe(true);
   });
 
-  it("keeps the old render if a replacement cannot produce audio", async () => {
+  it("keeps the old input playing when a seek cannot open its target", async () => {
+    const reader = await fileReader(media.hour, start =>
+      start > 0
+        ? new Readable({
+            read() {
+              this.destroy(new Error("range failed"));
+            },
+          })
+        : undefined,
+    );
     const { player, events } = createPlayer();
-    await player.play(request());
-    const first = latest.child;
-    native.autoAudio = false;
+    await player.play({ itemId: "reader", resource: reader.resource });
+    await take(latest.resource.input, 100);
 
-    const replacing = player.seek(10);
-    await settle();
-    latest.child.close(1, null);
+    await expect(player.seek(20 * 60)).rejects.toThrow();
 
-    await expect(replacing).rejects.toThrow("FFmpeg exited with code 1");
-    expect(first.kill).not.toHaveBeenCalled();
+    expect(player.position).toBeLessThan(3);
+    expect(await take(latest.resource.input, 10)).toHaveLength(10);
     expect(events).toEqual([]);
     await player.release();
   });
 
-  it("fails the existing track once when native handoff fails after replacement begins", async () => {
-    const { player, events } = createPlayer();
-    await player.play(request());
-    latest.player.play.mockImplementationOnce(() => {
-      throw new Error("handoff failed");
+  it("fences a pending seek when the track stops and joins its input", async () => {
+    const stalls: PassThrough[] = [];
+    let stalling = false;
+    const reader = await fileReader(media.hour, start => {
+      if (!stalling || start === 0) return undefined;
+      const stalled = new PassThrough();
+      stalls.push(stalled);
+      return stalled;
     });
+    const { player, events } = createPlayer();
+    await player.play({ itemId: "reader", resource: reader.resource });
+    await take(latest.resource.input, 5);
+    stalling = true;
 
-    await expect(player.seek(10)).rejects.toThrow("handoff failed");
-    expect(events).toEqual([{ type: "failed", itemId: "item", error: expect.any(Error) }]);
-    expect(player.position).toBe(0);
+    const seeking = player.seek(40 * 60).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+    await vi.waitFor(() => expect(stalls.length).toBeGreaterThan(0));
+    await player.stopTrack();
+
+    expect(await seeking).toBeInstanceOf(Error);
     await player.release();
+    expect(latest.player.play).toHaveBeenCalledTimes(1);
+    expect(reader.readables.every(readable => readable.destroyed)).toBe(true);
+    expect(events).toEqual([]);
   });
 
   it("aborts a pending URL before release and joins it without late native playback", async () => {
@@ -201,48 +287,26 @@ describe("local Player", () => {
     const arrived = new Promise<void>(resolve => {
       requested = resolve;
     });
-    const url = await origin(response => {
+    const server = createServer((_request, response) => {
       respond = body => {
         response.writeHead(200);
         response.end(body);
       };
       requested();
     });
+    servers.push(server);
+    await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
+    const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}/audio`;
+    const body = await readFile(media.opus);
     const { player } = createPlayer();
     const playing = player.play({ itemId: "late", resource: { kind: "url", url } });
     await arrived;
 
     const leaving = player.release();
-    respond?.(Buffer.from([1]));
+    respond?.(body);
     await expect(playing).rejects.toThrow();
     await leaving;
-    expect(native.spawn).not.toHaveBeenCalled();
+    expect(native.createAudioResource).not.toHaveBeenCalled();
     expect(latest.player.play).not.toHaveBeenCalled();
-  });
-
-  it("aborts a pending decoder replacement when the track stops", async () => {
-    let count = 0;
-    let requested!: () => void;
-    const secondRequest = new Promise<void>(resolve => {
-      requested = resolve;
-    });
-    const url = await origin(response => {
-      if (++count === 2) {
-        requested();
-        return;
-      }
-      response.writeHead(200);
-      response.end(Buffer.from([1]));
-    });
-    const { player, events } = createPlayer();
-    await player.play({ itemId: "url", resource: { kind: "url", url, seekable: true } });
-    const seeking = player.seek(10);
-    await secondRequest;
-    await player.stopTrack();
-
-    await expect(seeking).rejects.toThrow();
-    expect(latest.player.play).toHaveBeenCalledTimes(1);
-    expect(events).toEqual([]);
-    await player.release();
   });
 });

@@ -1,3 +1,4 @@
+import { type Readable, Transform, type TransformCallback } from "node:stream";
 import type { VoiceConnection } from "eris";
 
 export type NativeCurrent = NonNullable<VoiceConnection["current"]>;
@@ -40,4 +41,32 @@ export function observeStopPlaying(connection: VoiceConnection, observe: StopObs
     active = false;
     if (connection.stopPlaying === wrapped) connection.stopPlaying = original;
   };
+}
+
+/** Eris drains an `opusPackets` source with no backpressure unless it carries the `manualCB` pacing hooks. */
+export function pacedOpusPackets(packets: Readable): Readable {
+  const paced = new PacedOpusPackets();
+  packets.pipe(paced);
+  return paced;
+}
+
+class PacedOpusPackets extends Transform {
+  manualCB = false;
+  #next?: TransformCallback;
+
+  constructor() {
+    super({ objectMode: true, highWaterMark: 1 });
+  }
+
+  override _transform(packet: Buffer, _encoding: BufferEncoding, callback: TransformCallback): void {
+    this.push(packet);
+    if (this.manualCB) this.#next = callback;
+    else callback();
+  }
+
+  transformCB(): void {
+    const next = this.#next;
+    this.#next = undefined;
+    next?.();
+  }
 }

@@ -1,3 +1,4 @@
+import { Readable } from "node:stream";
 import { inspect } from "node:util";
 import { describe, expect, expectTypeOf, it, vi } from "vitest";
 import { DisTube, DisTubeError, type DisTubeQueue, type DisTubeVoice, Song } from "../src";
@@ -59,6 +60,23 @@ describe("minimal integrations", () => {
       await expect(voice.play(resource)).rejects.toMatchObject({ code: "UNSUPPORTED" });
     }
     expect(predicate).not.toHaveBeenCalled();
+    expect(engine.createPlayer).not.toHaveBeenCalled();
+    await client.dispose();
+  });
+
+  it("rejects a reader for an engine that does not accept readers and disposes it once", async () => {
+    const engine = new FakeEngine();
+    const dispose = vi.fn();
+    const read = vi.fn(() => Readable.from([]));
+    const client = new DisTube({ adapter: new FakeAdapter(), sources: [], engine });
+    const voice = await client.voices.join(target);
+
+    await expect(voice.play({ kind: "reader", size: 10, container: "webm", read, dispose })).rejects.toMatchObject({
+      code: "UNSUPPORTED",
+    });
+
+    expect(dispose).toHaveBeenCalledOnce();
+    expect(read).not.toHaveBeenCalled();
     expect(engine.createPlayer).not.toHaveBeenCalled();
     await client.dispose();
   });

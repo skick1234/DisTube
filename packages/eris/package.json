@@ -20,12 +20,15 @@
     }
   },
   "scripts": {
-    "check": "biome check .",
+    "check": "oxlint --deny-warnings && oxfmt --check",
     "type": "tsc --noEmit",
     "test": "vitest run --coverage=false",
     "test:release": "vitest run --coverage",
     "build": "tsdown && bun ../../scripts/sanitize-adapter-output.ts",
     "prepack": "bun run build"
+  },
+  "dependencies": {
+    "node-av": "6.2.0-beta.33"
   },
   "devDependencies": {
     "distube": "workspace:*",

@@ -7,6 +7,8 @@ import { DisTubeError, ErrorCode, malformedValue } from "../errors";
 const URL_RESOURCE_KEYS = new Set(["kind", "url", "headers", "seekable", "dispose"]);
 const FILE_RESOURCE_KEYS = new Set(["kind", "path", "dispose"]);
 const STREAM_RESOURCE_KEYS = new Set(["kind", "stream", "dispose"]);
+const READER_RESOURCE_KEYS = new Set(["kind", "size", "container", "read", "dispose"]);
+const TIMED_RESOURCE_KEYS = new Set(["kind", "container", "open", "dispose"]);
 const ENCODED_RESOURCE_KEYS = new Set(["kind", "format", "encoded", "seekable", "dispose"]);
 const RESOURCE_PREPARATION_KEYS = new Set(["kind", "resource"]);
 const SEARCH_PREPARATION_KEYS = new Set(["kind", "query"]);
@@ -82,6 +84,32 @@ export function validatePlaybackResource(
       stream: record.stream,
       ...(typeof record.dispose === "function" ? { dispose: record.dispose.bind(value) } : {}),
     });
+  } else if (record.kind === "reader") {
+    assertExactKeys(record, READER_RESOURCE_KEYS, "Reader playback resource", code);
+    if (typeof record.size !== "number" || !Number.isSafeInteger(record.size) || record.size <= 0) {
+      throw malformedValue(code, "Reader playback resource size must be a positive safe integer");
+    }
+    const container = validateContainer(record.container, code);
+    if (typeof record.read !== "function") throw malformedValue(code, "Reader playback resource read must be callable");
+    validateDisposer(record.dispose, code);
+    return Object.freeze({
+      kind: "reader",
+      size: record.size,
+      container,
+      read: record.read.bind(value),
+      ...(typeof record.dispose === "function" ? { dispose: record.dispose.bind(value) } : {}),
+    });
+  } else if (record.kind === "timed") {
+    assertExactKeys(record, TIMED_RESOURCE_KEYS, "Timed playback resource", code);
+    const container = validateContainer(record.container, code);
+    if (typeof record.open !== "function") throw malformedValue(code, "Timed playback resource open must be callable");
+    validateDisposer(record.dispose, code);
+    return Object.freeze({
+      kind: "timed",
+      container,
+      open: record.open.bind(value),
+      ...(typeof record.dispose === "function" ? { dispose: record.dispose.bind(value) } : {}),
+    });
   } else if (record.kind === "encoded") {
     assertExactKeys(record, ENCODED_RESOURCE_KEYS, "Encoded playback resource", code);
     if (typeof record.format !== "string" || record.format.length === 0 || record.format !== record.format.trim()) {
@@ -100,7 +128,7 @@ export function validatePlaybackResource(
       ...(typeof record.dispose === "function" ? { dispose: record.dispose.bind(value) } : {}),
     });
   } else {
-    throw malformedValue(code, "Playback resource kind must be url, file, stream, or encoded");
+    throw malformedValue(code, "Playback resource kind must be url, file, stream, reader, timed, or encoded");
   }
 }
 
@@ -175,6 +203,12 @@ function validateSeekable(value: unknown, code: ErrorCode): boolean | undefined 
     throw malformedValue(code, "Playback resource seekable must be a boolean");
   }
   return value as boolean | undefined;
+}
+
+function validateContainer(value: unknown, code: ErrorCode): "webm" | "mp4" {
+  if (value !== "webm" && value !== "mp4")
+    throw malformedValue(code, "Playback resource container must be webm or mp4");
+  return value;
 }
 
 function validateDisposer(value: unknown, code: ErrorCode): void {

@@ -62,25 +62,30 @@ const adapter = new OceanicAdapter(client, {
 `voice.filters.definitions` reports each preset's range, default and label, so a command can build choices from it.
 Filters and volume persist across queue stop and reset when the voice leaves.
 
-The default engine reports `capabilities.seek: true`. Files seek through FFmpeg input seeking. A URL marked
-`seekable: true` reopens its request and decodes to the offset, which can cost time and bandwidth. One-shot streams
-and URLs without that flag reject seek with `UNSUPPORTED`. An active filter change that needs a decoder restart
-also rejects for nonseekable input; initial filters remain available.
+The default engine reports `capabilities.seek: true`. Files, URLs marked `seekable: true`, byte-addressable
+`reader` resources and time-addressable `timed` resources support seek. One-shot streams and URLs without that flag
+reject seek with `UNSUPPORTED`. Seek and filter changes apply in-process without starting a decoder process.
+Filters also work on one-shot streams and nonseekable URLs.
 
 ## Local playback requirements
 
-Use Node 22.12.0 or later. Install FFmpeg and expose `ffmpeg` on `PATH`, or set `FFMPEG_PATH` to its executable.
-Install one Opus encoder: `@discordjs/opus` or `opusscript`.
+Use Node 22.12.0 or later on a host with glibc 2.28 or newer, such as `node:22-slim`, Debian or Ubuntu.
+Alpine and other musl hosts are unsupported. This adapter installs `node-av`, pinned to `6.2.0-beta.33`, as a
+dependency, so nothing extra is needed for decoding. System FFmpeg, `FFMPEG_PATH`, `@discordjs/opus` and
+`opusscript` are no longer needed.
 Install one voice encryption implementation: `sodium-native`, `sodium`, `libsodium-wrappers`,
 `@stablelib/xchacha20poly1305`, or `@noble/ciphers`.
 
-This adapter's default engine accepts `url`, `file` and `stream` playback resources. An `encoded` resource rejects
-with `UNSUPPORTED`; select an engine that declares its format to play it.
+`node-av` bundles FFmpeg built with GPLv3 and runs it in-process. Distributing a bot image or binary carries GPLv3
+obligations. DisTube's packages remain MIT.
 
-Node opens URL bodies with copied headers and refuses redirects, then streams them into FFmpeg without passing the
-URL or credentials as process arguments. FFmpeg also decodes absolute files and submitted readables. HLS/DASH and
-nested network requests from the decoder are unsupported.
+This adapter's default engine accepts `url`, `file`, `stream`, `reader` and `timed` playback resources. An `encoded`
+resource rejects with `UNSUPPORTED`; select an engine that declares its format to play it.
+
+Node opens URL bodies with copied headers and refuses redirects, then feeds the bytes to the in-process decoder.
+The decoder also accepts absolute files, submitted readables, byte-addressable readers and time-addressable inputs.
+HLS/DASH and nested network requests from the decoder are unsupported.
 
 The selected local engine checks these prerequisites when it creates a Player for playback. A gateway-only join
-and an explicitly selected remote engine do not run the local codec or FFmpeg checks. A missing local prerequisite
-rejects playback with `VOICE_FAILED` and names the missing dependency.
+and an explicitly selected remote engine such as Lavalink require none of the local prerequisites and do not run
+their checks. A missing local prerequisite rejects playback with `VOICE_FAILED` and names the missing dependency.

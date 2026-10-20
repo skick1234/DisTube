@@ -1,8 +1,18 @@
 import { Readable } from "node:stream";
-import type { Engine, PlaybackResource } from "../contracts";
+import type { Engine, PlaybackResource, PlaybackResourceKind } from "../contracts";
 import { asError, DisTubeError, type ErrorCode, type ErrorContext } from "../errors";
 import { disposeOnce, settleAll } from "../utils/dispose";
 import { validatePlaybackResource } from "./validation";
+
+const RESOURCE_KINDS: Record<PlaybackResourceKind, true> = {
+  url: true,
+  file: true,
+  stream: true,
+  reader: true,
+  timed: true,
+  encoded: true,
+};
+export const PLAYBACK_RESOURCE_KINDS: ReadonlySet<string> = new Set(Object.keys(RESOURCE_KINDS));
 
 const claimedWrappers = new WeakSet<object>();
 const claimedReadables = new WeakSet<Readable>();
@@ -25,7 +35,7 @@ export function consumePlaybackResource(value: unknown, code: ErrorCode = "INVAL
 export function capturePlaybackResource(value: unknown): OwnedPlaybackResource | undefined {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return undefined;
   const record = value as Readonly<Record<string, unknown>>;
-  if (!new Set(["url", "file", "stream", "encoded"]).has(record.kind as string)) return undefined;
+  if (!PLAYBACK_RESOURCE_KINDS.has(record.kind as string)) return undefined;
   if (typeof record.dispose !== "function") return undefined;
   const stream = record.kind === "stream" && record.stream instanceof Readable ? record.stream : undefined;
   if (claimedWrappers.has(value) || (stream && claimedReadables.has(stream))) return undefined;
@@ -70,7 +80,10 @@ export function resourceErrorContext(resource: PlaybackResource): ErrorContext {
 
 export function isPlaybackResourceSeekable(resource: PlaybackResource): boolean {
   return (
-    resource.kind === "file" || ((resource.kind === "url" || resource.kind === "encoded") && resource.seekable === true)
+    resource.kind === "file" ||
+    resource.kind === "reader" ||
+    resource.kind === "timed" ||
+    ((resource.kind === "url" || resource.kind === "encoded") && resource.seekable === true)
   );
 }
 

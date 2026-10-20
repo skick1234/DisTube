@@ -1,54 +1,86 @@
-import { createServer, type ServerResponse } from "node:http";
+import { createReadStream } from "node:fs";
+import { readFile } from "node:fs/promises";
+import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { PassThrough } from "node:stream";
-import { FilterRegistry } from "@distube/voice-core/core";
-import type { PlaybackRequest, PlayerEvent } from "distube/integrations";
+import { FilterRegistry, Track } from "@distube/voice-core/core";
+import type { PlaybackRequest, PlaybackResource, PlayerEvent } from "distube/integrations";
 import type { VoiceConnection } from "eris";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { createMedia, fileReader, type MediaFixtures, sourcePackets } from "../../voice-core/tests/support/media";
 import { ErisVoicePlayer } from "../src/player";
-import { FakeVoiceConnection, latest, native, resetNative, settle } from "./support/eris";
+import { FakeVoiceConnection } from "./support/eris";
 
-vi.mock("node:child_process", async () => (await import("./support/eris")).childProcessModule());
-
-const FILE = "/tmp/distube-eris-fixture.mp3";
 const servers: ReturnType<typeof createServer>[] = [];
+let media: MediaFixtures;
 
-function request(itemId = "item"): PlaybackRequest {
-  return { itemId, resource: { kind: "file", path: FILE } };
+beforeAll(async () => {
+  media = await createMedia();
+}, 30_000);
+afterAll(() => media.cleanup());
+afterEach(async () => {
+  await Promise.all(servers.splice(0).map(server => new Promise<void>(resolve => server.close(() => resolve()))));
+});
+
+/** Serves `path` over HTTP, answering byte ranges with 206 and recording each request's Range header. */
+async function serve(path: string): Promise<{ url: string; ranges: (string | undefined)[] }> {
+  const body = await readFile(path);
+  const ranges: (string | undefined)[] = [];
+  const server = createServer((incoming, response) => {
+    ranges.push(incoming.headers.range);
+    const match = /^bytes=(\d+)-(\d+)$/.exec(incoming.headers.range ?? "");
+    if (!match) {
+      response.writeHead(200, { "content-length": String(body.length) });
+      response.end(body);
+      return;
+    }
+    const start = Number(match[1]);
+    const end = Math.min(Number(match[2]), body.length - 1);
+    response.writeHead(206, {
+      "content-length": String(end - start + 1),
+      "content-range": `bytes ${start}-${end}/${body.length}`,
+    });
+    response.end(body.subarray(start, end + 1));
+  });
+  servers.push(server);
+  await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
+  return { url: `http://127.0.0.1:${(server.address() as AddressInfo).port}/audio`, ranges };
 }
 
-function createPlayer(): { player: ErisVoicePlayer; connection: FakeVoiceConnection; events: PlayerEvent[] } {
+async function seekable(kind: "file" | "timed" | "seekable url"): Promise<PlaybackResource> {
+  if (kind === "file") return { kind: "file", path: media.hour };
+  if (kind === "timed") return { kind: "timed", container: "webm", open: () => createReadStream(media.hour) };
+  return { kind: "url", url: (await serve(media.hour)).url, seekable: true };
+}
+
+function request(itemId = "item", path = media.opus): PlaybackRequest {
+  return { itemId, resource: { kind: "file", path } };
+}
+
+function createPlayer(filters = new FilterRegistry()): {
+  player: ErisVoicePlayer;
+  connection: FakeVoiceConnection;
+  events: PlayerEvent[];
+} {
   const connection = new FakeVoiceConnection();
-  const player = new ErisVoicePlayer(connection as unknown as VoiceConnection, new FilterRegistry());
+  const player = new ErisVoicePlayer(connection as unknown as VoiceConnection, filters);
   const events: PlayerEvent[] = [];
   player.subscribe(event => events.push(event));
   return { player, connection, events };
 }
 
-async function release(player: ErisVoicePlayer): Promise<void> {
-  const leaving = player.release();
-  for (const child of native.children) if (child.exitCode === null) child.close(null, "SIGKILL");
-  await leaving;
+async function oneShot(): Promise<PassThrough> {
+  const stream = new PassThrough();
+  stream.write((await readFile(media.hour)).subarray(0, 400_000));
+  return stream;
 }
-
-async function origin(respond: (response: ServerResponse, count: number) => void): Promise<string> {
-  let count = 0;
-  const server = createServer((_request, response) => respond(response, ++count));
-  servers.push(server);
-  await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
-  return `http://127.0.0.1:${(server.address() as AddressInfo).port}/audio`;
-}
-
-beforeEach(resetNative);
-afterEach(async () => {
-  await Promise.all(servers.splice(0).map(server => new Promise<void>(resolve => server.close(() => resolve()))));
-});
 
 describe("Eris local Player", () => {
   it("rejects invalid controls and remains reusable after stopping a track", async () => {
     const { player, connection, events } = createPlayer();
     await expect(player.pause()).rejects.toThrow("no active playback");
     await expect(player.resume()).rejects.toThrow("no active playback");
+    await expect(player.seek(-1)).rejects.toMatchObject({ code: "INVALID_ARGUMENT" });
     await expect(player.seek(5)).rejects.toMatchObject({ code: "INVALID_STATE" });
     await expect(player.setVolume(Number.NaN)).rejects.toMatchObject({ code: "INVALID_ARGUMENT" });
     await expect(player.setVolume(-1)).rejects.toMatchObject({ code: "INVALID_ARGUMENT" });
@@ -62,125 +94,317 @@ describe("Eris local Player", () => {
 
     const firstRelease = player.release();
     expect(player.release()).toBe(firstRelease);
-    for (const child of native.children) child.close(null, "SIGKILL");
     await firstRelease;
     await expect(player.play(request("after release"))).rejects.toThrow("retired");
   });
 
-  it("starts a file track and correlates the exact native completion", async () => {
+  it("hands Eris the source Opus packets and finishes once after the last packet and the native stop", async () => {
     const { player, connection, events } = createPlayer();
     await player.play(request("A"));
 
-    expect(connection.play).toHaveBeenCalledWith(latest.child.stdout, {
-      format: "pcm",
-      inlineVolume: true,
+    expect(connection.play).toHaveBeenCalledWith(expect.anything(), {
+      format: "opusPackets",
+      frameDuration: 20,
       voiceDataTimeout: 15_000,
     });
-    expect(latest.spawn).toEqual(expect.arrayContaining(["-i", FILE, "-f", "s16le", "-ar", "48000", "-ac", "2"]));
-    expect(connection.resume).toHaveBeenCalledTimes(1);
-    if (connection.current) connection.current.playTime = 4000;
-    expect(player.position).toBe(4);
+    const sent = await connection.send(Number.POSITIVE_INFINITY);
+    const packets = await sourcePackets(media.opus);
+    expect(sent).toHaveLength(packets.length);
+    expect(sent.every((packet, index) => packet.equals(packets[index] as Buffer))).toBe(true);
+    expect(player.position).toBeGreaterThan(5.5);
 
-    latest.child.close(0, null);
     connection.finishCurrent();
-    await settle();
+    connection.finishCurrent();
     expect(events).toEqual([{ type: "finished", itemId: "A" }]);
+    await player.release();
+  });
+
+  it("reports the time of the last packet Eris sent, not of the packets it queued", async () => {
+    const { player, connection } = createPlayer();
+    await player.play(request("A", media.hour));
+
+    await connection.send(500);
+    await connection.queue(30);
+
+    expect(player.position).toBeGreaterThanOrEqual(9.9);
+    expect(player.position).toBeLessThanOrEqual(10.1);
+    await player.release();
+  });
+
+  it("seeks to the start while Eris still sends the final packets, without a track event", async () => {
+    const { player, connection, events } = createPlayer();
+    const packets = await sourcePackets(media.opus);
+    await player.play(request("A"));
+    await connection.send(packets.length - 10);
+    await connection.queue(10);
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    await player.seek(0);
+
+    expect(events).toEqual([]);
+    expect(player.position).toBeLessThan(1);
+    expect(await connection.send(Number.POSITIVE_INFINITY)).toHaveLength(packets.length + 10);
+    connection.finishCurrent();
+    expect(events).toEqual([{ type: "finished", itemId: "A" }]);
+    await player.release();
+  });
+
+  it("rejects a filter chain the Track cannot build and keeps the committed one", async () => {
+    const filters = new FilterRegistry({ broken: { render: () => "nonexistent_filter=1" } });
+    const control = createPlayer(filters);
+    const subject = createPlayer(filters);
+    await control.player.setFilters([{ name: "echo" }]);
+    await subject.player.setFilters([{ name: "echo" }]);
+    await subject.player.play(request("A"));
+    await subject.connection.send(5);
+
+    await expect(subject.player.setFilters([{ name: "broken" }])).rejects.toMatchObject({ code: "INVALID_ARGUMENT" });
+
+    await subject.player.stopTrack();
+    await subject.player.play(request("B"));
+    await control.player.play(request("B"));
+    const echoed = await control.connection.send(40);
+    expect(await subject.connection.send(40)).toEqual(echoed);
+    expect(subject.events).toEqual([]);
+    await control.player.release();
+    await subject.player.release();
+  });
+
+  it("applies volume to the running track without replaying its input", async () => {
+    const { player, connection } = createPlayer();
+    await player.play(request());
+    const packets = await sourcePackets(media.opus);
+    const before = await connection.send(10);
+
+    await player.setVolume(50);
+
+    const after = await connection.send(40);
+    expect(before.every((packet, index) => packet.equals(packets[index] as Buffer))).toBe(true);
+    expect(after.some((packet, index) => !packet.equals(packets[index + 10] as Buffer))).toBe(true);
+    expect(connection.play).toHaveBeenCalledTimes(1);
+    await player.release();
+  });
+
+  it("fails the track once when Eris gives it up before its input ended", async () => {
+    const { player, connection, events } = createPlayer();
+    await player.play(request("A", media.hour));
+    await connection.send(5);
+
+    connection.finishCurrent();
+
+    expect(events).toMatchObject([{ type: "failed", itemId: "A", error: expect.any(Error) }]);
+    expect(player.position).toBe(0);
+    await player.release();
   });
 
   it("does not finish a track when Eris stops it while the connection is tearing down", async () => {
     const { player, connection, events } = createPlayer();
     await player.play(request("A"));
+    await connection.send(Number.POSITIVE_INFINITY);
 
-    latest.child.close(0, null);
     connection.ready = false;
     connection.finishCurrent();
-    await settle();
+
     expect(events).toEqual([]);
-    await release(player);
+    await player.release();
   });
 
-  it("keeps pause, volume and filters across a file seek", async () => {
+  it.each([
+    {
+      refusal: "throws from play",
+      refuse: () => {
+        throw new Error("Not ready yet");
+      },
+      error: "Not ready yet",
+    },
+    { refusal: "refuses the source", refuse: () => undefined, error: "could not start the track" },
+  ])("rejects play and closes the input when Eris $refusal", async ({ refuse, error }) => {
     const { player, connection, events } = createPlayer();
-    await player.setVolume(40);
-    await player.setFilters([{ name: "bassboost", value: 5 }]);
+    const stream = await oneShot();
+    connection.play.mockImplementationOnce(refuse);
+
+    await expect(player.play({ itemId: "refused", resource: { kind: "stream", stream } })).rejects.toThrow(error);
+
+    await vi.waitFor(() => expect(stream.destroyed).toBe(true));
+    expect(events).toEqual([]);
+    await player.play(request("next"));
+    await player.release();
+  });
+
+  it("closes a Track whose open finishes after the track was stopped and never hands it to Eris", async () => {
+    const { player, connection, events } = createPlayer();
+    const open = Track.open.bind(Track);
+    let opened: Track | undefined;
+    let proceed!: () => void;
+    const gate = new Promise<void>(resolve => {
+      proceed = resolve;
+    });
+    vi.spyOn(Track, "open").mockImplementationOnce(async (...args) => {
+      opened = await open(...args);
+      await gate;
+      return opened;
+    });
+    const playing = player.play(request());
+    await vi.waitFor(() => expect(opened).toBeDefined());
+
+    await player.stopTrack();
+    proceed();
+
+    await expect(playing).rejects.toThrow("superseded");
+    expect(opened?.packets.destroyed).toBe(true);
+    expect(connection.play).not.toHaveBeenCalled();
+    expect(events).toEqual([]);
+    vi.restoreAllMocks();
+    await player.play(request("next"));
+    await player.release();
+  });
+
+  it("reapplies pause intent when the next track is handed to Eris", async () => {
+    const { player, connection } = createPlayer();
+    await player.play(request("A"));
+    await player.pause();
+    await player.stopTrack();
+
+    await player.play(request("B"));
+
+    expect(connection.play).toHaveBeenCalledTimes(2);
+    expect(connection.pause.mock.invocationCallOrder.at(-1)).toBeGreaterThan(
+      connection.play.mock.invocationCallOrder.at(-1) ?? Number.POSITIVE_INFINITY,
+    );
+    await player.release();
+  });
+
+  it("resumes Eris only from a paused intent", async () => {
+    const { player, connection } = createPlayer();
     await player.play(request());
-    const first = latest.child;
+
+    await player.resume();
+    expect(connection.resume).not.toHaveBeenCalled();
+    await player.pause();
+    await player.resume();
+
+    expect(connection.resume).toHaveBeenCalledTimes(1);
+    expect(connection.paused).toBe(false);
+    await player.release();
+  });
+
+  it("reapplies pause intent after Eris resumes on reconnect", async () => {
+    const { player, connection } = createPlayer();
+    await player.play(request());
+    await player.pause();
+
+    connection.reconnect();
+    await Promise.resolve();
+
+    expect(connection.paused).toBe(true);
+    await player.release();
+  });
+
+  it("ignores a late native stop for a replaced track", async () => {
+    const { player, connection, events } = createPlayer();
+    await player.play(request("A", media.hour));
+    const replaced = connection.current;
+    await player.stopTrack();
+    await player.play(request("B", media.hour));
+
+    connection.current = replaced;
+    connection.finishCurrent();
+
+    expect(events).toEqual([]);
+    await expect(player.play(request("C"))).rejects.toThrow("already has active playback");
+    await player.release();
+  });
+
+  it.each([
+    ["file", "volume"],
+    ["file", "filters"],
+    ["timed", "volume"],
+    ["timed", "filters"],
+    ["seekable url", "volume"],
+    ["seekable url", "filters"],
+  ] as const)("keeps pause and %s %s across a paused seek without a track event", async (kind, setting) => {
+    const { player, connection, events } = createPlayer();
+    const passthrough = new Set((await sourcePackets(media.hour)).map(packet => packet.toString("hex")));
+    if (setting === "volume") await player.setVolume(40);
+    else await player.setFilters([{ name: "bassboost", value: 5 }]);
+    await player.play({ itemId: "item", resource: await seekable(kind) });
+    await connection.send(5);
     await player.pause();
 
     await player.seek(37);
 
-    expect(latest.spawn).toEqual(expect.arrayContaining(["-ss", "37", "-i", FILE, "-af", "bass=g=5"]));
-    expect(connection.setVolume).toHaveBeenLastCalledWith(0.4);
+    expect(player.position).toBeGreaterThanOrEqual(37);
+    expect(player.position).toBeLessThan(37.1);
     expect(connection.paused).toBe(true);
-    expect(player.position).toBe(37);
-    first.close(1, null);
-    await settle();
-    expect(events).toEqual([]);
-    await release(player);
-  });
-
-  it("reopens a seekable URL while keeping its address out of FFmpeg arguments", async () => {
-    let requests = 0;
-    const url = await origin(response => {
-      requests++;
-      response.writeHead(200);
-      response.end(Buffer.from([1, 2, 3]));
-    });
-    const { player } = createPlayer();
-    await player.play({ itemId: "url", resource: { kind: "url", url, seekable: true } });
-    await player.seek(5);
-
-    expect(requests).toBe(2);
-    expect(latest.spawn).toEqual(expect.arrayContaining(["-i", "pipe:0", "-ss", "5"]));
-    expect(latest.spawn.join(" ")).not.toContain(url);
-    await release(player);
-  });
-
-  it("applies initial filters to a one-shot stream and refuses restart controls", async () => {
-    const { player, connection } = createPlayer();
-    const stream = new PassThrough();
-    await player.setFilters([{ name: "echo" }]);
-    await player.play({ itemId: "stream", resource: { kind: "stream", stream } });
-    const handoffs = connection.play.mock.calls.length;
-    const spawns = native.spawns.length;
-
-    expect(latest.spawn).toEqual(expect.arrayContaining(["-af", "aecho=0.8:0.9:1000:0.3"]));
-    await expect(player.seek(2)).rejects.toMatchObject({ code: "UNSUPPORTED" });
-    await expect(player.setFilters([{ name: "earwax" }])).rejects.toMatchObject({ code: "UNSUPPORTED" });
-    expect(connection.play).toHaveBeenCalledTimes(handoffs);
-    expect(native.spawns).toHaveLength(spawns);
-    await release(player);
-    expect(stream.destroyed).toBe(true);
-  });
-
-  it("keeps the old render when candidate PCM never arrives", async () => {
-    const { player, connection, events } = createPlayer();
-    await player.play(request());
-    const first = latest.child;
-    native.autoAudio = false;
-
-    const seeking = player.seek(10);
-    await settle();
-    latest.child.close(1, null);
-
-    await expect(seeking).rejects.toThrow("FFmpeg exited with code 1");
-    expect(first.kill).not.toHaveBeenCalled();
+    expect(connection.resume).not.toHaveBeenCalled();
     expect(connection.play).toHaveBeenCalledTimes(1);
+    const after = await connection.send(30);
+    expect(after).toHaveLength(30);
+    expect(after.every(packet => !passthrough.has(packet.toString("hex")))).toBe(true);
     expect(events).toEqual([]);
-    await release(player);
+    await player.release();
   });
 
-  it("fails the existing track once after an irreversible native handoff failure", async () => {
+  it.each(["stream", "live url"] as const)("refuses to seek a %s before native effects", async kind => {
     const { player, connection, events } = createPlayer();
-    await player.play(request());
-    connection.play.mockImplementationOnce(() => {
-      throw new Error("handoff failed");
-    });
+    const stream = await oneShot();
+    const origin = await serve(media.hour);
+    const resource: PlaybackResource =
+      kind === "stream" ? { kind: "stream", stream } : { kind: "url", url: origin.url };
+    await player.play({ itemId: "item", resource });
+    await connection.send(5);
+    const requests = origin.ranges.length;
 
-    await expect(player.seek(10)).rejects.toThrow("handoff failed");
-    expect(events).toEqual([{ type: "failed", itemId: "item", error: expect.any(Error) }]);
-    expect(player.position).toBe(0);
-    await release(player);
+    await expect(player.seek(2)).rejects.toMatchObject({ code: "UNSUPPORTED" });
+
+    expect(await connection.send(20)).toHaveLength(20);
+    expect(origin.ranges).toHaveLength(requests);
+    expect(connection.play).toHaveBeenCalledTimes(1);
+    expect(stream.destroyed).toBe(false);
+    expect(events).toEqual([]);
+    await player.release();
+  });
+
+  it("applies a filter change to a running one-shot stream without replaying it", async () => {
+    const control = createPlayer();
+    const filtered = createPlayer();
+    for (const { player } of [control, filtered]) {
+      await player.setVolume(50);
+      await player.play({ itemId: "stream", resource: { kind: "stream", stream: await oneShot() } });
+    }
+    await control.connection.send(20);
+    await filtered.connection.send(20);
+
+    await filtered.player.setFilters([{ name: "echo" }]);
+
+    const plain = await control.connection.send(40);
+    const echoed = await filtered.connection.send(40);
+    expect(echoed).toHaveLength(40);
+    expect(echoed.some((packet, index) => !packet.equals(plain[index] as Buffer))).toBe(true);
+    expect(filtered.connection.play).toHaveBeenCalledTimes(1);
+    expect(filtered.events).toEqual([]);
+    await control.player.release();
+    await filtered.player.release();
+  });
+
+  it("fences a pending seek when the track stops and joins its input", async () => {
+    let seeking = false;
+    const stalled = new PassThrough();
+    const reader = await fileReader(media.hour, () => (seeking ? stalled : undefined));
+    const { player, connection, events } = createPlayer();
+    await player.play({ itemId: "reader", resource: reader.resource });
+    await connection.send(5);
+
+    seeking = true;
+    const pending = player.seek(40 * 60);
+    await vi.waitFor(() => expect(reader.readables).toContain(stalled));
+    await player.stopTrack();
+
+    await expect(pending).rejects.toThrow();
+    await player.release();
+    expect(connection.play).toHaveBeenCalledTimes(1);
+    expect(reader.readables.every(readable => readable.destroyed)).toBe(true);
+    expect(events).toEqual([]);
   });
 
   it("joins a pending URL on release without starting late playback", async () => {
@@ -189,48 +413,25 @@ describe("Eris local Player", () => {
     const arrived = new Promise<void>(resolve => {
       requested = resolve;
     });
-    const url = await origin(response => {
+    const server = createServer((_request, response) => {
       respond = body => {
         response.writeHead(200);
         response.end(body);
       };
       requested();
     });
+    servers.push(server);
+    await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
+    const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}/audio`;
+    const body = await readFile(media.opus);
     const { player, connection } = createPlayer();
     const playing = player.play({ itemId: "late", resource: { kind: "url", url } });
     await arrived;
 
     const leaving = player.release();
-    respond?.(Buffer.from([1]));
+    respond?.(body);
     await expect(playing).rejects.toThrow();
     await leaving;
-    expect(native.spawn).not.toHaveBeenCalled();
     expect(connection.play).not.toHaveBeenCalled();
-  });
-
-  it("stops during a URL decoder replacement and suppresses late handoff", async () => {
-    let count = 0;
-    let requested!: () => void;
-    const secondRequest = new Promise<void>(resolve => {
-      requested = resolve;
-    });
-    const url = await origin(response => {
-      if (++count === 2) {
-        requested();
-        return;
-      }
-      response.writeHead(200);
-      response.end(Buffer.from([1]));
-    });
-    const { player, connection, events } = createPlayer();
-    await player.play({ itemId: "url", resource: { kind: "url", url, seekable: true } });
-    const seeking = player.seek(10);
-    await secondRequest;
-    await player.stopTrack();
-
-    await expect(seeking).rejects.toThrow();
-    expect(connection.play).toHaveBeenCalledTimes(1);
-    expect(events).toEqual([]);
-    await release(player);
   });
 });

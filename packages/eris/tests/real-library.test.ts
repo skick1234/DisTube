@@ -1,12 +1,13 @@
 import { FilterRegistry } from "@distube/voice-core/core";
-import type { VoiceSessionEvent } from "distube/integrations";
+import type { PlayerEvent, VoiceSessionEvent } from "distube/integrations";
 import { Client, VoiceConnection } from "eris";
 import { afterAll, describe, expect, it, vi } from "vitest";
+import { createMedia, fileReader, type MediaFixtures } from "../../voice-core/tests/support/media";
 import { type AudioOrigin, serveAudio } from "../../voice-core/tests/support/real";
 import { ErisVoicePlayer } from "../src/player";
 import { ErisVoiceSession, suppressTransportVoiceState } from "../src/session";
 
-// Nothing is mocked here: the real Eris Client and VoiceConnection, the real ffmpeg binary, and a real
+// Nothing is mocked here: the real Eris Client and VoiceConnection, the real node-av binding, and a real
 // HTTP origin. The mocked suites prove our logic; this one proves Eris still behaves the way it assumes.
 
 const GUILD = "real-guild";
@@ -14,7 +15,8 @@ const CHANNEL = "real-channel";
 const GATEWAY = { channelId: CHANNEL, sessionId: "real-session", token: "real-token", endpoint: "voice.real.example" };
 
 const origin: AudioOrigin = await serveAudio();
-afterAll(() => origin.stop());
+const media: MediaFixtures = await createMedia();
+afterAll(() => Promise.all([origin.stop(), media.cleanup()]));
 
 /** A real Eris Client with a bot identity but no gateway, which is all the session reads off it. */
 function realClient(): Client {
@@ -29,6 +31,15 @@ function realConnection(): VoiceConnection {
     shard: { sendWS: () => undefined },
     opusOnly: true,
   } as unknown as ConstructorParameters<typeof VoiceConnection>[1]);
+}
+
+/** A real connection past its handshake, whose sent audio frames land in `frames` instead of a UDP socket. */
+function readyConnection(): { connection: VoiceConnection; frames: Buffer[] } {
+  const connection = realConnection();
+  const frames: Buffer[] = [];
+  Reflect.set(connection, "ready", true);
+  Reflect.set(connection, "sendAudioFrame", (frame: Buffer) => frames.push(frame));
+  return { connection, frames };
 }
 
 describe("real Eris", () => {
@@ -128,18 +139,47 @@ describe("real Eris", () => {
     });
   });
 
-  it("decodes with real ffmpeg and surfaces Eris's own refusal on a connection that is not ready", async () => {
+  it("decodes with node-av and surfaces Eris's own refusal on a connection that is not ready", async () => {
     const connection = realConnection();
     const player = new ErisVoicePlayer(connection, new FilterRegistry());
     try {
-      // Real ffmpeg decodes the real HTTP origin; real Eris then refuses the hand-off, and that refusal
-      // reaches core instead of a started item over silence.
       await expect(
         player.play({ itemId: "item", resource: { kind: "url", url: origin.url, dispose: () => undefined } }),
       ).rejects.toThrow("Not ready yet");
 
       expect(connection.playing).toBe(false);
       expect(player.position).toBe(0);
+    } finally {
+      await player.release();
+    }
+  });
+
+  it("plays a short track to one natural completion", async () => {
+    const { connection, frames } = readyConnection();
+    const player = new ErisVoicePlayer(connection, new FilterRegistry());
+    const events: PlayerEvent[] = [];
+    player.subscribe(event => events.push(event));
+    try {
+      await player.play({ itemId: "item", resource: { kind: "url", url: origin.url, dispose: () => undefined } });
+
+      await vi.waitFor(() => expect(events).toEqual([{ type: "finished", itemId: "item" }]), { timeout: 5000 });
+      expect(frames.length).toBeGreaterThanOrEqual(50);
+      expect(connection.playing).toBe(false);
+    } finally {
+      await player.release();
+    }
+  });
+
+  it("reads a long track at Eris's pace and reports the time Eris has sent", async () => {
+    const { connection, frames } = readyConnection();
+    const player = new ErisVoicePlayer(connection, new FilterRegistry());
+    const reader = await fileReader(media.hour);
+    try {
+      await player.play({ itemId: "item", resource: reader.resource });
+
+      await vi.waitFor(() => expect(frames.length).toBeGreaterThanOrEqual(75), { timeout: 5000 });
+      expect(Math.abs(player.position - frames.length * 0.02)).toBeLessThan(0.1);
+      expect(reader.delivered).toBeLessThan(2_000_000);
     } finally {
       await player.release();
     }

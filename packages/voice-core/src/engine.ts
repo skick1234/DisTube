@@ -1,7 +1,7 @@
 import type { Engine, FilterDefinitionInfo, PlaybackResource, Player, VoiceSession } from "distube/integrations";
 import { type FfmpegFilterDefinitions, FilterRegistry } from "./filters";
 import { DiscordVoicePlayer } from "./player";
-import { createPrerequisiteCheck, DISCORD_ENCRYPTION_MODULES, DISCORD_OPUS_MODULES } from "./prerequisites";
+import { createPrerequisiteCheck, DISCORD_ENCRYPTION_MODULES } from "./prerequisites";
 import { DiscordVoiceSession } from "./session";
 
 /** Named when nothing else claims the engine, since this package's own name never reaches published output. */
@@ -19,24 +19,20 @@ const preflights = new Map<string, () => Promise<void>>();
 export function discordPreflight(owner: string): () => Promise<void> {
   const existing = preflights.get(owner);
   if (existing) return existing;
-  const check = createPrerequisiteCheck({
-    owner,
-    encryption: DISCORD_ENCRYPTION_MODULES,
-    opus: DISCORD_OPUS_MODULES,
-  });
+  const check = createPrerequisiteCheck({ owner, encryption: DISCORD_ENCRYPTION_MODULES });
   preflights.set(owner, check);
   return check;
 }
 
 /**
- * The package's default voice engine: ffmpeg decoding and filtering over the platform voice connection.
+ * The package's default voice engine: in-process decoding and filtering over the platform voice connection.
  *
- * It plays local URL, file and stream resources and creates one Player per attached transport.
+ * It plays local URL, file, stream, reader and timed resources and creates one Player per attached transport.
  */
 export class DiscordVoiceEngine implements Engine {
-  /** ffmpeg decodes local input; a provider-encoded track means nothing to it. */
-  readonly accepts: ReadonlySet<PlaybackResource["kind"]> = new Set(["url", "file", "stream"]);
-  /** Seekable files and URLs restart a decoder at the requested position. */
+  /** libav decodes local input; a provider-encoded track means nothing to it. */
+  readonly accepts: ReadonlySet<PlaybackResource["kind"]> = new Set(["url", "file", "stream", "reader", "timed"]);
+  /** Files, seekable URLs, readers and timed resources open a second input at the requested position. */
   readonly capabilities = Object.freeze({ seek: true });
   readonly filters: ReadonlyMap<string, FilterDefinitionInfo>;
   readonly #filters: FilterRegistry;

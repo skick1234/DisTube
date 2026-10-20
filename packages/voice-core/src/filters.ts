@@ -2,8 +2,7 @@ import { DisTubeError } from "distube";
 import type { FilterDefinition, FilterDefinitionInfo, FilterDefinitions, FilterEntry } from "distube/integrations";
 
 /**
- * One preset for an ffmpeg engine: `render` returns a plain libavfilter graph fragment (never CLI
- * arguments). A definition with none of `default`, `min` or `max` is fixed and takes no value.
+ * One preset for a local engine: `render` returns a plain libavfilter graph fragment. A definition with none of `default`, `min` or `max` is fixed and takes no value.
  */
 export type FfmpegFilterDefinition = FilterDefinition<string>;
 
@@ -43,7 +42,7 @@ function fixed(fragment: string): FfmpegFilterDefinition {
  * The engine's preset registry: built-in defaults with construction-time definitions merged over them.
  *
  * Core keeps filters named and ordered; this side owns what each name means, which values it takes,
- * and how the set folds into the one `-af` chain ffmpeg accepts.
+ * and how the set folds into one libavfilter chain.
  */
 export class FilterRegistry {
   readonly #definitions = new Map<string, FfmpegFilterDefinition>();
@@ -57,7 +56,7 @@ export class FilterRegistry {
     this.definitions = new Map([...this.#definitions].map(([name, definition]) => [name, info(name, definition)]));
   }
 
-  /** Folds the ordered set into one ffmpeg filter chain, or `undefined` when nothing is active. */
+  /** Folds the ordered set into one libavfilter chain, or `undefined` when nothing is active. */
   render(entries: readonly FilterEntry[]): string | undefined {
     const fragments = entries.map(entry => this.#fragment(entry)).filter(fragment => fragment.length > 0);
     return fragments.length > 0 ? fragments.join(",") : undefined;
@@ -70,7 +69,7 @@ export class FilterRegistry {
     }
     const fragment = definition.render(resolveValue(entry, definition));
     if (typeof fragment !== "string") {
-      throw new DisTubeError("INVALID_ARGUMENT", `Filter ${entry.name} must render an ffmpeg fragment`);
+      throw new DisTubeError("INVALID_ARGUMENT", `Filter ${entry.name} must render a libavfilter fragment`);
     }
     return fragment.trim();
   }

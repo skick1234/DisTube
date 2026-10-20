@@ -23,9 +23,11 @@ import type {
   Player,
   PlayerEvent,
   PluginContext,
+  ReaderPlaybackResource,
   SourceOperationOptions,
   SourcePlugin,
   StreamPlaybackResource,
+  TimedPlaybackResource,
   UrlPlaybackResource,
   VoiceSession,
   VoiceSessionEvent,
@@ -233,6 +235,18 @@ const mixed: EncodedPlaybackResource = {
 };
 // @ts-expect-error streams are one-shot and do not advertise seeking
 const seekableStream: StreamPlaybackResource = { kind: "stream", stream: audio, seekable: true };
+const reader: ReaderPlaybackResource = { kind: "reader", size: 1000, container: "webm", read: () => audio };
+const timed: TimedPlaybackResource = { kind: "timed", container: "mp4", open: () => audio };
+const seekableRequests: readonly PlaybackRequest[] = [
+  { itemId: "reader", resource: reader },
+  { itemId: "timed", resource: timed },
+];
+// @ts-expect-error reader containers are limited to webm and mp4
+const oggReader: ReaderPlaybackResource = { kind: "reader", size: 1, container: "ogg", read: () => audio };
+// @ts-expect-error a reader needs its byte size
+const sizelessReader: ReaderPlaybackResource = { kind: "reader", container: "webm", read: () => audio };
+// @ts-expect-error a timed resource opens at a time and has no byte reader
+const readingTimed: TimedPlaybackResource = { kind: "timed", container: "webm", open: () => audio, read: () => audio };
 // @ts-expect-error Song cannot carry a playback resource
 new Song({ id: "leak", name: "Leak", url: "https://provider.example/leak", duration: 1, source: "source", resource });
 // @ts-expect-error QueueItem cannot carry a playback resource
@@ -287,6 +301,10 @@ void [
   missingEncodedFormat,
   mixed,
   seekableStream,
+  seekableRequests,
+  oggReader,
+  sizelessReader,
+  readingTimed,
   idleTerminal,
   session,
   engine,

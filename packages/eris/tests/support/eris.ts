@@ -1,5 +1,5 @@
 import { EventEmitter } from "node:events";
-import { PassThrough } from "node:stream";
+import type { Readable } from "node:stream";
 import type { Client } from "eris";
 import { vi } from "vitest";
 
@@ -7,18 +7,22 @@ export const GUILD = "guild";
 export const CHANNEL = "channel";
 export const GATEWAY = { channelId: CHANNEL, sessionId: "session", token: "token", endpoint: "voice.example" };
 
-/** An Eris voice connection: playing, pausing, and the elapsed clock all follow its own calls. */
+/** An Eris voice connection: playing and pausing follow its own calls, and a stop destroys its source. */
 export class FakeVoiceConnection extends EventEmitter {
   channelID: string | null = CHANNEL;
   playing = false;
   paused = false;
   ready = true;
   current: { playTime: number } | undefined;
-  readonly play = vi.fn((_source: unknown, _options?: unknown) => {
+  /** The stream Eris would read Opus packets from. */
+  source: Readable | undefined;
+  readonly play = vi.fn((source: Readable, _options?: unknown) => {
+    this.source = source;
     this.playing = true;
     this.current = { playTime: 0 };
   });
   stopPlaying = vi.fn(() => {
+    this.source?.destroy();
     this.playing = false;
     this.current = undefined;
   });
@@ -28,71 +32,61 @@ export class FakeVoiceConnection extends EventEmitter {
   readonly resume = vi.fn(() => {
     this.paused = false;
   });
-  readonly setVolume = vi.fn((_level: number) => undefined);
+
+  readonly #queue: Buffer[] = [];
+
+  /** Eris's send loop: sends its queued packets, then the source's, adding 20 ms of `playTime` for each. */
+  async send(count: number): Promise<Buffer[]> {
+    const sent = this.#queue.splice(0, count);
+    const current = this.current;
+    if (current) current.playTime += sent.length * 20;
+    sent.push(
+      ...(await this.#read(count - sent.length, () => {
+        if (current) current.playTime += 20;
+      })),
+    );
+    return sent;
+  }
+
+  /** Eris's read-ahead: moves packets from the source into its queue without sending them. */
+  async queue(count: number): Promise<void> {
+    this.#queue.push(...(await this.#read(count)));
+  }
+
+  async #read(count: number, onPacket?: () => void): Promise<Buffer[]> {
+    const packets: Buffer[] = [];
+    const source = this.source;
+    if (!source) return packets;
+    while (packets.length < count) {
+      const packet: unknown = source.read();
+      if (Buffer.isBuffer(packet)) {
+        packets.push(packet);
+        onPacket?.();
+        continue;
+      }
+      if (source.readableEnded || source.destroyed) break;
+      await new Promise<void>(resolve => {
+        const done = (): void => {
+          for (const event of ["readable", "end", "close"]) source.off(event, done);
+          resolve();
+        };
+        for (const event of ["readable", "end", "close"]) source.on(event, done);
+      });
+    }
+    return packets;
+  }
+
+  /** Eris's reconnect handshake: ready, then an unconditional resume. */
+  reconnect(): void {
+    this.ready = true;
+    this.emit("ready");
+    this.resume();
+  }
 
   /** A real completion reaches the Player through its temporary stopPlaying wrapper. */
   finishCurrent(): void {
     this.stopPlaying();
   }
-}
-
-/** A package-owned FFmpeg child whose lifecycle tests drive without a real process. */
-export class FakeChild extends EventEmitter {
-  readonly stdin = new PassThrough();
-  readonly stdout = new PassThrough();
-  readonly stderr = new PassThrough();
-  exitCode: number | null = null;
-  signalCode: string | null = null;
-  /** Records the kill request. Tests must explicitly emit close to settle the decoder outcome. */
-  readonly kill = vi.fn((signal: string) => {
-    this.signalCode = signal;
-    return true;
-  });
-
-  close(code: number | null = this.exitCode, signal: string | null = this.signalCode): void {
-    this.exitCode = code;
-    this.signalCode = signal;
-    this.emit("close", code, signal);
-  }
-}
-
-export const native = {
-  children: [] as FakeChild[],
-  spawns: [] as string[][],
-  autoAudio: true,
-  spawn: vi.fn((_command: string, args: string[]) => {
-    native.spawns.push(args);
-    const child = new FakeChild();
-    native.children.push(child);
-    if (native.autoAudio) queueMicrotask(() => child.stdout.write(Buffer.from([0])));
-    return child;
-  }),
-};
-
-export const latest = {
-  get child(): FakeChild {
-    return native.children.at(-1) as FakeChild;
-  },
-  get spawn(): string[] {
-    return native.spawns.at(-1) as string[];
-  },
-};
-
-/** Completes the exact stream that currently belongs to this fake connection. */
-export function finishCurrent(connection: FakeVoiceConnection): void {
-  connection.finishCurrent();
-}
-
-export function resetNative(): void {
-  vi.resetAllMocks();
-  native.children.length = 0;
-  native.spawns.length = 0;
-  native.autoAudio = true;
-}
-
-export async function childProcessModule(): Promise<unknown> {
-  const actual = await vi.importActual<Record<string, unknown>>("node:child_process");
-  return { ...actual, spawn: native.spawn };
 }
 
 /** A voice channel as the adapter's validation reads it: joinable, and owned by a guild. */

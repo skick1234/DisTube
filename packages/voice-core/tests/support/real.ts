@@ -52,7 +52,7 @@ export function voiceState(
   } as unknown as Parameters<DiscordGatewayAdapterLibraryMethods["onVoiceStateUpdate"]>[0];
 }
 
-/** A minimal 16-bit mono WAV of silence, which real ffmpeg decodes without any network fixture. */
+/** A minimal 16-bit mono WAV of silence, which libav decodes without any network fixture. */
 export function silentWav(seconds = 1, sampleRate = 8000): Uint8Array {
   const samples = seconds * sampleRate;
   const dataBytes = samples * 2;
@@ -81,7 +81,7 @@ export interface AudioOrigin {
   stop(): Promise<void>;
 }
 
-/** Serves the silent WAV over real HTTP, so ffmpeg decodes an absolute URL exactly as it would in production. */
+/** Serves the silent WAV over real HTTP, so the engine fetches an absolute URL exactly as it would in production. */
 export async function serveAudio(): Promise<AudioOrigin> {
   const body = Buffer.from(silentWav());
   const server = createServer((_request, response) => {

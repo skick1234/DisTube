@@ -1,7 +1,10 @@
+import { readFile } from "node:fs/promises";
+import { PassThrough } from "node:stream";
 import { DisTube, Song } from "distube";
 import type {
   PlaybackContext,
   PlaybackPreparation,
+  PlaybackResource,
   Player,
   PluginContext,
   SourceOperationOptions,
@@ -9,7 +12,7 @@ import type {
 } from "distube/integrations";
 import type * as ErisModule from "eris";
 import type { VoiceChannel } from "eris";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 interface Transport extends FakeVoiceConnection {
   readonly credentials: unknown[];
@@ -22,6 +25,7 @@ const { preflight, preflightFactory, transports } = vi.hoisted(() => {
   return { preflight: check, preflightFactory: factory, transports: [] as Transport[] };
 });
 
+import { createMedia, type MediaFixtures } from "../../voice-core/tests/support/media";
 import { ErisAdapter } from "../src";
 import type * as ErisEngine from "../src/engine";
 import {
@@ -30,16 +34,12 @@ import {
   CHANNEL,
   FakeClient,
   type FakeVoiceConnection,
-  finishCurrent,
   GATEWAY,
   GUILD,
-  latest,
-  resetNative,
   settle,
   voiceChannel,
 } from "./support/eris";
 
-vi.mock("node:child_process", async () => (await import("./support/eris")).childProcessModule());
 vi.mock("../src/engine", async importOriginal => {
   const actual = await importOriginal<typeof ErisEngine>();
   return { ...actual, erisPreflight: preflightFactory };
@@ -85,8 +85,13 @@ const CREDENTIALS = {
   user_id: "bot",
 };
 
+let media: MediaFixtures;
+
+beforeAll(async () => {
+  media = await createMedia();
+}, 30_000);
+afterAll(() => media.cleanup());
 beforeEach(() => {
-  resetNative();
   transports.length = 0;
   preflight.mockReset();
   preflight.mockResolvedValue(undefined);
@@ -157,35 +162,34 @@ describe("Eris adapter queue lifecycle", () => {
     expect(later.current?.song.id).toBe("A");
   });
 
-  it("waits for the owned decoder to close before session release on voice leave", async () => {
+  it("closes the active input before session release on voice leave", async () => {
     const client = new FakeClient();
-    const distube = createDisTube(client);
+    const stream = await oneShot();
+    const distube = createDisTube(client, () => ({ kind: "stream", stream }));
     const started = waitForStart(distube);
     const outcomes = vi.fn();
     distube.on("queue.item.finished", outcomes);
     distube.on("queue.item.failed", outcomes);
     await distube.play(target(CHANNEL), song("A"));
     await started;
-    const child = latest.child;
+    const closedAtLeave: boolean[] = [];
+    client.sendWS.mockImplementation((_op, payload) => {
+      if (payload.channel_id === null) closedAtLeave.push(stream.destroyed);
+    });
 
-    const leaving = distube.voices.leave(GUILD);
-    await settle();
+    await distube.voices.leave(GUILD);
 
-    expect(child.kill).toHaveBeenCalledWith("SIGKILL");
-    expect(leaves(client)).toBe(0);
-    child.close(null, "SIGKILL");
-    await leaving;
-
-    expect(leaves(client)).toBe(1);
+    expect(closedAtLeave).toEqual([true]);
     expect(distube.getQueue(GUILD)).toBeUndefined();
-    finishCurrent(transport(0));
+    transport(0).finishCurrent();
     await settle();
     expect(outcomes).not.toHaveBeenCalled();
   });
 
-  it("publishes one failed queue item for a post-start decoder exit and never finishes it", async () => {
+  it("publishes one failed queue item for a post-start input failure and never finishes it", async () => {
     const client = new FakeClient();
-    const distube = createDisTube(client);
+    const stream = await oneShot();
+    const distube = createDisTube(client, () => ({ kind: "stream", stream }));
     const started = waitForStart(distube);
     const failed = waitForFailure(distube);
     const finished = vi.fn();
@@ -193,7 +197,8 @@ describe("Eris adapter queue lifecycle", () => {
     await distube.play(target(CHANNEL), song("A"));
     await started;
 
-    latest.child.close(1, null);
+    stream.destroy(new Error("socket reset"));
+    await transport(0).send(Number.POSITIVE_INFINITY);
     await failed;
     await settle();
 
@@ -208,17 +213,14 @@ describe("Eris adapter queue lifecycle", () => {
     distube.on("voice.disconnected", disconnected);
     await distube.play(target(CHANNEL), song("A"));
     await started;
-    const child = latest.child;
 
     transport(0).emit("disconnect", new Error("connection lost"));
-    child.close(null, "SIGKILL");
-    await settle();
+    await vi.waitFor(() => expect(transport(0).disconnects).toBe(1));
 
     expect(disconnected).not.toHaveBeenCalled();
     expect(distube.getQueue(GUILD)).toBeUndefined();
     expect(distube.voices.get(GUILD)?.channelId).toBe(CHANNEL);
     expect(leaves(client)).toBe(0);
-    expect(transport(0).disconnects).toBe(1);
 
     const restarted = waitForStart(distube);
     await distube.play(target(CHANNEL), song("B"));
@@ -260,11 +262,9 @@ describe("Eris adapter queue lifecycle", () => {
     await harness.distube.play(target(CHANNEL), song("A"));
     await firstStarted;
     await harness.distube.play(target(CHANNEL), song("B"));
-    const child = latest.child;
 
     transport(0).emit("disconnect", new Error("connection lost"));
     announceState(client, undefined, GUILD, null);
-    child.close(null, "SIGKILL");
     await Promise.all([failed, deleted, disconnected]);
 
     expect(failedItem).toBe("A");
@@ -284,19 +284,28 @@ function target(id: string): VoiceChannel {
   return { id, guildID: GUILD, guild: { id: GUILD } } as unknown as VoiceChannel;
 }
 
-function createDisTube(client: FakeClient): DisTube<unknown, VoiceChannel> {
-  return createHarness(client).distube;
+function createDisTube(client: FakeClient, resource?: () => PlaybackResource): DisTube<unknown, VoiceChannel> {
+  return createHarness(client, resource).distube;
+}
+
+async function oneShot(): Promise<PassThrough> {
+  const stream = new PassThrough();
+  stream.write((await readFile(media.hour)).subarray(0, 400_000));
+  return stream;
 }
 
 /** The real adapter and engine; the spy only exposes the first Player the engine created. */
-function createHarness(client: FakeClient): {
+function createHarness(
+  client: FakeClient,
+  resource: () => PlaybackResource = () => ({ kind: "file", path: media.hour }),
+): {
   readonly distube: DisTube<unknown, VoiceChannel>;
   readonly player: () => Promise<Player>;
 } {
   const adapter = new ErisAdapter(asClient(client));
   const createPlayer = vi.spyOn(adapter.engine, "createPlayer");
   return {
-    distube: new DisTube({ adapter, sources: [localSource()] }),
+    distube: new DisTube({ adapter, sources: [localSource(resource)] }),
     player: () => {
       const created = createPlayer.mock.results[0];
       if (created?.type !== "return") throw new Error("Expected playback to create an Eris Player");
@@ -316,20 +325,16 @@ function leaves(client: FakeClient): number {
   return client.sendWS.mock.calls.filter(([, payload]) => payload.channel_id === null).length;
 }
 
-function localSource(): SourcePlugin {
+function localSource(resource: () => PlaybackResource): SourcePlugin {
   return {
     name: "local",
     initialize: (_context: PluginContext): void => undefined,
     dispose: (): void => undefined,
     search: async (_query: string, _options?: SourceOperationOptions): Promise<readonly Song[]> => [],
     resolve: async (_url: string, _options?: SourceOperationOptions): Promise<undefined> => undefined,
-    stream: async (value: Song, _context: PlaybackContext): Promise<PlaybackPreparation> => ({
+    stream: async (_value: Song, _context: PlaybackContext): Promise<PlaybackPreparation> => ({
       kind: "resource",
-      resource: {
-        kind: "file",
-        path: `/tmp/distube-eris-${value.id}.mp3`,
-        dispose: (): void => undefined,
-      },
+      resource: resource(),
     }),
   };
 }
