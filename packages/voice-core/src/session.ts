@@ -4,16 +4,20 @@ import type {
   VoiceConnection,
 } from "@discordjs/voice";
 import { entersState, joinVoiceChannel, VoiceConnectionStatus } from "@discordjs/voice";
-import type { JoinOptions, VoiceGatewayData, VoiceSession, VoiceSessionEvent } from "distube/integrations";
+import type {
+  JoinOptions,
+  VoiceGatewayData,
+  VoiceSession,
+  VoiceSessionEvent,
+  VoiceSessionOptions,
+  VoiceTarget,
+} from "distube/integrations";
 
-export interface DiscordVoiceSessionOptions {
-  readonly guildId: string;
-  readonly channelId: string;
+export interface DiscordVoiceSessionOptions extends VoiceTarget, VoiceSessionOptions {
   readonly clientUserId: string;
   readonly adapterCreator: DiscordGatewayAdapterCreator;
-  readonly selfDeaf: boolean;
-  readonly selfMute: boolean;
-  readonly connectionTimeoutMs: number;
+  /** The platform channel's bitrate in bits per second, read whenever the session needs it. */
+  readonly channelBitrate: (channelId: string) => number;
 }
 
 /** Gateway membership stays alive independently of the selected audio transport. */
@@ -73,7 +77,7 @@ export class DiscordVoiceSession implements VoiceSession {
     });
     session.#connection = connection;
     try {
-      await entersState(connection, VoiceConnectionStatus.Ready, session.#options.connectionTimeoutMs);
+      await entersState(connection, VoiceConnectionStatus.Ready, session.#options.timeoutMs);
       if (session.#released || session.#connection !== connection) throw new Error("Voice session was released");
     } catch (error) {
       DiscordVoiceSession.detachConnection(session, connection);
@@ -128,6 +132,9 @@ export class DiscordVoiceSession implements VoiceSession {
   get channelId(): string {
     return this.#channelId;
   }
+  get bitrate(): number {
+    return this.#options.channelBitrate(this.#channelId);
+  }
   get gateway(): VoiceGatewayData | undefined {
     return this.#gateway;
   }
@@ -153,7 +160,7 @@ export class DiscordVoiceSession implements VoiceSession {
     const timer = setTimeout(() => {
       this.#waiters.delete(check);
       reject(new Error("Discord gateway membership timed out"));
-    }, this.#options.connectionTimeoutMs);
+    }, this.#options.timeoutMs);
     const check = (): void => {
       if (
         !this.#released &&
@@ -189,12 +196,6 @@ export class DiscordVoiceSession implements VoiceSession {
       }
       throw error;
     }
-  }
-  setSelfDeaf(value: boolean): Promise<void> {
-    return this.join(this.channelId, { selfDeaf: value });
-  }
-  setSelfMute(value: boolean): Promise<void> {
-    return this.join(this.channelId, { selfMute: value });
   }
   subscribe(listener: (event: VoiceSessionEvent) => void): () => void {
     if (this.#released) return () => undefined;

@@ -3,10 +3,9 @@ import { readFile } from "node:fs/promises";
 import type * as NodeHttp from "node:http";
 import { PassThrough } from "node:stream";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { URL_READY_TIMEOUT_MS } from "../src/input";
+import { type LocalPlaybackResource, URL_READY_TIMEOUT_MS } from "../src/input";
 import { Track } from "../src/track";
-import type { LocalPlaybackResource } from "../src/validation";
-import { createMedia, type MediaFixtures, take } from "./support/media";
+import { createMedia, type MediaFixtures, PLAIN, take } from "./support/media";
 
 const http = vi.hoisted(() => ({ request: vi.fn() }));
 vi.mock("node:http", async importOriginal => ({
@@ -68,7 +67,7 @@ beforeEach(() => {
 afterEach(() => vi.useRealTimers());
 
 function open(resource: LocalPlaybackResource, signal = new AbortController().signal): Promise<Track> {
-  return Track.open(resource, { volume: 100, chain: undefined }, signal);
+  return Track.open(resource, PLAIN, signal);
 }
 
 function causes(error: Error): Error[] {
@@ -87,14 +86,6 @@ async function failureOf(work: Promise<unknown>): Promise<Error> {
 }
 
 describe("controlled URL input", () => {
-  it("rejects unsafe headers and URL userinfo before any request", async () => {
-    await expect(
-      open({ kind: "url", url: "https://example.test", headers: { Authorization: "secret\r\nX: injected" } }),
-    ).rejects.toThrow();
-    await expect(open({ kind: "url", url: "https://user:secret@example.test" })).rejects.toThrow();
-    expect(http.request).not.toHaveBeenCalled();
-  });
-
   it("sends copied headers with byte ranges and seeks with a range at the target", async () => {
     const headers = { Authorization: "private-value" };
     const track = await open({ kind: "url", url: "https://example.test/audio?token=private", headers, seekable: true });

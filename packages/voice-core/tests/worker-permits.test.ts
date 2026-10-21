@@ -2,7 +2,10 @@ import { EventEmitter } from "node:events";
 import type * as Os from "node:os";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { FromWorker, PermitMessage } from "../src/pipeline-worker";
+import type { TrackSettings } from "../src/track";
 import type * as Pool from "../src/worker-pool";
+
+const PLAIN: TrackSettings = { volume: 100, chain: undefined, bitrate: 510_000, opusComplexity: 10, readAhead: 25 };
 
 class FakeWorker extends EventEmitter {
   readonly posted: unknown[] = [];
@@ -118,11 +121,7 @@ describe("worker pool", () => {
   it("settles a Track on a lost worker and stops sending its controls there", async () => {
     await pool();
     const { Track } = await import("../src/track");
-    const opening = Track.open(
-      { kind: "file", path: "/dev/null" },
-      { volume: 100, chain: undefined },
-      new AbortController().signal,
-    );
+    const opening = Track.open({ kind: "file", path: "/dev/null" }, PLAIN, new AbortController().signal);
     const worker = await vi.waitFor(() => {
       const [spawned] = workers;
       if (!spawned) throw new Error("No worker yet");
@@ -144,11 +143,7 @@ describe("worker pool", () => {
   it("rejects a filter change the lost worker never answered", async () => {
     await pool();
     const { Track } = await import("../src/track");
-    const opening = Track.open(
-      { kind: "file", path: "/dev/null" },
-      { volume: 100, chain: undefined },
-      new AbortController().signal,
-    );
+    const opening = Track.open({ kind: "file", path: "/dev/null" }, PLAIN, new AbortController().signal);
     const worker = await vi.waitFor(() => {
       const [spawned] = workers;
       if (!spawned) throw new Error("No worker yet");

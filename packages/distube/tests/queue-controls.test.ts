@@ -53,9 +53,12 @@ describe("pause, resume, and seek", () => {
     await expect(queue.seek(-1)).rejects.toThrow("Seek seconds must be non-negative");
     await expect(queue.seek(Number.NaN)).rejects.toThrow("Seek seconds must be non-negative");
 
+    await queue.stop();
+    await expect(queue.pause()).rejects.toMatchObject({ code: "INVALID_STATE" });
+
     const other = playableSetup();
-    const { result, queue: idle, release } = await gated(other);
-    await expect(idle.pause()).rejects.toThrow("Queue has no current QueueItem");
+    const { result, queue: starting, release } = await gated(other);
+    await expect(starting.pause()).rejects.toMatchObject({ code: "INVALID_STATE" });
     release();
     await result;
     await other.distube.dispose();
@@ -75,7 +78,7 @@ describe("pause, resume, and seek", () => {
     player.seek.mockRejectedValueOnce(unsupportedFailure);
     expect(await capture(queue.seek(3))).toBe(unsupportedFailure);
 
-    const backendFailure = new DisTubeError("LAVALINK_NODE_LOST", "node went away");
+    const backendFailure = new DisTubeError("UNAVAILABLE", "node went away");
     player.pause.mockRejectedValueOnce(backendFailure);
     expect(await capture(queue.pause())).toBe(backendFailure);
     await harness.distube.dispose();
@@ -109,7 +112,6 @@ describe("playback failure paths", () => {
 
     expect(events).toEqual(["queue.item.failed", "queue.item.started"]);
     expect(failures).toMatchObject([{ code: "VOICE_FAILED" }]);
-    expect(player.stopTrack).toHaveBeenCalledTimes(1);
     expect(harness.source.disposed).toEqual(["a"]);
     expect(harness.engine.createPlayer).toHaveBeenCalledTimes(1);
     expect(queue.current?.song.id).toBe("b");
@@ -133,41 +135,14 @@ describe("playback failure paths", () => {
     await harness.distube.dispose();
   });
 
-  it("retires a terminally failed Player and creates a fresh one for the next item", async () => {
-    const { harness, queue, player } = await playing(["a", "b"]);
-    const events = record(harness.distube, ["voice.track.failed", "queue.item.failed", "queue.item.started"]);
-
-    player.emit({ type: "failed", itemId: player.playing as string, error: new Error("device lost"), terminal: true });
-    await settle();
-
-    expect(events).toEqual(["voice.track.failed", "queue.item.failed", "queue.item.started"]);
-    expect(player.release).toHaveBeenCalledTimes(1);
-    expect(harness.engine.createPlayer).toHaveBeenCalledTimes(2);
-    expect((harness.engine.players[1] as FakePlayer).playing).toBe(queue.current?.id);
-    expect(queue.current?.song.id).toBe("b");
-    await harness.distube.dispose();
-  });
-
   it("keeps the Player after a non-terminal playback failure", async () => {
     const { harness, queue, player } = await playing(["a", "b"]);
 
-    player.emit({ type: "failed", itemId: player.playing as string, error: new Error("hiccup") });
+    player.fail(new Error("hiccup"));
     await settle();
 
     expect(harness.engine.createPlayer).toHaveBeenCalledTimes(1);
-    expect(player.playing).toBe(queue.current?.id);
-    expect(queue.current?.song.id).toBe("b");
-    await harness.distube.dispose();
-  });
-
-  it("still advances when ending the track fails, surfacing the cleanup to the skipper", async () => {
-    const { harness, queue, player } = await playing(["a", "b"]);
-    player.stopTrack.mockRejectedValueOnce(new Error("stuck"));
-
-    const failure = (await capture(queue.skip())) as DisTubeError;
-    await settle();
-
-    expect(failure).toMatchObject({ code: "VOICE_FAILED", message: "Player failed to end the track cleanly" });
+    expect(player.playing).toBe(queue.current?.song.id);
     expect(queue.current?.song.id).toBe("b");
     await harness.distube.dispose();
   });

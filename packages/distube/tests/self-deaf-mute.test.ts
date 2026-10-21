@@ -20,7 +20,7 @@ describe("self-deaf and self-mute", () => {
 
     expect(harness.adapter.createVoiceSession).toHaveBeenCalledWith(
       { guildId: GUILD, channelId: VOICE_CHANNEL },
-      { selfDeaf: true, selfMute: false },
+      { selfDeaf: true, selfMute: false, timeoutMs: 15_000 },
     );
     expect(required(harness.adapter.sessions[0]).states).toEqual([{ selfDeaf: true, selfMute: false }]);
     expect([voice.selfDeaf, voice.selfMute]).toEqual([true, false]);
@@ -33,7 +33,7 @@ describe("self-deaf and self-mute", () => {
 
     expect(harness.adapter.createVoiceSession).toHaveBeenCalledWith(
       { guildId: GUILD, channelId: VOICE_CHANNEL },
-      { selfDeaf: false, selfMute: true },
+      { selfDeaf: false, selfMute: true, timeoutMs: 15_000 },
     );
     expect([voice.selfDeaf, voice.selfMute]).toEqual([false, true]);
   });
@@ -46,6 +46,7 @@ describe("self-deaf and self-mute", () => {
     expect(harness.adapter.createVoiceSession).toHaveBeenCalledWith(expect.anything(), {
       selfDeaf: true,
       selfMute: false,
+      timeoutMs: 15_000,
     });
   });
 
@@ -57,8 +58,8 @@ describe("self-deaf and self-mute", () => {
     await voice.setSelfDeaf(false);
     await voice.setSelfMute(true);
 
-    expect(session.setSelfDeaf).toHaveBeenCalledWith(false);
-    expect(session.setSelfMute).toHaveBeenCalledWith(true);
+    expect(session.join).toHaveBeenNthCalledWith(1, VOICE_CHANNEL, { selfDeaf: false });
+    expect(session.join).toHaveBeenNthCalledWith(2, VOICE_CHANNEL, { selfMute: true });
     expect(session.states.slice(1)).toEqual([
       { selfDeaf: false, selfMute: false },
       { selfDeaf: false, selfMute: true },
@@ -71,7 +72,7 @@ describe("self-deaf and self-mute", () => {
     const voice = await harness.distube.voices.join(channel);
     const session = required(harness.adapter.sessions[0]);
     const failure = new Error("gateway rejected");
-    session.setSelfMute.mockRejectedValueOnce(failure);
+    session.join.mockRejectedValueOnce(failure);
 
     await expect(voice.setSelfMute(true)).rejects.toMatchObject({ code: "VOICE_FAILED", cause: failure });
 
@@ -89,8 +90,7 @@ describe("self-deaf and self-mute", () => {
       code: "INVALID_ARGUMENT",
     });
 
-    expect(session.setSelfDeaf).not.toHaveBeenCalled();
-    expect(session.setSelfMute).not.toHaveBeenCalled();
+    expect(session.join).not.toHaveBeenCalled();
   });
 
   it("survives queue.stop and a later play on the same voice", async () => {
@@ -121,21 +121,48 @@ describe("self-deaf and self-mute", () => {
     expect(harness.distube.voices.has(GUILD)).toBe(false);
   });
 
-  it("rejects a join aborted during session creation with ABORTED and releases the late session once", async () => {
+  it("rejects joins aborted during session creation with ABORTED and releases the late session once", async () => {
     const harness = playableSetup();
     const creation = harness.adapter.gateCreateSession();
-    const controller = new AbortController();
-    const joining = capture(harness.distube.voices.join(channel, { signal: controller.signal }));
+    const first = new AbortController();
+    const second = new AbortController();
+    const joins = [first, second].map(controller =>
+      capture(harness.distube.voices.join(channel, { signal: controller.signal })),
+    );
     await flushMicrotasks(32);
 
-    controller.abort(new Error("caller gave up"));
+    first.abort(new Error("caller gave up"));
+    second.abort(new Error("caller gave up"));
     const session = new FakeVoiceSession(GUILD, VOICE_CHANNEL);
     creation.resolve(session);
 
-    expect(await joining).toMatchObject({ code: "ABORTED" });
-    await harness.distube.voices.leave(GUILD);
+    expect(await Promise.all(joins)).toMatchObject([{ code: "ABORTED" }, { code: "ABORTED" }]);
+    await settle();
     expect(session.release).toHaveBeenCalledTimes(1);
     expect(harness.distube.voices.has(GUILD)).toBe(false);
+    await harness.distube.voices.leave(GUILD);
+    expect(session.release).toHaveBeenCalledTimes(1);
+  });
+
+  it("aborts only its own caller when a concurrent join shares the session creation", async () => {
+    const harness = playableSetup();
+    const creation = harness.adapter.gateCreateSession();
+    const controller = new AbortController();
+    const aborted = capture(harness.distube.voices.join(channel, { signal: controller.signal }));
+    const shared = harness.distube.voices.join(channel, { selfMute: true });
+    await flushMicrotasks(32);
+
+    controller.abort(new Error("caller gave up"));
+    expect(await aborted).toMatchObject({ code: "ABORTED" });
+    const session = new FakeVoiceSession(GUILD, VOICE_CHANNEL);
+    creation.resolve(session);
+
+    const voice = await shared;
+    expect(harness.distube.voices.get(GUILD)).toBe(voice);
+    expect(voice.channelId).toBe(VOICE_CHANNEL);
+    expect([voice.selfDeaf, voice.selfMute]).toEqual([true, true]);
+    expect(session.release).not.toHaveBeenCalled();
+    expect(harness.adapter.createVoiceSession).toHaveBeenCalledTimes(1);
   });
 
   it("keeps the session's current state when the voice moves", async () => {

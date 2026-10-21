@@ -2,7 +2,6 @@ import { DisTubeError, ErrorCode, type ErrorCode as ErrorCodeType } from "../src
 
 declare const error: unknown;
 
-// The static guard narrows to the exact literal it was given.
 if (DisTubeError.is(error, ErrorCode.ABORTED)) {
   const aborted: "ABORTED" = error.code;
   void aborted;
@@ -11,44 +10,45 @@ if (DisTubeError.is(error, ErrorCode.ABORTED)) {
   void other;
 }
 
-// Plugin packages export their own const objects and narrow the same way.
-const SpotifyErrorCode = { NOT_FOUND: "SPOTIFY_NOT_FOUND", RATE_LIMITED: "SPOTIFY_RATE_LIMITED" } as const;
-if (DisTubeError.is(error, SpotifyErrorCode.NOT_FOUND)) {
-  const notFound: "SPOTIFY_NOT_FOUND" = error.code;
-  void notFound;
-  const owned: DisTubeError<"SPOTIFY_NOT_FOUND"> = error;
-  void owned;
+if (DisTubeError.is(error)) {
+  const code: ErrorCodeType = error.code;
+  const source: string | undefined = error.source;
+  void [code, source];
 }
-const spotify = new DisTubeError(SpotifyErrorCode.RATE_LIMITED, "slow down");
-const spotifyCode: "SPOTIFY_RATE_LIMITED" = spotify.code;
 
-// A plain DisTubeError carries a string code, so a switch with a default is exhaustive for unknown plugin codes.
+const rateLimited = new DisTubeError(ErrorCode.RATE_LIMITED, "slow down", { source: "spotify" });
+const rateLimitedCode: "RATE_LIMITED" = rateLimited.code;
+
 declare const failure: DisTubeError;
 function describe(caught: DisTubeError): string {
   switch (caught.code) {
+    case ErrorCode.INVALID_ARGUMENT:
+    case ErrorCode.INVALID_STATE:
+    case ErrorCode.ABORTED:
+    case ErrorCode.UNSUPPORTED:
+      return "caller";
     case ErrorCode.NO_RESULT:
-      return "nothing found";
-    case SpotifyErrorCode.NOT_FOUND:
-      return "not on Spotify";
-    default:
-      return caught.code;
+    case ErrorCode.NOT_FOUND:
+    case ErrorCode.UNAVAILABLE:
+    case ErrorCode.RATE_LIMITED:
+    case ErrorCode.SOURCE_FAILED:
+      return `provider ${caught.source ?? "core"}`;
+    case ErrorCode.VOICE_FAILED:
+      return "voice";
+    default: {
+      const exhaustive: never = caught.code;
+      return exhaustive;
+    }
   }
 }
 
-// Every exported core code is spelled exactly like its key.
 const spelled: { readonly [K in keyof typeof ErrorCode]: K } = ErrorCode;
 
-// The exported type accepts the core literals and any plugin string, while completion keeps the literals.
-const core: ErrorCodeType = "INVALID_ARGUMENT";
+// @ts-expect-error codes are the core set; plugins no longer add their own
 const plugin: ErrorCodeType = "YOUTUBE_AGE_RESTRICTED";
-// @ts-expect-error codes are strings
-const numeric: ErrorCodeType = 1;
-// @ts-expect-error the constructor takes a string code; a non-string needs `never`
-new DisTubeError(123, "message");
-const forced = new DisTubeError(123 as never, "message");
+// @ts-expect-error the constructor takes a core code
+new DisTubeError("SPOTIFY_NOT_FOUND", "message");
 
-// Widening keeps assignment covariant: a narrowed error is still a DisTubeError.
-const widened: DisTubeError = spotify;
-const generic: DisTubeError<string> = new DisTubeError(ErrorCode.QUEUE_FAILED, "queue");
+const widened: DisTubeError = rateLimited;
 
-void [spelled, spotifyCode, describe(failure), core, plugin, numeric, forced, widened, generic];
+void [rateLimitedCode, describe(failure), spelled, plugin, widened];

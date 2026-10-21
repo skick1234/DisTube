@@ -13,9 +13,14 @@ describe("real oceanic.js", () => {
     expect(typeof Object.getOwnPropertyDescriptor(Guild.prototype, "voiceAdapterCreator")?.get).toBe("function");
 
     const client = new Client({ auth: "Bot invalid" });
-    await new OceanicAdapter(client).createVoiceSession({ guildId: REAL_GUILD, channelId: REAL_CHANNEL }).then(
-      () => expect.unreachable("an unknown guild has no voice presence"),
-      (error: Error) => expect(error.message).toContain(REAL_GUILD),
-    );
+    await new OceanicAdapter(client)
+      .createVoiceSession(
+        { guildId: REAL_GUILD, channelId: REAL_CHANNEL },
+        { selfDeaf: true, selfMute: false, timeoutMs: 50 },
+      )
+      .then(
+        () => expect.unreachable("an unknown guild has no voice presence"),
+        (error: Error) => expect(error.message).toContain(REAL_GUILD),
+      );
   });
 });

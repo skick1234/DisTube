@@ -66,6 +66,7 @@ export function finishCurrent(current: QueueState): QueueState {
 
 /** Removes one upcoming occurrence by its stable ID. */
 export function removeItem(current: QueueState, itemId: string): Removal {
+  if (!itemId) throw new DisTubeError("INVALID_ARGUMENT", "Occurrence ID must be a non-empty string");
   const index = current.upcoming.findIndex(item => item.id === itemId);
   if (index < 0) throw new DisTubeError("INVALID_STATE", "Occurrence is not upcoming in this queue");
   return removeRange(current, index, index);
@@ -149,10 +150,6 @@ export function popHistory(current: QueueState): { readonly item: QueueItem; rea
   const item = current.history.at(-1);
   if (!item) return undefined;
   return Object.freeze({ item, state: patch(current, { history: current.history.slice(0, -1) }) });
-}
-
-export function setStatus(current: QueueState, status: QueueStatus): QueueState {
-  return current.status === status ? current : patch(current, { status });
 }
 
 export function setRepeat(current: QueueState, repeat: RepeatMode): QueueState {

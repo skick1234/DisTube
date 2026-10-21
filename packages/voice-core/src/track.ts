@@ -1,6 +1,5 @@
 import { Readable } from "node:stream";
 import { DisTubeError } from "distube";
-import type { PlaybackResource } from "distube/integrations";
 import {
   abortError,
   type ByteReply,
@@ -8,15 +7,14 @@ import {
   decodeFailure,
   fromWire,
   isSeekable,
+  type LocalPlaybackResource,
   redactor,
   safeError,
   serveInput,
 } from "./input";
 import type { FromWorker, WireError } from "./pipeline-worker";
-import { type LocalPlaybackResource, localPlaybackResource } from "./validation";
 import { attach, type Lease } from "./worker-pool";
 
-const HIGH_WATER_MARK = 5;
 const HOLD_POLL_MS = 20;
 
 /** How a Track ended: its input reached the end, its owner closed it, or it failed with a redacted cause. */
@@ -30,6 +28,12 @@ export interface TrackSettings {
   readonly volume: number;
   /** A libavfilter chain from the FilterRegistry, or `undefined` for none. */
   readonly chain: string | undefined;
+  /** Bits per second a transcoded track encodes at, capped by its source's bitrate. */
+  readonly bitrate: number;
+  /** Opus encoder complexity, 0 to 10. */
+  readonly opusComplexity: number;
+  /** Packets of 20 ms queued ahead of the platform. */
+  readonly readAhead: number;
 }
 
 type Settled = Extract<FromWorker, { type: "settled" }>;
@@ -45,11 +49,12 @@ let nextId = 0;
  * the old input plays until then.
  */
 export class Track {
-  /** Opus packets, one Buffer each, with 100 ms of read-ahead. */
+  /** Opus packets, one Buffer each, `readAhead` of them queued ahead. */
   readonly packets: Readable;
   /** Settles once: natural end after the platform played the last packet, close, or a failure. */
   readonly outcome: Promise<TrackOutcome>;
   readonly #id = ++nextId;
+  readonly #readAhead: number;
   readonly #resource: LocalPlaybackResource;
   readonly #redact: (value: string) => string;
   readonly #lease: Lease;
@@ -73,7 +78,8 @@ export class Track {
   #settled = false;
   #closing?: Promise<void>;
 
-  private constructor(resource: LocalPlaybackResource, redact: (value: string) => string) {
+  private constructor(resource: LocalPlaybackResource, redact: (value: string) => string, readAhead: number) {
+    this.#readAhead = readAhead;
     this.#resource = resource;
     this.#redact = redact;
     this.outcome = new Promise(resolve => {
@@ -82,20 +88,19 @@ export class Track {
     this.#closedSignal = new Promise(resolve => {
       this.#closed = resolve;
     });
-    this.packets = new Readable({ objectMode: true, highWaterMark: HIGH_WATER_MARK, read: () => this.#grant() });
+    this.packets = new Readable({ objectMode: true, highWaterMark: readAhead, read: () => this.#grant() });
     this.#lease = attach(this.#id, this.#receive);
   }
 
   /** Opens `resource` from its start; a resource libav cannot open or decode rejects here, before any audio. */
-  static async open(resource: PlaybackResource, settings: TrackSettings, signal: AbortSignal): Promise<Track> {
-    const validated = localPlaybackResource(resource);
-    const redact = redactor(validated);
+  static async open(resource: LocalPlaybackResource, settings: TrackSettings, signal: AbortSignal): Promise<Track> {
+    const redact = redactor(resource);
     signal.throwIfAborted();
     const input = ++nextId;
     let track: Track | undefined;
     let server: ByteServer;
     try {
-      server = await serveInput(validated, 0, signal, redact, message => {
+      server = await serveInput(resource, 0, signal, redact, message => {
         if (track) track.#reply(input, message);
       });
     } catch (error: unknown) {
@@ -105,7 +110,7 @@ export class Track {
       server.close();
       throw abortError();
     }
-    track = new Track(validated, redact);
+    track = new Track(resource, redact, settings.readAhead);
     track.#servers.set(input, server);
     const opened = new Promise<void>((resolve, reject) => {
       if (track) track.#opened = { resolve, reject };
@@ -123,6 +128,8 @@ export class Track {
         source: server.source,
         volume: settings.volume,
         chain: settings.chain,
+        bitrate: settings.bitrate,
+        complexity: settings.opusComplexity,
       });
       await opened;
       return track;
@@ -154,10 +161,12 @@ export class Track {
   }
 
   setVolume(percent: number): void {
-    if (!Number.isFinite(percent) || percent < 0) {
-      throw new DisTubeError("INVALID_ARGUMENT", "volume must be a non-negative number");
-    }
     if (!this.#closing && !this.#settled) this.#lease.post({ type: "volume", track: this.#id, percent });
+  }
+
+  /** Rebuilds the encoder at the next transcoded frame; passthrough keeps the source's own bitrate. */
+  setBitrate(bitrate: number): void {
+    if (!this.#closing && !this.#settled) this.#lease.post({ type: "bitrate", track: this.#id, bitrate });
   }
 
   /** Applies from the next decoded frame; a chain libavfilter cannot build rejects `INVALID_ARGUMENT`. */
@@ -174,9 +183,6 @@ export class Track {
 
   /** Resolves once the new input holds audio at `seconds` and playback switched to it. */
   async seek(seconds: number): Promise<void> {
-    if (!Number.isFinite(seconds) || seconds < 0) {
-      throw new DisTubeError("INVALID_ARGUMENT", "seek position must be non-negative");
-    }
     if (!isSeekable(this.#resource)) throw new DisTubeError("UNSUPPORTED", "This playback resource is not seekable");
     if (this.#closing || this.#settled) throw new DisTubeError("INVALID_STATE", "Track has no running input");
     this.#seekController?.abort();
@@ -246,9 +252,10 @@ export class Track {
     });
   }
 
+  /** Keeps queued plus requested packets at `readAhead`; Readable reads again only after a push, so a full queue still asks for the one it hands out. */
   #grant(): void {
     if (this.#settled) return;
-    const want = HIGH_WATER_MARK - this.#granted;
+    const want = Math.max(this.#readAhead - this.#granted - this.packets.readableLength, this.#granted === 0 ? 1 : 0);
     if (want <= 0) return;
     this.#granted += want;
     this.#lease.post({ type: "credit", track: this.#id, count: want });

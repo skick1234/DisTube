@@ -27,9 +27,7 @@ describe("transactional play", () => {
     [null, "input", undefined],
     [{ guildId: "", id: VOICE_CHANNEL }, "input", undefined],
     [{ guildId: GUILD, id: "" }, "input", undefined],
-    [TARGET, "input", null],
     [TARGET, "", undefined],
-    [TARGET, "input", { signal: {} }],
   ] as const)("rejects malformed play input %# before starting owned work", async (target, input, options) => {
     const harness = playableSetup();
 
@@ -111,8 +109,6 @@ describe("transactional play", () => {
     expect(harness.distube.voices.has(GUILD)).toBe(true);
     expect(harness.distube.getQueue(GUILD)).toBeDefined();
     const shutdown = harness.distube.dispose();
-    await flush();
-    expect(harness.adapter.sessions[0]?.release).not.toHaveBeenCalled();
     continuePlay.resolve();
     await shutdown;
     expect(await result).toMatchObject({ code: "INVALID_STATE" });

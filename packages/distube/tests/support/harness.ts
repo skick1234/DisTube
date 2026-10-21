@@ -4,6 +4,7 @@ import {
   DisTube,
   type DisTubeEventListener,
   type DisTubeEventName,
+  type DisTubeOptions,
   type Playlist,
   Song,
   type VoiceChannelTarget,
@@ -12,23 +13,24 @@ import { Filters } from "../../src/enums";
 import type {
   Adapter,
   Engine,
+  EngineSettings,
   FilterDefinitionInfo,
   FilterDefinitions,
   FilterEntry,
   JoinOptions,
-  PlaybackContext,
   PlaybackPreparation,
-  PlaybackRequest,
   PlaybackResource,
   Player,
-  PlayerEvent,
-  PluginContext,
-  RelatedContext,
-  SourceOperationOptions,
-  SourcePlugin,
+  Plugin,
+  PrepareContext,
+  RelatedOptions,
+  SearchOptions,
+  TrackEnd,
+  TrackOptions,
   VoiceGatewayData,
   VoiceSession,
   VoiceSessionEvent,
+  VoiceSessionOptions,
   VoiceTarget,
 } from "../../src/integrations";
 
@@ -48,12 +50,12 @@ export function deferred<Value>(): Deferred<Value> {
   return { promise, resolve, reject };
 }
 
-/** Advances Promise jobs without yielding to timers. Deferred lifecycle tests use this to control every boundary. */
+/** Advances Promise jobs without yielding to timers. */
 export async function flushMicrotasks(rounds = 8): Promise<void> {
   for (let round = 0; round < rounds; round += 1) await Promise.resolve();
 }
 
-/** Lets the queue's detached effects, mailbox round-trips, and cleanup barriers run to quiescence. */
+/** Lets detached loop work and event delivery run to quiescence. */
 export async function settle(rounds = 6): Promise<void> {
   for (let round = 0; round < rounds; round += 1) await new Promise(resolve => setTimeout(resolve, 0));
 }
@@ -77,41 +79,40 @@ export function media(source: string, id = `${source}-song`): Song {
   return new Song({ id, name: `Title ${id}`, url: `https://${source}.example/media/${id}`, duration: 60, source });
 }
 
-/** A SourcePlugin whose every operation is a spy; tests override only what they exercise. */
-export class FakeSource implements SourcePlugin {
+/** A Plugin whose every operation is a spy; tests override only what they exercise. */
+export class FakeSource implements Plugin {
   /** IDs of the Songs whose prepared resource was disposed, in disposal order. */
   readonly disposed: string[] = [];
-  readonly initialize = vi.fn((_context: PluginContext) => undefined);
   readonly dispose = vi.fn(() => undefined);
-  readonly search = vi.fn(async (_query: string, _options?: SourceOperationOptions): Promise<readonly Song[]> => []);
+  readonly search = vi.fn(async (_query: string, _options: SearchOptions): Promise<readonly Song[]> => []);
   readonly resolve = vi.fn(
-    async (_url: string, _options?: SourceOperationOptions): Promise<Song | Playlist | undefined> => undefined,
+    async (_url: string, _options: { signal: AbortSignal }): Promise<Song | Playlist | undefined> => undefined,
   );
-  readonly related = vi.fn(async (_song: Song, _context: RelatedContext): Promise<Song | undefined> => undefined);
-  readonly stream = vi.fn(async (song: Song, _context: PlaybackContext): Promise<PlaybackPreparation> =>
+  readonly related = vi.fn(async (_song: Song, _options: RelatedOptions): Promise<Song | undefined> => undefined);
+  readonly stream = vi.fn(async (song: Song, _options: { signal: AbortSignal }): Promise<PlaybackPreparation> =>
     this.resourceFor(song),
   );
 
   constructor(readonly name: string) {}
 
-  /** A `url` preparation that records its own disposal, so tests can assert cleanup exactly once. */
+  /** A seekable `url` preparation that records its own disposal, so tests can assert cleanup exactly once. */
   resourceFor(song: Song): PlaybackPreparation {
+    return { kind: "resource", resource: this.resource(song.id) };
+  }
+
+  resource(id: string): PlaybackResource {
     return {
-      kind: "resource",
-      resource: {
-        kind: "url",
-        url: `https://stream.example/${song.id}`,
-        seekable: true,
-        dispose: () => {
-          this.disposed.push(song.id);
-        },
+      kind: "url",
+      url: `https://stream.example/${id}`,
+      seekable: true,
+      dispose: () => {
+        this.disposed.push(id);
       },
     };
   }
 }
 
 export type FakePlayerOperation =
-  /** Matches the next play or volume effect regardless of its argument; `play:${id}` targets one. */
   | "play"
   | `play:${string}`
   | "stop"
@@ -119,9 +120,8 @@ export type FakePlayerOperation =
   | "resume"
   | "seek"
   | "volume"
-  | `volume:${string}`
   | "filters"
-  | "gateway"
+  | "bitrate"
   | "release";
 
 /** A deferred backend acknowledgement that reports when the effect reached the fake Player. */
@@ -129,79 +129,82 @@ export interface FakePlayerGate extends Deferred<void> {
   readonly entered: Promise<void>;
 }
 
-interface InternalFakePlayerGate extends FakePlayerGate {
-  readonly markEntered: () => void;
+interface ActiveTrack {
+  readonly id: string;
+  readonly end: Deferred<TrackEnd>;
 }
 
-/** A long-lived Player with controllable backend acknowledgements. */
+/** The id a fake resource names: the last URL segment. */
+export function resourceId(resource: PlaybackResource): string {
+  return resource.kind === "url" ? (resource.url.split("/").pop() as string) : resource.kind;
+}
+
 /**
- * The voice sends the Player a unique per-play request ID of the form `<itemId>#<n>`. The fake reports the
- * caller's public ID everywhere a test reads it and translates public IDs back on `emit`, so tests speak
- * in item IDs; `requestIds` exposes the raw form for late-outcome cases.
+ * A Player that follows the contract: a second play settles the first `replaced`, an aborted signal,
+ * `stopTrack` or `release` settles it `stopped`. Tests end tracks with `finish` or `fail`.
  */
-export function publicTrackId(requestId: string): string {
-  return requestId.replace(/#\d+$/u, "");
-}
-
 export class FakePlayer implements Player {
   position = 0;
-  /** Requests as the test sees them: `itemId` is the caller's public ID. */
-  readonly requests: PlaybackRequest[] = [];
-  /** Raw per-play request IDs in play order. */
-  readonly requestIds: string[] = [];
+  /** Resource ids in play order. */
+  readonly played: string[] = [];
   readonly renders: (readonly FilterEntry[])[] = [];
   readonly volumes: number[] = [];
+  readonly bitrates: (number | undefined)[] = [];
   readonly calls: string[] = [];
-  readonly listeners = new Set<(event: PlayerEvent) => void>();
-  readonly #gates = new Map<FakePlayerOperation, InternalFakePlayerGate[]>();
-  #currentItem?: string;
-  #terminal = false;
-  #releasePromise?: Promise<void>;
+  readonly #gates = new Map<FakePlayerOperation, (FakePlayerGate & { markEntered: () => void })[]>();
+  #track?: ActiveTrack;
+  #released = false;
 
   readonly pause = vi.fn(async (): Promise<void> => this.#effect("pause"));
   readonly resume = vi.fn(async (): Promise<void> => this.#effect("resume"));
   readonly seek = vi.fn(async (_seconds: number): Promise<void> => this.#effect("seek"));
   readonly stopTrack = vi.fn(async (): Promise<void> => {
     await this.#effect("stop");
-    this.#currentItem = undefined;
+    this.#end({ reason: "stopped" });
   });
-  readonly play = vi.fn(async (request: PlaybackRequest): Promise<void> => {
+  readonly play = vi.fn(async (resource: PlaybackResource, options: TrackOptions): Promise<TrackEnd> => {
     this.#assertOpen();
-    const itemId = publicTrackId(request.itemId);
-    this.requests.push({ ...request, itemId });
-    this.requestIds.push(request.itemId);
-    // The bare name matches any play; the keyed name matches only that item.
-    await this.#effect("play", `play:${itemId}`);
-    const keyed = this.#gates.get(`play:${itemId}`)?.shift();
-    if (keyed) {
-      keyed.markEntered();
-      await keyed.promise;
-    }
-    this.#currentItem = request.itemId;
+    const id = resourceId(resource);
+    this.#end({ reason: "replaced" });
+    const track: ActiveTrack = { id, end: deferred<TrackEnd>() };
+    this.#track = track;
+    this.played.push(id);
+    const stop = (): void => {
+      if (this.#track === track) this.#end({ reason: "stopped" });
+    };
+    if (options.signal.aborted) stop();
+    options.signal.addEventListener("abort", stop, { once: true });
+    void (async () => {
+      await this.#effect("play", `play:${id}`);
+      const keyed = this.#gates.get(`play:${id}`)?.shift();
+      if (keyed) {
+        keyed.markEntered();
+        await keyed.promise;
+      }
+      if (this.#track === track) options.onStart();
+    })().catch((error: unknown) => {
+      if (this.#track === track) this.fail(error);
+    });
+    return track.end.promise;
   });
   readonly setVolume = vi.fn(async (percent: number): Promise<void> => {
     await this.#effect("volume", `volume:${percent}`);
-    const keyed = this.#gates.get(`volume:${percent}`)?.shift();
-    if (keyed) {
-      keyed.markEntered();
-      await keyed.promise;
-    }
     this.volumes.push(percent);
   });
   readonly setFilters = vi.fn(async (entries: readonly FilterEntry[]): Promise<void> => {
     await this.#effect("filters");
     this.renders.push(entries);
   });
-  readonly release = vi.fn((): Promise<void> => {
-    this.#terminal = true;
-    this.#currentItem = undefined;
-    this.listeners.clear();
-    this.#releasePromise ??= this.#effect("release", "release", true);
-    return this.#releasePromise;
+  readonly setBitrate = vi.fn(async (bitrate: number | undefined): Promise<void> => {
+    await this.#effect("bitrate", `bitrate:${bitrate}`);
+    this.bitrates.push(bitrate);
   });
-  readonly updateVoiceGateway = vi.fn(async (_gateway: VoiceGatewayData): Promise<void> => {
-    await this.#effect("gateway");
+  readonly release = vi.fn(async (): Promise<void> => {
+    this.#released = true;
+    this.#end({ reason: "stopped" });
+    await this.#effect("release", "release", true);
   });
+  readonly updateVoiceGateway = vi.fn(async (_gateway: VoiceGatewayData): Promise<void> => undefined);
 
   /** Holds the next named backend operation until the returned gate settles. */
   gate(operation: FakePlayerOperation): FakePlayerGate {
@@ -210,41 +213,34 @@ export class FakePlayer implements Player {
     const entered = new Promise<void>(resolve => {
       markEntered = resolve;
     });
-    const gate: InternalFakePlayerGate = { ...completion, entered, markEntered };
+    const gate = { ...completion, entered, markEntered };
     const gates = this.#gates.get(operation) ?? [];
     gates.push(gate);
     this.#gates.set(operation, gates);
     return gate;
   }
 
-  /** The public ID of the item the Player has actually acknowledged as active. */
+  /** The id of the resource currently playing. */
   get playing(): string | undefined {
-    return this.#currentItem === undefined ? undefined : publicTrackId(this.#currentItem);
+    return this.#track?.id;
   }
 
-  subscribe(listener: (event: PlayerEvent) => void): () => void {
-    if (this.#terminal) return () => undefined;
-    this.listeners.add(listener);
-    return () => this.listeners.delete(listener);
-  }
-
-  /** Publishes a native outcome. A public item ID names the latest request for that item; a raw request ID is used as is. */
-  emit(event: PlayerEvent): void {
-    if (this.#terminal) return;
-    const outcome = event.type === "terminal" ? event : { ...event, itemId: this.#requestIdFor(event.itemId) };
-    if (outcome.type !== "terminal" && this.#currentItem === outcome.itemId) this.#currentItem = undefined;
-    for (const listener of Array.from(this.listeners)) listener(outcome);
-  }
-
-  /** Reports the active track as finished, the way a backend does when it runs out of media. */
+  /** Ends the active track the way a backend does when it runs out of media. */
   finish(): void {
-    const itemId = this.#currentItem;
-    if (itemId) this.emit({ type: "finished", itemId });
+    this.#end({ reason: "finished" });
   }
 
-  #requestIdFor(itemId: string): string {
-    if (this.requestIds.includes(itemId)) return itemId;
-    return this.requestIds.findLast(requestId => publicTrackId(requestId) === itemId) ?? itemId;
+  /** Fails the active track. */
+  fail(error: unknown): void {
+    const track = this.#track;
+    this.#track = undefined;
+    track?.end.reject(error);
+  }
+
+  #end(end: TrackEnd): void {
+    const track = this.#track;
+    this.#track = undefined;
+    track?.end.resolve(end);
   }
 
   async #effect(operation: FakePlayerOperation, call: string = operation, terminal = false): Promise<void> {
@@ -258,29 +254,31 @@ export class FakePlayer implements Player {
   }
 
   #assertOpen(): void {
-    if (this.#terminal) throw new Error("Fake Player is retired");
+    if (this.#released) throw new Error("Fake Player is released");
   }
+}
+
+/** A Player without `setBitrate`, for engines that cannot change it. */
+export class FixedBitratePlayer extends FakePlayer {
+  override readonly setBitrate = undefined as never;
 }
 
 /** One guild's voice presence: it survives queue deletion and ends only when released or dropped. */
 export class FakeVoiceSession implements VoiceSession {
   readonly clientUserId = "bot";
+  bitrate = 64_000;
   channelId: string;
+  selfDeaf: boolean;
+  selfMute: boolean;
   readonly listeners = new Set<(event: VoiceSessionEvent) => void>();
-  readonly #releaseGates: Deferred<void>[] = [];
-  /** Every voice state the session sent: the join state plus each runtime update. */
+  /** Every voice state the session sent: the creation state plus each join. */
   readonly states: Required<JoinOptions>[] = [];
-  selfDeaf = true;
-  selfMute = false;
+  readonly #releaseGates: Deferred<void>[] = [];
   readonly join = vi.fn(async (channelId: string, options: JoinOptions = {}): Promise<void> => {
     this.channelId = channelId;
-    this.#record(options);
-  });
-  readonly setSelfDeaf = vi.fn(async (enabled: boolean): Promise<void> => {
-    this.#record({ selfDeaf: enabled });
-  });
-  readonly setSelfMute = vi.fn(async (enabled: boolean): Promise<void> => {
-    this.#record({ selfMute: enabled });
+    this.selfDeaf = options.selfDeaf ?? this.selfDeaf;
+    this.selfMute = options.selfMute ?? this.selfMute;
+    this.states.push({ selfDeaf: this.selfDeaf, selfMute: this.selfMute });
   });
   readonly release = vi.fn(async (): Promise<void> => {
     const gate = this.#releaseGates.shift();
@@ -290,15 +288,11 @@ export class FakeVoiceSession implements VoiceSession {
   constructor(
     readonly guildId: string,
     channelId: string,
-    state: JoinOptions = {},
+    options: Pick<VoiceSessionOptions, "selfDeaf" | "selfMute"> = { selfDeaf: true, selfMute: false },
   ) {
     this.channelId = channelId;
-    this.#record(state);
-  }
-
-  #record(options: JoinOptions): void {
-    this.selfDeaf = options.selfDeaf ?? this.selfDeaf;
-    this.selfMute = options.selfMute ?? this.selfMute;
+    this.selfDeaf = options.selfDeaf;
+    this.selfMute = options.selfMute;
     this.states.push({ selfDeaf: this.selfDeaf, selfMute: this.selfMute });
   }
 
@@ -314,7 +308,6 @@ export class FakeVoiceSession implements VoiceSession {
     return () => this.listeners.delete(listener);
   }
 
-  /** Publishes renewed platform gateway data. */
   connect(gateway: VoiceGatewayData, channelId = this.channelId): void {
     this.channelId = channelId;
     for (const listener of Array.from(this.listeners)) listener({ type: "connected", channelId, gateway });
@@ -345,7 +338,6 @@ export const FAKE_FILTERS: FilterDefinitions<string> = Object.freeze({
   vaporwave: { render: (value = 0.8) => `rate=${value}`, default: 0.8, min: 0.5, max: 1 },
 });
 
-/** Builds the metadata map an Engine exposes for `voice.filters.definitions`. */
 export function filterInfo(definitions: FilterDefinitions<string>): ReadonlyMap<string, FilterDefinitionInfo> {
   return new Map(
     Object.entries(definitions).map(([name, definition]) => [
@@ -363,8 +355,6 @@ export function filterInfo(definitions: FilterDefinitions<string>): ReadonlyMap<
 }
 
 export class FakeEngine implements Engine {
-  readonly accepts: ReadonlySet<PlaybackResource["kind"]> = new Set(["url" as const]);
-  readonly capabilities: Readonly<{ seek: boolean }>;
   readonly filters: ReadonlyMap<string, FilterDefinitionInfo>;
   readonly players: FakePlayer[] = [];
   readonly #createGates: Deferred<Player>[] = [];
@@ -375,6 +365,10 @@ export class FakeEngine implements Engine {
     return player;
   });
 
+  constructor(definitions: FilterDefinitions<string> = FAKE_FILTERS) {
+    this.filters = filterInfo(definitions);
+  }
+
   /** Holds the next Player creation until the returned gate settles. */
   gateCreate(): Deferred<Player> {
     const gate = deferred<Player>();
@@ -382,10 +376,18 @@ export class FakeEngine implements Engine {
     return gate;
   }
 
-  constructor(definitions: FilterDefinitions<string> = FAKE_FILTERS, capabilities = { seek: true }) {
-    this.filters = filterInfo(definitions);
-    this.capabilities = Object.freeze({ ...capabilities });
+  get player(): FakePlayer {
+    return required(this.players.at(-1));
   }
+}
+
+/** An engine that prepares every Song itself, like Lavalink. */
+export class PreparingEngine extends FakeEngine {
+  readonly prepare = vi.fn(async (song: Song, _context: PrepareContext): Promise<PlaybackResource> => ({
+    kind: "encoded",
+    format: "fake",
+    encoded: song.id,
+  }));
 }
 
 export class FakeAdapter implements Adapter {
@@ -394,13 +396,22 @@ export class FakeAdapter implements Adapter {
     channelId: channel.id,
   });
   readonly sessions: FakeVoiceSession[] = [];
+  readonly settings: EngineSettings[] = [];
   readonly #createGates: Deferred<VoiceSession>[] = [];
-  readonly createVoiceSession = vi.fn(async (target: VoiceTarget, state: JoinOptions = {}): Promise<VoiceSession> => {
-    const gate = this.#createGates.shift();
-    const session = gate ? await gate.promise : new FakeVoiceSession(target.guildId, target.channelId, state);
-    if (session instanceof FakeVoiceSession) this.sessions.push(session);
-    return session;
+  readonly createVoiceSession = vi.fn(
+    async (target: VoiceTarget, options: VoiceSessionOptions): Promise<VoiceSession> => {
+      const gate = this.#createGates.shift();
+      const session = gate ? await gate.promise : new FakeVoiceSession(target.guildId, target.channelId, options);
+      if (session instanceof FakeVoiceSession) this.sessions.push(session);
+      return session;
+    },
+  );
+  readonly createEngine = vi.fn((settings: EngineSettings): Engine => {
+    this.settings.push(settings);
+    return this.engine;
   });
+
+  constructor(readonly engine: Engine = new FakeEngine()) {}
 
   /** Holds the next session creation until the returned gate settles. */
   gateCreateSession(): Deferred<VoiceSession> {
@@ -409,11 +420,14 @@ export class FakeAdapter implements Adapter {
     return gate;
   }
 
-  constructor(readonly engine: Engine = new FakeEngine()) {}
+  get session(): FakeVoiceSession {
+    return required(this.sessions.at(-1));
+  }
 }
 
 export const GUILD = "guild";
 export const VOICE_CHANNEL = "voice";
+export const CHANNEL: VoiceChannelTarget = { id: VOICE_CHANNEL, guildId: GUILD };
 
 export interface Harness {
   readonly adapter: FakeAdapter;
@@ -422,23 +436,23 @@ export interface Harness {
   readonly distube: DisTube;
 }
 
-export interface HarnessOptions {
-  readonly sources?: readonly SourcePlugin[];
+export interface HarnessOptions extends Partial<Omit<DisTubeOptions, "adapter" | "plugins" | "engine">> {
   readonly engine?: FakeEngine;
-  /** Adapter override for tests that fail or defer session creation. */
   readonly adapter?: FakeAdapter;
-  readonly historySize?: number;
+  readonly tuning?: DisTubeOptions["engine"];
 }
 
-export function setup(sources: readonly SourcePlugin[], options: HarnessOptions = {}): Harness {
-  const engine = options.engine ?? new FakeEngine();
-  const adapter = options.adapter ?? new FakeAdapter(engine);
+export function setup(plugins: readonly Plugin[], options: HarnessOptions = {}): Harness {
+  const { engine: fakeEngine, adapter: fakeAdapter, tuning, ...rest } = options;
+  const engine = fakeEngine ?? new FakeEngine();
+  const adapter = fakeAdapter ?? new FakeAdapter(engine);
   const diagnostics = vi.fn<(diagnostic: Diagnostic) => void>();
   const distube = new DisTube({
     adapter,
-    sources: [...sources, ...(options.sources ?? [])],
-    ...(options.historySize === undefined ? {} : { historySize: options.historySize }),
+    plugins,
     onDiagnostic: diagnostics,
+    ...rest,
+    ...(tuning ? { engine: tuning } : {}),
   });
   return { adapter, engine, diagnostics, distube };
 }
@@ -448,25 +462,28 @@ export function mediaUrl(id: string, source = "source"): string {
   return `https://${source}.example/media/${id}`;
 }
 
-/** The id a harness input names, whether it arrived as a bare id or as its `mediaUrl` form. */
 function idOf(input: string): string {
   return input.startsWith("https://") ? (input.split("/").pop() as string) : input;
 }
 
-/**
- * A single-source harness whose plugin answers for every input, by URL or by query.
- *
- * Core routes an absolute URL to `resolve` and everything else to `search`, so a test picks which path
- * it exercises by passing `mediaUrl("a")` or plain `"a"`. Both produce the Song named `a`.
- */
-export function playableSetup(name = "source"): Harness & { readonly source: FakeSource } {
+/** A single-source harness whose plugin answers every input: a URL through `resolve`, a query through `search`. */
+export function playableSetup(
+  name = "source",
+  options: HarnessOptions = {},
+): Harness & { readonly source: FakeSource } {
   const source = new FakeSource(name);
   source.resolve.mockImplementation(async url => media(name, idOf(url)));
   source.search.mockImplementation(async query => [media(name, idOf(query))]);
-  return { ...setup([source]), source };
+  return { ...setup([source], options), source };
 }
 
-/** A listener that unregisters its own exact registration before invoking the test callback. */
+/** Starts playback of `ids` in order and waits until the first one is playing. */
+export async function playing(harness: Harness, ...ids: string[]): Promise<FakePlayer> {
+  for (const id of ids) await harness.distube.play(CHANNEL, id);
+  await settle();
+  return harness.engine.player;
+}
+
 export function once<Name extends DisTubeEventName>(
   distube: DisTube,
   name: Name,
@@ -479,8 +496,17 @@ export function once<Name extends DisTubeEventName>(
   return unsubscribe;
 }
 
-/** Fails a fixture at the missing value, preserving its narrowed type for the assertions below. */
 export function required<Value>(value: Value | undefined): Value {
   if (value === undefined) throw new Error("Expected fixture value");
   return value;
+}
+
+/** The error a synchronous command throws, for assertions on its code and cause. */
+export function thrown(action: () => unknown): unknown {
+  try {
+    action();
+  } catch (error: unknown) {
+    return error;
+  }
+  throw new Error("Expected the action to throw");
 }

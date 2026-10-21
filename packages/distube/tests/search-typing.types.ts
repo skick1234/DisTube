@@ -1,5 +1,5 @@
 import type { DisTube, Song } from "../src";
-import type { PluginDataOf, SourcePlugin } from "../src/integrations";
+import type { Plugin, PluginDataOf } from "../src/integrations";
 
 interface YouTubeData {
   readonly views: number;
@@ -10,8 +10,8 @@ interface SoundCloudData {
 }
 
 declare const distube: DisTube;
-declare const youtube: SourcePlugin<YouTubeData>;
-declare const soundcloud: SourcePlugin<SoundCloudData>;
+declare const youtube: Plugin<YouTubeData>;
+declare const soundcloud: Plugin<SoundCloudData>;
 
 // `source` narrows every result's pluginData to the plugin's declaration without a cast.
 const typed: Promise<readonly Song<YouTubeData>[]> = distube.search("lofi", { source: youtube });
@@ -39,7 +39,7 @@ const signalled: Promise<readonly string[]> = distube.getSuggestions("lo", undef
 const notSongs: Promise<readonly Song[]> = distube.getSuggestions("lo");
 
 // A plugin declares its data once and its Songs carry it.
-const plugin: SourcePlugin<YouTubeData> = {
+const plugin: Plugin<YouTubeData> = {
   name: "youtube",
   async search(): Promise<readonly Song<YouTubeData>[]> {
     return [];
@@ -51,7 +51,7 @@ const plugin: SourcePlugin<YouTubeData> = {
     throw new Error("unused");
   },
 };
-const mismatched: SourcePlugin<YouTubeData> = {
+const mismatched: Plugin<YouTubeData> = {
   ...plugin,
   // @ts-expect-error the declared data shape is enforced on returned Songs
   async search(): Promise<readonly Song<SoundCloudData>[]> {

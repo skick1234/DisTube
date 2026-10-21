@@ -128,9 +128,10 @@ describe("voice filter manager", () => {
     expect(harness.engine.createPlayer).not.toHaveBeenCalled();
     expect(voice.filters.entries).toEqual([{ name: "bassboost", value: 12, label: "Bass +12dB" }]);
 
-    await voice.play({ kind: "url", url: "https://stream.example/a", dispose: () => undefined });
-    await voice.play({ kind: "url", url: "https://stream.example/b", dispose: () => undefined });
+    const first = voice.play({ kind: "url", url: "https://stream.example/a" });
     await settle();
+    void voice.play({ kind: "url", url: "https://stream.example/b" });
+    expect(await first).toEqual({ reason: "replaced" });
     const player = required(harness.engine.players[0]) as FakePlayer;
 
     expect(player.renders).toEqual([[{ name: "bassboost", value: 12 }]]);

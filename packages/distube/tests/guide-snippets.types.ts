@@ -5,13 +5,11 @@ import { DisTube, type DisTubeVoice, Song } from "distube";
 import type {
   Adapter,
   Engine,
-  JoinOptions,
-  PlaybackContext,
   PlaybackPreparation,
-  PlaybackResource,
   Player,
-  SourcePlugin,
+  Plugin,
   VoiceSession,
+  VoiceSessionOptions,
   VoiceTarget,
 } from "distube/integrations";
 
@@ -28,7 +26,7 @@ interface ClipData {
   readonly plays: number;
 }
 
-class ClipSource implements SourcePlugin<ClipData> {
+class ClipSource implements Plugin<ClipData> {
   readonly name = "clips";
 
   async resolve(url: string): Promise<Song<ClipData> | undefined> {
@@ -41,31 +39,40 @@ class ClipSource implements SourcePlugin<ClipData> {
     return song ? [song] : [];
   }
 
-  async stream(song: Song<ClipData>, context: PlaybackContext): Promise<PlaybackPreparation> {
-    context.signal.throwIfAborted();
-    return { kind: "resource", resource: { kind: "encoded", format: "lavalink.v4", encoded: song.id, seekable: true } };
+  async stream(song: Song<ClipData>, options: { readonly signal: AbortSignal }): Promise<PlaybackPreparation> {
+    options.signal.throwIfAborted();
+    return { kind: "resource", resource: { kind: "url", url: song.url } };
   }
 }
 
-declare const createGatewaySession: (target: VoiceTarget, options?: JoinOptions) => Promise<VoiceSession>;
+declare const createGatewaySession: (target: VoiceTarget, options: VoiceSessionOptions) => Promise<VoiceSession>;
 declare const player: Player;
+
+const localEngine: Engine = { filters: new Map(), createPlayer: async () => player };
 
 const adapter: Adapter<NativeChannel> = {
   normalizeTarget: channel => ({ guildId: channel.guildSnowflake, channelId: channel.voiceSnowflake }),
   createVoiceSession: createGatewaySession,
+  createEngine: () => localEngine,
 };
 
-const remoteEngine: Engine = {
-  accepts: new Set<PlaybackResource["kind"]>(["encoded", "url"]),
-  encodedFormats: new Set(["lavalink.v4"]),
-  capabilities: { seek: true },
-  filters: new Map(),
-  supportsResource: resource => resource.kind !== "url" || resource.headers === undefined,
-  createPlayer: async () => player,
+const remote: Plugin = {
+  name: "remote",
+  engine: {
+    filters: new Map(),
+    createPlayer: async () => player,
+    prepare: async (song, { stream }) => {
+      const preparation = await stream?.();
+      return preparation?.kind === "resource"
+        ? preparation.resource
+        : { kind: "encoded", format: "remote", encoded: song.id };
+    },
+  },
 };
 
 const clips = new ClipSource();
-const distube = new DisTube<RequestMetadata, NativeChannel>({ adapter, sources: [clips], engine: remoteEngine });
+const distube = new DisTube<RequestMetadata, NativeChannel>({ adapter, plugins: [clips], engine: { bufferMs: 400 } });
+const remoteDistube = new DisTube({ adapter, plugins: [clips, remote] });
 
 async function musicCommand(channel: NativeChannel): Promise<void> {
   const queue = await distube.play(channel, "https://example.audio/clip/1", {
@@ -83,17 +90,17 @@ async function musicCommand(channel: NativeChannel): Promise<void> {
 }
 
 async function directInputs(voice: DisTubeVoice<NativeChannel>, freshReadable: () => Readable): Promise<void> {
-  await voice.play({ kind: "file", path: "/absolute/clip.mp3" });
-  await voice.stop();
+  const end = await voice.play({ kind: "file", path: "/absolute/clip.mp3" }, { onStart: () => undefined });
+  const reason: "finished" | "stopped" | "replaced" = end.reason;
+  void reason;
   await voice.play({
     kind: "url",
     url: "https://audio.example/private.mp3",
     headers: { Authorization: "Bearer token" },
     seekable: true,
   });
-  if (voice.seekable) await voice.seek(12);
-  await voice.stop();
-  await voice.play({ kind: "stream", stream: freshReadable() });
+  await voice.setBitrate("auto");
+  await voice.play({ kind: "stream", stream: freshReadable() }, { signal: AbortSignal.timeout(30_000) });
 }
 
-void [musicCommand, directInputs];
+void [musicCommand, directInputs, remoteDistube];

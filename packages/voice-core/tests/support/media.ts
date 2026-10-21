@@ -20,8 +20,18 @@ import {
   Muxer,
   Packet,
 } from "node-av";
+import type { TrackSettings } from "../../src/track";
 
 const RATE = 48_000;
+
+/** Track settings that leave the source untouched and never cap its bitrate. */
+export const PLAIN: TrackSettings = {
+  volume: 100,
+  chain: undefined,
+  bitrate: 510_000,
+  opusComplexity: 10,
+  readAhead: 25,
+};
 
 /** Media files generated with node-av's own encoders and muxers, deleted by `cleanup`. */
 export interface MediaFixtures {

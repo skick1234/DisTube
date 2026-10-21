@@ -2,7 +2,7 @@ import type { VoiceSession } from "distube/integrations";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { DiscordVoiceEngine, DiscordVoiceSession } from "../src/discord";
 import { FilterRegistry } from "../src/filters";
-import { CHANNEL, gatewayAdapter, latest, resetNative } from "./support/native";
+import { CHANNEL, gatewayAdapter, latest, native, resetNative } from "./support/native";
 
 vi.mock("@discordjs/voice", async () => (await import("./support/native")).voiceModule());
 
@@ -13,28 +13,16 @@ const OPTIONS = {
   adapterCreator: gatewayAdapter().creator,
   selfDeaf: true,
   selfMute: false,
-  connectionTimeoutMs: 50,
+  timeoutMs: 50,
+  channelBitrate: () => 64_000,
 };
+const SETTINGS = { opusComplexity: 10, bufferMs: 500 };
 
 beforeEach(resetNative);
 
 describe("engine", () => {
-  it("declares each local input kind and rejects encoded tracks", async () => {
-    const engine = new DiscordVoiceEngine(undefined, async () => undefined);
-    const session = await DiscordVoiceSession.connect(OPTIONS);
-    const player = await engine.createPlayer(session);
-
-    expect([...engine.accepts]).toEqual(["url", "file", "stream", "reader", "timed"]);
-
-    // The declaration is only worth something if the Player enforces it.
-    const encoded = { itemId: "item", resource: { kind: "encoded", encoded: "track", dispose: vi.fn() } };
-    await expect(player.play(encoded as never)).rejects.toMatchObject({ code: "UNSUPPORTED" });
-    await player.release();
-    await session.release();
-  });
-
   it("creates a Player over its own session's connection", async () => {
-    const engine = new DiscordVoiceEngine(undefined, async () => undefined);
+    const engine = new DiscordVoiceEngine(SETTINGS);
     const session = await DiscordVoiceSession.connect(OPTIONS);
 
     const player = await engine.createPlayer(session);
@@ -45,17 +33,38 @@ describe("engine", () => {
     await session.release();
   });
 
+  it("names node-av and its host requirement when the binding cannot load", async () => {
+    const engine = new DiscordVoiceEngine(SETTINGS);
+    const session = await DiscordVoiceSession.connect(OPTIONS);
+    const failure = new Error("libavcodec.so: cannot open shared object file");
+    vi.doMock("node-av", () => {
+      throw failure;
+    });
+    try {
+      await expect(engine.createPlayer(session)).rejects.toMatchObject({
+        code: "VOICE_FAILED",
+        message: expect.stringContaining("node-av native binding, which runs on glibc 2.28 or newer"),
+      });
+      expect(native.joinVoiceChannel).not.toHaveBeenCalled();
+    } finally {
+      vi.doUnmock("node-av");
+      await session.release();
+    }
+  });
+
   it("refuses a session it does not own", async () => {
-    const engine = new DiscordVoiceEngine(undefined, async () => undefined);
+    const engine = new DiscordVoiceEngine(SETTINGS);
     const foreign = { guildId: "guild", channelId: CHANNEL } as unknown as VoiceSession;
 
     await expect(engine.createPlayer(foreign)).rejects.toThrow("only plays through its own package's VoiceSession");
   });
 
-  it("exposes its merged preset metadata and local seek support", () => {
-    const engine = new DiscordVoiceEngine({ house: { render: () => "volume=2", label: "House" } });
+  it("exposes its merged preset metadata", () => {
+    const engine = new DiscordVoiceEngine({
+      ...SETTINGS,
+      filters: { house: { render: () => "volume=2", label: "House" } },
+    });
 
-    expect(engine.capabilities).toEqual({ seek: true });
     expect(engine.filters.get("bassboost")).toMatchObject({ default: 10, min: 0, max: 20, acceptsValue: true });
     expect(engine.filters.get("house")?.label()).toBe("House");
     expect(engine.filters.has("unknown")).toBe(false);

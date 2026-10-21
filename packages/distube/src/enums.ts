@@ -34,7 +34,6 @@ export const Filters = {
   Mcompand: "mcompand",
   Nightcore: "nightcore",
   Phaser: "phaser",
-  Reverse: "reverse",
   Surround: "surround",
   Tremolo: "tremolo",
   Vaporwave: "vaporwave",

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { DisTube, Playlist, Song } from "../src";
-import { FakeAdapter, FakeEngine, FakeSource, GUILD, playableSetup, setup, VOICE_CHANNEL } from "./support/harness";
+import { Playlist, Song } from "../src";
+import { FakeAdapter, FakeSource, GUILD, playableSetup, setup, VOICE_CHANNEL } from "./support/harness";
 
 const channel = { guildId: GUILD, id: VOICE_CHANNEL };
 
@@ -46,7 +46,7 @@ describe("adapter target normalization", () => {
     const voice = await harness.distube.voices.join(native);
     expect(harness.adapter.createVoiceSession).toHaveBeenCalledWith(
       { guildId: GUILD, channelId: VOICE_CHANNEL },
-      { selfDeaf: true, selfMute: false },
+      { selfDeaf: true, selfMute: false, timeoutMs: 15_000 },
     );
     const queue = await harness.distube.play(native, "a");
     expect(queue.guildId).toBe(GUILD);
@@ -57,44 +57,6 @@ describe("adapter target normalization", () => {
     });
     expect(voice.channelId).toBe(VOICE_CHANNEL);
     await harness.distube.dispose();
-  });
-});
-
-describe("explicit engine configuration", () => {
-  it.each([
-    { initialize: "invalid", dispose: () => undefined },
-    { initialize: () => undefined, dispose: "invalid" },
-  ])("rejects noncallable engine lifecycle %# before initialization", hooks => {
-    const source = new FakeSource("source");
-    const engine = Object.assign(new FakeEngine(), hooks);
-    expect(() => new DisTube({ adapter: new FakeAdapter(), sources: [source], engine: engine as never })).toThrow(
-      expect.objectContaining({ code: "INVALID_ARGUMENT" }),
-    );
-    expect(source.initialize).not.toHaveBeenCalled();
-  });
-
-  it("rejects a distinct engine that reuses a source name", () => {
-    const source = new FakeSource("source");
-    const engine = Object.assign(new FakeEngine(), { name: "source" });
-    expect(() => new DisTube({ adapter: new FakeAdapter(), sources: [source], engine })).toThrow(
-      expect.objectContaining({ code: "INVALID_ARGUMENT" }),
-    );
-    expect(source.initialize).not.toHaveBeenCalled();
-  });
-
-  it("captures sources and selected engine before initialization callbacks", async () => {
-    const source = new FakeSource("source");
-    const late = new FakeSource("late");
-    const sources = [source];
-    source.initialize.mockImplementation(() => {
-      sources.push(late);
-    });
-    const client = new DisTube({ adapter: new FakeAdapter(), sources });
-    await expect(client.play(channel, "declined")).rejects.toMatchObject({ code: "NO_RESULT" });
-    expect(late.initialize).not.toHaveBeenCalled();
-    expect(late.search).not.toHaveBeenCalled();
-    await client.dispose();
-    expect(late.dispose).not.toHaveBeenCalled();
   });
 });
 
@@ -109,15 +71,6 @@ it("rejects invalid voice settings before committing state", async () => {
   await expect(voice.filters.set("")).rejects.toMatchObject({ code: "INVALID_ARGUMENT" });
   expect([voice.volume, voice.selfDeaf, voice.selfMute, voice.filters.names]).toEqual([100, true, false, []]);
   await harness.distube.dispose();
-});
-
-it("prevents concurrent ownership of a bare engine and allows reuse after disposal", async () => {
-  const adapter = new FakeAdapter();
-  const first = new DisTube({ adapter, sources: [] });
-  expect(() => new DisTube({ adapter, sources: [] })).toThrow(expect.objectContaining({ code: "INVALID_STATE" }));
-  await first.dispose();
-  const second = new DisTube({ adapter, sources: [] });
-  await second.dispose();
 });
 
 it("validates resolved media ownership without calling providers", async () => {

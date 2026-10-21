@@ -55,7 +55,7 @@ describe("bounded history", () => {
 
   it("does not remember a failed item", async () => {
     const { harness, queue, player } = await playing(["a", "b", "c"]);
-    player.emit({ type: "failed", itemId: player.playing as string, error: new Error("decoder") });
+    player.fail(new Error("decoder"));
     await settle();
     expect(queue.current?.song.id).toBe("b");
     player.finish();
@@ -64,7 +64,7 @@ describe("bounded history", () => {
     await harness.distube.dispose();
   });
 
-  it("appends the skipped item and publishes queue.history.added after queue.item.finished", async () => {
+  it("appends the skipped item to history without publishing queue.item.finished", async () => {
     const { harness, queue } = await playing(["a", "b"]);
     const events = record(harness.distube, ["queue.item.finished", "queue.history.added", "queue.item.started"]);
     const skipped: string[] = [];
@@ -73,7 +73,7 @@ describe("bounded history", () => {
     await queue.skip();
     await settle();
 
-    expect(events).toEqual(["queue.item.finished", "queue.history.added", "queue.item.started"]);
+    expect(events).toEqual(["queue.history.added", "queue.item.started"]);
     expect(skipped).toEqual(["a"]);
     expect(queue.history[0]?.song.id).toBe("a");
     await harness.distube.dispose();
@@ -94,6 +94,21 @@ describe("bounded history", () => {
 });
 
 describe("related media", () => {
+  it("seeds autoplay with the last finished item even when history keeps nothing", async () => {
+    const { harness, queue, player } = await playing(["a"], 0);
+    harness.source.related.mockResolvedValue(media("source", "related"));
+    await queue.setAutoplay(true);
+    player.finish();
+    await settle();
+
+    expect(harness.source.related).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "a" }),
+      expect.objectContaining({ exclude: [] }),
+    );
+    expect(queue.current?.song.id).toBe("related");
+    await harness.distube.dispose();
+  });
+
   it("passes the bounded history as context.exclude to the owning source", async () => {
     const { harness, queue, player } = await playing(["a", "b"]);
     const excluded: Song[][] = [];

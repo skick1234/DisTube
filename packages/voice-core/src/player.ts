@@ -3,375 +3,346 @@ import {
   AudioPlayerStatus,
   createAudioPlayer,
   createAudioResource,
-  entersState,
   NoSubscriberBehavior,
   StreamType,
   VoiceConnectionStatus,
 } from "@discordjs/voice";
 import { DisTubeError } from "distube";
-import type { FilterEntry, PlaybackRequest, Player, PlayerEvent } from "distube/integrations";
-import { asError } from "./cleanup";
+import type {
+  FilterEntry,
+  PlaybackResource,
+  Player,
+  TrackEnd,
+  TrackOptions,
+  VoiceSession,
+  VoiceSessionEvent,
+} from "distube/integrations";
 import type { FilterRegistry } from "./filters";
-import { Track } from "./track";
-import { playbackRequest } from "./validation";
-
-/** How long a fresh track has to reach the audio player before the request gives up. */
-const START_TIMEOUT_MS = 15_000;
+import type { LocalPlaybackResource } from "./input";
+import { Track, type TrackSettings } from "./track";
 
 const MAX_MISSED_FRAMES = 15_000 / 20;
 
-/** States in which the audio player holds a resource without consuming it. */
-const HELD_STATES: ReadonlySet<AudioPlayerStatus> = new Set([AudioPlayerStatus.Paused, AudioPlayerStatus.AutoPaused]);
+const FINISHED: TrackEnd = Object.freeze({ reason: "finished" });
+const STOPPED: TrackEnd = Object.freeze({ reason: "stopped" });
+const REPLACED: TrackEnd = Object.freeze({ reason: "replaced" });
 
-/** One track the Player holds, from native hand-off to its single outcome. */
-interface ActiveTrack {
-  readonly itemId: string;
-  readonly track: Track;
-  readonly resource: AudioResource;
-  /** Whether the audio player accepted the track, which is what makes a later end an item outcome. */
-  started: boolean;
-  /** Signals a matching early Idle transition while native startup is still settling. */
-  readonly start: StartSignal;
-  /** Natural completion needs both this resource's Idle transition and the Track's end of input. */
-  idle: boolean;
-  ended: boolean;
+const STARTED: ReadonlySet<AudioPlayerStatus> = new Set([
+  AudioPlayerStatus.Playing,
+  AudioPlayerStatus.AutoPaused,
+  AudioPlayerStatus.Paused,
+]);
+
+export interface DiscordVoicePlayerOptions {
+  readonly connection: VoiceConnection;
+  readonly session: VoiceSession;
+  readonly filters: FilterRegistry;
+  readonly opusComplexity: number;
+  readonly readAhead: number;
+  readonly releaseTransport: () => void;
 }
 
-/** Coordinates native startup events for the track currently trying to start. */
-interface StartSignal {
-  complete(): void;
-  fail(error: Error): void;
-  readonly completed: Promise<void>;
-  readonly failed: Promise<never>;
+/** One `play` call, from opening its Track to its single end. */
+class Playback {
+  readonly controller = new AbortController();
+  readonly onStart: () => void;
+  readonly ended: Promise<TrackEnd>;
+  closed!: Promise<void>;
+  track?: Track;
+  audio?: AudioResource;
+  started = false;
+  idle = false;
+  inputEnded = false;
+  #settled = false;
+  readonly #settle: PromiseWithResolvers<TrackEnd>;
+
+  constructor(onStart: () => void) {
+    this.onStart = onStart;
+    this.#settle = Promise.withResolvers();
+    this.ended = this.#settle.promise;
+    void this.ended.catch(() => undefined);
+  }
+
+  get settled(): boolean {
+    return this.#settled;
+  }
+
+  end(end: TrackEnd): void {
+    if (this.#markSettled()) this.#settle.resolve(end);
+  }
+
+  fail(error: unknown): void {
+    if (this.#markSettled()) this.#settle.reject(error);
+  }
+
+  #markSettled(): boolean {
+    if (this.#settled) return false;
+    this.#settled = true;
+    this.controller.abort();
+    return true;
+  }
 }
 
 /**
- * The long-lived playback backend for one connected voice session.
+ * The playback backend for one attached voice connection.
  *
- * The Player outlives tracks and queues until release or terminal transport failure. Volume and filters
- * live here and apply to the running Track in place.
+ * It outlives tracks until release or connection loss. Volume, filters and bitrate live here and apply to
+ * the running Track in place.
  */
 export class DiscordVoicePlayer implements Player {
   readonly #connection: VoiceConnection;
+  readonly #session: VoiceSession;
   readonly #filters: FilterRegistry;
-  readonly #releaseTransport?: () => void;
+  readonly #opusComplexity: number;
+  readonly #readAhead: number;
+  readonly #releaseTransport: () => void;
   readonly #player: AudioPlayer;
   readonly #subscription?: Readonly<{ unsubscribe(): void }>;
-  readonly #listeners = new Set<(event: PlayerEvent) => void>();
-  /** Track opens and closes still running, which release joins before the transport goes. */
-  readonly #pending = new Set<Promise<void>>();
-  readonly #opening = new Set<AbortController>();
-  #track?: ActiveTrack;
-  /** Only explicit Player controls carry pause intent. AutoPaused is transport state. */
-  #pauseIntent = false;
+  readonly #unsubscribeSession: () => void;
+  readonly #closing = new Set<Promise<void>>();
+  #current?: Playback;
+  #paused = false;
   #volume = 100;
   #chain?: string;
-  #terminal = false;
-  #releasePromise?: Promise<void>;
+  #bitrate?: number;
+  #released = false;
+  #release?: Promise<void>;
 
-  constructor(connection: VoiceConnection, filters: FilterRegistry, releaseTransport?: () => void) {
-    this.#connection = connection;
-    this.#filters = filters;
-    this.#releaseTransport = releaseTransport;
+  constructor(options: DiscordVoicePlayerOptions) {
+    this.#connection = options.connection;
+    this.#session = options.session;
+    this.#filters = options.filters;
+    this.#opusComplexity = options.opusComplexity;
+    this.#readAhead = options.readAhead;
+    this.#releaseTransport = options.releaseTransport;
     this.#player = createAudioPlayer({
       behaviors: { noSubscriber: NoSubscriberBehavior.Pause, maxMissedFrames: MAX_MISSED_FRAMES },
     });
-    this.#subscription = connection.subscribe(this.#player) ?? undefined;
-    connection.on("stateChange", this.#onConnectionStateChange);
+    this.#subscription = this.#connection.subscribe(this.#player) ?? undefined;
+    this.#unsubscribeSession = this.#session.subscribe(this.#onSessionEvent);
+    this.#connection.on("stateChange", this.#onConnectionStateChange);
     this.#player.on("stateChange", this.#onPlayerStateChange);
     this.#player.on("error", this.#onPlayerError);
   }
 
   get position(): number {
-    return this.#track?.track.position ?? 0;
+    return this.#current?.track?.position ?? 0;
   }
 
-  async play(value: PlaybackRequest): Promise<void> {
-    this.#assertOpen();
-    if (this.#track || this.#opening.size > 0) throw new Error("Discord Player already has active playback");
-    const request = playbackRequest(value);
-    const controller = new AbortController();
-    this.#opening.add(controller);
-    const opening = Track.open(request.resource, { volume: this.#volume, chain: this.#chain }, controller.signal);
-    this.#join(opening.then(() => undefined));
-    let track: Track;
+  play(resource: PlaybackResource, { signal, onStart }: TrackOptions): Promise<TrackEnd> {
     try {
-      track = await opening;
-    } finally {
-      this.#opening.delete(controller);
-    }
-    if (this.#terminal || this.#track || controller.signal.aborted) {
-      this.#join(track.close());
       this.#assertOpen();
-      throw new Error("Discord Player track was superseded");
-    }
-    let resource: AudioResource;
-    try {
-      resource = createAudioResource(track.packets, { inputType: StreamType.Opus });
-      track.setPlayedCounter(() => resource.playbackDuration / 20);
+      if (resource.kind === "encoded") {
+        throw new DisTubeError("UNSUPPORTED", "The built-in voice engine cannot play encoded resources");
+      }
     } catch (error: unknown) {
-      this.#join(track.close());
-      throw error;
+      return Promise.reject(error);
     }
-    const active: ActiveTrack = {
-      itemId: request.itemId,
-      track,
-      resource,
-      started: false,
-      start: startSignal(),
-      idle: false,
-      ended: false,
-    };
-    this.#track = active;
-    try {
-      this.#player.play(resource);
-      if (this.#pauseIntent) this.#player.pause(true);
-      await this.#awaitStart(active);
-      this.#assertOpen();
-      if (this.#track !== active) throw new Error("Discord Player track was superseded");
-      active.started = true;
-      this.#watch(active);
-    } catch (error: unknown) {
-      this.#endTrack(active);
-      throw error;
-    }
+    const previous = this.#current;
+    const playback = new Playback(onStart);
+    this.#current = playback;
+    previous?.end(REPLACED);
+    const run = this.#run(playback, resource, signal, previous);
+    const closed = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    playback.closed = closed;
+    this.#closing.add(closed);
+    void closed.then(() => this.#closing.delete(closed));
+    return run;
   }
 
   async pause(): Promise<void> {
     this.#assertOpen();
-    if (!this.#player.pause(true)) throw new Error("Discord audio player could not pause");
-    this.#pauseIntent = true;
+    this.#paused = true;
+    this.#player.pause(true);
   }
 
   async resume(): Promise<void> {
     this.#assertOpen();
-    if (!this.#player.unpause()) throw new Error("Discord audio player could not resume");
-    this.#pauseIntent = false;
+    this.#paused = false;
+    this.#player.unpause();
   }
 
-  /** Ends the active track, leaving the Player and its voice connection ready for the next one. */
   async stopTrack(): Promise<void> {
     this.#assertOpen();
-    for (const controller of this.#opening) controller.abort();
-    const active = this.#track;
-    if (active) this.#endTrack(active);
+    const playback = this.#current;
+    playback?.end(STOPPED);
+    await playback?.closed;
   }
 
   async seek(seconds: number): Promise<void> {
     this.#assertOpen();
-    if (!Number.isFinite(seconds) || seconds < 0)
-      throw new DisTubeError("INVALID_ARGUMENT", "seek position must be non-negative");
-    const active = this.#track;
-    if (!active) throw new DisTubeError("INVALID_STATE", "Player has no active track");
-    await active.track.seek(seconds);
+    const track = this.#current?.track;
+    if (!track) throw new DisTubeError("INVALID_STATE", "Player has no active track");
+    await track.seek(seconds);
   }
 
   async setVolume(percent: number): Promise<void> {
     this.#assertOpen();
-    if (typeof percent !== "number" || !Number.isFinite(percent) || percent < 0) {
-      throw new DisTubeError("INVALID_ARGUMENT", "volume must be a non-negative number");
-    }
-    this.#track?.track.setVolume(percent);
     this.#volume = percent;
+    this.#current?.track?.setVolume(percent);
   }
 
   async setFilters(entries: readonly FilterEntry[]): Promise<void> {
     this.#assertOpen();
     const chain = this.#filters.render(entries);
     if (chain === this.#chain) return;
-    await this.#track?.track.setFilters(chain);
+    await this.#current?.track?.setFilters(chain);
     this.#chain = chain;
   }
 
+  async setBitrate(bitrate: number | undefined): Promise<void> {
+    this.#assertOpen();
+    this.#bitrate = bitrate;
+    this.#current?.track?.setBitrate(this.#target());
+  }
+
   release(): Promise<void> {
-    if (!this.#terminal) this.#terminal = true;
-    this.#releasePromise ??= this.#cleanup();
-    return this.#releasePromise;
+    this.#release ??= this.#cleanup();
+    return this.#release;
   }
 
-  subscribe(listener: (event: PlayerEvent) => void): () => void {
-    if (this.#terminal) return () => undefined;
-    this.#listeners.add(listener);
-    return () => this.#listeners.delete(listener);
+  async #run(
+    playback: Playback,
+    resource: LocalPlaybackResource,
+    signal: AbortSignal,
+    previous?: Playback,
+  ): Promise<TrackEnd> {
+    const stop = (): void => playback.end(STOPPED);
+    if (signal.aborted) stop();
+    else signal.addEventListener("abort", stop, { once: true });
+    try {
+      const settings = this.#settings();
+      const track = await Track.open(resource, settings, playback.controller.signal);
+      playback.track = track;
+      void track.outcome.then(outcome => {
+        if (outcome.type === "failed") playback.fail(outcome.error);
+        else if (outcome.type === "ended") {
+          playback.inputEnded = true;
+          this.#reconcile(playback);
+        }
+      });
+      await previous?.closed;
+      await this.#catchUp(track, settings);
+      if (!playback.settled) this.#handOff(playback, track);
+    } catch (error: unknown) {
+      playback.fail(error);
+    }
+    try {
+      return await playback.ended;
+    } finally {
+      signal.removeEventListener("abort", stop);
+      if (this.#current === playback) this.#current = undefined;
+      if (playback.audio && stateResource(this.#player.state) === playback.audio) this.#player.stop(true);
+      await playback.track?.close();
+    }
   }
 
-  #join(work: Promise<void>): void {
-    const settled = work.then(
-      () => undefined,
-      () => undefined,
-    );
-    this.#pending.add(settled);
-    void settled.then(() => this.#pending.delete(settled));
+  #settings(): TrackSettings {
+    return {
+      volume: this.#volume,
+      chain: this.#chain,
+      bitrate: this.#target(),
+      opusComplexity: this.#opusComplexity,
+      readAhead: this.#readAhead,
+    };
   }
 
-  /** Resolves once the audio player took the track, whether it plays it or holds it without a subscriber. */
-  async #awaitStart(active: ActiveTrack): Promise<void> {
-    if (HELD_STATES.has(this.#player.state.status)) return;
-    const trackFailure = active.track.outcome.then(outcome => {
-      if (outcome.type === "failed") throw outcome.error;
-      // A tiny track can end while AudioPlayer commits its last frame. Let its state decide.
-      return new Promise<never>(() => undefined);
-    });
-    const result = await Promise.race([
-      entersState(this.#player, AudioPlayerStatus.Playing, START_TIMEOUT_MS).then(
-        () => true as const,
-        () => false as const,
-      ),
-      entersState(this.#player, AudioPlayerStatus.AutoPaused, START_TIMEOUT_MS).then(
-        () => true as const,
-        () => false as const,
-      ),
-      // A matching Idle state means the audio player accepted a very short track before this
-      // continuation committed it.
-      active.start.completed.then(() => true as const),
-      trackFailure,
-      active.start.failed,
-    ]);
-    if (result === true) return;
-    throw new Error("Discord audio player did not start the track");
+  async #catchUp(track: Track, opened: TrackSettings): Promise<void> {
+    if (opened.volume !== this.#volume) track.setVolume(this.#volume);
+    if (opened.bitrate !== this.#target()) track.setBitrate(this.#target());
+    if (opened.chain !== this.#chain) await track.setFilters(this.#chain);
   }
 
-  #watch(active: ActiveTrack): void {
-    void active.track.outcome.then(outcome => {
-      if (this.#terminal || this.#track !== active) return;
-      if (outcome.type === "failed") this.#fail(active, outcome.error);
-      else if (outcome.type === "ended") {
-        active.ended = true;
-        this.#reconcile(active);
-      }
-    });
+  #handOff(playback: Playback, track: Track): void {
+    const audio = createAudioResource(track.packets, { inputType: StreamType.Opus });
+    track.setPlayedCounter(() => audio.playbackDuration / 20);
+    playback.audio = audio;
+    this.#player.play(audio);
   }
 
-  /** Completes a track only after both native resource consumption and the Track's end of input agree. */
-  #reconcile(active: ActiveTrack): void {
-    if (active.idle && active.ended) this.#finish(active);
+  #target(): number {
+    return this.#bitrate ?? this.#session.bitrate;
   }
 
-  #finish(active: ActiveTrack): void {
-    if (this.#track !== active) return;
-    this.#track = undefined;
-    this.#join(active.track.close());
-    this.#emit({ type: "finished", itemId: active.itemId });
+  #start(playback: Playback): void {
+    if (playback.started) return;
+    playback.started = true;
+    try {
+      playback.onStart();
+    } catch (error: unknown) {
+      playback.fail(error);
+    }
   }
 
-  /** Ends the track's audio without touching the Player, its listeners, or the connection. */
-  #endTrack(active: ActiveTrack): void {
-    if (this.#track !== active) return;
-    this.#track = undefined;
-    this.#player.stop(true);
-    this.#join(active.track.close());
+  #reconcile(playback: Playback): void {
+    if (playback.idle && playback.inputEnded) playback.end(FINISHED);
   }
 
-  /** Ends the track and reports it as failed; the Player stays usable for the next request. */
-  #fail(active: ActiveTrack, error: Error): void {
-    if (this.#track !== active) return;
-    const started = active.started;
-    this.#endTrack(active);
-    // A track that never started is reported by its pending play request, not as an item outcome.
-    if (started) this.#emit({ type: "failed", itemId: active.itemId, error });
-  }
-
-  /**
-   * AudioPlayer's Idle event carries no resource. The preceding state identifies the exact track,
-   * including one that reached Idle before its start continuation ran.
-   */
+  /** AudioPlayer's Idle event carries no resource, so the preceding state identifies the track that ended. */
   readonly #onPlayerStateChange = (previous: AudioPlayer["state"], next: AudioPlayer["state"]): void => {
-    if (next.status !== AudioPlayerStatus.Idle) return;
-    const active = this.#track;
-    if (!active || stateResource(previous) !== active.resource) return;
-    if (!active.track.settled) {
-      const failure = new Error("Discord audio player stopped before the track ended");
-      if (!active.started) active.start.fail(failure);
-      this.#fail(active, failure);
+    const playback = this.#current;
+    const audio = playback?.audio;
+    if (!playback || !audio || playback.settled) return;
+    if (stateResource(next) === audio && STARTED.has(next.status)) {
+      this.#start(playback);
+      if (next.status === AudioPlayerStatus.Playing && this.#paused) this.#player.pause(true);
       return;
     }
-    active.idle = true;
-    active.start.complete();
-    this.#reconcile(active);
+    if (next.status !== AudioPlayerStatus.Idle || stateResource(previous) !== audio) return;
+    if (!playback.track?.settled) {
+      playback.fail(new Error("Discord audio player stopped before the track ended"));
+      return;
+    }
+    this.#start(playback);
+    playback.idle = true;
+    this.#reconcile(playback);
   };
 
   readonly #onPlayerError = (error: AudioPlayerError): void => {
-    const active = this.#track;
-    if (!active || active.resource !== error.resource) return;
-    const failure = audioPlayerFailure(error);
-    if (!active.started) active.start.fail(failure);
-    this.#fail(active, failure);
+    const playback = this.#current;
+    if (playback?.audio && playback.audio === error.resource) playback.fail(audioPlayerFailure(error));
+  };
+
+  readonly #onSessionEvent = (event: VoiceSessionEvent): void => {
+    if (event.type === "connected") this.#current?.track?.setBitrate(this.#target());
   };
 
   readonly #onConnectionStateChange = (_previous: VoiceConnection["state"], next: VoiceConnection["state"]): void => {
-    if (next.status === VoiceConnectionStatus.Destroyed) {
-      this.#retire(new Error("Discord voice connection was destroyed"));
-    }
+    if (next.status !== VoiceConnectionStatus.Destroyed || this.#released) return;
+    this.#current?.fail(new Error("Discord voice connection was destroyed"));
+    void this.release().catch(() => undefined);
   };
 
-  /** Retires the Player with its session: no later playback, no later outcome, no leaked track. */
-  #retire(error: Error): void {
-    if (this.#terminal) return;
-    const active = this.#track;
-    const listeners = [...this.#listeners];
-    this.#terminal = true;
-    this.#releasePromise ??= this.#cleanup();
-    if (!active?.started) return;
-    const outcome: PlayerEvent = { type: "failed", itemId: active.itemId, error, terminal: true };
-    for (const listener of listeners) deliver(listener, outcome);
-  }
-
   async #cleanup(): Promise<void> {
-    for (const controller of this.#opening) controller.abort();
-    const active = this.#track;
-    this.#track = undefined;
-    this.#listeners.clear();
-    const failures: Error[] = [];
-    const attempt = (step: () => void): void => {
+    this.#released = true;
+    this.#current?.end(STOPPED);
+    while (this.#closing.size > 0) await Promise.all(this.#closing);
+    const failures: unknown[] = [];
+    for (const step of [
+      () => this.#connection.off("stateChange", this.#onConnectionStateChange),
+      () => this.#player.off("stateChange", this.#onPlayerStateChange),
+      () => this.#player.off("error", this.#onPlayerError),
+      () => this.#unsubscribeSession(),
+      () => this.#subscription?.unsubscribe(),
+      () => this.#player.stop(true),
+      () => this.#releaseTransport(),
+    ]) {
       try {
         step();
       } catch (error: unknown) {
-        failures.push(asError(error));
+        failures.push(error);
       }
-    };
-    attempt(() => this.#connection.off("stateChange", this.#onConnectionStateChange));
-    attempt(() => this.#player.off("stateChange", this.#onPlayerStateChange));
-    attempt(() => this.#player.off("error", this.#onPlayerError));
-    attempt(() => this.#subscription?.unsubscribe());
-    attempt(() => this.#player.stop(true));
-    if (active) this.#join(active.track.close());
-    // Voice must not release its session before every opened input has closed.
-    while (this.#pending.size > 0) await Promise.all(this.#pending);
-    attempt(() => this.#releaseTransport?.());
+    }
     if (failures.length === 1) throw failures[0];
     if (failures.length > 1) throw new AggregateError(failures, "Discord Player cleanup failures");
   }
 
   #assertOpen(): void {
-    if (this.#terminal) throw new Error("Discord Player is retired");
+    if (this.#released) throw new DisTubeError("INVALID_STATE", "Discord Player is released");
   }
-
-  #emit(event: PlayerEvent): void {
-    if (this.#terminal) return;
-    for (const listener of this.#listeners) deliver(listener, event);
-  }
-}
-
-function deliver(listener: (event: PlayerEvent) => void, event: PlayerEvent): void {
-  try {
-    listener(event);
-  } catch {
-    // Player listeners are isolated; GuildQueue remains the state and diagnostic authority.
-  }
-}
-
-function startSignal(): StartSignal {
-  let complete!: () => void;
-  let fail!: (error: Error) => void;
-  const completed = new Promise<void>(resolve => {
-    complete = resolve;
-  });
-  const failed = new Promise<never>((_resolve, reject) => {
-    fail = reject;
-  });
-  // A native error can arrive before #awaitStart races this promise; mark the rejection observed now.
-  void failed.catch(() => undefined);
-  return { complete, fail, completed, failed };
 }
 
 function stateResource(state: AudioPlayer["state"]): AudioResource | undefined {

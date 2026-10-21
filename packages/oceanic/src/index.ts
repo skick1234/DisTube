@@ -1,1 +1,1 @@
-export { OceanicAdapter, type OceanicAdapterOptions } from "./adapter";
+export { OceanicAdapter } from "./adapter";

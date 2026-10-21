@@ -16,7 +16,8 @@ function options(creator: ReturnType<typeof gatewayAdapter>["creator"]) {
     adapterCreator: creator,
     selfDeaf: true,
     selfMute: false,
-    connectionTimeoutMs: 50,
+    timeoutMs: 50,
+    channelBitrate: (channelId: string) => (channelId === CHANNEL ? 64_000 : 96_000),
   } as const;
 }
 
@@ -56,7 +57,7 @@ describe("gateway session", () => {
   it("replaces a released local Player without leaving the gateway session", async () => {
     const gateway = gatewayAdapter();
     const session = await DiscordVoiceSession.connect(options(gateway.creator));
-    const engine = new DiscordVoiceEngine(undefined, async () => undefined);
+    const engine = new DiscordVoiceEngine({ opusComplexity: 10, bufferMs: 500 });
     const first = await engine.createPlayer(session);
     const firstConnection = latest.connection;
     const sent = gateway.sendPayload.mock.calls.length;
@@ -98,14 +99,26 @@ describe("gateway session", () => {
     await session.release();
   });
 
-  it("acknowledges self flags and stops delivering updates after unsubscribe", async () => {
+  it("reads the bitrate of the channel it settled in, including after a move", async () => {
+    const gateway = gatewayAdapter();
+    const session = await DiscordVoiceSession.connect(options(gateway.creator));
+    const before = session.bitrate;
+
+    await session.join("other");
+
+    expect(before).toBe(64_000);
+    expect(session.bitrate).toBe(96_000);
+    await session.release();
+  });
+
+  it("acknowledges self flags sent through join and stops delivering updates after unsubscribe", async () => {
     const gateway = gatewayAdapter();
     const session = await DiscordVoiceSession.connect(options(gateway.creator));
     const events = vi.fn();
     const unsubscribe = session.subscribe(events);
 
-    await session.setSelfDeaf(false);
-    await session.setSelfMute(true);
+    await session.join(CHANNEL, { selfDeaf: false });
+    await session.join(CHANNEL, { selfMute: true });
     expect(session.selfDeaf).toBe(false);
     expect(session.selfMute).toBe(true);
     expect(gateway.sendPayload).toHaveBeenLastCalledWith({

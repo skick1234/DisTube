@@ -4,13 +4,16 @@ import * as discordjsExports from "../src";
 
 declare const client: Client;
 
-const adapter = new discordjsExports.DiscordJSAdapter(client, { connectionTimeoutMs: 10_000 });
-const sessionPromise: Promise<VoiceSession> = adapter.createVoiceSession({ guildId: "guild", channelId: "voice" });
+const adapter = new discordjsExports.DiscordJSAdapter(client);
+const sessionPromise: Promise<VoiceSession> = adapter.createVoiceSession(
+  { guildId: "guild", channelId: "voice" },
+  { selfDeaf: true, selfMute: false, timeoutMs: 15_000 },
+);
 declare const session: VoiceSession;
 const clientUserId: string = session.clientUserId;
 
 void [adapter, sessionPromise, clientUserId];
-// @ts-expect-error public Player factories are not configurable
-new discordjsExports.DiscordJSAdapter(client, { playerFactory: async () => Promise.reject(new Error("unused")) });
+// @ts-expect-error the adapter is constructed from its client alone
+new discordjsExports.DiscordJSAdapter(client, {});
 // @ts-expect-error redundant create-adapter aliases are removed
 discordjsExports.createDiscordJSAdapter;

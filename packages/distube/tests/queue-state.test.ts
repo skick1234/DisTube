@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Song } from "../src";
-import { QueueStatus, RepeatMode } from "../src/enums";
+import { RepeatMode } from "../src/enums";
 import { QueueItem } from "../src/media";
 import {
   clearQueue,
@@ -18,7 +18,6 @@ import {
   removeRange,
   setAutoplay,
   setRepeat,
-  setStatus,
   shuffle,
   startFirst,
 } from "../src/queue/state";
@@ -164,14 +163,13 @@ describe("history and settings", () => {
     expect(popHistory(IDLE_QUEUE_STATE)).toBeUndefined();
   });
 
-  it("changes status and scheduling settings without mutating identity, and keeps no-ops identical", () => {
+  it("changes scheduling settings without mutating identity, and keeps no-ops identical", () => {
     const a = item();
     const started = playing([a]);
-    const paused = setStatus(started, QueueStatus.Paused);
-    expect(paused.current).toBe(a);
-    expect(paused.current?.song).toBe(song);
-    expect(Object.isFrozen(paused)).toBe(true);
-    expect(setStatus(started, QueueStatus.Playing)).toBe(started);
+    const repeating = setRepeat(started, RepeatMode.Queue);
+    expect(repeating.current).toBe(a);
+    expect(repeating.current?.song).toBe(song);
+    expect(Object.isFrozen(repeating)).toBe(true);
     expect(setRepeat(started, RepeatMode.Off)).toBe(started);
     expect(setRepeat(started, RepeatMode.Song).repeat).toBe("song");
     expect(setAutoplay(started, false)).toBe(started);

@@ -1,14 +1,18 @@
 import { type ClientRequest, request as httpRequest, type IncomingMessage } from "node:http";
 import { request as httpsRequest } from "node:https";
 import type { Readable } from "node:stream";
+import type { EncodedPlaybackResource, PlaybackResource } from "distube/integrations";
 import type { InputSource, WireError } from "./pipeline-worker";
-import type { LocalPlaybackResource } from "./validation";
+
+export type LocalPlaybackResource = Exclude<PlaybackResource, EncodedPlaybackResource>;
 
 export const MAX_DIAGNOSTIC_BYTES = 4096;
 export const MAX_ERROR_DEPTH = 4;
 export const MAX_ERROR_NODES = 12;
 export const WINDOW_BYTES = 256 * 1024;
 export const URL_READY_TIMEOUT_MS = 10_000;
+const MAX_REDIRECTS = 5;
+const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 const MANIFEST_CONTENT_TYPES = new Set([
   "application/dash+xml",
   "application/vnd.apple.mpegurl",
@@ -335,14 +339,17 @@ async function openUrl(
   range?: { readonly start: number; readonly end: number },
 ): Promise<OpenedUrl> {
   const url = new URL(value);
-  const makeRequest = url.protocol === "https:" ? httpsRequest : httpRequest;
+  const followsRedirects = Object.keys(headers ?? {}).length === 0;
   const requestHeaders = { ...headers, ...(range ? { Range: `bytes=${range.start}-${range.end}` } : {}) };
   return await new Promise((resolve, reject) => {
+    if (signal.aborted) {
+      reject(abortError());
+      return;
+    }
     let request: ClientRequest | undefined;
     let acceptedResponse: IncomingMessage | undefined;
     let settled = false;
-    const timer = setTimeout(() => finish(new Error("Playback URL response headers timed out")), URL_READY_TIMEOUT_MS);
-    const detachAbort = listenForAbort(signal, () => finish(abortError()));
+    let redirects = 0;
     const finish = (error: Error, response?: IncomingMessage): void => {
       if (settled) {
         acceptedResponse?.destroy(error);
@@ -355,50 +362,66 @@ async function openUrl(
       request?.destroy();
       reject(error);
     };
-    try {
-      request = makeRequest(url, { headers: requestHeaders, method: "GET" }, response => {
-        response.on("error", () => undefined);
-        if (settled) {
-          response.destroy();
-          return;
-        }
-        const status = response.statusCode ?? 0;
-        if (status < 200 || status >= 300) {
-          finish(
-            new Error(
-              status >= 300 && status < 400 ? "Playback URL redirected" : "Playback URL returned a non-success status",
-            ),
-            response,
-          );
-          return;
-        }
-        const contentType = response.headers["content-type"]?.split(";", 1)[0]?.trim().toLowerCase();
-        if (contentType && MANIFEST_CONTENT_TYPES.has(contentType)) {
-          finish(new Error("Playback URL returned a nested media manifest"), response);
-          return;
-        }
-        const size = status === 206 ? rangeSize(response.headers["content-range"]) : undefined;
-        if (range && range.start > 0 && size === undefined) {
-          finish(new Error("Playback URL ignored the requested byte range"), response);
-          return;
-        }
-        settled = true;
-        acceptedResponse = response;
-        clearTimeout(timer);
-        detachAbort();
-        const detachCancel = listenForAbort(signal, () => response.destroy(abortError()));
-        response.once("close", detachCancel);
-        resolve({ response, ...(size === undefined ? {} : { size }) });
-      });
-      request.once("error", error => finish(safeInputError("Playback URL request failed", error, redact)));
-      if (signal.aborted) {
-        finish(abortError());
-        return;
+    const timer = setTimeout(() => finish(new Error("Playback URL response headers timed out")), URL_READY_TIMEOUT_MS);
+    const detachAbort = listenForAbort(signal, () => finish(abortError()));
+    const send = (target: URL): void => {
+      try {
+        const makeRequest = target.protocol === "https:" ? httpsRequest : httpRequest;
+        const sent = makeRequest(target, { headers: requestHeaders, method: "GET" }, response => {
+          response.on("error", () => undefined);
+          if (settled) {
+            response.destroy();
+            return;
+          }
+          const status = response.statusCode ?? 0;
+          const location = REDIRECT_STATUSES.has(status) ? response.headers.location : undefined;
+          if (location !== undefined) {
+            if (!followsRedirects) return finish(new Error("Playback URL with headers redirected"), response);
+            if (redirects === MAX_REDIRECTS) {
+              return finish(new Error("Playback URL redirected too many times"), response);
+            }
+            const next = URL.parse(location, target.href);
+            if (next?.protocol !== "http:" && next?.protocol !== "https:") {
+              return finish(new Error("Playback URL redirected to a non-HTTP location"), response);
+            }
+            response.destroy();
+            sent.destroy();
+            redirects += 1;
+            send(next);
+            return;
+          }
+          if (status < 200 || status >= 300) {
+            finish(new Error("Playback URL returned a non-success status"), response);
+            return;
+          }
+          const contentType = response.headers["content-type"]?.split(";", 1)[0]?.trim().toLowerCase();
+          if (contentType && MANIFEST_CONTENT_TYPES.has(contentType)) {
+            finish(new Error("Playback URL returned a nested media manifest"), response);
+            return;
+          }
+          const size = status === 206 ? rangeSize(response.headers["content-range"]) : undefined;
+          if (range && range.start > 0 && size === undefined) {
+            finish(new Error("Playback URL ignored the requested byte range"), response);
+            return;
+          }
+          settled = true;
+          acceptedResponse = response;
+          clearTimeout(timer);
+          detachAbort();
+          const detachCancel = listenForAbort(signal, () => response.destroy(abortError()));
+          response.once("close", detachCancel);
+          resolve({ response, ...(size === undefined ? {} : { size }) });
+        });
+        request = sent;
+        sent.once("error", error => {
+          if (request === sent) finish(safeInputError("Playback URL request failed", error, redact));
+        });
+        sent.end();
+      } catch (error: unknown) {
+        finish(safeInputError("Playback URL request failed", error, redact));
       }
-      request.end();
-    } catch (error: unknown) {
-      finish(safeInputError("Playback URL request failed", error, redact));
-    }
+    };
+    send(url);
   });
 }
 

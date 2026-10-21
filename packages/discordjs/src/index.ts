@@ -1,1 +1,1 @@
-export { DiscordJSAdapter, type DiscordJSAdapterOptions } from "./adapter";
+export { DiscordJSAdapter } from "./adapter";

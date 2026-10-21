@@ -3,11 +3,10 @@ import { describe, expect, it, vi } from "vitest";
 import type { DisTubeEventName } from "../src";
 import type { PlaybackResource } from "../src/integrations";
 import {
-  FakeEngine,
-  FakePlayer,
-  FakeSource,
+  capture,
+  type FakePlayer,
+  FixedBitratePlayer,
   GUILD,
-  media,
   playableSetup,
   record,
   required,
@@ -29,394 +28,353 @@ const QUEUE_EVENTS: readonly DisTubeEventName[] = [
   "queue.deleted",
 ];
 
-function clip(id = "clip"): PlaybackResource {
-  return { kind: "url", url: `https://stream.example/${id}`, dispose: () => undefined };
+function clip(id = "clip", dispose: () => void = () => undefined): PlaybackResource {
+  return { kind: "url", url: `https://stream.example/${id}`, dispose };
 }
 
-function errorText(value: unknown): string {
-  if (!(value instanceof Error)) return "";
-  return [
-    value.name,
-    value.message,
-    value.stack ?? "",
-    errorText(value.cause),
-    ...(value instanceof AggregateError ? value.errors.map(errorText) : []),
-  ].join("\n");
+async function joined() {
+  const harness = setup([]);
+  const voice = await harness.distube.voices.join(channel);
+  return { harness, voice };
 }
 
-describe("direct playback without a queue", () => {
-  it("publishes only voice track events, without an itemId, and reads position 0 after the track ends", async () => {
-    const harness = playableSetup();
-    const voice = await harness.distube.voices.join(channel);
-    const order = record(harness.distube, ["voice.track.started", "voice.track.finished", ...QUEUE_EVENTS]);
-    const started = vi.fn();
-    const finished = vi.fn();
-    harness.distube.on("voice.track.started", started);
-    harness.distube.on("voice.track.finished", finished);
+describe("direct playback", () => {
+  it("resolves finished at the natural end, calls onStart once and publishes no queue event", async () => {
+    const { harness, voice } = await joined();
+    const events = record(harness.distube, QUEUE_EVENTS);
+    const onStart = vi.fn();
+    const dispose = vi.fn();
 
-    await voice.play(clip());
-    const player = required(harness.engine.players[0]) as FakePlayer;
-    player.position = 12;
+    const playing = voice.play(clip("clip", dispose), { onStart });
     await settle();
+    const player = harness.engine.player;
+    player.position = 12;
     expect(voice.position).toBe(12);
+    expect(onStart).toHaveBeenCalledTimes(1);
 
     player.finish();
-    await settle();
-
-    expect(order).toEqual(["voice.track.started", "voice.track.finished"]);
-    expect(started).toHaveBeenCalledWith(expect.objectContaining({ guildId: GUILD, voice }));
-    expect(started.mock.calls[0]?.[0]).not.toHaveProperty("itemId");
-    expect(finished.mock.calls[0]?.[0]).not.toHaveProperty("itemId");
+    expect(await playing).toEqual({ reason: "finished" });
     expect(voice.position).toBe(0);
-    expect(harness.distube.getQueue(GUILD)).toBeUndefined();
-  });
-
-  it("rejects an undeclared resource kind with UNSUPPORTED before any backend command", async () => {
-    const harness = playableSetup();
-    const voice = await harness.distube.voices.join(channel);
-
-    await expect(
-      voice.play({
-        kind: "encoded",
-        format: "test.encoded",
-        encoded: "QAAAjQIAJVJpY2sgQXN0bGV5",
-        dispose: () => undefined,
-      }),
-    ).rejects.toMatchObject({ code: "UNSUPPORTED" });
-
-    expect(harness.engine.createPlayer).not.toHaveBeenCalled();
-  });
-
-  it("rejects a malformed resource with INVALID_ARGUMENT", async () => {
-    const harness = playableSetup();
-    const voice = await harness.distube.voices.join(channel);
-    const dispose = vi.fn();
-
-    await expect(voice.play({ kind: "url", url: "not a url", dispose })).rejects.toMatchObject({
-      code: "INVALID_ARGUMENT",
-    });
-    expect(dispose).not.toHaveBeenCalled();
-    expect(harness.engine.createPlayer).not.toHaveBeenCalled();
-  });
-
-  it("consumes a valid resource before rejecting play on a released voice", async () => {
-    const harness = playableSetup();
-    const voice = await harness.distube.voices.join(channel);
-    await voice.leave();
-    const dispose = vi.fn();
-
-    await expect(voice.play({ kind: "url", url: "https://stream.example/late", dispose })).rejects.toMatchObject({
-      code: "INVALID_STATE",
-    });
     expect(dispose).toHaveBeenCalledTimes(1);
-    expect(harness.engine.createPlayer).not.toHaveBeenCalled();
-  });
-
-  it("claims a one-shot readable across wrappers without disposing the duplicate", async () => {
-    class StreamEngine extends FakeEngine {
-      override readonly accepts = new Set(["stream" as const]);
-    }
-    const harness = setup([], { engine: new StreamEngine() });
-    const voice = await harness.distube.voices.join(channel);
-    const stream = Readable.from(["audio"]);
-    const firstDispose = vi.fn();
-    const duplicateDispose = vi.fn();
-    const first = { kind: "stream" as const, stream, dispose: firstDispose };
-
-    await voice.play(first);
-    await expect(voice.play({ kind: "stream", stream, dispose: duplicateDispose })).rejects.toMatchObject({
-      code: "INVALID_STATE",
-    });
-    expect(duplicateDispose).not.toHaveBeenCalled();
-    expect(required(harness.engine.players[0]).playing).toBeDefined();
-
-    await voice.stop();
-    expect(stream.destroyed).toBe(true);
-    expect(firstDispose).toHaveBeenCalledTimes(1);
-    await expect(voice.play(first)).rejects.toMatchObject({ code: "INVALID_STATE" });
-    expect(firstDispose).toHaveBeenCalledTimes(1);
-  });
-
-  it("releases a Player that rejects stop before disposing its borrowed resource", async () => {
-    const harness = playableSetup();
-    const voice = await harness.distube.voices.join(channel);
-    const disposalOrder: string[] = [];
-    await voice.play({
-      kind: "url",
-      url: "https://stream.example/first",
-      dispose: () => {
-        disposalOrder.push("resource");
-      },
-    });
-    const player = required(harness.engine.players[0]);
-    player.stopTrack.mockImplementationOnce(async () => {
-      throw new Error("stop failed");
-    });
-    player.release.mockImplementationOnce(async () => {
-      disposalOrder.push("player");
-    });
-
-    await expect(voice.stop()).rejects.toMatchObject({ code: "VOICE_FAILED" });
-    expect(disposalOrder).toEqual(["player", "resource"]);
-
-    await voice.play(clip("next"));
-    expect(harness.engine.players).toHaveLength(2);
-  });
-
-  it.each([
-    {
-      name: "URL and header",
-      secret: "Bearer private-header",
-      resource: {
-        kind: "url" as const,
-        url: "https://stream.example/audio?X-Amz-Signature=private-query",
-        headers: { Authorization: "Bearer private-header" },
-      },
-    },
-    {
-      name: "file",
-      secret: "/private/audio/file-token.mp3",
-      resource: { kind: "file" as const, path: "/private/audio/file-token.mp3" },
-    },
-    {
-      name: "encoded",
-      secret: "ENCODED_PRIVATE_TOKEN",
-      resource: { kind: "encoded" as const, format: "test.encoded", encoded: "ENCODED_PRIVATE_TOKEN" },
-    },
-  ])("redacts nested Player start failures for a $name resource", async ({ resource, secret }) => {
-    class ResourceEngine extends FakeEngine {
-      override readonly accepts = new Set(["url", "file", "encoded"] as const);
-      readonly encodedFormats = new Set(["test.encoded"]);
-    }
-    const engine = new ResourceEngine();
-    const harness = setup([], { engine });
-    const voice = await harness.distube.voices.join(channel);
-    const pendingPlayer = engine.gateCreate();
-    const player = new FakePlayer();
-    player.play.mockRejectedValueOnce(
-      new Error(`decoder could not open ${secret}`, {
-        cause: new AggregateError([new Error(`codec failed for ${secret}`)], "decoder causes"),
-      }),
-    );
-
-    const playing = voice.play(resource);
-    pendingPlayer.resolve(player);
-    const failure = await playing.catch((error: unknown) => error);
-
-    expect(failure).toMatchObject({ code: "VOICE_FAILED" });
-    expect(errorText(failure)).toContain("codec failed");
-    expect(errorText(failure)).not.toContain(secret);
-    if (resource.kind === "url") expect(errorText(failure)).not.toContain(resource.url);
-    await voice.leave();
-  });
-
-  it("redacts Player outcome and stop cleanup failures using the accepted file path", async () => {
-    class FileEngine extends FakeEngine {
-      override readonly accepts = new Set(["file"] as const);
-    }
-    const harness = setup([], { engine: new FileEngine() });
-    const voice = await harness.distube.voices.join(channel);
-    const path = "/private/audio/accepted-file.mp3";
-    const failed = vi.fn();
-    harness.distube.on("voice.track.failed", failed);
-    await voice.play({ kind: "file", path });
-    const player = required(harness.engine.players[0]);
-    player.emit({
-      type: "failed",
-      itemId: "direct",
-      error: new Error("decode failed", { cause: new Error(`Could not read ${path}`) }),
-    });
     await settle();
-    expect(failed).toHaveBeenCalledTimes(1);
-    expect(errorText(failed.mock.calls[0]?.[0]?.error)).toContain("Could not read");
-    expect(errorText(failed.mock.calls[0]?.[0]?.error)).not.toContain(path);
-
-    await voice.play({
-      kind: "file",
-      path,
-      dispose: () => {
-        throw new Error(`dispose failed for ${path}`);
-      },
-    });
-    player.stopTrack.mockRejectedValueOnce(new Error(`stop failed for ${path}`));
-    player.release.mockRejectedValueOnce(new Error(`release failed for ${path}`));
-    const failure = await voice.stop().catch((error: unknown) => error);
-    expect(failure).toMatchObject({ code: "VOICE_FAILED" });
-    expect(errorText(failure)).toContain("stop failed");
-    expect(errorText(failure)).toContain("dispose failed");
-    expect(errorText(failure)).not.toContain(path);
-  });
-
-  it("rejects track controls with INVALID_STATE while a queue is attached and leaves its item alone", async () => {
-    const harness = playableSetup();
-    const queue = await harness.distube.play(channel, "a");
-    const items = [...(queue.current ? [queue.current] : []), ...queue.upcoming];
-    await settle();
-    const voice = required(harness.distube.voices.get(GUILD));
-    const player = required(harness.engine.players[0]) as FakePlayer;
-    const events = record(harness.distube, ["voice.track.started", "voice.track.finished", "queue.item.finished"]);
-
-    for (const control of [
-      () => voice.play(clip()),
-      () => voice.stop(),
-      () => voice.pause(),
-      () => voice.resume(),
-      () => voice.seek(5),
-    ]) {
-      await expect(control()).rejects.toMatchObject({ code: "INVALID_STATE" });
-    }
-    await settle();
-
-    expect(queue.current?.id).toBe(items[0]?.id);
-    expect(player.playing).toBe(items[0]?.id);
-    expect(player.calls.filter(call => call !== "volume:100" && !call.startsWith("play:"))).toEqual([]);
-    expect(events).toEqual([]);
-  });
-
-  it("stops and releases the queue's track before a direct play in the same tick as queue.stop and keeps the direct track playing", async () => {
-    const harness = playableSetup();
-    const queue = await harness.distube.play(channel, "a");
-    await settle();
-    const queued = required(queue.current).id;
-    const voice = required(harness.distube.voices.get(GUILD));
-    const player = required(harness.engine.players[0]) as FakePlayer;
-    const events = record(
-      harness.distube,
-      QUEUE_EVENTS.filter(name => name !== "queue.deleted"),
-    );
-    const tracks: (string | undefined)[] = [];
-    const finished: (string | undefined)[] = [];
-    harness.distube.on("voice.track.started", event => tracks.push(event.itemId));
-    harness.distube.on("voice.track.finished", event => finished.push(event.itemId));
-
-    // The stop's own queue.deleted is the last queue event; the direct track must add none after it.
-    const stopping = queue.stop();
-    const playing = voice.play(clip("after-stop"));
-    await Promise.all([stopping, playing]);
-    await settle();
-
-    // A stale queue stop that lands after the direct play would silence the new track.
-    expect(player.calls.filter(call => call === "stop" || call.startsWith("play:"))).toEqual([
-      `play:${queued}`,
-      "stop",
-      `play:${player.requests.at(-1)?.itemId}`,
-    ]);
-    expect(player.requests.at(-1)?.resource).toMatchObject({ url: "https://stream.example/after-stop" });
-    expect(player.playing).toBe(player.requests.at(-1)?.itemId);
-    expect(tracks).toEqual([undefined]);
-    expect(finished).toEqual([queued]);
-    expect(harness.source.disposed).toEqual(["a"]);
     expect(events).toEqual([]);
     expect(harness.distube.getQueue(GUILD)).toBeUndefined();
   });
 
-  it("rejects stop, pause, resume and seek with INVALID_STATE when no track is active", async () => {
-    const harness = playableSetup();
-    const voice = await harness.distube.voices.join(channel);
+  it("rejects VOICE_FAILED when the track fails after start and stays connected", async () => {
+    const { harness, voice } = await joined();
+    const playing = capture(voice.play(clip()));
+    await settle();
+    const failure = new Error("input ended early");
+    harness.engine.player.fail(failure);
+    expect(await playing).toMatchObject({ code: "VOICE_FAILED", cause: failure });
+    expect(harness.distube.voices.get(GUILD)).toBe(voice);
+  });
 
+  it("lets the last play win: the replaced call resolves before the new track is audible", async () => {
+    const { harness, voice } = await joined();
+    const order: string[] = [];
+    const disposed: string[] = [];
+    const first = voice.play(clip("a", () => void disposed.push("a")));
+    await settle();
+    void first.then(end => order.push(`a:${end.reason}`));
+    const second = voice.play(
+      clip("b", () => void disposed.push("b")),
+      { onStart: () => order.push("b:started") },
+    );
+    await settle();
+
+    expect(order).toEqual(["a:replaced", "b:started"]);
+    expect(harness.engine.player.playing).toBe("b");
+    harness.engine.player.finish();
+    expect(await second).toEqual({ reason: "finished" });
+    expect(disposed).toEqual(["a", "b"]);
+  });
+
+  it("rejects ABORTED for a signal aborted before start and resolves stopped for one aborted after", async () => {
+    const { harness, voice } = await joined();
+    const early = new AbortController();
+    early.abort();
+    const unstarted = vi.fn();
+    const onStart = vi.fn();
+    await expect(voice.play(clip("early", unstarted), { signal: early.signal, onStart })).rejects.toMatchObject({
+      code: "ABORTED",
+    });
+    expect(unstarted).toHaveBeenCalledTimes(1);
+    expect(onStart).not.toHaveBeenCalled();
+
+    const late = new AbortController();
+    const playing = voice.play(clip("late"), { signal: late.signal });
+    await settle();
+    late.abort();
+    expect(await playing).toEqual({ reason: "stopped" });
+    expect(harness.engine.player.playing).toBeUndefined();
+  });
+
+  it("ends only the track on stop and destroys a stream resource once", async () => {
+    const { harness, voice } = await joined();
+    const stream = Readable.from(["audio"]);
+    const dispose = vi.fn();
+    const playing = voice.play({ kind: "stream", stream, dispose });
+    await settle();
+    await voice.stop();
+    expect(await playing).toEqual({ reason: "stopped" });
+    expect(stream.destroyed).toBe(true);
+    expect(dispose).toHaveBeenCalledTimes(1);
+    expect(harness.distube.voices.get(GUILD)).toBe(voice);
+  });
+
+  it("rejects track controls with INVALID_STATE without a track", async () => {
+    const { harness, voice } = await joined();
     for (const control of [() => voice.stop(), () => voice.pause(), () => voice.resume(), () => voice.seek(1)]) {
       await expect(control()).rejects.toMatchObject({ code: "INVALID_STATE" });
     }
-
-    await voice.play(clip());
-    required(harness.engine.players[0]).finish();
+    const playing = voice.play(clip());
     await settle();
+    harness.engine.player.finish();
+    await playing;
     await expect(voice.pause()).rejects.toMatchObject({ code: "INVALID_STATE" });
-    expect(required(harness.engine.players[0]).pause).not.toHaveBeenCalled();
+    expect(harness.engine.player.pause).not.toHaveBeenCalled();
   });
 
-  it("rejects seek with INVALID_STATE before checking capabilities for attached, idle and released voices", async () => {
-    const harness = setup([new FakeSource("source")], { engine: new FakeEngine(undefined, { seek: false }) });
-    const voice = await harness.distube.voices.join(channel);
-    await expect(voice.seek(10)).rejects.toMatchObject({ code: "INVALID_STATE" });
-    const queue = await harness.distube.play(channel, media("source", "a"));
+  it("forwards pause and resume once each and carries the pause intent across tracks", async () => {
+    const { harness, voice } = await joined();
+    void voice.play(clip("a"));
     await settle();
-    const player = required(harness.engine.players[0]);
+    const player = harness.engine.player;
+    await voice.pause();
+    await voice.pause();
+    expect(player.pause).toHaveBeenCalledTimes(1);
+    expect(voice.paused).toBe(true);
 
-    await expect(voice.seek(10)).rejects.toMatchObject({ code: "INVALID_STATE" });
-    await expect(queue.seek(10)).rejects.toMatchObject({ code: "UNSUPPORTED" });
-    await voice.leave();
-    await expect(voice.seek(10)).rejects.toMatchObject({ code: "INVALID_STATE" });
-
-    expect(player.seek).not.toHaveBeenCalled();
+    void voice.play(clip("b"));
+    await settle();
+    expect(voice.paused).toBe(true);
+    await voice.resume();
+    await voice.resume();
+    expect(player.resume).toHaveBeenCalledTimes(1);
+    expect(voice.paused).toBe(false);
   });
 
-  it("rejects seek with UNSUPPORTED before touching the Player when the engine cannot seek", async () => {
-    const harness = setup([], { engine: new FakeEngine(undefined, { seek: false }) });
-    const voice = await harness.distube.voices.join(channel);
-    await voice.play(clip());
-    const player = required(harness.engine.players[0]) as FakePlayer;
+  it("seeks only resources whose kind allows it", async () => {
+    const { harness, voice } = await joined();
+    const stream = Readable.from(["audio"]);
+    void voice.play({ kind: "stream", stream });
+    await settle();
+    const player = harness.engine.player;
+    await expect(voice.seek(10)).rejects.toMatchObject({ code: "UNSUPPORTED" });
+    expect(player.playing).toBe("stream");
 
+    void voice.play({ kind: "url", url: "https://stream.example/live" });
+    await settle();
     await expect(voice.seek(10)).rejects.toMatchObject({ code: "UNSUPPORTED" });
 
-    expect(player.seek).not.toHaveBeenCalled();
-    expect(player.playing).toBeDefined();
-    await harness.distube.dispose();
+    void voice.play({ kind: "file", path: "/music/a.mp3" });
+    await settle();
+    await expect(voice.seek(-1)).rejects.toMatchObject({ code: "INVALID_ARGUMENT" });
+    await voice.seek(10);
+    expect(player.seek).toHaveBeenCalledExactlyOnceWith(10);
   });
 
-  it("ends an active direct track before starting the next one", async () => {
-    const harness = playableSetup();
-    const voice = await harness.distube.voices.join(channel);
-    const order: string[] = [];
-    harness.distube.on("voice.track.started", event => order.push(`started:${event.itemId}`));
-    harness.distube.on("voice.track.finished", event => order.push(`finished:${event.itemId}`));
-
-    await voice.play(clip("a"), { itemId: "a" });
-    await voice.play(clip("b"), { itemId: "b" });
-    await settle();
-    const player = required(harness.engine.players[0]) as FakePlayer;
-
-    expect(player.calls).toEqual(["volume:100", "play:a", "stop", "play:b"]);
-    expect(player.playing).toBe("b");
-    expect(order).toEqual(["started:a", "finished:a", "started:b"]);
+  it("rejects play on a released voice and still disposes the resource once", async () => {
+    const { harness, voice } = await joined();
+    await voice.leave();
+    const dispose = vi.fn();
+    await expect(voice.play(clip("late", dispose))).rejects.toMatchObject({ code: "INVALID_STATE" });
+    expect(dispose).toHaveBeenCalledTimes(1);
+    expect(harness.engine.createPlayer).not.toHaveBeenCalled();
   });
 });
 
-describe("leave from the voice facade", () => {
-  it("joins and leaves without publishing queue events or creating a Player", async () => {
+describe("direct playback over a queue", () => {
+  it("replaces the queue's track, deletes the queue as replaced and keeps the clip playing", async () => {
     const harness = playableSetup();
-    const events = record(harness.distube, ["voice.disconnected", ...QUEUE_EVENTS]);
-    const voice = await harness.distube.voices.join(channel);
-    expect(events).toEqual([]);
-    await voice.leave();
+    const queue = await harness.distube.play(channel, "a");
+    await harness.distube.play(channel, "b");
+    await settle();
+    const voice = required(queue.voice);
+    const events: string[] = [];
+    for (const name of QUEUE_EVENTS)
+      harness.distube.on(
+        name,
+        event => void events.push(name === "queue.deleted" && "reason" in event ? `deleted:${event.reason}` : name),
+      );
 
-    expect(events).toEqual(["voice.disconnected"]);
-    expect(harness.engine.createPlayer).not.toHaveBeenCalled();
-    expect(required(harness.adapter.sessions[0]).release).toHaveBeenCalledTimes(1);
+    const playing = voice.play(clip("sfx"));
+    await settle();
+
+    expect(events).toEqual(["deleted:replaced"]);
+    expect(harness.distube.getQueue(GUILD)).toBeUndefined();
+    expect(harness.engine.player.playing).toBe("sfx");
+    expect(harness.source.disposed).toEqual(["a"]);
+    harness.engine.player.finish();
+    expect(await playing).toEqual({ reason: "finished" });
   });
 
-  it("deletes the attached queue, releases Player before session, announces once, and repeats as a no-op", async () => {
+  it("rejects skip on the queue a direct clip replaced and keeps the clip playing", async () => {
+    const harness = playableSetup();
+    const queue = await harness.distube.play(channel, "a");
+    await harness.distube.play(channel, "b");
+    await settle();
+    void required(queue.voice).play(clip("sfx"));
+    await settle();
+
+    await expect(queue.skip()).rejects.toMatchObject({ code: "INVALID_STATE" });
+    await settle();
+    expect(harness.engine.player.playing).toBe("sfx");
+    expect(harness.engine.player.played).toEqual(["a", "sfx"]);
+  });
+
+  it("keeps a move committed when the caller aborts the insertion after the join", async () => {
     const harness = playableSetup();
     const queue = await harness.distube.play(channel, "a");
     await settle();
-    const voice = required(harness.distube.voices.get(GUILD));
-    const player = required(harness.engine.players[0]);
-    const session = required(harness.adapter.sessions[0]);
-    const order: string[] = [];
-    player.release.mockImplementation(async () => {
-      order.push("player.release");
+    const controller = new AbortController();
+    const session = harness.adapter.session;
+    session.join.mockImplementationOnce(async channelId => {
+      session.channelId = channelId;
+      controller.abort();
     });
-    session.release.mockImplementation(async () => {
-      order.push("session.release");
-    });
-    harness.distube.on("queue.deleted", () => order.push("queue.deleted"));
-    harness.distube.on("voice.disconnected", event => order.push(`voice.disconnected:${event.reason}`));
+    const events = record(harness.distube, QUEUE_EVENTS);
 
-    const first = voice.leave();
-    const second = voice.leave();
-    await Promise.all([first, second]);
+    await expect(
+      harness.distube.play({ guildId: GUILD, id: "second" }, "b", { signal: controller.signal }),
+    ).rejects.toMatchObject({ code: "ABORTED" });
     await settle();
 
-    expect(order).toEqual(["queue.deleted", "player.release", "session.release", "voice.disconnected:left"]);
-    expect(queue.status).toBe("idle");
+    expect(harness.source.search).toHaveBeenLastCalledWith("b", expect.anything());
+    expect(queue.voice?.channelId).toBe("second");
+    expect(harness.engine.player.playing).toBe("a");
+    expect(queue.upcoming).toEqual([]);
+    expect(events).toEqual([]);
+  });
+
+  it("treats a direct stop as a skip and a direct pause as the queue's pause", async () => {
+    const harness = playableSetup();
+    const queue = await harness.distube.play(channel, "a");
+    await harness.distube.play(channel, "b");
+    await settle();
+    const voice = required(queue.voice);
+    const events = record(harness.distube, ["queue.item.finished", "queue.history.added", "queue.item.started"]);
+
+    await voice.pause();
+    expect(queue.status).toBe("paused");
+    await voice.resume();
+    expect(queue.status).toBe("playing");
+
+    await voice.stop();
+    await settle();
+    expect(events).toEqual(["queue.history.added", "queue.item.started"]);
+    expect(queue.history.map(item => item.song.id)).toEqual(["a"]);
+    expect(queue.current?.song.id).toBe("b");
+  });
+
+  it("does not stop a direct track that replaced the queue in the same tick as queue.stop", async () => {
+    const harness = playableSetup();
+    const queue = await harness.distube.play(channel, "a");
+    await settle();
+    const voice = required(queue.voice);
+    const stopping = queue.stop();
+    const playing = voice.play(clip("after-stop"));
+    await stopping;
+    await settle();
+    expect(harness.engine.player.played).toEqual(["a", "after-stop"]);
+    expect(harness.engine.player.playing).toBe("after-stop");
+    expect(harness.source.disposed).toEqual(["a"]);
+    harness.engine.player.finish();
+    expect(await playing).toEqual({ reason: "finished" });
+  });
+});
+
+describe("bitrate", () => {
+  it("commits a numeric override and auto after the live Player acknowledges", async () => {
+    const { harness, voice } = await joined();
+    expect(voice.bitrate).toBe("auto");
+    void voice.play(clip());
+    await settle();
+    await voice.setBitrate(96_000);
+    expect(voice.bitrate).toBe(96_000);
+    await voice.setBitrate("auto");
+    expect(voice.bitrate).toBe("auto");
+    expect(harness.engine.player.bitrates).toEqual([96_000, undefined]);
+  });
+
+  it.each([5_999, 512_000, 96_000.5, Number.NaN])("rejects %d with INVALID_ARGUMENT", async bitrate => {
+    const { voice } = await joined();
+    await expect(voice.setBitrate(bitrate)).rejects.toMatchObject({ code: "INVALID_ARGUMENT" });
+    expect(voice.bitrate).toBe("auto");
+  });
+
+  it("stores a value set before any Player and applies it before the first track", async () => {
+    const { harness, voice } = await joined();
+    await voice.setBitrate(64_000);
+    expect(voice.bitrate).toBe(64_000);
+    void voice.play(clip());
+    await settle();
+    expect(harness.engine.player.calls.slice(0, 3)).toEqual(["volume:100", "bitrate:64000", "play:clip"]);
+  });
+
+  it("keeps the previous setting when the Player rejects or cannot change the bitrate", async () => {
+    const { harness, voice } = await joined();
+    void voice.play(clip());
+    await settle();
+    harness.engine.player.setBitrate.mockRejectedValueOnce(new Error("encoder busy"));
+    await expect(voice.setBitrate(96_000)).rejects.toMatchObject({ code: "VOICE_FAILED" });
+    expect(voice.bitrate).toBe("auto");
+
+    const fixed = setup([]);
+    fixed.engine.createPlayer.mockResolvedValueOnce(new FixedBitratePlayer());
+    const fixedVoice = await fixed.distube.voices.join(channel);
+    await fixedVoice.setBitrate(48_000);
+    void fixedVoice.play(clip());
+    await settle();
+    await expect(fixedVoice.setBitrate(96_000)).rejects.toMatchObject({ code: "UNSUPPORTED" });
+    expect(fixedVoice.bitrate).toBe(48_000);
+    await fixedVoice.setBitrate("auto");
+    expect(fixedVoice.bitrate).toBe("auto");
+  });
+});
+
+describe("leave from the voice", () => {
+  it("joins and leaves without queue events or a Player", async () => {
+    const harness = playableSetup();
+    const events = record(harness.distube, ["voice.disconnected", ...QUEUE_EVENTS]);
+    const voice = await harness.distube.voices.join(channel);
+    await voice.leave();
+    await settle();
+    expect(events).toEqual(["voice.disconnected"]);
+    expect(harness.engine.createPlayer).not.toHaveBeenCalled();
+    expect(harness.adapter.session.release).toHaveBeenCalledTimes(1);
+  });
+
+  it("deletes the queue, releases Player before session, announces once and repeats as a no-op", async () => {
+    const harness = playableSetup();
+    const queue = await harness.distube.play(channel, "a");
+    await settle();
+    const voice = required(queue.voice);
+    const player = harness.engine.player as FakePlayer;
+    const session = harness.adapter.session;
+    const order: string[] = [];
+    player.release.mockImplementation(async () => void order.push("player.release"));
+    session.release.mockImplementation(async () => void order.push("session.release"));
+    harness.distube.on("queue.deleted", event => void order.push(`queue.deleted:${event.reason}`));
+    harness.distube.on("voice.disconnected", event => void order.push(`voice.disconnected:${event.reason}`));
+
+    let firstSettled = false;
+    const first = voice.leave().then(() => (firstSettled = true));
+    const second = harness.distube.voices.leave(GUILD).then(() => firstSettled);
+    expect(await second).toBe(true);
+    await first;
+    await settle();
+
+    expect(order).toEqual(["queue.deleted:leave", "player.release", "session.release", "voice.disconnected:left"]);
     expect(harness.distube.getQueue(GUILD)).toBeUndefined();
     expect(harness.distube.voices.has(GUILD)).toBe(false);
 
-    // A released voice's leave is a successful no-op and cannot touch a successor voice.
     const successor = await harness.distube.voices.join(channel);
     await expect(voice.leave()).resolves.toBeUndefined();
     expect(harness.distube.voices.get(GUILD)).toBe(successor);
     expect(session.release).toHaveBeenCalledTimes(1);
-    await expect(voice.play(clip())).rejects.toMatchObject({ code: "INVALID_STATE" });
+    await expect(voice.setVolume(50)).rejects.toMatchObject({ code: "INVALID_STATE" });
   });
 });

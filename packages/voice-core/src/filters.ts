@@ -28,7 +28,6 @@ export const DEFAULT_FILTERS: FfmpegFilterDefinitions = Object.freeze({
   mcompand: fixed("mcompand"),
   nightcore: { render: (value = 1.25) => rate(value), default: 1.25, min: 1, max: 2, label: v => `Nightcore x${v}` },
   phaser: fixed("aphaser"),
-  reverse: fixed("areverse"),
   surround: fixed("surround"),
   tremolo: fixed("tremolo"),
   vaporwave: { render: (value = 0.8) => rate(value), default: 0.8, min: 0.5, max: 1, label: v => `Vaporwave x${v}` },

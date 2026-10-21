@@ -72,7 +72,7 @@ describe("repeat modes", () => {
   it("does not repeat a failed item in queue mode", async () => {
     const { harness, queue, player } = await playing(["a", "b"]);
     await queue.setRepeat("queue");
-    player.emit({ type: "failed", itemId: required(queue.current).id, error: new Error("decoder failed") });
+    player.fail(new Error("decoder failed"));
     await settle();
 
     expect(queue.current?.song.id).toBe("b");
@@ -84,15 +84,11 @@ describe("repeat modes", () => {
 
     expect(queue.current?.song.id).toBe("b");
     expect(waiting(queue)).toEqual([]);
-    expect(player.requests.map(request => request.resource)).toEqual([
-      expect.objectContaining({ url: "https://stream.example/a" }),
-      expect.objectContaining({ url: "https://stream.example/b" }),
-      expect.objectContaining({ url: "https://stream.example/b" }),
-    ]);
+    expect(player.played).toEqual(["a", "b", "b"]);
     await harness.distube.dispose();
   });
 
-  it("rejects an unknown repeat mode and a non-boolean autoplay before committing", async () => {
+  it("rejects an unknown repeat mode before committing", async () => {
     const { harness, queue } = await playing(["a"]);
     await expect(queue.setRepeat("forever" as never)).rejects.toMatchObject({ code: "INVALID_ARGUMENT" });
     await expect(queue.setAutoplay("yes" as never)).rejects.toMatchObject({ code: "INVALID_ARGUMENT" });
@@ -167,7 +163,7 @@ describe("autoplay", () => {
 
   it("publishes no cause when the owning source has no related member", async () => {
     const { harness, queue, player } = await playing(["a"]);
-    // A SourcePlugin that never implements autoplay, rather than one that declines.
+    // A Plugin that never implements autoplay, rather than one that declines.
     Reflect.deleteProperty(harness.source, "related");
     const failures: DisTubeError[] = [];
     harness.distube.on("queue.autoplay.failed", event => failures.push(event.error));
@@ -230,9 +226,7 @@ describe("event lifecycle", () => {
       "queue.created",
       "queue.playlist.added",
       "queue.item.added",
-      "voice.track.started",
       "queue.item.started",
-      "voice.track.finished",
       "queue.item.finished",
       "queue.history.added",
       "queue.finished",
@@ -247,18 +241,14 @@ describe("event lifecycle", () => {
     player.finish();
     await settle();
 
-    // The Playlist's own Songs publish no per-item added events; voice events precede the queue's.
+    // The Playlist's own Songs publish no per-item added events.
     expect(events).toEqual([
       "queue.created",
       "queue.playlist.added",
-      "voice.track.started",
       "queue.item.started",
-      "voice.track.finished",
       "queue.item.finished",
       "queue.history.added",
-      "voice.track.started",
       "queue.item.started",
-      "voice.track.finished",
       "queue.item.finished",
       "queue.history.added",
       "queue.finished",
@@ -268,8 +258,8 @@ describe("event lifecycle", () => {
 
   it("captures immutable state that does not change after later commits", async () => {
     const { harness, queue, player } = await playing(["a", "b"]);
-    const captures: DisTubeEventMap["queue.item.finished"][] = [];
-    harness.distube.on("queue.item.finished", event => captures.push(event));
+    const captures: DisTubeEventMap["queue.history.added"][] = [];
+    harness.distube.on("queue.history.added", event => captures.push(event));
     await queue.skip();
     await settle();
     player.finish();
@@ -317,7 +307,7 @@ describe("queue occurrence edits and lifetime", () => {
     await voice.setVolume(40);
     expect(voice.volume).toBe(40);
     expect(player.volumes.at(-1)).toBe(40);
-    expect(player.playing).toBe(queue.current?.id);
+    expect(player.playing).toBe(queue.current?.song.id);
     await voice.filters.set("bassboost", 15);
     await queue.setRepeat("queue");
     await queue.setAutoplay(true);

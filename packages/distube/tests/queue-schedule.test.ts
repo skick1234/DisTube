@@ -106,8 +106,8 @@ describe("jump", () => {
     expect(waiting(queue)).toEqual(["d", "a", "b"]);
     expect(remembered(queue)).toEqual([]);
     expect(events).toEqual(["queue.item.started"]);
-    expect(player.stopTrack).toHaveBeenCalledTimes(1);
-    expect(player.playing).toBe(queue.current?.id);
+    expect(player.played).toEqual(["a", "c"]);
+    expect(player.playing).toBe("c");
     await harness.distube.dispose();
   });
 
@@ -221,7 +221,7 @@ describe("shuffle, clear and remove", () => {
     });
     await settle();
     expect(late.disposed).toBe(1);
-    expect(player.requests.map(request => request.itemId)).toHaveLength(1);
+    expect(player.played).toHaveLength(1);
     await harness.distube.dispose();
   });
 
@@ -230,7 +230,7 @@ describe("shuffle, clear and remove", () => {
     await queue.clear();
     expect(queue.current?.song.id).toBe("a");
     expect(queue.upcoming).toEqual([]);
-    expect(player.playing).toBe(queue.current?.id);
+    expect(player.playing).toBe(queue.current?.song.id);
     expect(player.stopTrack).not.toHaveBeenCalled();
     await harness.distube.dispose();
   });

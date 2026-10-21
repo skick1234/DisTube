@@ -6,7 +6,7 @@ import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { Track } from "../src/track";
-import { createMedia, type MediaFixtures, take } from "./support/media";
+import { createMedia, type MediaFixtures, PLAIN, take } from "./support/media";
 import { silentWav } from "./support/real";
 
 let media: MediaFixtures;
@@ -22,11 +22,7 @@ function liveWorkers(): number {
 it("exits the playback worker 30 seconds after its last track closes", async () => {
   vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
   try {
-    const track = await Track.open(
-      { kind: "file", path: media.opus },
-      { volume: 100, chain: undefined },
-      new AbortController().signal,
-    );
+    const track = await Track.open({ kind: "file", path: media.opus }, PLAIN, new AbortController().signal);
     await take(track.packets, 5);
     await track.close();
     const afterClose = liveWorkers();
@@ -67,7 +63,7 @@ it("lets the process exit while a closed track's worker waits out its idle perio
       const { Track } = await import(${JSON.stringify(track)});
       const track = await Track.open(
         { kind: "file", path: ${JSON.stringify(audio)} },
-        { volume: 100, chain: undefined },
+        ${JSON.stringify(PLAIN)},
         new AbortController().signal,
       );
       await track.close();

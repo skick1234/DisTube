@@ -1,95 +1,43 @@
 import { describe, expect, it, vi } from "vitest";
-import { DisTube, DisTubeError, type Playlist, type Song } from "../src";
-import type { PluginContext, SourceOperationOptions, SourcePlugin } from "../src/integrations";
-import { FakeAdapter, FakeEngine, FakeSource, GUILD, media, settle, setup, VOICE_CHANNEL } from "./support/harness";
+import { DisTubeError, type Playlist, type Song } from "../src";
+import type { Plugin } from "../src/integrations";
+import { FakeEngine, FakeSource, GUILD, media, settle, setup, VOICE_CHANNEL } from "./support/harness";
 
 const TARGET = { guildId: GUILD, id: VOICE_CHANNEL };
 
-/** A SourcePlugin with only the four required members. */
-function minimal(name: string, hits: readonly string[] = []): SourcePlugin {
+function minimal(name: string, hits: readonly string[] = []): Plugin {
   return {
     name,
     search: async (query: string) => hits.filter(hit => hit === query).map(hit => media(name, hit)),
     resolve: async (): Promise<Song | Playlist | undefined> => undefined,
     stream: async (song: Song) => ({
       kind: "resource" as const,
-      resource: { kind: "url" as const, url: `https://stream.example/${song.id}`, dispose: () => undefined },
+      resource: { kind: "url" as const, url: `https://stream.example/${song.id}` },
     }),
   };
 }
 
-describe("optional plugin lifecycle", () => {
-  it("constructs, plays through and disposes a source with only the required members", async () => {
+describe("optional plugin members", () => {
+  it("constructs, plays through and disposes a plugin with only the members it needs", async () => {
     const harness = setup([minimal("bare", ["a"])]);
     const queue = await harness.distube.play(TARGET, "a");
     await settle();
     expect(queue.current?.song.id).toBe("a");
-    expect(harness.engine.players[0]?.playing).toBe(queue.current?.id);
+    expect(harness.engine.player.playing).toBe("a");
     await expect(harness.distube.dispose()).resolves.toBeUndefined();
   });
 
-  it("calls a present initialize once with a PluginContext and a present dispose once", async () => {
-    const source = new FakeSource("hooked");
-    const harness = setup([source]);
-    expect(source.initialize).toHaveBeenCalledTimes(1);
-    const context = source.initialize.mock.calls[0]?.[0] as PluginContext;
-    expect(typeof context.diagnostic).toBe("function");
-    context.diagnostic({ severity: "info", stage: "test", message: "hello" });
-    expect(harness.diagnostics).toHaveBeenCalledWith(expect.objectContaining({ plugin: "hooked", stage: "test" }));
+  it("disposes every plugin once in reverse order, an engine plugin included", async () => {
+    const order: string[] = [];
+    const first = new FakeSource("A");
+    const second = new FakeSource("B");
+    const remote: Plugin = { name: "E", engine: new FakeEngine(), dispose: () => void order.push("E") };
+    first.dispose.mockImplementation(() => void order.push("A"));
+    second.dispose.mockImplementation(() => void order.push("B"));
+    const harness = setup([first, remote, second]);
     await harness.distube.dispose();
     await harness.distube.dispose();
-    expect(source.dispose).toHaveBeenCalledTimes(1);
-  });
-
-  it.each([false, true])(
-    "initializes in constructor order and disposes in reverse with dual-role engine=%s",
-    async dualRole => {
-      const order: string[] = [];
-      const first = new FakeSource("A");
-      const second = new FakeSource("B");
-      const engine = Object.assign(new FakeEngine(), minimal("E"), {
-        initialize: vi.fn(() => {
-          order.push("initialize:E");
-        }),
-        dispose: vi.fn(() => {
-          order.push("dispose:E");
-        }),
-      });
-      first.initialize.mockImplementation(() => {
-        order.push("initialize:A");
-      });
-      second.initialize.mockImplementation(() => {
-        order.push("initialize:B");
-      });
-      first.dispose.mockImplementation(() => {
-        order.push("dispose:A");
-      });
-      second.dispose.mockImplementation(() => {
-        order.push("dispose:B");
-      });
-      const harness = setup(dualRole ? [first, second, engine] : [first, second], { engine });
-      expect(order).toEqual(["initialize:A", "initialize:B", "initialize:E"]);
-
-      await harness.distube.dispose();
-      await harness.distube.dispose();
-      expect(order).toEqual(["initialize:A", "initialize:B", "initialize:E", "dispose:E", "dispose:B", "dispose:A"]);
-      expect(engine.initialize).toHaveBeenCalledTimes(1);
-      expect(engine.dispose).toHaveBeenCalledTimes(1);
-    },
-  );
-
-  it("rejects a present hook that is not callable and an instance owned by another live client", () => {
-    const adapter = new FakeAdapter();
-    const broken = { ...minimal("broken"), initialize: "later" as never };
-    expect(() => new DisTube({ adapter, sources: [broken] })).toThrow(
-      expect.objectContaining({ code: "INVALID_ARGUMENT" }),
-    );
-    const shared = minimal("shared");
-    const first = new DisTube({ adapter, sources: [shared] });
-    expect(() => new DisTube({ adapter: new FakeAdapter(), sources: [shared] })).toThrow(
-      expect.objectContaining({ code: "INVALID_STATE" }),
-    );
-    void first.dispose();
+    expect(order).toEqual(["B", "E", "A"]);
   });
 });
 
@@ -146,7 +94,7 @@ describe("search and suggestions", () => {
     const harness = setup([source]);
     const controller = new AbortController();
     controller.abort("cancelled");
-    const options: SourceOperationOptions = { signal: controller.signal };
+    const options = { signal: controller.signal };
     await expect(harness.distube.search("a", options)).rejects.toMatchObject({ code: "ABORTED" });
     await expect(harness.distube.getSuggestions("a", undefined, options)).rejects.toMatchObject({ code: "ABORTED" });
     expect(source.suggest).not.toHaveBeenCalled();
@@ -169,7 +117,7 @@ describe("search and suggestions", () => {
       cause: boom,
     });
     // A source that already speaks DisTubeError keeps its identity, including a plugin-owned code.
-    const owned = new DisTubeError("FIRST_RATE_LIMITED", "slow down");
+    const owned = new DisTubeError("RATE_LIMITED", "slow down");
     first.search.mockRejectedValueOnce(owned);
     await expect(harness.distube.search("x")).rejects.toBe(owned);
     expect(second.search).not.toHaveBeenCalled();

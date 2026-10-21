@@ -2,12 +2,9 @@ import { readSync } from "node:fs";
 import { type FileHandle, open } from "node:fs/promises";
 import { parentPort, workerData } from "node:worker_threads";
 import {
-  AV_CH_LAYOUT_STEREO,
-  AV_CHANNEL_ORDER_NATIVE,
   AV_CODEC_ID_OPUS,
   AV_LOG_QUIET,
   AV_NOPTS_VALUE,
-  AV_SAMPLE_FMT_S16,
   AVERROR_EINVAL,
   AVERROR_EIO,
   AVERROR_EOF,
@@ -15,6 +12,8 @@ import {
   AVERROR_INVALIDDATA,
   AVSEEK_FLAG_BACKWARD,
   AVSEEK_SIZE,
+  avSamplesGetBufferSize,
+  type CodecContext,
   Decoder,
   Demuxer,
   Encoder,
@@ -51,10 +50,13 @@ export type ToWorker =
       source: InputSource;
       volume: number;
       chain: string | undefined;
+      bitrate: number;
+      complexity: number;
     }>
   | Readonly<{ type: "seek"; track: number; request: number; input: number; source: InputSource; seconds: number }>
   | Readonly<{ type: "filters"; track: number; request: number; chain: string | undefined }>
   | Readonly<{ type: "volume"; track: number; percent: number }>
+  | Readonly<{ type: "bitrate"; track: number; bitrate: number }>
   | Readonly<{ type: "credit"; track: number; count: number }>
   | Readonly<{ type: "close"; track: number }>
   | Readonly<{
@@ -111,7 +113,6 @@ const VOLUME_FILTER = "volume@distube";
 const FILE_PROBE_BYTES = 256 * 1024;
 const REMOTE_PROBE_BYTES = 4 * 1024;
 const IO_BUFFER_BYTES = 16 * 1024;
-const DEFAULT_BITRATE = 128_000;
 const BATCH_PACKETS = 5;
 
 const port = parentPort;
@@ -298,6 +299,7 @@ abstract class RemoteSource implements ByteSource {
   protected readonly buffer = new Chunks();
   protected ended = false;
   protected closed = false;
+  protected firstWindowFilled = false;
   #waiters: (() => void)[] = [];
 
   constructor(track: number, input: number) {
@@ -307,6 +309,10 @@ abstract class RemoteSource implements ByteSource {
   }
 
   abstract readonly callbacks: IOInputCallbacks;
+
+  prefill(): Promise<void> {
+    return this.until(() => this.firstWindowFilled || this.ended);
+  }
 
   async probe(): Promise<Buffer> {
     await this.until(() => this.buffer.length >= REMOTE_PROBE_BYTES || this.ended);
@@ -379,6 +385,7 @@ class OneShotSource extends RemoteSource {
   receive(message: Extract<ToWorker, { type: "bytes" }>): void {
     if (message.request !== this.#requested) return;
     this.#requested = undefined;
+    this.firstWindowFilled = true;
     if (message.failed) this.fail(new Error("Playback input failed"));
     else if (message.done) this.ended = true;
     else if (message.chunk) this.buffer.push(Buffer.from(message.chunk));
@@ -435,6 +442,7 @@ class RangedSource extends RemoteSource {
     if (!message.done) return;
     this.#window = undefined;
     this.#fetched = window.end + 1;
+    this.firstWindowFilled = true;
     this.wake();
     this.#fill();
   }
@@ -492,7 +500,7 @@ class Input {
   readonly id: number;
   readonly stream: Stream;
   readonly opus: boolean;
-  readonly bitRate: number;
+  readonly bitRate: number | undefined;
   readonly start: number;
   readonly #track: number;
   readonly #demuxer: Demuxer;
@@ -510,7 +518,7 @@ class Input {
     const { codecpar } = stream;
     this.opus = codecpar.codecId === AV_CODEC_ID_OPUS && codecpar.sampleRate === 48_000 && codecpar.channels === 2;
     const known = [codecpar.bitRate, demuxer.getFormatContext().bitRate].find(rate => rate > 0n);
-    this.bitRate = known === undefined ? DEFAULT_BITRATE : Math.min(Math.max(Number(known), 6_000), 510_000);
+    this.bitRate = known === undefined ? undefined : Math.min(Math.max(Number(known), 6_000), 510_000);
   }
 
   get failure(): Error | undefined {
@@ -558,7 +566,9 @@ async function openInput(
   const abort = (): void => void bytes.close();
   signal.addEventListener("abort", abort, { once: true });
   try {
+    if (bytes instanceof RemoteSource) await bytes.prefill();
     signal.throwIfAborted();
+    if (bytes.failure) throw bytes.failure;
     const container = source.kind === "file" ? undefined : source.container;
     const format = container ? (container === "mp4" ? "mp4" : "matroska") : probedFormat(await bytes.probe(), bytes);
     demuxer = await withPermit(signal, async () => {
@@ -610,10 +620,24 @@ function graph(chain: string | undefined, volume: number): string {
   return `aresample=48000,${chain ? `${chain},` : ""}${VOLUME_FILTER}=${volume / 100},${OUTPUT_FORMAT}`;
 }
 
+/** One silent sample in the decoder's output format, or `undefined` when the decoder learns it only from data. */
+function silentSample({ sampleFormat, sampleRate, channelLayout }: CodecContext): Frame | undefined {
+  if (sampleFormat < 0 || sampleRate <= 0 || channelLayout.nbChannels <= 0) return undefined;
+  const { size } = avSamplesGetBufferSize(channelLayout.nbChannels, 1, sampleFormat, 1);
+  return Frame.fromAudioBuffer(Buffer.alloc(size), {
+    nbSamples: 1,
+    format: sampleFormat,
+    sampleRate,
+    channelLayout,
+    timeBase: { num: 1, den: sampleRate },
+  });
+}
+
 interface Transcoder {
   decoder: Decoder;
   filter: FilterAPI;
-  readonly encoder: Encoder;
+  encoder: Encoder;
+  bitrate: number;
 }
 
 interface Candidate {
@@ -630,6 +654,8 @@ class Pipeline {
   #transcoder?: Transcoder;
   #volume: number;
   #chain: string | undefined;
+  #target: number;
+  readonly #complexity: number;
   #position = 0;
   #credit = 0;
   #batch: ArrayBuffer[] = [];
@@ -642,10 +668,12 @@ class Pipeline {
   #failed = false;
   #closed = false;
 
-  constructor(id: number, volume: number, chain: string | undefined) {
+  constructor(id: number, volume: number, chain: string | undefined, bitrate: number, complexity: number) {
     this.id = id;
     this.#volume = volume;
     this.#chain = chain;
+    this.#target = bitrate;
+    this.#complexity = complexity;
     this.#packet.alloc();
   }
 
@@ -659,8 +687,9 @@ class Pipeline {
         return;
       }
       this.#input = opened;
-      if (this.#chain !== undefined) this.#assertRenders(this.#chain);
-      if (!opened.opus) this.#transcoder = this.#createTranscoder();
+      if (!opened.opus || this.#chain !== undefined || this.#volume !== 100) {
+        this.#transcoder = this.#createTranscoder();
+      }
       post({ type: "opened", track: this.id });
       this.#kick();
     } catch (error: unknown) {
@@ -683,20 +712,28 @@ class Pipeline {
   }
 
   setFilters(request: number, chain: string | undefined): void {
+    const previous = this.#chain;
+    this.#chain = chain;
     try {
-      if (chain !== undefined) this.#assertRenders(chain);
+      const transcoder = this.#transcoder;
+      if (transcoder) {
+        const filter = this.#createFilter(transcoder.decoder);
+        transcoder.filter.close();
+        transcoder.filter = filter;
+      } else if (chain !== undefined && this.#input) {
+        this.#transcoder = this.#createTranscoder();
+      }
     } catch (error: unknown) {
+      this.#chain = previous;
       post({ type: "settled", track: this.id, request, error: wire(error) });
       return;
     }
-    this.#chain = chain;
-    const transcoder = this.#transcoder;
-    if (transcoder) {
-      transcoder.filter.close();
-      transcoder.filter = this.#createFilter();
-    }
     post({ type: "settled", track: this.id, request });
     this.#kick();
+  }
+
+  setBitrate(bitrate: number): void {
+    this.#target = bitrate;
   }
 
   async seek(request: number, input: number, source: InputSource, seconds: number): Promise<void> {
@@ -812,7 +849,7 @@ class Pipeline {
       transcoder.decoder.close();
       transcoder.decoder = Decoder.createSync(input.stream);
       transcoder.filter.close();
-      transcoder.filter = this.#createFilter();
+      transcoder.filter = this.#createFilter(transcoder.decoder);
     }
   }
 
@@ -898,10 +935,17 @@ class Pipeline {
     }
   }
 
-  #encode({ encoder }: Transcoder, frames: Iterable<Frame>): void {
+  #encode(transcoder: Transcoder, frames: Iterable<Frame>): void {
+    const bitrate = this.#bitrate();
+    if (bitrate !== transcoder.bitrate) {
+      for (const packet of transcoder.encoder.flushPacketsSync()) this.#emitPacket(packet);
+      transcoder.encoder.close();
+      transcoder.encoder = this.#createEncoder(bitrate);
+      transcoder.bitrate = bitrate;
+    }
     for (const frame of frames) {
       try {
-        for (const packet of encoder.encodeAllSync(frame)) this.#emitPacket(packet);
+        for (const packet of transcoder.encoder.encodeAllSync(frame)) this.#emitPacket(packet);
       } finally {
         frame.free();
       }
@@ -965,18 +1009,47 @@ class Pipeline {
   }
 
   #createTranscoder(): Transcoder {
-    const input = this.#input as Input;
-    const decoder = Decoder.createSync(input.stream);
-    const filter = this.#createFilter();
-    const encoder = Encoder.createSync(FF_ENCODER_LIBOPUS, {
-      bitrate: input.bitRate,
-      options: { application: "audio", frame_duration: 20, compression_level: 10 },
-    });
-    return { decoder, filter, encoder };
+    const decoder = Decoder.createSync((this.#input as Input).stream);
+    let filter: FilterAPI | undefined;
+    try {
+      filter = this.#createFilter(decoder);
+      const bitrate = this.#bitrate();
+      return { decoder, filter, encoder: this.#createEncoder(bitrate), bitrate };
+    } catch (error: unknown) {
+      filter?.close();
+      decoder.close();
+      throw error;
+    }
   }
 
-  #createFilter(): FilterAPI {
-    return FilterAPI.create(() => graph(this.#chain, this.#volume));
+  #bitrate(): number {
+    return Math.min((this.#input as Input).bitRate ?? this.#target, this.#target);
+  }
+
+  #createEncoder(bitrate: number): Encoder {
+    return Encoder.createSync(FF_ENCODER_LIBOPUS, {
+      bitrate,
+      options: { application: "audio", frame_duration: 20, compression_level: this.#complexity },
+    });
+  }
+
+  /** FilterAPI builds its graph on the first frame, so one silent sample builds it now and a bad chain fails here. */
+  #createFilter(decoder: Decoder): FilterAPI {
+    const filter = FilterAPI.create(() => graph(this.#chain, this.#volume));
+    const context = decoder.getCodecContext();
+    const probe = context && silentSample(context);
+    if (!probe) return filter;
+    try {
+      for (const frame of filter.processAllSync(probe)) frame.free();
+      return filter;
+    } catch (error: unknown) {
+      filter.close();
+      throw Object.assign(new Error("Filter chain could not be applied", { cause: error }), {
+        code: "INVALID_ARGUMENT",
+      });
+    } finally {
+      probe.free();
+    }
   }
 
   #dropTranscoder(): void {
@@ -985,28 +1058,6 @@ class Pipeline {
     transcoder?.decoder.close();
     transcoder?.filter.close();
     transcoder?.encoder.close();
-  }
-
-  #assertRenders(chain: string): void {
-    const silence = Frame.fromAudioBuffer(Buffer.alloc(960 * 4), {
-      nbSamples: 960,
-      format: AV_SAMPLE_FMT_S16,
-      sampleRate: 48_000,
-      channelLayout: { nbChannels: 2, order: AV_CHANNEL_ORDER_NATIVE, mask: AV_CH_LAYOUT_STEREO },
-      timeBase: { num: 1, den: 48_000 },
-      pts: 0n,
-    });
-    const filter = FilterAPI.create(graph(chain, this.#volume));
-    try {
-      for (const frame of filter.processAllSync(silence)) frame.free();
-    } catch (error: unknown) {
-      throw Object.assign(new Error("Filter chain could not be applied", { cause: error }), {
-        code: "INVALID_ARGUMENT",
-      });
-    } finally {
-      filter.close();
-      silence.free();
-    }
   }
 
   #seconds(pts: bigint, input: Input): number {
@@ -1043,7 +1094,7 @@ function receive(message: ToWorker): void {
 function dispatch(message: ToWorker): void {
   switch (message.type) {
     case "open": {
-      const pipeline = new Pipeline(message.track, message.volume, message.chain);
+      const pipeline = new Pipeline(message.track, message.volume, message.chain, message.bitrate, message.complexity);
       pipelines.set(message.track, pipeline);
       void pipeline.open(message.input, message.source);
       return;
@@ -1060,6 +1111,9 @@ function dispatch(message: ToWorker): void {
       return;
     case "volume":
       pipelines.get(message.track)?.setVolume(message.percent);
+      return;
+    case "bitrate":
+      pipelines.get(message.track)?.setBitrate(message.bitrate);
       return;
     case "credit":
       pipelines.get(message.track)?.credit(message.count);
