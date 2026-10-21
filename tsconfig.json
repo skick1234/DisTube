@@ -27,7 +27,6 @@
     "paths": {
       "distube": ["./packages/distube/src/index.ts"],
       "@distube/discordjs": ["./packages/discordjs/src/index.ts"],
-      "@distube/eris": ["./packages/eris/src/index.ts"],
       "@distube/oceanic": ["./packages/oceanic/src/index.ts"],
       "@distube/voice-core": ["./packages/voice-core/src/index.ts"],
       "@distube/voice-core/core": ["./packages/voice-core/src/index.ts"],

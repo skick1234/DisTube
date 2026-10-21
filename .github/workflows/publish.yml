@@ -35,7 +35,7 @@ jobs:
         env:
           TAG: ${{ github.ref_name }}
         run: |
-          if [[ ! "$TAG" =~ ^(distube|@distube/(discordjs|oceanic|eris))@([0-9A-Za-z.+-]+)$ ]]; then
+          if [[ ! "$TAG" =~ ^(distube|@distube/(discordjs|oceanic))@([0-9A-Za-z.+-]+)$ ]]; then
             echo "Tag must be <package>@<version>: $TAG" >&2
             exit 1
           fi

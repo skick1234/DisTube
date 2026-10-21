@@ -62,7 +62,6 @@ The codebase is organized by durable ownership:
 - `packages/distube/`: public client, queue/player/plugin contracts, runtime behavior, and package-local tests.
 - `packages/discordjs/`: direct discord.js Adapter and Player with package-local tests.
 - `packages/oceanic/`: direct Oceanic Adapter and Player with package-local tests.
-- `packages/eris/`: direct Eris Adapter and Player with package-local tests.
 - `scripts/`: adapter build sanitizer and documentation generator.
 
 ### Scripts
@@ -71,7 +70,7 @@ The codebase is organized by durable ownership:
 - `bun run type`: `tsrs --noEmit` in every package
 - `bun run test`: Run the fast coverage-disabled unit tests
 - `bun run test:release`: Run the coverage-enabled test pass
-- `bun run build`: Build all four packages
+- `bun run build`: Build all three packages
 - `bun run docs`: Build, run API Extractor and build the VitePress documentation site
 - `bun run verify`: Run the whole gate above in order (no `docs`); CI runs exactly this
 

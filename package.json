@@ -22,7 +22,6 @@
     "@types/node": "^26.1.1",
     "@vitest/coverage-v8": "^4.1.10",
     "discord.js": "^14.27.0",
-    "eris": "^0.18.0",
     "oceanic.js": "^1.14.0",
     "oxfmt": "^0.73.0",
     "oxlint": "^1.88.0",
@@ -36,8 +35,6 @@
   },
   "packageManager": "bun@1.4.3",
   "trustedDependencies": [
-    "@discordjs/opus",
-    "esbuild",
-    "ffmpeg-static"
+    "esbuild"
   ]
 }

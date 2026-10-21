@@ -46,8 +46,6 @@
                   "discord.js/**",
                   "oceanic.js",
                   "oceanic.js/**",
-                  "eris",
-                  "eris/**",
                   "@discordjs/voice",
                   "@discordjs/voice/**",
                   "@distube/*",
