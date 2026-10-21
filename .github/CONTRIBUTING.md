@@ -68,7 +68,7 @@ The codebase is organized by durable ownership:
 ### Scripts
 
 - `bun run check`: oxlint and oxfmt, including the core import boundary and import-cycle rules
-- `bun run type`: `tsc --noEmit` in every package
+- `bun run type`: `tsrs --noEmit` in every package
 - `bun run test`: Run the fast coverage-disabled unit tests
 - `bun run test:release`: Run the coverage-enabled test pass
 - `bun run build`: Build all four packages
