@@ -1,323 +1,91 @@
 ---
 title: Migration
-description: Move from DisTube v5 or the v6 pre-release, and update plugins, adapters and engines to the new contracts.
+description: Move from DisTube v5 to v6, and update plugins, adapters and engines.
+sidebar:
+  order: 10
 ---
 
-This release changes each published package's public contract. Removed APIs have no aliases. Start a music command
-with `const queue = await distube.play(voiceChannel, input)`. `DisTubeQueue` schedules `current`, `upcoming`,
-`history`, `repeat` and `autoplay`. Its optional `queue.voice` is the exact attached `DisTubeVoice`, which owns the
-connection, Player, volume, filters, self-deaf and self-mute. A voice can also play a track on its own.
+v6 removes aliases for the APIs it replaces. A music command starts with
+`const queue = await distube.play(voiceChannel, input)`. `DisTubeQueue` schedules `current`, `upcoming`, `history`,
+`repeat` and `autoplay`. `queue.voice` is the `DisTubeVoice` that owns the connection, volume, bitrate, filters,
+self-deaf and self-mute.
 
-Pick the table for the version you are on, then read the author sections if you maintain a plugin or an adapter.
+## Applications
 
-## From v5
+| v5                                                                | v6                                                                                                               |
+| ----------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `new DisTube(client, { plugins: [new YouTubePlugin()] })`         | `new DisTube({ adapter: new DiscordJSAdapter(client), plugins: [new YouTubePlugin()] })`                         |
+| `@distube/eris`                                                   | removed; use `@distube/discordjs` or `@distube/oceanic`                                                          |
+| `ytdlOptions`, `emitNewSongOnly`, `leaveOnEmpty`, `leaveOnFinish` | removed; `distube.on("queue.finished", ({ guildId }) => distube.voices.leave(guildId))`                          |
+| `distube.play(vc, song, { member, textChannel, message })`        | `await distube.play(vc, input, { metadata: { requestedBy: member.id } })`                                        |
+| `queue.songs[0]`                                                  | `queue.current?.song`                                                                                            |
+| `queue.songs.slice(1)`                                            | `queue.upcoming.map(item => item.song)`                                                                          |
+| `queue.previousSongs`                                             | `queue.history.map(item => item.song)`                                                                           |
+| `queue.jump(2)`, `queue.previous()`, `queue.shuffle()`            | `await queue.jump(2)`, `await queue.previous()`, `await queue.shuffle()`                                         |
+| `queue.songs.splice(index, 1)`                                    | `await queue.remove(index)` or `await queue.remove({ from: 2, to: 4 })`                                          |
+| `queue.addRelatedSong()`                                          | `await queue.addRelated()`                                                                                       |
+| `distube.play(vc, song, { position: 1 })`                         | `await queue.add(input, { next: true })` or `{ at: 0 }`                                                          |
+| `queue.filters.add("bassboost")`, `.remove(name)`, `.clear()`     | `await voice.filters.set("bassboost", 15)`, `.remove(name)`, `.clear()`                                          |
+| the `reverse` filter                                              | removed                                                                                                          |
+| `queue.setVolume(50)`, `queue.volume`                             | `await voice.setVolume(50)`, `voice.volume`                                                                      |
+| `queue.setRepeatMode(RepeatMode.SONG)`, `queue.repeatMode`        | `await queue.setRepeat("song")`, `queue.repeat`                                                                  |
+| `queue.toggleAutoplay()`                                          | `await queue.setAutoplay(!queue.autoplay)`                                                                       |
+| `queue.currentTime`                                               | `queue.position`                                                                                                 |
+| `queue.paused`, `queue.playing`                                   | `queue.status === "paused"`, `queue.status === "playing"`                                                        |
+| `song.views`, `song.uploader.name`, `song.isLive`                 | `song.pluginData.views`, `.uploader`, `.live`, typed after `distube.search(q, { source: youtube })`              |
+| `distube.search(query, { limit, type })`                          | `await distube.search(query, { source: youtube, limit })`                                                        |
+| `Events.PLAY_SONG`, `ADD_SONG`, `FINISH`, `ERROR`                 | `"queue.item.started"`, `"queue.item.added"`, `"queue.finished"`, `"queue.item.failed"` plus a `catch` on `play` |
+| `on`, `once`, `off`, `removeAllListeners`                         | `const off = distube.on(name, listener)`; call `off()`                                                           |
+| `queue.textChannel`                                               | your own `Map` keyed by `queue.guildId`                                                                          |
+| `error.errorCode === "SPOTIFY_NOT_FOUND"`                         | `DisTubeError.is(error, ErrorCode.NOT_FOUND)` and `error.source === "spotify"`                                   |
+| `shutdown()`                                                      | `await distube.dispose()`                                                                                        |
+| runtime `RepeatMode` and `Filters` enums                          | literals such as `"song"` and `"bassboost"`                                                                      |
 
-| v5                                                                   | This release                                                                                        |
-| -------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| `new DisTube(client, { plugins: [new YouTubePlugin()] })`            | `new DisTube({ adapter: new DiscordJSAdapter(client), sources: [new YouTubePlugin()] })`            |
-| `distube.play(voiceChannel, song, { member, textChannel, message })` | `const queue = await distube.play(voiceChannel, input, { metadata: { requestedBy: member.id } })`   |
-| `queue.songs[0]`                                                     | `queue.current?.song`                                                                               |
-| `queue.songs.slice(1)`                                               | `queue.upcoming.map(item => item.song)`                                                             |
-| `queue.previousSongs`                                                | `queue.history.map(item => item.song)`                                                              |
-| `queue.jump(2)`                                                      | `await queue.jump(2)` (one-based position in `upcoming`, or an item ID)                             |
-| `queue.previous()`                                                   | `await queue.previous()`                                                                            |
-| `queue.shuffle()`                                                    | `await queue.shuffle()`                                                                             |
-| `queue.songs.splice(index, 1)`                                       | `await queue.remove(index)` or `await queue.remove({ from: 2, to: 4 })`                             |
-| `queue.addRelatedSong()`                                             | `await queue.addRelated()`                                                                          |
-| `distube.play(channel, song, { position: 1 })`                       | `await queue.add(input, { next: true })` or `{ at: 0 }`                                             |
-| `queue.filters.add("bassboost")`                                     | `await voice.filters.set("bassboost", 15)`                                                          |
-| `queue.filters.remove("bassboost")`                                  | `await voice.filters.remove("bassboost")`                                                           |
-| `queue.filters.clear()`                                              | `await voice.filters.clear()`                                                                       |
-| `queue.filters.names`                                                | `voice.filters.names`                                                                               |
-| `queue.setVolume(50)`                                                | `await voice.setVolume(50)`                                                                         |
-| `queue.volume`                                                       | `voice.volume`                                                                                      |
-| `queue.setRepeatMode(RepeatMode.SONG)`                               | `await queue.setRepeat("song")`                                                                     |
-| `queue.repeatMode`                                                   | `queue.repeat`                                                                                      |
-| `queue.toggleAutoplay()`                                             | `await queue.setAutoplay(!queue.autoplay)`                                                          |
-| `queue.currentTime`                                                  | `queue.position`                                                                                    |
-| `queue.paused`, `queue.playing`                                      | `queue.status === "paused"`, `queue.status === "playing"`                                           |
-| `song.views`                                                         | `song.pluginData.views` (typed when the Song came from `distube.search(q, { source: youtube })`)    |
-| `song.uploader.name`                                                 | `song.pluginData.uploader`                                                                          |
-| `song.isLive`                                                        | `song.pluginData.live`                                                                              |
-| `song.formattedDuration`                                             | `song.formattedDuration` (unchanged; `Live` when the duration is unknown)                           |
-| `distube.search(query, { limit, type })`                             | `await distube.search(query, { source: youtube, limit })`                                           |
-| `distube.on(Events.PLAY_SONG, (queue, song) => ...)`                 | `distube.on("queue.item.started", ({ queue, item }) => ...)`                                        |
-| `distube.on(Events.ADD_SONG, ...)`                                   | `distube.on("queue.item.added", ({ item }) => ...)`                                                 |
-| `distube.on(Events.FINISH, ...)`                                     | `distube.on("queue.finished", ({ queue }) => ...)`                                                  |
-| `distube.on(Events.ERROR, (channel, error) => ...)`                  | `catch` the rejection of `play`, plus `distube.on("queue.item.failed", ({ error }) => ...)`         |
-| `queue.textChannel`                                                  | `textChannels.set(queue.guildId, channel)` in your own `Map`                                        |
-| `distube.voices.join(channel)`                                       | `await distube.voices.join(channel, { selfDeaf: true, selfMute: false })`                           |
-| `voice.setSelfDeaf(true)`                                            | `await voice.setSelfDeaf(true)` (voice from `distube.voices.get(guildId)`)                          |
-| `error.errorCode === "SPOTIFY_NOT_FOUND"`                            | `DisTubeError.is(error, SpotifyErrorCode.NOT_FOUND)`                                                |
-| `leaveOnEmpty`, `leaveOnFinish` options                              | `distube.on("queue.finished", ({ guildId }) => distube.voices.leave(guildId))`                      |
-| `queue.voice.leave()`, `distube.voices.leave(guildId)`               | `await voice.leave()` or `await distube.voices.leave(guildId)`; both delete an attached queue first |
+New in v6:
 
-Use `const voice = queue.voice` when the queue is attached. It becomes `undefined` before attachment and after
-detachment. A retained queue never points at a later voice for that guild. `distube.voices.get(queue.guildId)` is
-still available for independent voice lookup. Every queue command returns a promise that settles after the edit
-commits. Insertion `at` is zero-based; numeric `jump` and `remove` positions are one-based. Positional edits resolve
-at commit time, so a concurrent insert cannot make `remove(3)` delete the wrong item.
+- `await voice.play(resource, { signal, onStart })` plays a file, URL or stream without a queue and resolves with
+  `{ reason: "finished" | "stopped" | "replaced" }`. A new `voice.play` replaces the current track, and a queue it
+  interrupts is deleted with `queue.deleted` reason `replaced`. Handle that reason if you also play directly.
+- `voice.setBitrate(bps | "auto")`.
+- `distube.getSuggestions(query, source?)` for autocomplete.
+- `DisTube` options `historySize` (default 10), `filters`, `connectionTimeoutMs`, `onDiagnostic` and
+  `engine: { opusComplexity, bufferMs }`. See the [guide](../guide/#options).
+- `voice.track.*` events do not exist. Await `voice.play` instead.
 
-## From the v6 pre-release
+Queue commands return promises that settle after the edit commits. Insertion `at` is zero-based. Numeric `jump` and
+`remove` positions are one-based. Volume, bitrate, filters, self-deaf and self-mute stay on the voice when a queue
+ends, and a queue that ends cleanly keeps the voice connected.
 
-| v6 pre-release                                                      | This release                                                                                                                                |
-| ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Song.title`, `Playlist.title`                                      | `name`                                                                                                                                      |
-| Queue ID lookup                                                     | `getQueue(guildId)`; queues have `guildId`, no random public queue ID                                                                       |
-| `DisTubeGuild`                                                      | `DisTubeQueue`                                                                                                                              |
-| `queue.enqueue(input, options)`                                     | `await queue.add(input, { metadata, signal, next, at })`                                                                                    |
-| `const { queue, items } = await distube.play(channel, input)`       | `const queue = await distube.play(channel, input)`; read exact occurrences from committed addition events                                   |
-| Guild lookup for an attached voice                                  | `queue.voice`, optional and bound to that queue's attachment                                                                                |
-| `queue.state.current`, `queue.state.upcoming`, `queue.state.status` | `queue.current`, `queue.upcoming`, `queue.status` (event payloads still carry a captured `state`)                                           |
-| `GuildState`                                                        | `QueueState`, now with `history`, `repeat` and `autoplay`                                                                                   |
-| `voice.setRepeat("song")`                                           | `await queue.setRepeat("song")`                                                                                                             |
-| `voice.setAutoplay(true)`                                           | `await queue.setAutoplay(true)`                                                                                                             |
-| `voice.settings.volume`, `voice.settings.repeat`                    | `voice.volume`, `queue.repeat`                                                                                                              |
-| `VoiceSettings`                                                     | removed; read `voice.volume`, `voice.filters`, `voice.selfDeaf`, `voice.selfMute`                                                           |
-| `voice.setFilters(["bassboost", "nightcore"])`                      | `await voice.filters.set("bassboost", 15); await voice.filters.set("nightcore")`                                                            |
-| `voice.setFilters([])`                                              | `await voice.filters.clear()`                                                                                                               |
-| `voice.settings.filters`                                            | `voice.filters.entries`                                                                                                                     |
-| Filters cleared by `queue.stop()`                                   | filters persist; `distube.on("queue.deleted", ({ guildId }) => distube.voices.get(guildId)?.filters.clear())` if you want the old behaviour |
-| `queue.remove(itemId)`                                              | `await queue.remove(itemId)` (unchanged) plus `remove(index)` and `remove({ from, to })`                                                    |
-| no jump, previous, shuffle, clear, history                          | `queue.jump`, `queue.previous`, `queue.shuffle`, `queue.clear`, `queue.history`                                                             |
-| `youtube.search(query, { limit })`                                  | `await distube.search(query, { source: youtube, limit })`                                                                                   |
-| no suggestions                                                      | `await distube.getSuggestions(query, youtube)`                                                                                              |
-| `new ErisAdapter(client, { selfDeaf, selfMute })`                   | `new ErisAdapter(client)` then `distube.voices.join(channel, { selfDeaf, selfMute })`                                                       |
-| no direct voice playback                                            | `await voice.play({ kind: "url", url, dispose })` when no queue is attached                                                                 |
-| `distube.voices.leave(guildId)` only                                | `await voice.leave()` added as the same operation on the facade                                                                             |
-| `error.code === "SOURCE_FAILED"` for a provider miss                | `DisTubeError.is(error, YouTubeErrorCode.NOT_FOUND)`; safe plugin errors retain their code and cause                                        |
-| `error.code === "SOURCE_FAILED"` for an exhausted search            | `DisTubeError.is(error, ErrorCode.NO_RESULT)`                                                                                               |
-| string literal codes only                                           | `ErrorCode.INVALID_STATE` and friends exported as a `const` object                                                                          |
-| `song.duration` only                                                | `song.formattedDuration`, `playlist.duration`, `playlist.formattedDuration`                                                                 |
-| `preparePlayback(song, context)`                                    | `stream(song, context)`                                                                                                                     |
-| `new DisTube({ adapter, sources, engine, onDiagnostic })`           | same, plus `historySize` (default 10)                                                                                                       |
+## Error codes
 
-Events gained `voice.track.started`, `voice.track.finished`, `voice.track.failed` and `queue.history.added`. Queue
-payloads name their owner `queue: DisTubeQueue`. `voice.play`, `voice.stop`, `voice.pause`, `voice.resume` and
-`voice.seek` reject `INVALID_STATE` while a queue is attached; use queue controls then. Existing queue controls
-such as `jump`, `previous`, `shuffle`, `clear`, `remove`, `move`, repeat and autoplay remain. `queue.stop()` detaches
-before it awaits cleanup.
-
-## Errors, events and removed enums
-
-| Earlier API                                           | This release                                                                                |
-| ----------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| Runtime `RepeatMode`, `QueueStatus`, `Filters` enums  | Literal modes, statuses and preset names                                                    |
-| Runtime `Events` members                              | Typed dotted names such as `"queue.item.started"`                                           |
-| Chained `on`, `once`, `off`, `removeAllListeners`     | Store the unsubscribe function returned by each `on` registration                           |
-| `ErrorCode` enum, `errorCode`, `error.code === "..."` | `DisTubeError.is(error, ErrorCode.X)` and plugin codes such as `YouTubeErrorCode.NOT_FOUND` |
-| Cancellation reported as `QUEUE_FAILED`               | `ABORTED` for caller cancellation before commit                                             |
-| Bad-state `INVALID_ARGUMENT` with `reason`            | `INVALID_STATE`; malformed values still use `INVALID_ARGUMENT`                              |
-| `shutdown()`                                          | `await distube.dispose()`                                                                   |
-
-The root exports application values and method-facing types. Extension authors use type-only imports from
-`distube/integrations`; separate SDK or testkit packages and private implementation imports remain unsupported.
-
-## Ownership and lifetime
-
-`DisTubeVoice` owns the connection, the long-lived Player, volume, filters, self-deaf and self-mute, and exposes
-`play`, `stop`, `pause`, `resume`, `seek` and `position` directly. It works without a queue. `DisTubeQueue` is a
-scheduler over that voice: it owns `current`, `upcoming`, `history`, `repeat` and `autoplay`, calls `voice.play` and
-listens to `voice.track.*`. While a queue is attached the five direct track controls reject `INVALID_STATE`;
-`queue.stop()` detaches synchronously.
-
-`play` copies channel IDs, validates shallow input and reserves the guild's queue synchronously before returning its
-promise. `getQueue` and readonly queue iteration can observe an idle empty queue immediately. `queue.created`
-acknowledges registration, not successful insertion or audible playback. Each call retains its original queue
-identity. Stop unregisters and fences that queue immediately; late resolution cannot insert into a later replacement.
-
-Queue exhaustion publishes `queue.finished` then `queue.deleted`. Stop and exhaustion retain the connected voice with
-volume, filters, self-deaf and self-mute intact; repeat, autoplay and history die with the queue. Nothing on the
-voice resets when a queue is deleted. `voice.leave()`, `voices.leave(guildId)`, terminal connection loss and `dispose` end voice
-ownership. A later voice starts with volume 100, no filters, self-deaf true and self-mute false. Commands on deleted
-queues or released voices reject `INVALID_STATE`.
-
-## Media and metadata
-
-`Song<PluginData>` contains `source`, `id`, `name`, canonical `url`, optional `duration`, `thumbnail` and
-`artist`, plus `pluginData` filled by the owning plugin and a `formattedDuration` getter. `Playlist` contains
-`source`, `id`, `name`, canonical `url`, optional `thumbnail`, readonly Songs, `pluginData`, `duration` and
-`formattedDuration`. Core permits an absent duration; sources define their normalization. Keep signed URLs,
-encoded tracks and playback state out of `pluginData`.
-
-Core creates each QueueItem's ID and insertion timestamp at commit. Every successful insertion, natural repeat or
-`previous()` creates a fresh occurrence. Its optional metadata binding is readonly but the referenced caller-owned
-contents remain mutable, without recursive freezing or cloning.
-
-Maintained source packages are `@distube/youtube`, `@distube/spotify` and `@distube/soundcloud`; `@distube/lavalink`
-provides the explicit remote source and engine option. See the [plugin pages](../../plugins/) for provider bounds and
-native dependencies.
+v6 has one `ErrorCode` list: `INVALID_ARGUMENT`, `INVALID_STATE`, `ABORTED`, `NO_RESULT`, `NOT_FOUND`,
+`UNAVAILABLE`, `RATE_LIMITED`, `SOURCE_FAILED`, `VOICE_FAILED` and `UNSUPPORTED`. The per-plugin code objects
+`YouTubeErrorCode`, `SoundCloudErrorCode`, `SpotifyErrorCode` and `LavalinkErrorCode` are gone. Check
+`DisTubeError.is(error, ErrorCode.NOT_FOUND)` and read `error.source` for the plugin. YouTube's age restriction is
+`UNAVAILABLE`. `PLUGIN_FAILED` and `QUEUE_FAILED` are gone too.
 
 ## Plugin authors
 
-`SourcePlugin` requires `name`, `stream(song, context)` and at least one callable discovery method, `resolve` or
-`search`. Both methods are optional in the TypeScript interface so a plugin can implement just one. Core checks
-the at-least-one rule at construction. `related`, `suggest`, `initialize` and `dispose` are independently optional.
-
-Changes to make:
-
-1. Rename `preparePlayback` to `stream`. Return a fresh `{ kind: "resource", resource }` or one
-   `{ kind: "search", query }` request for bounded cross-source playback fallback.
-2. Delete no-op lifecycle methods. `initialize`, if present, must finish synchronously; `dispose`, if present,
-   joins owned work and releases resources. A source with only `dispose` is valid. Constructors validate options
-   only; make the first provider request on first use.
-3. Declare a `PluginData` type and implement `SourcePlugin<PluginData>`. Fill `pluginData` on every Song you
-   construct. Core never reads it; `distube.search(q, { source: you })` types results by it.
-4. Export a `const` error-code object prefixed with your upper-case name and throw `DisTubeError` with those codes
-   for not-found, unavailable and rate-limited cases. Core preserves the code and a safe message/cause; it strips
-   secrets from unsafe error details. A bot can write `DisTubeError.is(error, YourErrorCode.NOT_FOUND)`.
-5. Implement `suggest` if the provider has an autocomplete endpoint. Return at most 25 strings; return an empty list
-   to decline.
-6. `related` receives `context.exclude`, the queue's history Songs. Avoid returning one of them.
-
-```ts
-import type { PlaybackContext, PlaybackPreparation, RelatedContext, SourcePlugin } from "distube/integrations";
-import { DisTubeError, Song } from "distube";
-
-export const ExampleErrorCode = { NOT_FOUND: "EXAMPLE_NOT_FOUND" } as const;
-
-export interface ExampleData {
-  readonly plays: number;
-}
-
-export class ExamplePlugin implements SourcePlugin<ExampleData> {
-  readonly name = "example";
-  async resolve(url: string): Promise<Song<ExampleData> | undefined> {
-    if (!url.startsWith("https://example.audio/")) return undefined;
-    throw new DisTubeError(ExampleErrorCode.NOT_FOUND, "Track does not exist");
-  }
-  async stream(song: Song<ExampleData>, context: PlaybackContext): Promise<PlaybackPreparation> {
-    context.signal.throwIfAborted();
-    return {
-      kind: "resource",
-      resource: { kind: "url", url: `https://cdn.example/${song.id}`, dispose: () => undefined },
-    };
-  }
-  async related(_song: Song<ExampleData>, _context: RelatedContext): Promise<Song<ExampleData> | undefined> {
-    return undefined;
-  }
-  async suggest(query: string): Promise<readonly string[]> {
-    return [`${query} remix`];
-  }
-}
-```
-
-This example is resolve-only; a search-only plugin can omit `resolve`. An explicit public `search` against a
-resolve-only source rejects `UNSUPPORTED`. Query discovery skips it. `@distube/plugin-network` is an optional
-helper, not part of the contract.
+| Before                                               | v6                                                      |
+| ---------------------------------------------------- | ------------------------------------------------------- |
+| `SourcePlugin`                                       | `Plugin`                                                |
+| `initialize(context)` and `PluginContext.diagnostic` | removed; validate options in the constructor            |
+| `preparePlayback`, `stream(song, context)`           | `stream(song, { signal })`                              |
+| `sources: []` in `DisTube` options                   | `plugins: []`                                           |
+| a plugin's own error code object                     | `DisTubeError` with a core code and `source: this.name` |
+| `@distube/plugin-network`                            | removed; each plugin owns its HTTP policy               |
+| `engine` option next to `sources`                    | a plugin with an `engine` member, in `plugins`          |
 
 ## Adapter and engine authors
 
-An `Adapter<Target>` now provides a synchronous, pure `normalizeTarget(target)` that returns copied
-`{ guildId, channelId }` strings. Core calls it before registering a queue or joining voice. The native `Target`
-type follows `DisTube<Metadata, Target>`, its queues, voices, managers and events. `createVoiceSession` receives the
-normalized `VoiceTarget` and `JoinOptions` (`{ selfDeaf?, selfMute? }`). It handles gateway membership only and
-does not create a local audio transport. Core defaults to self-deaf true and self-mute false unless the caller
-overrides them. `adapter.engine` is optional; pass `engine` to `new DisTube` if the adapter has no default.
+| Before                                               | v6                                                                |
+| ---------------------------------------------------- | ----------------------------------------------------------------- |
+| `adapter.engine`                                     | `adapter.createEngine(settings)`                                  |
+| `VoiceSession.setSelfDeaf`, `setSelfMute`            | `VoiceSession.join(channelId, { selfDeaf, selfMute })`            |
+| no bitrate                                           | `VoiceSession.bitrate`, the channel bitrate in bits per second    |
+| `Engine.accepts`, `capabilities`, `supportsResource` | removed; reject what you cannot play with `UNSUPPORTED`           |
+| `Player.play({ itemId, resource })` plus `subscribe` | `Player.play(resource, { signal, onStart }) -> Promise<TrackEnd>` |
+| `PlayerEvent`, `terminal` outcomes                   | removed; a rejected `play` is a failure                           |
 
-`VoiceSession` has readonly `selfDeaf` and `selfMute`, `join(channelId, options?)` with the same options, and
-`setSelfDeaf(enabled)` and `setSelfMute(enabled)` that resolve after the gateway acknowledges the update. Its
-`gateway` snapshot contains `channelId`, `sessionId`, `token` and `endpoint`. A platform rejection surfaces as a
-safe `VOICE_FAILED` without native or credential data in the cause chain.
-
-`Engine` changes:
-
-- `resolvable(name)` is removed. Expose `readonly filters: ReadonlyMap<string, FilterDefinitionInfo>` instead; core
-  calls `engine.filters.get(name)` to validate a preset and clamp its value, and `voice.filters.definitions` returns
-  the same map to bots.
-- `FilterDefinition` is `{ render(value?), default?, min?, max?, label? }`. A definition with none of `default`,
-  `min` or `max` is fixed and takes no value. `label` is a string or a function of the value.
-  `FilterDefinitionInfo` is `{ default?, min?, max?, acceptsValue, label(value?) }`.
-- Add `readonly capabilities: { seek: boolean }`. Core rejects `seek` with `UNSUPPORTED` before calling the Player
-  when it is false. Official local engines support files and URLs marked `seekable: true`; Node streams cannot
-  seek. A Player that cannot perform a specific seek still rejects `UNSUPPORTED`.
-- Declare `accepts: ReadonlySet<PlaybackResource["kind"]>`. An engine that accepts encoded input also declares a
-  non-empty `encodedFormats: ReadonlySet<string>`. Core matches `resource.format` before Player work. Readonly
-  map and set contracts are structural; native `Map` and `Set` instances are not required.
-- If a declared kind or encoded format has option-level limits, add a pure synchronous
-  `supportsResource(resource): boolean`. Core checks it after kind and format, before creating a Player. Return
-  `false` for an unusable resource; core disposes an explicit fallback candidate and tries the next one. The
-  method is optional for engines that accept every declared resource, and core binds it to the selected engine
-  when the client is constructed.
-- `FilterEntry` is `{ name, value? }`. The ad hoc `payload` field is gone; custom presets belong in the definitions
-  passed at construction.
-
-`Player` is created and released by `DisTubeVoice` alone, once per connection. Queues no longer lease it, and
-queue deletion no longer calls `setFilters([])`. `stopTrack` ends a track and leaves the Player usable. The Player
-borrows each source resource; core runs its optional `dispose()` after backend access ends.
-
-```ts
-import type { Engine, FilterDefinitionInfo, PlaybackResource, Player, VoiceSession } from "distube/integrations";
-
-declare const createPlayer: (session: VoiceSession) => Promise<Player>;
-
-const engine: Engine = {
-  accepts: new Set<PlaybackResource["kind"]>(["url"]),
-  capabilities: { seek: true },
-  filters: new Map<string, FilterDefinitionInfo>([
-    ["bassboost", { default: 10, min: 0, max: 20, acceptsValue: true, label: value => `Bass +${value ?? 10}dB` }],
-  ]),
-  supportsResource: resource => resource.kind === "url" && resource.headers === undefined,
-  createPlayer,
-};
-```
-
-The selected engine owns audio setup. An explicit remote engine can use an adapter's gateway-only session without
-local FFmpeg, Opus or encryption prerequisites. This does not remove the adapter's package peer requirements.
-
-Platform peer boundaries documented by the adapter packages:
-
-- `@distube/discordjs`: discord.js 14.26 or newer within major 14, with `@discordjs/voice` 0.19.x.
-- `@distube/oceanic`: Oceanic 1.14 or newer within major 1, with `@discordjs/voice` 0.19.x.
-- `@distube/eris`: Eris 0.18.x, an Opus implementation and FFmpeg for transcoding.
-
-All three provide local engines accepting files, progressive HTTP(S) URLs and Node readable streams. Files and
-explicitly seekable URLs support seeking; streams do not. Explicit remote engine selection needs no local FFmpeg, Opus
-or encryption runtime.
-
-## Direct input and resource migration
-
-Queue inputs remain query strings, provider URLs, Songs and Playlists. A filesystem path passed to `play` is a
-query. With an official local engine, join voice without a queue, or stop its queue, before submitting a direct
-playback resource:
-
-```ts
-import { createReadStream } from "node:fs";
-import { resolve } from "node:path";
-import type { DisTube, VoiceChannelTarget } from "distube";
-
-declare const distube: DisTube;
-declare const channel: VoiceChannelTarget;
-declare const token: string;
-
-const voice = await distube.voices.join(channel);
-const file = resolve("clips/welcome.mp3");
-await voice.play({ kind: "file", path: file });
-await voice.stop();
-await voice.play({
-  kind: "url",
-  url: "https://audio.example/private.mp3",
-  headers: { Authorization: `Bearer ${token}` },
-  seekable: true,
-});
-await voice.stop();
-await voice.play({ kind: "stream", stream: createReadStream(file) });
-await voice.stop();
-await voice.leave();
-```
-
-The file path must be absolute. URLs use Node-controlled HTTP(S) transport with copied headers and no redirects.
-Files can seek; URLs need `seekable: true` and reopen for each seek, decoding and discarding audio to the offset.
-Large offsets cost time and bandwidth. Streams cannot seek or resume through a decoder restart. Read
-`voice.capabilities` for engine kinds, encoded formats and seek support, then `voice.seekable` for the active track.
-
-Every resource wrapper and every Node readable can be submitted once. A fresh, valid direct resource is consumed
-before later compatibility checks; await a rejection to join its cleanup. Core ends Player access before destroying
-a readable and calling optional `dispose()`, exactly once. Malformed or duplicate submissions remain caller-owned.
-Provider `stream()` must likewise return a fresh resource each time. Keep paths, authentication headers, signed URLs
-and encoded tracks out of public Song fields and `pluginData`.
-
-Lavalink v4.2+ within major 4 accepts only `encoded` resources with `format: "lavalink.v4"`, plus headerless URL
-loading when `trustedUrlLoading: true` and the node enforces equivalent destination policy. It rejects files,
-streams, URL headers and foreign encoded formats before node work. It does not upload local files. See
-[Direct playback inputs](../direct-inputs/) for the full cleanup and seek rules.
+`Player.play` replaces any current track, which settles `replaced` first. See
+[adapter authoring](../adapter-authoring/) and [plugin authoring](../plugin-authoring/).

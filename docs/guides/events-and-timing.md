@@ -1,6 +1,8 @@
 ---
 title: Events and timing
 description: The typed event list and the order events fire in.
+sidebar:
+  order: 5
 ---
 
 Subscribe to typed dotted names on the client:
@@ -13,19 +15,29 @@ Subscribe to typed dotted names on the client:
 | `queue.item.started`    | `item`                                           |
 | `queue.item.finished`   | `item`                                           |
 | `queue.item.failed`     | `item`, `error`                                  |
-| `queue.history.added`   | `item`, after the item's terminal outcome event  |
-| `queue.finished`        | Natural exhaustion                               |
+| `queue.history.added`   | `item`, after the item's finished event          |
+| `queue.finished`        | Playback ran out of items                        |
 | `queue.autoplay.failed` | `song`, `error`                                  |
-| `queue.deleted`         | Terminal queue deletion                          |
-| `voice.track.started`   | `voice`, optional `itemId`                       |
-| `voice.track.finished`  | `voice`, optional `itemId`                       |
-| `voice.track.failed`    | `voice`, optional `itemId`, `error`              |
+| `queue.deleted`         | `reason`                                         |
 | `voice.disconnected`    | `voice`, `channelId`, `reason`, optional `error` |
 
-Queue events carry `guildId`, the originating `queue`, captured `state` (`current`, `upcoming`, `history`, `status`,
-`repeat`, `autoplay`) and commit `timestamp`. A later queue for that guild is a different owner. Voice events carry
-`guildId`, `voice` and `timestamp` and never manufacture a queue. Disconnect reasons are `"left"`, `"platform"` and
-`"shutdown"`.
+Queue events carry `guildId`, the `queue`, a captured `state` (`current`, `upcoming`, `history`, `status`,
+`repeat`, `autoplay`) and the commit `timestamp`. Voice events carry `guildId`, `voice` and `timestamp`.
+
+`queue.deleted` reasons:
+
+| Reason       | Cause                                                    |
+| ------------ | -------------------------------------------------------- |
+| `stop`       | `queue.stop()`                                           |
+| `finished`   | The queue ran out of items. `queue.finished` came first. |
+| `replaced`   | `voice.play` started a track while the queue was playing |
+| `voice-loss` | The voice session was lost                               |
+| `leave`      | `voice.leave()` or `voices.leave(guildId)`               |
+| `shutdown`   | `distube.dispose()`                                      |
+| `failed`     | The first insertion failed and left the queue empty      |
+
+`voice.disconnected` reasons are `left`, `platform` and `shutdown`. It publishes once per voice, after that
+guild's `queue.deleted`.
 
 ## Register and unsubscribe
 
@@ -40,55 +52,38 @@ const unsubscribe = distube.on("queue.item.started", event => {
 unsubscribe();
 ```
 
-Each `on` call returns a function removing that registration. Retain it for application cleanup. Event delivery uses
-a captured listener list; registration during delivery does not receive that event. Listener throws and rejected
-promises are isolated and sent to `onDiagnostic`, whose own failures cannot affect playback.
+`on` returns a function that removes the registration. Core delivers each event in a later microtask, in emit order.
+A listener registered during delivery does not receive that event. A listener that throws or rejects affects
+nothing else and is reported to `onDiagnostic` with stage `event.listener`.
 
-## Registration is visible before resolution
+## Ordering
 
-`play` validates shallow inputs and synchronously registers and reserves its queue before returning its promise.
-`getQueue(guildId)` sees it immediately. The creation event is delivered after that initial invocation, once the
-first reservation is already established. It does not promise that a source recognized the input or insertion worked.
+`play` registers its queue synchronously, so `getQueue(guildId)` sees it before the first event arrives.
+`queue.created` does not promise that the input resolves or the insertion succeeds.
 
-Insertion publishes one `queue.item.added` for a Song or one `queue.playlist.added` for a Playlist. Playlist items do
-not also emit individual addition events. `play` resolves after that commit. Playback preparation can still fail,
-reported through `queue.item.failed` for the original occurrence.
+Insertion publishes one `queue.item.added` for a Song or one `queue.playlist.added` for a Playlist. Playlist items
+do not also emit individual events. `play` resolves after that commit. Preparation or playback can still fail, and
+that reports `queue.item.failed` for the original item.
 
-Failed first work that leaves no items or other reservations produces `queue.deleted` after registration, without
-fabricated item events or `queue.finished`. An outstanding explicit insertion prevents natural exhaustion.
+Each item gets at most one of `queue.item.finished` or `queue.item.failed`. `queue.history.added` follows a finished
+item. Failed items do not enter history. When the queue runs out, `queue.finished` fires, then `queue.deleted` with
+reason `finished`. When the voice session is lost during a track, the order is `queue.item.failed`,
+`queue.deleted` with reason `voice-loss`, then `voice.disconnected`.
 
-## Voice track events and queue events
-
-The voice publishes `voice.track.started` after the backend acknowledges a track, then exactly one of
-`voice.track.finished` or `voice.track.failed`. When a queue drives the voice, the queue derives its own
-`queue.item.started`, `queue.item.finished` or `queue.item.failed` from those, so the voice event for an item always
-precedes the queue event for the same item, and `itemId` on the voice event equals `item.id` on the queue event. A
-direct `voice.play` without a queue publishes only voice track events, with no `itemId` unless the caller passed one.
-
-## Playback and cleanup
-
-Timestamps come from committing transitions. Events follow per-guild FIFO order; each occurrence receives at most
-one finished/failed terminal event, followed by `queue.history.added` when it enters history (failed items do not).
-Exhaustion publishes `queue.finished`, then `queue.deleted`. An unrecoverable voice disconnect with an active item
-publishes `voice.track.failed`, `queue.item.failed`, `queue.deleted`, then `voice.disconnected`. The voice
-disconnect event occurs once for that voice lifetime.
-
-Queue deletion detaches from the voice and fences old work immediately. It does not touch volume, filters, self-deaf
-or self-mute. Deletion notification does not by itself prove backend cleanup completed; await the terminal operation
-when cleanup completion matters. Failed cleanup never rewrites a completed item outcome or revives a deleted queue.
+Deleting a queue does not touch the voice's volume, bitrate, filters, self-deaf or self-mute.
 
 ## Typed caller metadata
 
 ```ts
 import { DisTube } from "distube";
 import type { VoiceChannelTarget } from "distube";
-import type { Adapter, SourcePlugin } from "distube/integrations";
+import type { Adapter, Plugin } from "distube/integrations";
 
 declare const adapter: Adapter;
-declare const sources: readonly SourcePlugin[];
+declare const plugins: readonly Plugin[];
 declare const channel: VoiceChannelTarget;
 
-const distube = new DisTube<{ requestedBy: string }>({ adapter, sources });
+const distube = new DisTube<{ requestedBy: string }>({ adapter, plugins });
 const unsubscribe = distube.on("queue.item.added", event => {
   console.log(event.item.metadata?.requestedBy);
 });
@@ -96,6 +91,5 @@ await distube.play(channel, "a song query", { metadata: { requestedBy: "user-id"
 unsubscribe();
 ```
 
-Metadata is optional. Core stores the caller reference without reading, cloning or freezing its contents. The
-occurrence property binding is readonly; mutations to the supplied object remain visible. Without a type parameter,
+Metadata is optional. Core stores the reference without reading, cloning or freezing it. Without a type parameter,
 metadata is `unknown` and needs narrowing before property reads.

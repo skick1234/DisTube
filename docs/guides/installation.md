@@ -1,30 +1,25 @@
 ---
 title: Installation
-description: Install DisTube, an adapter and sources, and the system packages the local engines need.
+description: Install DisTube, an adapter and plugins.
+sidebar:
+  order: 1
 ---
-
-Install only the packages the application uses:
 
 ```bash
 bun add distube @distube/discordjs @distube/youtube discord.js @discordjs/voice
 ```
 
-Alternatives are `@distube/oceanic` or `@distube/eris` for the platform Adapter and `@distube/spotify`,
-`@distube/soundcloud`, or `@distube/lavalink` for media. Official local engines require system FFmpeg, one Opus
-encoder (`@discordjs/opus` or `opusscript`), and one voice encryption implementation before first playback. The
-discord.js and Oceanic adapters accept `sodium-native`, `sodium`, `libsodium-wrappers`, `@stablelib/xchacha20poly1305`, or
-`@noble/ciphers`; Eris accepts `sodium-native` or `tweetnacl`. A missing encryption module fails the voice operation
-with `VOICE_FAILED` naming the adapter and at least one accepted module, and holds no connection open. Official local engines accept `url`, `file` and Node `stream` resources. Files and explicitly seekable URLs
-support seeking. Streams are one-shot and cannot seek. URL playback uses controlled Node HTTP(S) transport
-piped into FFmpeg; authentication headers and signed URLs stay out of process arguments.
+Use `@distube/oceanic` instead of `@distube/discordjs` for Oceanic. The plugins are `@distube/youtube`,
+`@distube/soundcloud`, `@distube/spotify` and `@distube/lavalink`.
 
-With an explicit remote engine, the adapter handles gateway membership without creating local audio or checking
-FFmpeg, Opus or encryption prerequisites. Lavalink requires v4.2+ within major 4. Headerless URL playback needs
-`trustedUrlLoading: true` and nodes enforcing equivalent destination policy. Authenticated URLs, local files and
-streams are not accepted by Lavalink.
+Each adapter bundles the built-in engine, which decodes with the `node-av` native binding. It needs glibc 2.28 or
+newer, so musl hosts such as Alpine are unsupported. A host that cannot load `node-av` fails the first playback
+with `VOICE_FAILED`. The built-in engine decodes in a worker pool that takes `UV_THREADPOOL_SIZE - 1` permits
+(at least one). Raise `UV_THREADPOOL_SIZE` above the default of 4 when the bot plays in many guilds at once.
 
-All published packages declare Node `^22.22.2 || ^24.15.0 || >=26.0.0`; workspace development uses pinned Bun 1.4.3. Platform peer ranges
-are discord.js `^14.26.0` with `@discordjs/voice ^0.19.0`, Oceanic `^1.14.0` with that same voice peer, and
-Eris `^0.18.0`. Package peers remain required for installation even when local audio is not selected.
-See [direct inputs](../direct-inputs/) for seek cost and cleanup, and [migration](../migration/) for the
-coordinated release plan. Packages release independently.
+Lavalink replaces the built-in engine, so a bot that uses it needs no local decoding. It requires Lavalink v4.2 or
+newer within major 4.
+
+All packages declare Node `^22.22.2 || ^24.15.0 || >=26.0.0`. Peer ranges are discord.js `^14.26.0` with `@discordjs/voice ^0.19.0`, and
+Oceanic `^1.14.0` with the same voice peer. See [direct inputs](../direct-inputs/) for playing a file or stream
+and [migration](../migration/) for the move from v5.

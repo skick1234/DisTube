@@ -1,7 +1,7 @@
 {
   "name": "@distube/oceanic",
   "version": "6.0.0",
-  "description": "Oceanic Adapter and Player for DisTube",
+  "description": "Oceanic adapter for DisTube",
   "license": "MIT",
   "files": [
     "dist",
