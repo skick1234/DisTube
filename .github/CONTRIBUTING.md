@@ -10,7 +10,7 @@ We use GitHub Issues to track bugs and feature requests.
 
 - **Bug Reports**: Please use the [Bug Report](https://github.com/skick1234/DisTube/issues/new?template=bug_report.yml) form. Provide a minimal reproduction code sample.
 - **Feature Requests**: Please use the [Feature Request](https://github.com/skick1234/DisTube/issues/new?template=feature_request.yml) form.
-- **Questions**: For questions or general support, please join our [Discord Support Server](https://discord.gg/feaDd9h) or check the [FAQ](https://github.com/skick1234/DisTube/wiki/Frequently-Asked-Questions).
+- **Questions**: For questions or general support, please join our [Discord Support Server](https://discord.gg/feaDd9h) or check the [FAQ](https://distube.js.org/distube/guides/faq/).
 
 **Please do not report security vulnerabilities in public issues.** See [SECURITY.md](SECURITY.md) for more details.
 
@@ -82,8 +82,8 @@ CI installs with `--frozen-lockfile`, so manifest or lock drift fails.
 
 ## Releasing
 
-See the [Releasing](../wiki/Releasing.md) wiki page. In short: `changeset version` on `main`, then push a
-`<package>@<version>` tag; CI verifies, `npm pack`s that package and publishes it with provenance.
+See [RELEASING.md](RELEASING.md). In short: `changeset version` on `main`, then push a
+`<package>@<version>` tag; CI verifies, `npm pack`s that package and publishes it with provenance through npm trusted publishing.
 
 ## ⚖️ License
 

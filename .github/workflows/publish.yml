@@ -27,7 +27,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22.12.0
+          node-version: 24
           registry-url: "https://registry.npmjs.org"
 
       - name: Resolve package from tag
@@ -63,8 +63,6 @@ jobs:
 
       - name: Publish
         working-directory: ${{ steps.tag.outputs.directory }}
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_PUBLISH_TOKEN }}
         run: npm publish "$RUNNER_TEMP"/*.tgz --provenance --access public
 
   docs:
