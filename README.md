@@ -15,7 +15,7 @@ Use `OceanicAdapter` from `@distube/oceanic` for oceanic.js or `ErisAdapter` fro
 The official adapters install `node-av`, pinned to `6.2.0-beta.33`, so nothing extra is needed for decoding.
 Local playback needs glibc 2.28 or newer, such as `node:22-slim`, Debian or Ubuntu, and a supported encryption
 implementation. Alpine and other musl hosts are unsupported. System FFmpeg, `FFMPEG_PATH`, `@discordjs/opus` and
-`opusscript` are no longer needed. See [Installation](wiki/Installation.md) for platform requirements.
+`opusscript` are no longer needed. See [Installation](https://distube.js.org/distube/guides/installation/) for platform requirements.
 
 `node-av` bundles FFmpeg built with GPLv3 and runs it in-process. Distributing a bot image or binary carries GPLv3
 obligations. DisTube's packages remain MIT. A remote engine such as Lavalink needs none of the local prerequisites.
@@ -88,7 +88,7 @@ Spotify can return an explicit fallback query for playback through another confi
 QueueItem remain public; signed playback URLs and candidate resources remain private.
 
 An adapter may supply a default engine. If it does not, the client needs an explicit engine. For a remote engine such as Lavalink, pass the same instance explicitly in
-`sources` and `engine`. It initializes and disposes once. See [Adapter authoring](wiki/Adapter-Authoring.md).
+`sources` and `engine`. It initializes and disposes once. See [Adapter authoring](https://distube.js.org/distube/guides/adapter-authoring/).
 
 ## Control queue and voice
 
@@ -140,8 +140,8 @@ Listener failures go to safe diagnostics; application code owns bot replies.
 All public failures are `DisTubeError` with a string `code`. Narrow with `DisTubeError.is(error, ErrorCode.NO_RESULT)`
 for the core codes (`INVALID_ARGUMENT`, `INVALID_STATE`, `ABORTED`, `NO_RESULT`, `SOURCE_FAILED`, `VOICE_FAILED`,
 `PLUGIN_FAILED`, `QUEUE_FAILED`, `UNSUPPORTED`) or with a plugin code such as `YouTubeErrorCode.NOT_FOUND`. Core
-preserves a safe plugin error; it sanitizes unsafe messages and nested causes. See [Events and timing](wiki/Events-and-Timing.md) and
-[Error handling](wiki/Error-Handling.md).
+preserves a safe plugin error; it sanitizes unsafe messages and nested causes. See [Events and timing](https://distube.js.org/distube/guides/events-and-timing/) and
+[Error handling](https://distube.js.org/distube/guides/error-handling/).
 
 ## Author extensions
 
@@ -150,8 +150,8 @@ Import application values and method-facing types from `distube`. Import `Adapte
 source needs `name`, `stream` and at least one of `resolve` or `search`; the rest is optional. Integrations own
 provider and platform policy, native resources and package-local tests. Core owns queue state and exactly-once
 source-resource disposal.
-See the [authoring guide](wiki/Plugin-Authoring.md), [Adapter authoring](wiki/Adapter-Authoring.md) and
-[MIGRATION.md](MIGRATION.md).
+See the [authoring guide](https://distube.js.org/distube/guides/plugin-authoring/), [Adapter authoring](https://distube.js.org/distube/guides/adapter-authoring/) and
+[migration guide](https://distube.js.org/distube/guides/migration/).
 
 ## Files, streams and authenticated URLs
 
@@ -159,4 +159,13 @@ For sound effects or generated audio, use direct `voice.play` with a fresh resou
 absolute files, Node readable streams, progressive HTTP(S) URLs with optional headers, byte-addressable readers
 and time-addressable resources. Read `voice.capabilities` for engine support and `voice.seekable` for the active
 track. Streams and URLs not marked seekable cannot seek. Each resource and readable is single-use, even after a
-later compatibility rejection. See [direct inputs](wiki/Direct-Inputs.md) for copyable examples and cleanup rules.
+later compatibility rejection. See [direct inputs](https://distube.js.org/distube/guides/direct-inputs/) for copyable examples and cleanup rules.
+
+## Documentation
+
+Guides and the API reference live at https://distube.js.org. Start with the
+[quick start](https://distube.js.org/distube/guides/quick-start/), then read the
+[guide](https://distube.js.org/distube/guides/guide/) for queue and voice controls,
+[events and timing](https://distube.js.org/distube/guides/events-and-timing/) and
+[error handling](https://distube.js.org/distube/guides/error-handling/). Official sources are covered under
+[plugins](https://distube.js.org/distube/plugins/). Questions go to the [Discord support server](https://discord.gg/feaDd9h).

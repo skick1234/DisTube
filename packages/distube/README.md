@@ -281,7 +281,7 @@ class ExampleSource implements SourcePlugin<ExampleData> {
 `resolve` returns `undefined` to decline a URL. `search` returns an empty list to decline a query and must honour
 its documented `limit` and `offset` bounds. `stream` returns a fresh single-use resource, or `{ kind: "search",
 query }` for a metadata-only source that plays through another one. Throw `DisTubeError` with your own
-upper-case prefixed codes so bots can narrow them. See the wiki's plugin and adapter authoring pages for the full
+upper-case prefixed codes so bots can narrow them. See the [plugin](https://distube.js.org/distube/guides/plugin-authoring/) and [adapter](https://distube.js.org/distube/guides/adapter-authoring/) authoring guides for the full
 contract.
 
 ## Files, streams and authenticated URLs
@@ -290,4 +290,4 @@ For sound effects or generated audio, use direct `voice.play` with a fresh resou
 absolute files, Node readable streams and progressive HTTP(S) URLs with optional headers. Read
 `voice.capabilities` for engine support and `voice.seekable` for the active track. Streams cannot seek; URL seeks
 reopen the request and decode/discard to the offset. Each resource and readable is single-use, even after a
-later compatibility rejection. See [direct inputs](../../wiki/Direct-Inputs.md) for copyable examples and cleanup rules.
+later compatibility rejection. See [direct inputs](https://distube.js.org/distube/guides/direct-inputs/) for copyable examples and cleanup rules.

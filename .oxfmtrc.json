@@ -4,5 +4,5 @@
   "arrowParens": "avoid",
   "quoteProps": "as-needed",
   "trailingComma": "all",
-  "ignorePatterns": ["dist", "docs", "coverage", "reports", "website/api"]
+  "ignorePatterns": ["dist", "coverage"]
 }

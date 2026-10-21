@@ -1,7 +1,7 @@
 blank_issues_enabled: false
 contact_links:
   - name: Frequently Asked Questions
-    url: https://github.com/skick1234/DisTube/wiki/Frequently-Asked-Questions
+    url: https://distube.js.org/distube/guides/faq/
     about: DisTube Frequently Asked Questions
   - name: Discord Support Server
     url: https://discord.gg/feaDd9h

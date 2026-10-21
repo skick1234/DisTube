@@ -7,7 +7,7 @@ body:
     attributes:
       value: |
         Thanks for taking the time to fill out this bug report!
-        Please check the [FAQ](https://github.com/skick1234/DisTube/wiki/Frequently-Asked-Questions) and existing issues first.
+        Please check the [FAQ](https://distube.js.org/distube/guides/faq/) and existing issues first.
 
   - type: textarea
     id: description

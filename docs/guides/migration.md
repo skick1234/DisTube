@@ -1,12 +1,14 @@
-# Migrating to this release
+---
+title: Migration
+description: Move from DisTube v5 or the v6 pre-release, and update plugins, adapters and engines to the new contracts.
+---
 
 This release changes each published package's public contract. Removed APIs have no aliases. Start a music command
 with `const queue = await distube.play(voiceChannel, input)`. `DisTubeQueue` schedules `current`, `upcoming`,
 `history`, `repeat` and `autoplay`. Its optional `queue.voice` is the exact attached `DisTubeVoice`, which owns the
 connection, Player, volume, filters, self-deaf and self-mute. A voice can also play a track on its own.
 
-Two audiences are covered below. Pick the table for the version you are on, then read the author sections if you
-maintain a plugin or an adapter.
+Pick the table for the version you are on, then read the author sections if you maintain a plugin or an adapter.
 
 ## From v5
 
@@ -60,6 +62,8 @@ at commit time, so a concurrent insert cannot make `remove(3)` delete the wrong 
 
 | v6 pre-release                                                      | This release                                                                                                                                |
 | ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Song.title`, `Playlist.title`                                      | `name`                                                                                                                                      |
+| Queue ID lookup                                                     | `getQueue(guildId)`; queues have `guildId`, no random public queue ID                                                                       |
 | `DisTubeGuild`                                                      | `DisTubeQueue`                                                                                                                              |
 | `queue.enqueue(input, options)`                                     | `await queue.add(input, { metadata, signal, next, at })`                                                                                    |
 | `const { queue, items } = await distube.play(channel, input)`       | `const queue = await distube.play(channel, input)`; read exact occurrences from committed addition events                                   |
@@ -93,6 +97,56 @@ payloads name their owner `queue: DisTubeQueue`. `voice.play`, `voice.stop`, `vo
 `voice.seek` reject `INVALID_STATE` while a queue is attached; use queue controls then. Existing queue controls
 such as `jump`, `previous`, `shuffle`, `clear`, `remove`, `move`, repeat and autoplay remain. `queue.stop()` detaches
 before it awaits cleanup.
+
+## Errors, events and removed enums
+
+| Earlier API                                           | This release                                                                                |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| Runtime `RepeatMode`, `QueueStatus`, `Filters` enums  | Literal modes, statuses and preset names                                                    |
+| Runtime `Events` members                              | Typed dotted names such as `"queue.item.started"`                                           |
+| Chained `on`, `once`, `off`, `removeAllListeners`     | Store the unsubscribe function returned by each `on` registration                           |
+| `ErrorCode` enum, `errorCode`, `error.code === "..."` | `DisTubeError.is(error, ErrorCode.X)` and plugin codes such as `YouTubeErrorCode.NOT_FOUND` |
+| Cancellation reported as `QUEUE_FAILED`               | `ABORTED` for caller cancellation before commit                                             |
+| Bad-state `INVALID_ARGUMENT` with `reason`            | `INVALID_STATE`; malformed values still use `INVALID_ARGUMENT`                              |
+| `shutdown()`                                          | `await distube.dispose()`                                                                   |
+
+The root exports application values and method-facing types. Extension authors use type-only imports from
+`distube/integrations`; separate SDK or testkit packages and private implementation imports remain unsupported.
+
+## Ownership and lifetime
+
+`DisTubeVoice` owns the connection, the long-lived Player, volume, filters, self-deaf and self-mute, and exposes
+`play`, `stop`, `pause`, `resume`, `seek` and `position` directly. It works without a queue. `DisTubeQueue` is a
+scheduler over that voice: it owns `current`, `upcoming`, `history`, `repeat` and `autoplay`, calls `voice.play` and
+listens to `voice.track.*`. While a queue is attached the five direct track controls reject `INVALID_STATE`;
+`queue.stop()` detaches synchronously.
+
+`play` copies channel IDs, validates shallow input and reserves the guild's queue synchronously before returning its
+promise. `getQueue` and readonly queue iteration can observe an idle empty queue immediately. `queue.created`
+acknowledges registration, not successful insertion or audible playback. Each call retains its original queue
+identity. Stop unregisters and fences that queue immediately; late resolution cannot insert into a later replacement.
+
+Queue exhaustion publishes `queue.finished` then `queue.deleted`. Stop and exhaustion retain the connected voice with
+volume, filters, self-deaf and self-mute intact; repeat, autoplay and history die with the queue. Nothing on the
+voice resets when a queue is deleted. `voice.leave()`, `voices.leave(guildId)`, terminal connection loss and `dispose` end voice
+ownership. A later voice starts with volume 100, no filters, self-deaf true and self-mute false. Commands on deleted
+queues or released voices reject `INVALID_STATE`.
+
+## Media and metadata
+
+`Song<PluginData>` contains `source`, `id`, `name`, canonical `url`, optional `duration`, `thumbnail` and
+`artist`, plus `pluginData` filled by the owning plugin and a `formattedDuration` getter. `Playlist` contains
+`source`, `id`, `name`, canonical `url`, optional `thumbnail`, readonly Songs, `pluginData`, `duration` and
+`formattedDuration`. Core permits an absent duration; sources define their normalization. Keep signed URLs,
+encoded tracks and playback state out of `pluginData`.
+
+Core creates each QueueItem's ID and insertion timestamp at commit. Every successful insertion, natural repeat or
+`previous()` creates a fresh occurrence. Its optional metadata binding is readonly but the referenced caller-owned
+contents remain mutable, without recursive freezing or cloning.
+
+Maintained source packages are `@distube/youtube`, `@distube/spotify` and `@distube/soundcloud`; `@distube/lavalink`
+provides the explicit remote source and engine option. See the [plugin pages](../../plugins/) for provider bounds and
+native dependencies.
 
 ## Plugin authors
 
@@ -211,6 +265,16 @@ const engine: Engine = {
 The selected engine owns audio setup. An explicit remote engine can use an adapter's gateway-only session without
 local FFmpeg, Opus or encryption prerequisites. This does not remove the adapter's package peer requirements.
 
+Platform peer boundaries documented by the adapter packages:
+
+- `@distube/discordjs`: discord.js 14.26 or newer within major 14, with `@discordjs/voice` 0.19.x.
+- `@distube/oceanic`: Oceanic 1.14 or newer within major 1, with `@discordjs/voice` 0.19.x.
+- `@distube/eris`: Eris 0.18.x, an Opus implementation and FFmpeg for transcoding.
+
+All three provide local engines accepting files, progressive HTTP(S) URLs and Node readable streams. Files and
+explicitly seekable URLs support seeking; streams do not. Explicit remote engine selection needs no local FFmpeg, Opus
+or encryption runtime.
+
 ## Direct input and resource migration
 
 Queue inputs remain query strings, provider URLs, Songs and Playlists. A filesystem path passed to `play` is a
@@ -256,4 +320,4 @@ and encoded tracks out of public Song fields and `pluginData`.
 Lavalink v4.2+ within major 4 accepts only `encoded` resources with `format: "lavalink.v4"`, plus headerless URL
 loading when `trustedUrlLoading: true` and the node enforces equivalent destination policy. It rejects files,
 streams, URL headers and foreign encoded formats before node work. It does not upload local files. See
-[Direct playback inputs](wiki/Direct-Inputs.md) for the full cleanup and seek rules.
+[Direct playback inputs](../direct-inputs/) for the full cleanup and seek rules.

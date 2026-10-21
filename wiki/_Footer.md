@@ -1,1 +1,0 @@
-[Home]([[Home]]) - [Installation]([[Installation]]) - [Quick Start]([[Quick Start Example]]) - [Guide]([[DisTube Guide]]) - [Plugins]([[Projects Hub]]) - [FAQ]([[Frequently Asked Questions]]) - [API Documentation](https://distube.js.org) - [Discord Support](https://discord.gg/feaDd9h)

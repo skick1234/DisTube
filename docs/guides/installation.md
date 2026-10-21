@@ -1,4 +1,7 @@
-# Installation
+---
+title: Installation
+description: Install DisTube, an adapter and sources, and the system packages the local engines need.
+---
 
 Install only the packages the application uses:
 
@@ -20,8 +23,8 @@ FFmpeg, Opus or encryption prerequisites. Lavalink requires v4.2+ within major 4
 `trustedUrlLoading: true` and nodes enforcing equivalent destination policy. Authenticated URLs, local files and
 streams are not accepted by Lavalink.
 
-All published packages declare Node `>=22.12.0`; workspace development uses pinned Bun 1.4.3. Platform peer ranges
+All published packages declare Node `^22.22.2 || ^24.15.0 || >=26.0.0`; workspace development uses pinned Bun 1.4.3. Platform peer ranges
 are discord.js `^14.26.0` with `@discordjs/voice ^0.19.0`, Oceanic `^1.14.0` with that same voice peer, and
 Eris `^0.18.0`. Package peers remain required for installation even when local audio is not selected.
-See [direct inputs](Direct-Inputs.md) for seek cost and cleanup, and [migration](../MIGRATION.md) for the
+See [direct inputs](../direct-inputs/) for seek cost and cleanup, and [migration](../migration/) for the
 coordinated release plan. Packages release independently.

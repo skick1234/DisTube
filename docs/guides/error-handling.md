@@ -1,4 +1,7 @@
-# Error handling
+---
+title: Error handling
+description: DisTubeError codes and how to narrow them.
+---
 
 Public failures use `DisTubeError` with a string `code`. Core codes are the members of the exported `ErrorCode`
 object; plugins export their own prefixed codes. Core preserves safe plugin errors. If a message or nested cause

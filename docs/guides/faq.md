@@ -1,4 +1,7 @@
-# Frequently asked questions
+---
+title: Frequently asked questions
+description: Answers to common questions about playback, queues and sources.
+---
 
 ## How do I start playback?
 

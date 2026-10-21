@@ -1,4 +1,7 @@
-# v6 playback preparation
+---
+title: v6 playback preparation
+description: How v6 separates media identity from playable input.
+---
 
 DisTube v6 separates canonical media identity from playable input. `Song.url` remains the provider page/permalink.
 Immediately before activation, the exact owning SourcePlugin receives the Song and a required AbortSignal through

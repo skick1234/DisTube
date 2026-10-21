@@ -1,4 +1,7 @@
-# Events and timing
+---
+title: Events and timing
+description: The typed event list and the order events fire in.
+---
 
 Subscribe to typed dotted names on the client:
 

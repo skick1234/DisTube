@@ -1,4 +1,7 @@
-# Adapter authoring
+---
+title: Adapter authoring
+description: Write an Adapter and a playback Engine.
+---
 
 An `Adapter<Target>` owns one platform's gateway voice presence. It converts the platform's native `Target` with
 pure synchronous `normalizeTarget(target)` and returns `{ guildId, channelId }`. Core validates and copies those

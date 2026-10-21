@@ -10,8 +10,5 @@ node_modules
 # Output of 'npm pack'
 *.tgz
 
-/docs
-/website/api
 .turbo
 
-/reports

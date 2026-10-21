@@ -5,7 +5,7 @@
     "correctness": "error",
     "suspicious": "warn"
   },
-  "ignorePatterns": ["dist", "docs", "coverage", "reports", "website/api"],
+  "ignorePatterns": ["dist", "coverage"],
   "rules": {
     "typescript/consistent-type-imports": "error",
     "prefer-template": "error",

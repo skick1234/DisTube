@@ -1,4 +1,7 @@
-# SourcePlugin authoring
+---
+title: SourcePlugin authoring
+description: Write a SourcePlugin with typed pluginData and error codes.
+---
 
 A SourcePlugin needs a non-empty `name`, `stream(song, context)` and at least one callable discovery
 operation, `resolve` or `search`. Both discovery methods are optional in the interface so classes can use
@@ -91,7 +94,7 @@ synchronously and must not return a Promise. Constructors validate options only;
 first use. Diagnostics must redact credentials, tokens, query strings, and prepared URLs.
 
 `stream` returns one of two shapes. A streaming source returns a resource: a fresh `url`, absolute `file`, Node `stream`, or format-qualified `encoded` resource.
-See [direct inputs](Direct-Inputs.md) for shape, seekability and single-use cleanup rules. A
+See [direct inputs](../direct-inputs/) for shape, seekability and single-use cleanup rules. A
 metadata-only source returns one trimmed non-empty provider-derived search query instead. Core performs only that
 explicit bounded fallback, keeps the original QueueItem public, and owns exactly-once source-resource disposal. The
 Player only borrows the resource.

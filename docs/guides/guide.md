@@ -1,4 +1,7 @@
-# DisTube guide
+---
+title: DisTube guide
+description: Queue and voice controls, search, suggestions and disposal.
+---
 
 ```ts
 import { DiscordJSAdapter } from "@distube/discordjs";

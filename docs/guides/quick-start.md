@@ -1,4 +1,7 @@
-# Quick start
+---
+title: Quick start
+description: A complete bot setup that plays, queues, and controls volume and filters.
+---
 
 ```ts
 import { DiscordJSAdapter } from "@distube/discordjs";
