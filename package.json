@@ -88,7 +88,7 @@
     "vitest": "^4.0.16"
   },
   "peerDependencies": {
-    "@discordjs/voice": "*",
+    "@discordjs/voice": ">=0.19.1",
     "discord.js": "14"
   },
   "nano-staged": {

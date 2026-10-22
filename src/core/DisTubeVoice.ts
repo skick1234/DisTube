@@ -121,6 +121,7 @@ export class DisTubeVoice extends TypedEmitter<DisTubeVoiceEvents> {
       guildId: this.id,
       adapterCreator: channel.guild.voiceAdapterCreator,
       group: channel.client.user?.id,
+      daveEncryption: true,
     });
   }
   /**
