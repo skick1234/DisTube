@@ -11,7 +11,7 @@
     "test": "bun run --filter '*' test",
     "build": "bun run --filter '*' build",
     "test:release": "bun run --filter '*' test:release",
-    "verify": "bun run check && bun run type && bun run test:release && bun run build"
+    "verify": "bun run check && bun run type && bun run build && bun run test:release"
   },
   "devDependencies": {
     "@discordjs/voice": "^0.19.2",

@@ -66,6 +66,8 @@ const distube = new DisTube({
 
 ## Run the bot
 
+DisTube loads with `import` in an ES module bot and with `require()` in a CommonJS bot.
+
 ```sh title="Node.js"
 node index.js
 ```
