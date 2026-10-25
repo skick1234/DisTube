@@ -174,6 +174,7 @@ describe("string routing", () => {
     second.resolve.mockResolvedValue(undefined);
     await expect(harness.distube.resolve("https://provider.example/other")).rejects.toMatchObject({
       code: "NO_RESULT",
+      query: "https://provider.example/other",
     });
     expect([first.search, second.search, third.search].every(search => search.mock.calls.length === 0)).toBe(true);
   });
@@ -224,14 +225,15 @@ describe("string routing", () => {
   it("fails an exhausted query NO_RESULT, or SOURCE_FAILED with every recorded failure", async () => {
     const [first, second, third] = sources();
     const harness = setup([first, second, third]);
-    await expect(harness.distube.resolve("zzzz")).rejects.toMatchObject({ code: "NO_RESULT" });
+    const empty = (await capture(harness.distube.resolve("zzzz"))) as DisTubeError;
+    expect([empty.code, empty.query, empty.source]).toEqual(["NO_RESULT", "zzzz", undefined]);
 
     const down = new Error("provider down");
     const refused = new Error("provider refused");
     first.search.mockRejectedValue(down);
     third.search.mockRejectedValue(refused);
     const failure = (await capture(harness.distube.resolve("a query"))) as DisTubeError;
-    expect(failure.code).toBe("SOURCE_FAILED");
+    expect([failure.code, failure.query]).toEqual(["SOURCE_FAILED", "a query"]);
     expect((failure.cause as AggregateError).errors).toMatchObject([{ cause: down }, { cause: refused }]);
   });
 

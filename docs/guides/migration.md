@@ -40,6 +40,8 @@ self-deaf and self-mute.
 | `on`, `once`, `off`, `removeAllListeners`                         | `const off = distube.on(name, listener)`; call `off()`                                                                                |
 | `queue.textChannel`                                               | your own `Map` keyed by `queue.guildId`                                                                                               |
 | `error.errorCode === "SPOTIFY_NOT_FOUND"`                         | `DisTubeError.is(error, ErrorCode.NOT_FOUND)` and `error.source === "spotify"`                                                        |
+| the query parsed out of `Cannot find "<query>"`                   | `error.query` on the `NO_RESULT` or `SOURCE_FAILED` core raises after asking every plugin                                             |
+| playlist-specific messages such as `Unknown Playlist`             | `error.media === "playlist"` on `NOT_FOUND`, `UNAVAILABLE` or `NO_RESULT`                                                             |
 | `shutdown()`                                                      | `await distube.dispose()`                                                                                                             |
 | runtime `RepeatMode` and `Filters` enums                          | literals such as `"song"` and `"bassboost"`                                                                                           |
 
@@ -70,7 +72,8 @@ v6 has one `ErrorCode` list: `INVALID_ARGUMENT`, `INVALID_STATE`, `ABORTED`, `NO
 `UNAVAILABLE`, `RATE_LIMITED`, `SOURCE_FAILED`, `VOICE_FAILED` and `UNSUPPORTED`. The per-plugin code objects
 `YouTubeErrorCode`, `SoundCloudErrorCode`, `SpotifyErrorCode` and `LavalinkErrorCode` are gone. Check
 `DisTubeError.is(error, ErrorCode.NOT_FOUND)` and read `error.source` for the plugin. YouTube's age restriction is
-`UNAVAILABLE`. `PLUGIN_FAILED` and `QUEUE_FAILED` are gone too.
+`UNAVAILABLE`. `PLUGIN_FAILED` and `QUEUE_FAILED` are gone too. Stop parsing messages: `error.query` holds the
+text that found nothing, and `error.media` says whether a failed lookup was for a `"song"` or a `"playlist"`.
 
 ## Official plugins
 

@@ -51,7 +51,8 @@ For remote playback, [Lavalink](../lavalink/) loads the Song's page URL and neve
 
 Songs expose `live`, `views` and `uploader` through typed `pluginData`. Search clamps `limit` to 20 and uses a
 zero-based `offset`. Provider failures are core `DisTubeError` instances with codes such as `NOT_FOUND`,
-`UNAVAILABLE` and `RATE_LIMITED`, `error.source` set to `"youtube"` and the ytdl-core failure as `cause`.
+`UNAVAILABLE` and `RATE_LIMITED`, `error.source` set to `"youtube"` and the ytdl-core failure as `cause`. A video
+lookup or stream failure carries `error.media` `"song"`, a playlist lookup failure `"playlist"`.
 
 See the [quick start](../guides/quick-start/), [clips and playback resources](../guides/direct-inputs/) and
 [error handling](../guides/error-handling/) guides.

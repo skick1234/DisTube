@@ -8,6 +8,15 @@ sidebar:
 Public failures use `DisTubeError` with a string `code` from the exported `ErrorCode` object, an optional `cause`,
 and an optional `source`. `source` names the plugin a failure came from.
 
+Two more fields replace message parsing:
+
+- `query` is the text that found nothing. Core sets it only when every plugin was exhausted: the query you
+  passed, a URL no plugin resolved, or the name-and-artist search it ran for a Spotify track. A plugin's own
+  `NO_RESULT` for an empty playlist has no `query` and has `media` `"playlist"`.
+- `media` is `"song"` or `"playlist"`, the kind of media a failed provider lookup was for. The official plugins
+  set it on the provider's answer to that lookup. A Spotify album or artist counts as `"playlist"`. Search,
+  autoplay, malformed responses and refused credentials (HTTP 401) have none.
+
 | Code               | Meaning                                                                                                        |
 | ------------------ | -------------------------------------------------------------------------------------------------------------- |
 | `INVALID_ARGUMENT` | Malformed input or configuration                                                                               |
@@ -32,9 +41,12 @@ try {
   await queue.add("https://youtu.be/example");
 } catch (error) {
   if (DisTubeError.is(error, ErrorCode.INVALID_STATE)) await reply("The queue is gone.");
+  else if (DisTubeError.is(error, ErrorCode.NOT_FOUND) && error.media === "playlist") await reply("No such playlist.");
   else if (DisTubeError.is(error, ErrorCode.NOT_FOUND)) await reply("That video does not exist.");
   else if (DisTubeError.is(error, ErrorCode.UNAVAILABLE)) await reply("That video cannot be played.");
-  else if (DisTubeError.is(error, ErrorCode.NO_RESULT)) await reply("Nothing found.");
+  else if (DisTubeError.is(error, ErrorCode.NO_RESULT) && error.media === "playlist")
+    await reply("That playlist is empty.");
+  else if (DisTubeError.is(error, ErrorCode.NO_RESULT)) await reply(`Nothing found for ${error.query}.`);
   else throw error;
 }
 ```

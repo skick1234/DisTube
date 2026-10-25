@@ -231,14 +231,14 @@ describe("search fallback for a plugin without stream", () => {
     const youtube = new FakeSource("youtube");
     const soundcloud = new FakeSource("soundcloud");
     const harness = setup([spotify, youtube, soundcloud]);
-    const failures: ErrorCode[] = [];
-    harness.distube.on("queue.item.failed", event => failures.push(event.error.code));
+    const failures: [ErrorCode, string | undefined][] = [];
+    harness.distube.on("queue.item.failed", event => void failures.push([event.error.code, event.error.query]));
 
-    const queue = await harness.distube.play(TARGET, spotifySong());
+    const queue = await harness.distube.play(TARGET, spotifySong("Artist B"));
     await queue.add(media("youtube", "after"));
     await settle();
 
-    expect(failures).toEqual(["NO_RESULT"]);
+    expect(failures).toEqual([["NO_RESULT", "Song A Artist B"]]);
     expect(youtube.stream.mock.calls.map(([song]) => song.id)).toEqual(["after"]);
     expect(soundcloud.stream).not.toHaveBeenCalled();
     expect(harness.engine.player.played).toEqual(["after"]);
@@ -260,7 +260,7 @@ describe("search fallback for a plugin without stream", () => {
     await harness.distube.play(TARGET, spotifySong());
     await settle();
 
-    expect(errors.map(error => error.code)).toEqual(["SOURCE_FAILED"]);
+    expect(errors.map(error => [error.code, error.query])).toEqual([["SOURCE_FAILED", "Song A"]]);
     const cause = errors[0]?.cause;
     expect(cause).toBeInstanceOf(AggregateError);
     expect((cause as AggregateError).errors.map(error => (error as Error).cause)).toEqual([

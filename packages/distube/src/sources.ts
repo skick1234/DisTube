@@ -79,9 +79,9 @@ export async function resolveInput(
       const media = await call(plugin, signal, () => resolve(input, { signal, maxPlaylistSongs }));
       if (media) return capped(owned(plugin, media), maxPlaylistSongs);
     }
-    throw new DisTubeError(ErrorCode.NO_RESULT, "No plugin resolved the URL");
+    throw new DisTubeError(ErrorCode.NO_RESULT, "No plugin resolved the URL", { query: input });
   }
-  return firstFound(plugins, signal, "No plugin found a result for the query", async plugin => {
+  return firstFound(plugins, signal, "No plugin found a result for the query", input, async plugin => {
     const search = plugin.search?.bind(plugin);
     if (!search) return undefined;
     const [song] = await call(plugin, signal, () => search(input, { signal, limit: 1, offset: 0 }));
@@ -93,6 +93,7 @@ async function firstFound<Value>(
   plugins: readonly Plugin[],
   signal: AbortSignal,
   message: string,
+  query: string,
   find: (plugin: Plugin) => Promise<Value | undefined>,
 ): Promise<Value> {
   const failures: unknown[] = [];
@@ -106,8 +107,8 @@ async function firstFound<Value>(
     }
   }
   throw failures.length === 0
-    ? new DisTubeError(ErrorCode.NO_RESULT, message)
-    : new DisTubeError(ErrorCode.SOURCE_FAILED, message, { cause: new AggregateError(failures, message) });
+    ? new DisTubeError(ErrorCode.NO_RESULT, message, { query })
+    : new DisTubeError(ErrorCode.SOURCE_FAILED, message, { cause: new AggregateError(failures, message), query });
 }
 
 export async function searchSongs(
@@ -171,7 +172,7 @@ export async function prepareSong(
   const stream = owner.stream?.bind(owner);
   if (stream) return call(owner, signal, () => stream(song, { signal }));
   const query = song.artist === undefined ? song.name : `${song.name} ${song.artist}`;
-  return firstFound(plugins, signal, `No plugin could play ${song.name}`, async plugin => {
+  return firstFound(plugins, signal, `No plugin could play ${song.name}`, query, async plugin => {
     const search = plugin.search?.bind(plugin);
     const prepareCandidate = plugin.stream?.bind(plugin);
     if (!search || !prepareCandidate) return undefined;

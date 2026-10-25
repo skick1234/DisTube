@@ -46,7 +46,8 @@ or face rate limits. Spotify has no `related`, so autoplay publishes `queue.auto
 Spotify has no `stream`, so core plays its Songs through the search fallback. It searches every other plugin that
 has `search` and `stream`, in the order of `plugins`, for the track name and artists with limit 1, and plays the
 first candidate that prepares. The public Song and queue item remain Spotify's. If every plugin finds nothing, the
-item fails `NO_RESULT`; if some failed, it fails `SOURCE_FAILED` with an `AggregateError` of the failures. The client
+item fails `NO_RESULT`; if some failed, it fails `SOURCE_FAILED` with an `AggregateError` of the failures. Either
+error carries the searched text as `error.query`. The client
 constructor rejects Spotify when no other plugin has `search` and `stream`. An engine plugin such as
 [Lavalink](../lavalink/) prepares every Song itself and the fallback never runs.
 
@@ -54,7 +55,8 @@ Songs expose `album`, `explicit` and `popularity` through typed `pluginData`. Se
 a zero-based `offset`; an offset above 1000 returns no results. Playlists and albums keep their first
 `maxPlaylistSongs` tracks. Provider failures are core `DisTubeError` instances with codes such as `NOT_FOUND`,
 `UNAVAILABLE` and `RATE_LIMITED`, with `error.source` set to `"spotify"`. Each failure inside that `AggregateError`
-keeps the code and source of the plugin that failed; none is a Spotify error.
+keeps the code and source of the plugin that failed; none is a Spotify error. A failed track lookup carries
+`error.media` `"song"`, and a failed playlist, album or artist lookup `"playlist"`. A refused token has none.
 
 See the [quick start](../guides/quick-start/), [queue and voice controls](../guides/guide/) and
 [error handling](../guides/error-handling/) guides.

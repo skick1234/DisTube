@@ -54,6 +54,7 @@ Search clamps `limit` to 50 and uses a zero-based `offset`.
 
 A Lavalink node loads a SoundCloud Song through its permalink, or plays the first search hit for its name and artist.
 Provider failures are core `DisTubeError` instances with codes such as `NOT_FOUND`, `UNAVAILABLE` and `RATE_LIMITED`,
-with `error.source` set to `"soundcloud"`.
+with `error.source` set to `"soundcloud"`. A failed track or stream lookup carries `error.media` `"song"`, and a
+failed set lookup `"playlist"`.
 See the [quick start](../guides/quick-start/), [queue and voice controls](../guides/guide/) and
 [error handling](../guides/error-handling/) guides. For remote playback, see [Lavalink](../lavalink/).

@@ -16,20 +16,32 @@ export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];
 
 const CODES: ReadonlySet<unknown> = new Set(Object.values(ErrorCode));
 
+/** What a failed provider lookup was for. A Spotify album or artist resolves to a Playlist, so it is `playlist`. */
+export type ErrorMedia = "song" | "playlist";
+
 export interface DisTubeErrorOptions extends ErrorOptions {
   /** The plugin the failure came from. */
   readonly source?: string;
+  /** The text that found nothing: a query, a URL no plugin resolved, or the search the fallback ran. */
+  readonly query?: string;
+  readonly media?: ErrorMedia;
 }
 
 export class DisTubeError<Code extends ErrorCode = ErrorCode> extends Error {
   readonly code: Code;
   readonly source?: string;
+  /** Set when every plugin was exhausted; see `DisTubeErrorOptions.query`. */
+  readonly query?: string;
+  /** Set by a plugin when the failure came from looking up one Song or one Playlist. */
+  readonly media?: ErrorMedia;
 
   constructor(code: Code, message: string, options?: DisTubeErrorOptions) {
     super(message, options);
     this.name = "DisTubeError";
     this.code = code;
     if (options?.source !== undefined) this.source = options.source;
+    if (options?.query !== undefined) this.query = options.query;
+    if (options?.media !== undefined) this.media = options.media;
   }
 
   /**
