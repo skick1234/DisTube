@@ -15,5 +15,3 @@ const clientUserId: string = session.clientUserId;
 void [adapter, sessionPromise, clientUserId];
 // @ts-expect-error the adapter is constructed from its client alone
 new oceanicExports.OceanicAdapter(client, {});
-// @ts-expect-error redundant create-adapter aliases are removed
-oceanicExports.createOceanicAdapter;

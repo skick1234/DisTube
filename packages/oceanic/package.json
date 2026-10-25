@@ -24,10 +24,11 @@
     "type": "tsrs --noEmit",
     "test": "vitest run --coverage=false",
     "test:release": "vitest run --coverage",
-    "build": "tsdown && bun ../../scripts/sanitize-adapter-output.ts",
+    "build": "tsdown",
     "prepack": "bun run build"
   },
   "dependencies": {
+    "@noble/ciphers": "^2.1.1",
     "node-av": "6.2.0-beta.33"
   },
   "devDependencies": {

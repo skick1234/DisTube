@@ -128,11 +128,13 @@ describe("voice filter manager", () => {
     expect(harness.engine.createPlayer).not.toHaveBeenCalled();
     expect(voice.filters.entries).toEqual([{ name: "bassboost", value: 12, label: "Bass +12dB" }]);
 
-    const first = voice.play({ kind: "url", url: "https://stream.example/a" });
+    const queue = await harness.distube.play(channel, "a");
+    await queue.add("b");
     await settle();
-    void voice.play({ kind: "url", url: "https://stream.example/b" });
-    expect(await first).toEqual({ reason: "replaced" });
+    harness.engine.player.finish();
+    await settle();
     const player = required(harness.engine.players[0]) as FakePlayer;
+    expect(player.played).toEqual(["a", "b"]);
 
     expect(player.renders).toEqual([[{ name: "bassboost", value: 12 }]]);
     expect(player.calls.slice(0, 3)).toEqual(["volume:20", "filters", expect.stringMatching(/^play:/)]);

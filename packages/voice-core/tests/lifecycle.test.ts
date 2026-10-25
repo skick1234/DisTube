@@ -36,8 +36,11 @@ async function playing(): Promise<{
     selfMute: false,
     timeoutMs: 15_000,
     channelBitrate: () => 64_000,
+    preflight: () => undefined,
   });
-  const player = await new DiscordVoiceEngine({ opusComplexity: 10, bufferMs: 500 }).createPlayer(session);
+  const player = await new DiscordVoiceEngine({ opusComplexity: 10, bufferMs: 500 }).createPlayer(session, {
+    onClosed: () => undefined,
+  });
   const input = new PassThrough();
   input.write((await readFile(media.hour)).subarray(0, 400_000));
   const { promise: started, resolve } = Promise.withResolvers<void>();
@@ -71,28 +74,16 @@ describe("DiscordVoiceSession playback lifecycle", () => {
   it("closes every input before it destroys the voice connection on release", async () => {
     const { session, player, input, ended } = await playing();
     const connection = latest.connection;
-    const order: string[] = [];
-    connection.subscription.unsubscribe.mockImplementationOnce(() => {
-      order.push("unsubscribe");
-    });
-    latest.player.stop
-      .mockImplementationOnce(() => {
-        order.push("track stop");
-        return true;
-      })
-      .mockImplementationOnce(() => {
-        order.push("release stop");
-        return true;
-      });
-    expect(input.destroyed).toBe(false);
+    let inputClosedAtDestroy: boolean | undefined;
     connection.destroy.mockImplementationOnce(() => {
-      order.push(input.destroyed ? "destroy after inputs" : "destroy");
+      inputClosedAtDestroy = input.destroyed;
       connection.transition({ status: "destroyed" });
     });
 
     await player.release();
 
-    expect(order).toEqual(["track stop", "unsubscribe", "release stop", "destroy after inputs"]);
+    expect(inputClosedAtDestroy).toBe(true);
+    expect(connection.destroy).toHaveBeenCalledOnce();
     await expect(ended).resolves.toEqual({ reason: "stopped" });
     await session.release();
   });

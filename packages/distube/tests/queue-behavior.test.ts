@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { type DisTubeError, type DisTubeEventMap, type DisTubeQueue, Playlist, type Song } from "../src";
 import {
   deferred,
+  deletions,
   type FakePlayer,
   GUILD,
   media,
@@ -9,6 +10,7 @@ import {
   record,
   required,
   settle,
+  thrown,
   VOICE_CHANNEL,
 } from "./support/harness";
 
@@ -36,7 +38,7 @@ describe("repeat modes", () => {
     const { harness, queue, player } = await playing(["a", "b"]);
     const first = required(queue.current);
 
-    await queue.setRepeat("song");
+    queue.setRepeat("song");
     expect(queue.repeat).toBe("song");
     player.finish();
     await settle();
@@ -46,7 +48,7 @@ describe("repeat modes", () => {
     expect(queue.current?.song).toBe(first.song);
     expect(waiting(queue)).toEqual(["b"]);
 
-    await queue.setRepeat("queue");
+    queue.setRepeat("queue");
     player.finish();
     await settle();
     expect(queue.current?.song.id).toBe("b");
@@ -56,7 +58,7 @@ describe("repeat modes", () => {
 
   it("bypasses repeat when the caller ends the occurrence", async () => {
     const { harness, queue, player } = await playing(["a", "b"]);
-    await queue.setRepeat("song");
+    queue.setRepeat("song");
 
     await queue.skip();
     await settle();
@@ -71,7 +73,7 @@ describe("repeat modes", () => {
 
   it("does not repeat a failed item in queue mode", async () => {
     const { harness, queue, player } = await playing(["a", "b"]);
-    await queue.setRepeat("queue");
+    queue.setRepeat("queue");
     player.fail(new Error("decoder failed"));
     await settle();
 
@@ -90,8 +92,8 @@ describe("repeat modes", () => {
 
   it("rejects an unknown repeat mode before committing", async () => {
     const { harness, queue } = await playing(["a"]);
-    await expect(queue.setRepeat("forever" as never)).rejects.toMatchObject({ code: "INVALID_ARGUMENT" });
-    await expect(queue.setAutoplay("yes" as never)).rejects.toMatchObject({ code: "INVALID_ARGUMENT" });
+    expect(thrown(() => queue.setRepeat("forever" as never))).toMatchObject({ code: "INVALID_ARGUMENT" });
+    expect(thrown(() => queue.setAutoplay("yes" as never))).toMatchObject({ code: "INVALID_ARGUMENT" });
     expect([queue.repeat, queue.autoplay]).toEqual(["off", false]);
     await harness.distube.dispose();
   });
@@ -102,7 +104,7 @@ describe("autoplay", () => {
     const { harness, queue, player } = await playing(["a"]);
     harness.source.related.mockResolvedValue(media("source", "related"));
 
-    await queue.setAutoplay(true);
+    queue.setAutoplay(true);
     player.finish();
     await settle();
 
@@ -115,7 +117,7 @@ describe("autoplay", () => {
     const { harness, queue, player } = await playing(["a"]);
     const lookup = deferred<Song | undefined>();
     harness.source.related.mockReturnValueOnce(lookup.promise);
-    await queue.setAutoplay(true);
+    queue.setAutoplay(true);
 
     player.finish();
     await settle();
@@ -134,7 +136,7 @@ describe("autoplay", () => {
     const events = record(harness.distube, ["queue.autoplay.failed", "queue.finished", "queue.deleted"]);
     const failures: { song: Song; error: DisTubeError }[] = [];
     harness.distube.on("queue.autoplay.failed", event => failures.push({ song: event.song, error: event.error }));
-    await queue.setAutoplay(true);
+    queue.setAutoplay(true);
 
     player.finish();
     await settle();
@@ -152,7 +154,7 @@ describe("autoplay", () => {
     harness.source.related.mockRejectedValue(provider);
     const failures: DisTubeError[] = [];
     harness.distube.on("queue.autoplay.failed", event => failures.push(event.error));
-    await queue.setAutoplay(true);
+    queue.setAutoplay(true);
 
     player.finish();
     await settle();
@@ -167,7 +169,7 @@ describe("autoplay", () => {
     Reflect.deleteProperty(harness.source, "related");
     const failures: DisTubeError[] = [];
     harness.distube.on("queue.autoplay.failed", event => failures.push(event.error));
-    await queue.setAutoplay(true);
+    queue.setAutoplay(true);
 
     player.finish();
     await settle();
@@ -193,11 +195,11 @@ describe("autoplay", () => {
       "queue.item.started",
       "queue.autoplay.failed",
     ]);
-    await queue.setAutoplay(true);
+    queue.setAutoplay(true);
 
     player.finish();
     await started.promise;
-    await queue.setAutoplay(false);
+    queue.setAutoplay(false);
     await settle();
 
     expect(signal?.aborted).toBe(true);
@@ -208,6 +210,126 @@ describe("autoplay", () => {
 
     expect(events).toEqual(["queue.finished", "queue.deleted"]);
     expect(harness.distube.getQueue(GUILD)).toBeUndefined();
+  });
+
+  it.each(["prepare", "play"] as const)(
+    "ends the queue after an autoplay item fails to %s, with one lookup",
+    async stage => {
+      const { harness, queue, player } = await playing(["a"]);
+      harness.source.related.mockResolvedValue(media("source", "related"));
+      if (stage === "prepare")
+        harness.source.stream.mockImplementation(async song => {
+          if (song.id === "related") throw new Error("geo blocked");
+          return harness.source.resource(song.id);
+        });
+      else player.play.mockRejectedValueOnce(new Error("cannot start"));
+      const events = record(harness.distube, ["queue.item.failed", "queue.finished"]);
+      const reasons = deletions(harness.distube);
+      queue.setAutoplay(true);
+
+      player.finish();
+      await settle();
+
+      expect(harness.source.related).toHaveBeenCalledTimes(1);
+      expect(events).toEqual(["queue.item.failed", "queue.finished"]);
+      expect(reasons).toEqual(["finished"]);
+    },
+  );
+
+  it.each([
+    ["the queue is deleted", (queue: Awaited<ReturnType<typeof playing>>["queue"]) => queue.stop(), "stop", ["a"]],
+    [
+      "the user adds an item",
+      (queue: Awaited<ReturnType<typeof playing>>["queue"]) => queue.add("b"),
+      undefined,
+      ["a", "b"],
+    ],
+    [
+      "autoplay is disabled",
+      (queue: Awaited<ReturnType<typeof playing>>["queue"]) => queue.setAutoplay(false),
+      "finished",
+      ["a"],
+    ],
+  ] as const)("drops an autoplay result that lands after %s", async (_name, act, reason, played) => {
+    const { harness, queue, player } = await playing(["a"]);
+    const lookup = deferred<Song | undefined>();
+    harness.source.related.mockImplementationOnce(() => lookup.promise);
+    const events = record(harness.distube, ["queue.item.added", "queue.autoplay.failed"]);
+    const reasons = deletions(harness.distube);
+    queue.setAutoplay(true);
+    player.finish();
+    await settle();
+    expect(harness.source.related).toHaveBeenCalledTimes(1);
+
+    await act(queue);
+    lookup.resolve(media("source", "related"));
+    await settle();
+
+    expect(player.played).toEqual(played);
+    expect(queue.upcoming.map(item => item.song.id)).not.toContain("related");
+    expect(events).toEqual(reason === undefined ? ["queue.item.added"] : []);
+    expect(reasons).toEqual(reason === undefined ? [] : [reason]);
+  });
+
+  it.each(["prepare", "play"] as const)("keeps autoplay available after a user item fails to %s", async stage => {
+    const { harness, queue, player } = await playing(["a", "b"]);
+    harness.source.related.mockResolvedValue(media("source", "related"));
+    if (stage === "prepare")
+      harness.source.stream.mockImplementation(async song => {
+        if (song.id === "b") throw new Error("geo blocked");
+        return harness.source.resource(song.id);
+      });
+    else player.play.mockRejectedValueOnce(new Error("cannot start"));
+    queue.setAutoplay(true);
+
+    player.finish();
+    await settle();
+
+    expect(harness.source.related).toHaveBeenCalledTimes(1);
+    expect(player.playing).toBe("related");
+  });
+
+  it("keeps the queue for an insertion still resolving when the lookup declines", async () => {
+    const { harness, queue, player } = await playing(["a"]);
+    const lookup = deferred<Song | undefined>();
+    harness.source.related.mockReturnValueOnce(lookup.promise);
+    const resolving = deferred<readonly Song[]>();
+    harness.source.search.mockReturnValueOnce(resolving.promise);
+    const reasons = deletions(harness.distube);
+    const events = record(harness.distube, ["queue.finished"]);
+    queue.setAutoplay(true);
+    player.finish();
+    await settle();
+
+    const adding = queue.add("b");
+    await settle();
+    lookup.resolve(undefined);
+    await settle();
+    expect(events).toEqual([]);
+    expect(harness.distube.getQueue(GUILD)).toBe(queue);
+
+    resolving.resolve([media("source", "b")]);
+    await adding;
+    await settle();
+    expect(player.playing).toBe("b");
+    expect(events).toEqual([]);
+    expect(reasons).toEqual([]);
+  });
+
+  it("publishes no queue.finished when the queue is stopped during the lookup", async () => {
+    const { harness, queue, player } = await playing(["a"]);
+    const lookup = deferred<Song | undefined>();
+    harness.source.related.mockReturnValueOnce(lookup.promise);
+    const events = record(harness.distube, ["queue.finished", "queue.deleted"]);
+    queue.setAutoplay(true);
+    player.finish();
+    await settle();
+
+    await queue.stop();
+    lookup.resolve(undefined);
+    await settle();
+
+    expect(events).toEqual(["queue.deleted"]);
   });
 });
 
@@ -228,7 +350,6 @@ describe("event lifecycle", () => {
       "queue.item.added",
       "queue.item.started",
       "queue.item.finished",
-      "queue.history.added",
       "queue.finished",
       "queue.deleted",
     ]);
@@ -247,25 +368,23 @@ describe("event lifecycle", () => {
       "queue.playlist.added",
       "queue.item.started",
       "queue.item.finished",
-      "queue.history.added",
       "queue.item.started",
       "queue.item.finished",
-      "queue.history.added",
       "queue.finished",
       "queue.deleted",
     ]);
   });
 
   it("captures immutable state that does not change after later commits", async () => {
-    const { harness, queue, player } = await playing(["a", "b"]);
-    const captures: DisTubeEventMap["queue.history.added"][] = [];
-    harness.distube.on("queue.history.added", event => captures.push(event));
+    const { harness, queue, player } = await playing(["a", "b", "c"]);
+    const captures: DisTubeEventMap["queue.item.started"][] = [];
+    harness.distube.on("queue.item.started", event => captures.push(event));
     await queue.skip();
     await settle();
     player.finish();
     await settle();
     // Read after both commits: a live view would show the later state in the first capture.
-    expect(captures.map(event => event.state.upcoming.map(item => item.song.id))).toEqual([["b"], []]);
+    expect(captures.map(event => event.state.upcoming.map(item => item.song.id))).toEqual([["c"], []]);
     expect(Object.isFrozen(captures[0]?.state)).toBe(true);
     await harness.distube.dispose();
   });
@@ -275,13 +394,13 @@ describe("queue occurrence edits and lifetime", () => {
   it("moves and removes only upcoming occurrence IDs", async () => {
     const { harness, queue } = await playing(["a", "b", "c", "d"]);
     const [b, , d] = queue.upcoming;
-    await queue.move(required(d).id, required(b).id);
+    queue.move(required(d).id, required(b).id);
     expect(waiting(queue)).toEqual(["d", "b", "c"]);
-    expect((await queue.remove(required(b).id)).map(item => item.id)).toEqual([b?.id]);
+    expect(queue.remove(required(b).id).map(item => item.id)).toEqual([b?.id]);
     expect(waiting(queue)).toEqual(["d", "c"]);
     expect(queue.current?.song.id).toBe("a");
-    await expect(queue.remove(required(b).id)).rejects.toMatchObject({ code: "INVALID_STATE" });
-    await expect(queue.move(required(queue.current).id)).rejects.toMatchObject({ code: "INVALID_STATE" });
+    expect(thrown(() => queue.remove(required(b).id))).toMatchObject({ code: "INVALID_STATE" });
+    expect(thrown(() => queue.move(required(queue.current).id))).toMatchObject({ code: "INVALID_STATE" });
     await harness.distube.dispose();
   });
 
@@ -294,7 +413,7 @@ describe("queue occurrence edits and lifetime", () => {
     expect(second.song).toBe(song);
     expect(first.id).not.toBe(second.id);
 
-    expect((await queue.remove(first.id)).map(item => item.id)).toEqual([first.id]);
+    expect(queue.remove(first.id).map(item => item.id)).toEqual([first.id]);
     expect(queue.upcoming.map(item => item.id)).toEqual([second.id]);
     await queue.skip();
     await settle();
@@ -309,8 +428,8 @@ describe("queue occurrence edits and lifetime", () => {
     expect(player.volumes.at(-1)).toBe(40);
     expect(player.playing).toBe(queue.current?.song.id);
     await voice.filters.set("bassboost", 15);
-    await queue.setRepeat("queue");
-    await queue.setAutoplay(true);
+    queue.setRepeat("queue");
+    queue.setAutoplay(true);
     const rendered = player.renders.length;
 
     const stopped = queue.stop();
@@ -327,9 +446,8 @@ describe("queue occurrence edits and lifetime", () => {
     const replacement = await harness.distube.play(TARGET, "b");
     expect(replacement).not.toBe(queue);
     expect([replacement.repeat, replacement.autoplay]).toEqual(["off", false]);
-    await expect(queue.pause()).rejects.toMatchObject({ code: "INVALID_STATE" });
     await expect(queue.add("c")).rejects.toMatchObject({ code: "INVALID_STATE" });
-    await expect(queue.setRepeat("song")).rejects.toMatchObject({ code: "INVALID_STATE" });
+    expect(thrown(() => queue.setRepeat("song"))).toMatchObject({ code: "INVALID_STATE" });
     expect(harness.distube.getQueue(GUILD)).toBe(replacement);
 
     await harness.distube.voices.leave(GUILD);

@@ -1,5 +1,5 @@
 import { expectTypeOf } from "vitest";
-import type { DisTube, DisTubeQueue, DisTubeVoice, QueueItem, QueueState, TrackEnd, VoiceManager } from "../src";
+import type { DisTube, DisTubeQueue, DisTubeVoice, QueueItem, QueueState, VoiceManager } from "../src";
 import { Song } from "../src";
 import type {
   Adapter,
@@ -10,14 +10,14 @@ import type {
   FilterDefinitions,
   FilterEntry,
   JoinOptions,
-  PlaybackPreparation,
   Player,
+  PlayerOptions,
   Plugin,
-  PrepareContext,
   ReaderPlaybackResource,
   SearchOptions,
   StreamPlaybackResource,
   TimedPlaybackResource,
+  TrackEnd,
   TrackOptions,
   UrlPlaybackResource,
   VoiceSession,
@@ -28,8 +28,9 @@ import type {
 const resource: UrlPlaybackResource = { kind: "url", url: "https://stream.example/audio", dispose: () => undefined };
 const encoded: EncodedPlaybackResource = { kind: "encoded", format: "lavalink.v4", encoded: "QAAAjQIA" };
 declare const audio: StreamPlaybackResource["stream"];
-const direct: PlaybackPreparation = { kind: "resource", resource };
-const fallback: PlaybackPreparation = { kind: "search", query: "title artist" };
+const headers = { Authorization: "Bearer token" };
+// @ts-expect-error a url resource carries no headers; authenticated media is a reader or timed resource
+const authorized: UrlPlaybackResource = { kind: "url", url: "https://stream.example/a", headers };
 const song = new Song({ id: "song", name: "Song", url: "https://provider.example/song", source: "source" });
 
 const source: Plugin = {
@@ -43,8 +44,15 @@ const source: Plugin = {
   async resolve(): Promise<Song> {
     return song;
   },
-  async stream(): Promise<PlaybackPreparation> {
-    return direct;
+  async stream(): Promise<UrlPlaybackResource> {
+    return resource;
+  },
+};
+const searching: Plugin = {
+  name: "searching",
+  // @ts-expect-error stream resolves a PlaybackResource, never a search request
+  async stream() {
+    return { kind: "search", query: "title artist" } as const;
   },
 };
 // @ts-expect-error plugins lost initialize
@@ -62,7 +70,6 @@ const player: Player = {
   async seek(): Promise<void> {},
   async setVolume(): Promise<void> {},
   async setFilters(_entries: readonly FilterEntry[]): Promise<void> {},
-  async setBitrate(_bitrate: number | undefined): Promise<void> {},
   async release(): Promise<void> {},
 };
 // @ts-expect-error a track ends finished, stopped or replaced; failures reject
@@ -78,6 +85,9 @@ const session: VoiceSession = {
   selfDeaf: true,
   selfMute: false,
   async join(_channelId: string, _options?: JoinOptions): Promise<void> {},
+  async setSelfState(_state: JoinOptions): Promise<void> {},
+  voiceClosed(_code: number): void {},
+  async rejoin(): Promise<void> {},
   async release(): Promise<void> {},
   subscribe(_listener: (event: VoiceSessionEvent) => void): () => void {
     return () => undefined;
@@ -89,12 +99,13 @@ const bitrateless: VoiceSession = { ...session, bitrate: undefined };
 const info: FilterDefinitionInfo = { default: 10, min: 0, max: 20, acceptsValue: true, label: () => "Bass" };
 const engine: Engine = {
   filters: new Map([["bassboost", info]]),
-  async createPlayer(_session: VoiceSession): Promise<Player> {
+  async createPlayer(_session: VoiceSession, options: PlayerOptions): Promise<Player> {
+    expectTypeOf(options.onClosed).toEqualTypeOf<(error: Error) => void>();
     return player;
   },
-  async prepare(_song: Song, context: PrepareContext) {
-    const preparation = await context.stream?.();
-    return preparation?.kind === "resource" ? preparation.resource : encoded;
+  async prepare(_song: Song, options: { readonly signal: AbortSignal }) {
+    options.signal.throwIfAborted();
+    return encoded;
   },
 };
 const legacyEngine: Engine = {
@@ -126,16 +137,32 @@ const enginePlugin: Plugin = { name: "remote", engine };
 declare const queue: DisTubeQueue;
 declare const voices: VoiceManager;
 declare const voice: DisTubeVoice;
-const played: Promise<TrackEnd> = voice.play(resource, { signal: new AbortController().signal, onStart() {} });
-const bitrate: Promise<void> = voice.setBitrate("auto");
-const bitrateSetting: number | "auto" = voice.bitrate;
 const voiceState: [number, boolean, boolean] = [voice.volume, voice.selfDeaf, voice.selfMute];
 const joined: Promise<DisTubeVoice> = voices.join({ guildId: "guild", id: "voice" }, { selfDeaf: false });
-const removed: Promise<readonly QueueItem[]> = queue.remove(1);
+const removed: readonly QueueItem[] = queue.remove(1);
+const cleared: readonly QueueItem[] = queue.clear();
+const edits: void[] = [queue.move("item"), queue.shuffle(), queue.setRepeat("song"), queue.setAutoplay(true)];
 const attachedVoice: DisTubeVoice | undefined = queue.voice;
+const controls: [Promise<void>, Promise<void>, Promise<void>, boolean] = [
+  queue.pause(),
+  queue.resume(),
+  queue.seek(5),
+  queue.paused,
+];
+const addedAt: number | undefined = queue.current?.addedAt;
 
-// @ts-expect-error direct play lost caller item IDs
-voice.play(resource, { itemId: "clip" });
+// @ts-expect-error playback lives on the queue
+voice.play(resource);
+// @ts-expect-error stop is queue.stop()
+voice.stop();
+// @ts-expect-error pause is queue.pause()
+voice.pause();
+// @ts-expect-error seek is queue.seek()
+voice.seek(1);
+// @ts-expect-error the voice reads no track position
+voice.position;
+// @ts-expect-error only queue.skip() and queue.stop() end an item early
+queue.voice?.stop();
 // @ts-expect-error volume lives on the guild's DisTubeVoice
 queue.setVolume(50);
 // @ts-expect-error the schedule is read through current, upcoming and history
@@ -163,12 +190,12 @@ expectTypeOf<NonNullable<Awaited<ReturnType<DisTube<Requester>["play"]>>["curren
   Requester | undefined
 >();
 const typedFromQueue: string | undefined = typed.getQueue("guild")?.current?.metadata?.requestedBy;
-typed.on("queue.history.added", event => {
+typed.on("queue.item.finished", event => {
   const captured: QueueState<Requester> = event.state;
   return captured.history[0]?.metadata?.requestedBy;
 });
 typed.on("queue.deleted", event => {
-  const reason: "stop" | "finished" | "replaced" | "voice-loss" | "leave" | "shutdown" | "failed" = event.reason;
+  const reason: "stop" | "finished" | "voice-loss" | "leave" | "shutdown" | "failed" = event.reason;
   return reason;
 });
 // @ts-expect-error voice track events were removed
@@ -179,21 +206,23 @@ typed.play({ guildId: "guild", id: "voice" }, "query", { metadata: { requester: 
 untyped.getQueue("guild")?.current?.metadata?.requestedBy;
 
 void [
-  fallback,
+  authorized,
   source,
+  searching,
   initializing,
   failedEnd,
   bitrateless,
   legacyEngine,
   adapter,
   enginePlugin,
-  played,
-  bitrate,
-  bitrateSetting,
   voiceState,
   joined,
   removed,
+  cleared,
+  edits,
   attachedVoice,
+  controls,
+  addedAt,
   definitions,
   reader,
   timed,

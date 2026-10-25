@@ -1,6 +1,6 @@
-import { ChannelTypes, type Client, type VoiceChannel } from "oceanic.js";
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { GATEWAY, gatewayAdapter, native, resetNative } from "../../voice-core/tests/support/native";
+import { ChannelTypes, type Client, Permission, type PermissionName, Permissions, type VoiceChannel } from "oceanic.js";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { gatewayAdapter, resetNative } from "../../voice-core/tests/support/native";
 import { OceanicAdapter } from "../src";
 
 vi.mock("@discordjs/voice", async () => (await import("../../voice-core/tests/support/native")).voiceModule());
@@ -10,8 +10,33 @@ const CHANNEL = "channel";
 const TARGET = { guildId: GUILD, channelId: CHANNEL };
 const JOIN = { selfDeaf: true, selfMute: false, timeoutMs: 50 };
 
-function voiceChannel(id: string, bitrate = 64_000): unknown {
-  return { id, guildID: GUILD, guild: { id: GUILD }, type: ChannelTypes.GUILD_VOICE, bitrate };
+function permission(...names: PermissionName[]): Permission {
+  return new Permission(names.reduce((bits, name) => bits | Permissions[name], 0n));
+}
+
+function voiceChannel(
+  id: string,
+  {
+    bitrate = 64_000,
+    allowed = permission("CONNECT", "SPEAK"),
+    userLimit = 0,
+    members = 0,
+    type = ChannelTypes.GUILD_VOICE,
+  } = {},
+): unknown {
+  return {
+    id,
+    guildID: GUILD,
+    guild: { id: GUILD },
+    type,
+    bitrate,
+    userLimit,
+    voiceMembers: { size: members },
+    permissionsOf: (member: string) => {
+      if (member !== "bot") throw new Error(`unexpected member ${member}`);
+      return allowed;
+    },
+  };
 }
 
 function fixture(channels: readonly unknown[] = [voiceChannel(CHANNEL)], user: unknown = { id: "bot" }) {
@@ -22,6 +47,7 @@ function fixture(channels: readonly unknown[] = [voiceChannel(CHANNEL)], user: u
       [
         GUILD,
         {
+          id: GUILD,
           voiceAdapterCreator: gateway.creator,
           channels: new Map(channels.map(channel => [(channel as { id: string }).id, channel])),
         },
@@ -81,23 +107,11 @@ describe("OceanicAdapter", () => {
     expect(gateway.sendPayload).not.toHaveBeenCalled();
   });
 
-  it("joins gateway only, sending and acknowledging the requested self flags", async () => {
-    const { adapter, gateway } = fixture();
-    const session = await adapter.createVoiceSession(TARGET, { ...JOIN, selfDeaf: false, selfMute: true });
-
-    expect(gateway.sendPayload).toHaveBeenCalledWith({
-      op: 4,
-      d: { guild_id: GUILD, channel_id: CHANNEL, self_deaf: false, self_mute: true },
-    });
-    expect(session.gateway).toEqual(GATEWAY);
-    expect(session.selfDeaf).toBe(false);
-    expect(session.selfMute).toBe(true);
-    expect(native.joinVoiceChannel).not.toHaveBeenCalled();
-    await session.release();
-  });
-
   it("reads the bitrate of the session's current channel, including after a move", async () => {
-    const { adapter } = fixture([voiceChannel(CHANNEL, 64_000), voiceChannel("other", 128_000)]);
+    const { adapter } = fixture([
+      voiceChannel(CHANNEL, { bitrate: 64_000 }),
+      voiceChannel("other", { bitrate: 128_000 }),
+    ]);
     const session = await adapter.createVoiceSession(TARGET, JOIN);
     const before = session.bitrate;
 
@@ -106,6 +120,47 @@ describe("OceanicAdapter", () => {
     expect(before).toBe(64_000);
     expect(session.bitrate).toBe(128_000);
     await session.release();
+  });
+
+  describe("with a 15 s join deadline that never elapses", () => {
+    const DEADLINE = { ...JOIN, timeoutMs: 15_000 };
+    beforeEach(() => vi.useFakeTimers());
+    afterEach(() => vi.useRealTimers());
+
+    it.each([
+      { label: "denies the bot Connect", channel: voiceChannel(CHANNEL, { allowed: permission("SPEAK") }) },
+      { label: "denies the bot Speak", channel: voiceChannel(CHANNEL, { allowed: permission("CONNECT") }) },
+      { label: "is full and the bot lacks Move Members", channel: voiceChannel(CHANNEL, { userLimit: 2, members: 2 }) },
+    ])("rejects a join to a channel that $label before any gateway payload", async ({ label, channel }) => {
+      const { adapter, gateway } = fixture([channel]);
+
+      await expect(adapter.createVoiceSession(TARGET, DEADLINE)).rejects.toThrow(label);
+      expect(gateway.sendPayload).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      {
+        label: "a stage channel that denies the bot Speak",
+        channel: voiceChannel(CHANNEL, { allowed: permission("CONNECT"), type: ChannelTypes.GUILD_STAGE_VOICE }),
+      },
+      {
+        label: "a full channel with Move Members",
+        channel: voiceChannel(CHANNEL, {
+          userLimit: 2,
+          members: 2,
+          allowed: permission("CONNECT", "SPEAK", "MOVE_MEMBERS"),
+        }),
+      },
+    ])("joins $label", async ({ channel }) => {
+      const { adapter, gateway } = fixture([channel]);
+      const session = await adapter.createVoiceSession(TARGET, DEADLINE);
+
+      expect(gateway.sendPayload).toHaveBeenCalledWith({
+        op: 4,
+        d: { guild_id: GUILD, channel_id: CHANNEL, self_deaf: true, self_mute: false },
+      });
+      await session.release();
+    });
   });
 
   it("passes engine settings to the engine it creates", () => {

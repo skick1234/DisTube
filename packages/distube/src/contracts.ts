@@ -1,6 +1,11 @@
 import type { Readable } from "node:stream";
 import type { Playlist, Song } from "./media";
-import type { VoiceChannelTarget } from "./voice/target";
+
+/** Identity shared by supported native platform voice channels. */
+export type VoiceChannelTarget = { readonly id: string } & (
+  | { readonly guildId: string }
+  | { readonly guild: { readonly id: string } }
+);
 
 /** What core accepts wherever media enters the client. */
 export type ResolvableInput = string | Song | Playlist;
@@ -15,11 +20,10 @@ export interface Diagnostic {
   readonly error?: unknown;
 }
 
+/** A public HTTP(S) URL fetched without headers; never seekable. Authenticated or seekable media is a `reader` or `timed` resource. */
 export interface UrlPlaybackResource {
   readonly kind: "url";
   readonly url: string;
-  readonly headers?: Readonly<Record<string, string>>;
-  readonly seekable?: boolean;
   dispose?(): void | Promise<void>;
 }
 
@@ -63,8 +67,7 @@ export interface EncodedPlaybackResource {
 }
 
 /**
- * One prepared playable input. Whoever receives it disposes it exactly once: `DisTubeVoice.play` after the
- * track ends, or core when a prepared resource is dropped before playback.
+ * One prepared playable input. Core disposes it exactly once, after its track ends or when it is dropped before playback.
  */
 export type PlaybackResource =
   | UrlPlaybackResource
@@ -75,11 +78,6 @@ export type PlaybackResource =
   | EncodedPlaybackResource;
 
 export type PlaybackResourceKind = PlaybackResource["kind"];
-
-/** A resource to play, or a query core searches the other plugins for. */
-export type PlaybackPreparation =
-  | Readonly<{ kind: "resource"; resource: PlaybackResource }>
-  | Readonly<{ kind: "search"; query: string }>;
 
 /** How a track ended. A playback failure rejects instead. */
 export type TrackEnd = Readonly<{ reason: "finished" | "stopped" | "replaced" }>;
@@ -105,29 +103,33 @@ export interface RelatedOptions {
   readonly exclude: readonly Song[];
 }
 
-export interface PrepareContext {
+export interface ResolveOptions {
   readonly signal: AbortSignal;
-  /** Calls the owning plugin's `stream` on demand. Absent when the owner is the engine plugin or cannot stream. */
-  readonly stream?: () => Promise<PlaybackPreparation>;
+  /** Return at most this many Songs in a Playlist and stop requesting provider pages once reached. */
+  readonly maxPlaylistSongs: number;
 }
 
 /**
- * A media provider, an engine, or both. `Data` types the `pluginData` slot of every Song it returns.
+ * A media provider, an engine, or both. `Data` types the `pluginData` slot of every Song it returns, and `ListData`
+ * that of every Playlist.
  *
- * A plugin has `name` and at least one of `resolve`, `search` or `engine`. Core only passes Songs whose
+ * A plugin has `name` and at least one of `resolve`, `search`, `stream` or `engine`. Core only passes Songs whose
  * `source` is this plugin's name. A thrown `DisTubeError` reaches the caller unchanged; any other throw
  * becomes `SOURCE_FAILED` with `source` set to `name`.
  */
-export interface Plugin<Data = unknown> {
+export interface Plugin<Data = unknown, ListData = unknown> {
   readonly name: string;
   /** Replaces the Adapter's built-in engine. At most one configured plugin carries one. */
   readonly engine?: Engine;
   /** Resolves a URL the plugin owns, or declines with `undefined`. */
-  resolve?(url: string, options: { readonly signal: AbortSignal }): Promise<Song<Data> | Playlist<Data> | undefined>;
+  resolve?(url: string, options: ResolveOptions): Promise<Song<Data> | Playlist<Data, ListData> | undefined>;
   /** Provider-ranked results. An empty array declines. */
   search?(query: string, options: SearchOptions): Promise<readonly Song<Data>[]>;
-  /** Required for plugins that return Songs, unless an engine plugin prepares every Song. */
-  stream?(song: Song<Data>, options: { readonly signal: AbortSignal }): Promise<PlaybackPreparation>;
+  /**
+   * A fresh resource for an owned Song. Without it, and without an engine `prepare`, core searches every other plugin
+   * that has `search` and `stream` for the Song's name and artist and plays the first candidate that prepares.
+   */
+  stream?(song: Song<Data>, options: { readonly signal: AbortSignal }): Promise<PlaybackResource>;
   /** Autoplay continuation, or `undefined` to decline. */
   related?(song: Song<Data>, options: RelatedOptions): Promise<Song<Data> | undefined>;
   /** Completions for a partial query, at most 25 used. */
@@ -139,7 +141,7 @@ export interface Plugin<Data = unknown> {
 export type PluginDataOf<Source> = Source extends Plugin<infer Data> ? Data : unknown;
 
 /**
- * The playback backend for one voice session, created lazily by DisTubeVoice and released with it.
+ * The playback backend for one voice session, created lazily for a guild's first queue item and released when the voice leaves.
  *
  * An operation the backend cannot perform rejects with `DisTubeError(UNSUPPORTED)`; core reports any
  * other rejection as `VOICE_FAILED`.
@@ -147,7 +149,10 @@ export type PluginDataOf<Source> = Source extends Plugin<infer Data> ? Data : un
 export interface Player {
   /** Elapsed seconds of the active track, or `0`. */
   readonly position: number;
-  /** Plays `resource`, replacing the current track, which settles `replaced` first. Settles when the track ends. */
+  /**
+   * Plays `resource` unpaused, whatever the previous track's pause, replacing the current track, which settles
+   * `replaced` first. Settles when the track ends.
+   */
   play(resource: PlaybackResource, options: TrackOptions): Promise<TrackEnd>;
   pause(): Promise<void>;
   resume(): Promise<void>;
@@ -158,11 +163,21 @@ export interface Player {
   setVolume(percent: number): Promise<void>;
   /** Renders the ordered filter set; an empty list clears it. */
   setFilters(entries: readonly FilterEntry[]): Promise<void>;
-  /** Target encode bitrate in bits per second; `undefined` follows `session.bitrate`. */
-  setBitrate?(bitrate: number | undefined): Promise<void>;
   updateVoiceGateway?(gateway: VoiceGatewayData): Promise<void>;
-  /** Ends any active track as `stopped` and releases backend state. */
+  /**
+   * Ends any active track as `stopped` and releases backend state once. Every call, concurrent, repeated or after
+   * the Player closed on its own, settles from that one teardown; later `play` and controls reject.
+   */
   release(): Promise<void>;
+}
+
+export interface PlayerOptions {
+  /**
+   * Called once with an Error when the Player closes on its own, such as when its native connection is destroyed,
+   * before the Player rejects its pending `play`; core keeps using the Player until this call. The Player then
+   * rejects that `play` and every later call other than `release`. Never called for `release`.
+   */
+  readonly onClosed: (error: Error) => void;
 }
 
 /** Gateway credentials an engine needs to attach to a voice connection. */
@@ -179,7 +194,7 @@ export type VoiceSessionEvent =
   /** The Adapter exhausted its recovery policy. Published at most once per session. */
   | Readonly<{ type: "disconnected"; error?: Error }>;
 
-/** The bot's own voice state sent with a join. An omitted flag keeps the current one. */
+/** The bot's own voice flags for `join` and `setSelfState`. An omitted flag keeps the current one. */
 export interface JoinOptions {
   readonly selfDeaf?: boolean;
   readonly selfMute?: boolean;
@@ -189,9 +204,14 @@ export interface VoiceSessionOptions {
   readonly selfDeaf: boolean;
   readonly selfMute: boolean;
   readonly timeoutMs: number;
+  /** Aborts when `voices.leave` or `dispose` supersedes the join; reject promptly and release what was created. */
+  readonly signal?: AbortSignal;
 }
 
-/** One guild's voice presence, owned by the Adapter. Only a terminal disconnect reaches core. */
+/**
+ * One guild's voice presence, owned by the Adapter, which also owns bounded recovery. Only a terminal disconnect
+ * reaches core. `join`, `setSelfState`, `rejoin` and `release` run one at a time in call order.
+ */
 export interface VoiceSession {
   readonly guildId: string;
   readonly clientUserId: string;
@@ -204,6 +224,19 @@ export interface VoiceSession {
   readonly selfMute: boolean;
   /** Joins or moves to `channelId`, sending the requested voice state; resolves after acknowledgement. */
   join(channelId: string, options?: JoinOptions): Promise<void>;
+  /**
+   * Changes only the flags, in the channel the session holds when the write runs; resolves after acknowledgement.
+   * Never rebuilds the connection or publishes `connected`.
+   */
+  setSelfState(state: JoinOptions): Promise<void>;
+  /**
+   * Reports a Discord voice close code from a voice socket outside the Adapter, such as a remote engine's. The
+   * session applies its own recovery policy. Does nothing after `release` started.
+   */
+  voiceClosed(code: number): void;
+  /** Leaves and rejoins the current channel; resolves after the `connected` event with the fresh credentials. */
+  rejoin(): Promise<void>;
+  /** Leaves the channel once; every caller shares that completion. Later `join`, `setSelfState` and `rejoin` reject. */
   release(): Promise<void>;
   subscribe(listener: (event: VoiceSessionEvent) => void): () => void;
 }
@@ -244,9 +277,9 @@ export interface FilterEntry {
 /** The active playback backend: the Adapter's built-in engine, or the one engine plugin's. */
 export interface Engine {
   readonly filters: ReadonlyMap<string, FilterDefinitionInfo>;
-  createPlayer(session: VoiceSession): Promise<Player>;
-  /** When present, prepares every Song in place of the owning plugin's `stream`. */
-  prepare?(song: Song, context: PrepareContext): Promise<PlaybackResource>;
+  createPlayer(session: VoiceSession, options: PlayerOptions): Promise<Player>;
+  /** When present, prepares every Song; core then calls no plugin's `stream` and runs no search fallback. */
+  prepare?(song: Song, options: { readonly signal: AbortSignal }): Promise<PlaybackResource>;
 }
 
 /** Built-in engine settings from `DisTubeOptions`. */
@@ -258,7 +291,7 @@ export interface EngineSettings {
   readonly bufferMs: number;
 }
 
-/** The guild and voice channel a DisTubeVoice occupies, in platform-neutral IDs. */
+/** The guild and voice channel a voice occupies, in platform-neutral IDs. */
 export interface VoiceTarget {
   readonly guildId: string;
   readonly channelId: string;

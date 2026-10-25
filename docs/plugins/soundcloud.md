@@ -9,7 +9,11 @@ description: Play SoundCloud tracks and sets with @distube/soundcloud.
 
 Install alongside `distube` and your adapter:
 
-```sh
+```sh title="npm"
+npm install @distube/soundcloud
+```
+
+```sh title="Bun"
 bun add @distube/soundcloud
 ```
 
@@ -42,12 +46,13 @@ Requests use a fixed host allowlist and timeout and follow at most 5 redirects, 
 Cancellation and plugin disposal abort pending requests.
 Short `on.soundcloud.com` links expand to the URL they share, which then resolves as if pasted.
 
-Each preparation fetches a fresh, headerless progressive audio URL on `sndcdn.com`. Manifest-only tracks reject
-`SOURCE_FAILED`; blocked or non-streamable tracks reject `UNAVAILABLE`. A positive duration marks the resource seekable.
+Each preparation fetches a fresh link for the highest-bitrate AAC HLS transcoding and returns a timed mp4 resource
+with no URL. Tracks that offer only MP3 reject `SOURCE_FAILED`, as do segment hosts outside the allowlist
+(`media-streaming.soundcloud.cloud`); blocked or non-streamable tracks reject `UNAVAILABLE`.
 Songs keep their public permalink and expose `plays`, `likes` and `uploader` through typed `pluginData`.
 Search clamps `limit` to 50 and uses a zero-based `offset`.
 
-Lavalink can play these URLs through its `http` source, which must be enabled on the node.
+A Lavalink node loads a SoundCloud Song through its permalink, or plays the first search hit for its name and artist.
 Provider failures are core `DisTubeError` instances with codes such as `NOT_FOUND`, `UNAVAILABLE` and `RATE_LIMITED`,
 with `error.source` set to `"soundcloud"`.
 See the [quick start](../guides/quick-start/), [queue and voice controls](../guides/guide/) and

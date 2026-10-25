@@ -5,12 +5,16 @@ sidebar:
   order: 7
 ---
 
-A `Plugin` has a non-empty `name` and at least one of `resolve`, `search` or `engine`. `stream`, `related`,
-`suggest` and `dispose` are independently optional. A plugin that returns Songs needs `stream`, unless an engine
-plugin prepares every Song. There is no `initialize` hook: constructors validate options only, and the first
+A `Plugin` has a non-empty `name` and at least one of `resolve`, `search`, `stream` or `engine`. `related`,
+`suggest` and `dispose` are independently optional. A plugin with only `stream` is valid. It plays Songs the
+application builds itself, such as [sound clips](../direct-inputs/). A plugin that returns Songs and has no `stream` plays through the [search fallback](#a-plugin-without-stream), or through an engine
+plugin's `prepare`. There is no `initialize` hook: constructors validate options only, and the first
 provider request happens on first use. Do not add no-op methods for missing capabilities.
 
-Declare `Plugin<Data>` to type the `pluginData` of every Song. Return `Song` and `Playlist` values from `distube`.
+Declare `Plugin<Data, ListData>` to type the `pluginData` of every Song and Playlist. Give a Playlist the same two
+type arguments, `new Playlist<Data, ListData>({ ..., pluginData })`, and `resolve` returns
+`Song<Data> | Playlist<Data, ListData> | undefined`. A concrete `ListData` makes the Playlist's `pluginData`
+required at construction. Omit it and Playlist data stays `unknown`. Return `Song` and `Playlist` values from `distube`.
 Each one must have `source` equal to the plugin's `name`. `resolve` returns a Song, an ordered Playlist or
 `undefined` to decline. Throw for a provider failure.
 
@@ -21,7 +25,7 @@ A URL every plugin declines rejects `NO_RESULT`, and core does not retry it as a
 
 ```ts
 import { Song } from "distube";
-import type { PlaybackPreparation, Plugin } from "distube/integrations";
+import type { PlaybackResource, Plugin } from "distube/integrations";
 
 interface ExampleData {
   readonly plays: number;
@@ -41,12 +45,9 @@ export class ExampleSource implements Plugin<ExampleData> {
     });
   }
 
-  async stream(_song: Song<ExampleData>, options: { readonly signal: AbortSignal }): Promise<PlaybackPreparation> {
+  async stream(_song: Song<ExampleData>, options: { readonly signal: AbortSignal }): Promise<PlaybackResource> {
     options.signal.throwIfAborted();
-    return {
-      kind: "resource",
-      resource: { kind: "url", url: "https://cdn.example/audio.mp3", seekable: true },
-    };
+    return { kind: "url", url: "https://cdn.example/audio.mp3" };
   }
 }
 ```
@@ -66,7 +67,7 @@ Core never re-ranks across plugins. An empty array declines the query.
 | URL given to `resolve`             | `undefined`: try the next plugin | Rejects                                 |
 | Query for `play`, `add`, `resolve` | `[]`: try the next plugin        | Recorded, then the next plugin is tried |
 | `distube.search`                   | `[]`: try the next plugin        | Rejects                                 |
-| `getSuggestions`                   | `[]`: try the next plugin        | Rejects                                 |
+| `distube.suggest`                  | `[]`: try the next plugin        | Rejects                                 |
 
 A query takes the first Song of the first non-empty answer. When no plugin answers it rejects `NO_RESULT`. When
 some threw and none answered, it rejects `SOURCE_FAILED` with the failures in an `AggregateError` cause. An
@@ -75,29 +76,37 @@ absolute URL no plugin resolves rejects `NO_RESULT`.
 ## Preparing a Song
 
 `stream(song, { signal })` runs when a Song is about to play. Core calls the plugin named by `song.source`, and
-that plugin returns one of two shapes.
+that plugin returns a `PlaybackResource`: a fresh, single-use `url`, `file`, `stream`, `reader`, `timed` or `encoded`
+resource. See [clips and resources](../direct-inputs/) for the shapes and cleanup rules. A `stream` that throws
+fails the item with `queue.item.failed`, and core tries no other plugin.
 
-- `{ kind: "resource", resource }` is a fresh, single-use `url`, `file`, `stream`, `reader`, `timed` or `encoded`
-  resource. See [direct inputs](../direct-inputs/) for the shapes and cleanup rules.
-- `{ kind: "search", query }` asks core to find the Song elsewhere. Core searches the other plugins in order,
-  takes the first result of each, and plays the first one whose `stream` returns a resource. A candidate that
-  answers with another search request is skipped. Spotify uses this form. Exhaustion with no failures rejects
-  `NO_RESULT`, otherwise `SOURCE_FAILED`.
-
-The Player only borrows the resource. `voice.play` disposes it exactly once, and core disposes it when it drops a
-prepared item before playback. Put temporary files or sockets in `dispose`.
+Core disposes each resource exactly once, after its track ends or when it drops a prepared item before playback.
+Put temporary files or sockets in `dispose`.
 
 Add an `engine` when the plugin plays media itself, as Lavalink does. See
-[adapter authoring](../adapter-authoring/#engine-plugins). Its `engine.prepare(song, { signal, stream })` replaces
-`stream` for every Song, and `stream` calls the owning plugin when that is a different plugin.
+[adapter authoring](../adapter-authoring/#engine-plugins) for `onClosed`, pause and release rules. Its `engine.prepare(song, { signal })` replaces
+`stream` for every Song, and core calls no plugin's `stream`.
+
+## A plugin without stream
+
+Omit `stream` when the provider serves metadata only, as Spotify does. Core then plays the Song through a search
+fallback:
+
+1. It builds the query from `song.name`, followed by `song.artist` when present.
+2. It searches every other plugin that has both `search` and `stream`, in the order of `plugins`, with limit 1.
+3. It prepares only the first candidate of each plugin through that plugin's `stream`, and stops at the first resource.
+
+If nothing is found, the item fails `NO_RESULT`. If a search or stream failed, it fails `SOURCE_FAILED` with an
+`AggregateError` of every failure. Queue state and events keep the original item and Song. Without an engine plugin,
+`new DisTube` throws unless another plugin has both `search` and `stream`.
 
 ## Other methods
 
 `suggest(query, { signal })` returns at most 25 completions. An empty list declines. On a provider error, throw
-like any other method, and `getSuggestions` propagates it.
+like any other method, and `distube.suggest` propagates it.
 
 `related(song, { signal, exclude })` receives the recent history Songs in `exclude`. Avoid returning one of them.
-`queue.addRelated()` and autoplay both call it.
+Autoplay calls it.
 
 `dispose` joins your owned work and releases provider resources. Core calls it once, in reverse order of
 `plugins`, during `distube.dispose()`.
@@ -116,7 +125,8 @@ function missing(name: string): DisTubeError {
 void missing;
 ```
 
-A thrown `DisTubeError` reaches the caller unchanged. Any other throw becomes `SOURCE_FAILED` with the original as
+A thrown `DisTubeError` reaches the caller unchanged, including one from a second copy of the package, which
+`DisTubeError.is` matches by name and code. Do not re-wrap aborts or plain errors, because core wraps them. Any other throw becomes `SOURCE_FAILED` with the original as
 `cause` and `source` set to your `name`. Core does not scrub messages, so keep credentials, signed URLs and encoded
 track data out of messages and causes. A bot checks `DisTubeError.is(error, ErrorCode.NOT_FOUND)` and reads
 `error.source`.
@@ -133,7 +143,7 @@ reference and never reads or freezes it. Keep signed URLs and temporary playback
 `stream` with a bounded lifetime. `new Song<ExampleData>(...)` requires `pluginData` unless the type allows
 `undefined`. Caller metadata belongs to the QueueItem, not the Song.
 
-Expand a collection to a bound you document in the package README, in provider order. Check the `AbortSignal`
+Expand a collection to the `maxPlaylistSongs` value core passes in `resolve` options, in provider order. Stop requesting pages once you hold that many Songs, and return the first ones instead of rejecting. Check the `AbortSignal`
 between pages, and drop an entry the provider marks unavailable instead of failing the page.
 
 ## Package boundaries

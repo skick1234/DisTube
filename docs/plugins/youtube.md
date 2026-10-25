@@ -9,7 +9,11 @@ description: Play YouTube videos and playlists with @distube/youtube and @distub
 
 Install alongside `distube` and your adapter:
 
-```sh
+```sh title="npm"
+npm install @distube/youtube @distube/ytdl-core
+```
+
+```sh title="Bun"
 bun add @distube/youtube @distube/ytdl-core
 ```
 
@@ -43,11 +47,11 @@ preparation of a Song resolved from a video URL reuses its lookup if it expires 
 later preparations look up fresh media. Signed URLs and credentials stay inside ytdl-core, never on the Song
 or playback resource. Non-live WebM and MP4 formats use seekable `reader` resources when a URL and positive
 content length are available, or `timed` resources when no URL is available. All other cases use `stream` resources.
-For remote playback, [Lavalink](../lavalink/) tries the Song's page URL before asking this plugin for a resource.
+For remote playback, [Lavalink](../lavalink/) loads the Song's page URL and never asks this plugin for a resource.
 
 Songs expose `live`, `views` and `uploader` through typed `pluginData`. Search clamps `limit` to 20 and uses a
 zero-based `offset`. Provider failures are core `DisTubeError` instances with codes such as `NOT_FOUND`,
 `UNAVAILABLE` and `RATE_LIMITED`, `error.source` set to `"youtube"` and the ytdl-core failure as `cause`.
 
-See the [quick start](../guides/quick-start/), [direct playback](../guides/direct-inputs/) and
+See the [quick start](../guides/quick-start/), [clips and playback resources](../guides/direct-inputs/) and
 [error handling](../guides/error-handling/) guides.

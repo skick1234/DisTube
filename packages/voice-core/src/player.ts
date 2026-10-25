@@ -17,9 +17,9 @@ import type {
   VoiceSession,
   VoiceSessionEvent,
 } from "distube/integrations";
-import type { FilterRegistry } from "./filters";
-import type { LocalPlaybackResource } from "./input";
-import { Track, type TrackSettings } from "./track";
+import type { FilterRegistry } from "./engine";
+import type { LocalPlaybackResource } from "./sources";
+import { probeFilters, Track, type TrackSettings } from "./track";
 
 const MAX_MISSED_FRAMES = 15_000 / 20;
 
@@ -40,6 +40,7 @@ export interface DiscordVoicePlayerOptions {
   readonly opusComplexity: number;
   readonly readAhead: number;
   readonly releaseTransport: () => void;
+  readonly onClosed: (error: Error) => void;
 }
 
 /** One `play` call, from opening its Track to its single end. */
@@ -86,8 +87,8 @@ class Playback {
 /**
  * The playback backend for one attached voice connection.
  *
- * It outlives tracks until release or connection loss. Volume, filters and bitrate live here and apply to
- * the running Track in place.
+ * It outlives tracks until release or connection loss. Volume and filters live here and apply to the running
+ * Track in place; the encoder follows the session's channel bitrate.
  */
 export class DiscordVoicePlayer implements Player {
   readonly #connection: VoiceConnection;
@@ -96,6 +97,7 @@ export class DiscordVoicePlayer implements Player {
   readonly #opusComplexity: number;
   readonly #readAhead: number;
   readonly #releaseTransport: () => void;
+  readonly #onClosed: (error: Error) => void;
   readonly #player: AudioPlayer;
   readonly #subscription?: Readonly<{ unsubscribe(): void }>;
   readonly #unsubscribeSession: () => void;
@@ -104,7 +106,6 @@ export class DiscordVoicePlayer implements Player {
   #paused = false;
   #volume = 100;
   #chain?: string;
-  #bitrate?: number;
   #released = false;
   #release?: Promise<void>;
 
@@ -115,6 +116,7 @@ export class DiscordVoicePlayer implements Player {
     this.#opusComplexity = options.opusComplexity;
     this.#readAhead = options.readAhead;
     this.#releaseTransport = options.releaseTransport;
+    this.#onClosed = options.onClosed;
     this.#player = createAudioPlayer({
       behaviors: { noSubscriber: NoSubscriberBehavior.Pause, maxMissedFrames: MAX_MISSED_FRAMES },
     });
@@ -138,6 +140,7 @@ export class DiscordVoicePlayer implements Player {
     } catch (error: unknown) {
       return Promise.reject(error);
     }
+    this.#paused = false;
     const previous = this.#current;
     const playback = new Playback(onStart);
     this.#current = playback;
@@ -189,14 +192,10 @@ export class DiscordVoicePlayer implements Player {
     this.#assertOpen();
     const chain = this.#filters.render(entries);
     if (chain === this.#chain) return;
-    await this.#current?.track?.setFilters(chain);
+    const track = this.#current?.track;
+    if (track && !track.settled) await track.setFilters(chain);
+    else if (chain !== undefined) await probeFilters(chain);
     this.#chain = chain;
-  }
-
-  async setBitrate(bitrate: number | undefined): Promise<void> {
-    this.#assertOpen();
-    this.#bitrate = bitrate;
-    this.#current?.track?.setBitrate(this.#target());
   }
 
   release(): Promise<void> {
@@ -244,7 +243,7 @@ export class DiscordVoicePlayer implements Player {
     return {
       volume: this.#volume,
       chain: this.#chain,
-      bitrate: this.#target(),
+      bitrate: this.#session.bitrate,
       opusComplexity: this.#opusComplexity,
       readAhead: this.#readAhead,
     };
@@ -252,7 +251,7 @@ export class DiscordVoicePlayer implements Player {
 
   async #catchUp(track: Track, opened: TrackSettings): Promise<void> {
     if (opened.volume !== this.#volume) track.setVolume(this.#volume);
-    if (opened.bitrate !== this.#target()) track.setBitrate(this.#target());
+    if (opened.bitrate !== this.#session.bitrate) track.setBitrate(this.#session.bitrate);
     if (opened.chain !== this.#chain) await track.setFilters(this.#chain);
   }
 
@@ -261,10 +260,6 @@ export class DiscordVoicePlayer implements Player {
     track.setPlayedCounter(() => audio.playbackDuration / 20);
     playback.audio = audio;
     this.#player.play(audio);
-  }
-
-  #target(): number {
-    return this.#bitrate ?? this.#session.bitrate;
   }
 
   #start(playback: Playback): void {
@@ -307,13 +302,17 @@ export class DiscordVoicePlayer implements Player {
   };
 
   readonly #onSessionEvent = (event: VoiceSessionEvent): void => {
-    if (event.type === "connected") this.#current?.track?.setBitrate(this.#target());
+    if (event.type === "connected") this.#current?.track?.setBitrate(this.#session.bitrate);
   };
 
   readonly #onConnectionStateChange = (_previous: VoiceConnection["state"], next: VoiceConnection["state"]): void => {
     if (next.status !== VoiceConnectionStatus.Destroyed || this.#released) return;
-    this.#current?.fail(new Error("Discord voice connection was destroyed"));
+    const error = new DisTubeError("VOICE_FAILED", "Discord voice connection was destroyed");
+    this.#current?.fail(error);
     void this.release().catch(() => undefined);
+    try {
+      this.#onClosed(error);
+    } catch {}
   };
 
   async #cleanup(): Promise<void> {

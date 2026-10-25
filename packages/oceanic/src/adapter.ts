@@ -1,5 +1,5 @@
 import type { DiscordGatewayAdapterCreator } from "@discordjs/voice";
-import { DiscordVoiceEngine, DiscordVoiceSession } from "@distube/voice-core/discord";
+import { DiscordVoiceEngine, DiscordVoiceSession } from "@distube/voice-core";
 import type {
   Adapter,
   Engine,
@@ -12,6 +12,7 @@ import {
   type AnyGuildChannelWithoutThreads,
   ChannelTypes,
   type Client,
+  type Guild,
   type StageChannel,
   type VoiceChannel,
 } from "oceanic.js";
@@ -39,15 +40,9 @@ export class OceanicAdapter implements Adapter<VoiceChannel> {
   async createVoiceSession(target: VoiceTarget, options: VoiceSessionOptions): Promise<VoiceSession> {
     const guild = this.#client.guilds.get(target.guildId);
     if (!guild) throw new Error(`Oceanic guild is unavailable: ${target.guildId}`);
-    const channel = guild.channels.get(target.channelId);
-    if (!channel) throw new Error(`Oceanic voice channel is unavailable: ${target.channelId}`);
-    if (channel.guildID !== target.guildId) {
-      throw new Error(`Oceanic voice channel ${target.channelId} does not belong to guild ${target.guildId}`);
-    }
-    if (!isVoiceBased(channel)) throw new Error(`Oceanic channel is not voice-capable: ${target.channelId}`);
     const clientUserId = this.#client.user?.id;
     if (!clientUserId) throw new Error("Oceanic client user is unavailable");
-    return DiscordVoiceSession.connect({
+    return await DiscordVoiceSession.connect({
       ...target,
       ...options,
       clientUserId,
@@ -56,10 +51,29 @@ export class OceanicAdapter implements Adapter<VoiceChannel> {
         const current = guild.channels.get(channelId);
         return isVoiceBased(current) ? current.bitrate : DISCORD_DEFAULT_BITRATE;
       },
+      preflight: channelId => preflight(guild, channelId, clientUserId),
     });
   }
 
   createEngine(settings: EngineSettings): Engine {
     return new DiscordVoiceEngine(settings);
+  }
+}
+
+function preflight(guild: Guild, channelId: string, clientUserId: string): void {
+  const channel = guild.channels.get(channelId);
+  if (!channel) throw new Error(`Oceanic voice channel is unavailable: ${channelId}`);
+  if (channel.guildID !== guild.id) {
+    throw new Error(`Oceanic voice channel ${channelId} does not belong to guild ${guild.id}`);
+  }
+  if (!isVoiceBased(channel)) throw new Error(`Oceanic channel is not voice-capable: ${channelId}`);
+  const permissions = channel.permissionsOf(clientUserId);
+  if (!permissions.has("CONNECT")) throw new Error(`Oceanic voice channel ${channelId} denies the bot Connect`);
+  if (channel.type !== ChannelTypes.GUILD_STAGE_VOICE && !permissions.has("SPEAK")) {
+    throw new Error(`Oceanic voice channel ${channelId} denies the bot Speak`);
+  }
+  const full = channel.userLimit > 0 && channel.voiceMembers.size >= channel.userLimit;
+  if (full && !permissions.has("MOVE_MEMBERS")) {
+    throw new Error(`Oceanic voice channel ${channelId} is full and the bot lacks Move Members`);
   }
 }

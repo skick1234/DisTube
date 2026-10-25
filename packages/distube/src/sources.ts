@@ -1,6 +1,6 @@
-import type { Engine, PlaybackPreparation, PlaybackResource, Plugin, ResolvableInput } from "./contracts";
-import { abortError, DisTubeError, ErrorCode, throwIfAborted, toDisTubeError } from "./errors";
-import { type Playlist, Song } from "./media";
+import type { Engine, PlaybackResource, Plugin, ResolvableInput } from "./contracts";
+import { abortError, DisTubeError, ErrorCode, requireQuery, throwIfAborted, toDisTubeError } from "./errors";
+import { Playlist, Song } from "./media";
 
 const SUGGESTION_LIMIT = 25;
 
@@ -26,46 +26,49 @@ function owned<Media extends Song | Playlist>(plugin: Plugin, media: Media): Med
   return media;
 }
 
+function capped(media: Song | Playlist, maxPlaylistSongs: number): Song | Playlist {
+  if (media instanceof Song || media.songs.length <= maxPlaylistSongs) return media;
+  return new Playlist({
+    id: media.id,
+    name: media.name,
+    url: media.url,
+    source: media.source,
+    songs: media.songs.slice(0, maxPlaylistSongs),
+    thumbnail: media.thumbnail,
+    pluginData: media.pluginData,
+  });
+}
+
+export function validateInput(plugins: readonly Plugin[], input: ResolvableInput): void {
+  if (typeof input === "string") {
+    requireQuery(input);
+    return;
+  }
+  if (!(input instanceof Song) && !(input instanceof Playlist))
+    throw new DisTubeError(ErrorCode.INVALID_ARGUMENT, "Input must be a Song, a Playlist, a URL or a query");
+  if (songsOf(input).some(song => !ownerOf(plugins, song)))
+    throw new DisTubeError(ErrorCode.INVALID_ARGUMENT, "Song source does not name a configured plugin");
+}
+
 export function songsOf(media: Song | Playlist): readonly Song[] {
   return media instanceof Song ? [media] : media.songs;
 }
 
-export function ownerOf(plugins: readonly Plugin[], song: Song): Plugin | undefined {
+function ownerOf(plugins: readonly Plugin[], song: Song): Plugin | undefined {
   return plugins.find(plugin => plugin.name === song.source);
 }
 
-/** Only an absolute `http:` or `https:` URL goes to `resolve`; `URL.canParse` alone accepts `"artist: title"`. */
-export function isAbsoluteUrl(input: string): boolean {
+/** `URL.canParse` alone accepts `"artist: title"`, so only `http:` and `https:` count as URLs. */
+function isAbsoluteUrl(input: string): boolean {
   const url = URL.parse(input);
   return url?.protocol === "http:" || url?.protocol === "https:";
-}
-
-function searchFirst(plugin: Plugin, query: string, signal: AbortSignal): Promise<Song | undefined> | undefined {
-  const search = plugin.search?.bind(plugin);
-  return (
-    search &&
-    call(plugin, signal, async () => {
-      const [song] = await search(query, { signal, limit: 1, offset: 0 });
-      return song && owned(plugin, song);
-    })
-  );
-}
-
-function streamOf(plugin: Plugin, song: Song, signal: AbortSignal): (() => Promise<PlaybackPreparation>) | undefined {
-  const stream = plugin.stream?.bind(plugin);
-  return stream && (() => call(plugin, signal, () => stream(song, { signal })));
-}
-
-function exhausted(failures: readonly unknown[], message: string): DisTubeError {
-  return failures.length === 0
-    ? new DisTubeError(ErrorCode.NO_RESULT, message)
-    : new DisTubeError(ErrorCode.SOURCE_FAILED, message, { cause: new AggregateError(failures, message) });
 }
 
 export async function resolveInput(
   plugins: readonly Plugin[],
   input: ResolvableInput,
   signal: AbortSignal,
+  maxPlaylistSongs: number,
 ): Promise<Song | Playlist> {
   throwIfAborted(signal);
   if (typeof input !== "string") return input;
@@ -73,22 +76,38 @@ export async function resolveInput(
     for (const plugin of plugins) {
       const resolve = plugin.resolve?.bind(plugin);
       if (!resolve) continue;
-      const media = await call(plugin, signal, () => resolve(input, { signal }));
-      if (media) return owned(plugin, media);
+      const media = await call(plugin, signal, () => resolve(input, { signal, maxPlaylistSongs }));
+      if (media) return capped(owned(plugin, media), maxPlaylistSongs);
     }
     throw new DisTubeError(ErrorCode.NO_RESULT, "No plugin resolved the URL");
   }
+  return firstFound(plugins, signal, "No plugin found a result for the query", async plugin => {
+    const search = plugin.search?.bind(plugin);
+    if (!search) return undefined;
+    const [song] = await call(plugin, signal, () => search(input, { signal, limit: 1, offset: 0 }));
+    return song && owned(plugin, song);
+  });
+}
+
+async function firstFound<Value>(
+  plugins: readonly Plugin[],
+  signal: AbortSignal,
+  message: string,
+  find: (plugin: Plugin) => Promise<Value | undefined>,
+): Promise<Value> {
   const failures: unknown[] = [];
   for (const plugin of plugins) {
     try {
-      const song = await searchFirst(plugin, input, signal);
-      if (song) return song;
+      const value = await find(plugin);
+      if (value !== undefined) return value;
     } catch (error: unknown) {
       if (signal.aborted) throw error;
       failures.push(error);
     }
   }
-  throw exhausted(failures, "No plugin found a result for the query");
+  throw failures.length === 0
+    ? new DisTubeError(ErrorCode.NO_RESULT, message)
+    : new DisTubeError(ErrorCode.SOURCE_FAILED, message, { cause: new AggregateError(failures, message) });
 }
 
 export async function searchSongs(
@@ -146,31 +165,19 @@ export async function prepareSong(
 ): Promise<PlaybackResource> {
   const owner = ownerOf(plugins, song);
   if (!owner) throw new DisTubeError(ErrorCode.SOURCE_FAILED, `No plugin named ${song.source} is configured`);
-  const stream = streamOf(owner, song, signal);
   const prepare = engine.prepare?.bind(engine);
-  if (prepare) {
-    const enginePlugin = plugins.find(plugin => plugin.engine === engine);
-    return call(enginePlugin ?? owner, signal, () =>
-      prepare(song, { signal, ...(stream && enginePlugin !== owner ? { stream } : {}) }),
-    );
-  }
-  if (!stream) throw new DisTubeError(ErrorCode.UNSUPPORTED, `${owner.name} cannot stream`);
-  const preparation = await stream();
-  if (preparation.kind === "resource") return preparation.resource;
-
-  const failures: unknown[] = [];
-  for (const plugin of plugins) {
-    if (plugin === owner) continue;
-    try {
-      const candidate = await searchFirst(plugin, preparation.query, signal);
-      const result = candidate && (await streamOf(plugin, candidate, signal)?.());
-      if (result?.kind === "resource") return result.resource;
-    } catch (error: unknown) {
-      if (signal.aborted) throw error;
-      failures.push(error);
-    }
-  }
-  throw exhausted(failures, "No plugin could play the fallback query");
+  if (prepare)
+    return call(plugins.find(plugin => plugin.engine === engine) ?? owner, signal, () => prepare(song, { signal }));
+  const stream = owner.stream?.bind(owner);
+  if (stream) return call(owner, signal, () => stream(song, { signal }));
+  const query = song.artist === undefined ? song.name : `${song.name} ${song.artist}`;
+  return firstFound(plugins, signal, `No plugin could play ${song.name}`, async plugin => {
+    const search = plugin.search?.bind(plugin);
+    const prepareCandidate = plugin.stream?.bind(plugin);
+    if (!search || !prepareCandidate) return undefined;
+    const [candidate] = await call(plugin, signal, () => search(query, { signal, limit: 1, offset: 0 }));
+    return candidate && call(plugin, signal, () => prepareCandidate(owned(plugin, candidate), { signal }));
+  });
 }
 
 export async function disposeResource(resource: PlaybackResource): Promise<void> {

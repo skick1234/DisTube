@@ -9,7 +9,11 @@ description: Configure remote playback and source lookup with @distube/lavalink.
 
 Install alongside `distube` and your adapter. This example also uses SoundCloud:
 
-```sh
+```sh title="npm"
+npm install @distube/lavalink @distube/soundcloud
+```
+
+```sh title="Bun"
 bun add @distube/lavalink @distube/soundcloud
 ```
 
@@ -45,16 +49,14 @@ Remote playback needs no local decoder.
 
 ## Preparation order
 
-For every Song, Lavalink tries these steps and stops at the first loaded track:
+For every Song, Lavalink tries two steps and stops at the first loaded track:
 
 1. Load the canonical page URL with `loadtracks(song.url)`.
-2. If that fails and the owning plugin has `stream`, call it. If it returns a `url` resource with no headers, load its URL
-   through the node's `http` source. Enable the `http` source in the Lavalink server's `application.yml` for this step.
-3. Search for `<searchPrefix>:<name> <artist>` and take the first hit.
+2. Search for `<searchPrefix>:<name> <artist>` and take the first hit.
 
-Native loading does not call the source's `stream`. YouTube's process-local resources cannot be sent to a node,
-but its Songs can still play through native loading or the search step. If all steps fail, preparation rejects
-`SOURCE_FAILED` with an `AggregateError` containing the step failures.
+Preparation never calls a source plugin's `stream`. A SoundCloud or Spotify Song the node cannot load by URL plays
+the first search hit instead. If both steps fail, preparation rejects `SOURCE_FAILED` with an `AggregateError`
+holding the two step failures.
 
 ## Options
 
@@ -67,18 +69,21 @@ but its Songs can still play through native loading or the search step. If all s
   backoff and a 30000 ms ceiling, with jitter.
 - `resume.timeoutSeconds` defaults to 60; 0 disables session resume.
 - `failover` defaults to `"migrate"`, which resumes on another ready node with position and audio settings intact.
-  `"fail"`, or no remaining node, rejects active playback with `VOICE_FAILED`.
+  `"fail"`, or no remaining node, rejects active playback with `VOICE_FAILED`. Migration replays the encoded track on
+  another node, so every node in the pool needs the same sources and plugins.
 - `filters` adds or overrides native Lavalink filter presets.
 - `onDiagnostic` receives node failures, reconnects, resumes and migrations. The plugin writes nothing to process output.
 
 ## Playback controls and errors
 
 New Players use the least-loaded ready compatible node. Playback rejects `VOICE_FAILED` when no node is available.
-Only presets with a native Lavalink equivalent are built in. The Player has no bitrate control, so numeric
-`voice.setBitrate(...)` on an active Lavalink voice rejects `UNSUPPORTED`.
+Only presets with a native Lavalink equivalent are built in.
 
-Preparation returns `encoded` resources with format `lavalink.v4`. Direct playback through a Lavalink voice rejects
-other resource kinds or encoded formats with `UNSUPPORTED`; it never uploads or proxies media.
+`resolve` returns a Song for a loaded track and a Playlist of at most `maxPlaylistSongs` Songs for a loaded
+playlist. `search` loads `<searchPrefix>:<query>` and clamps `limit` to 100. The plugin has no `related`.
+
+Preparation returns `encoded` resources with format `lavalink.v4`. Its Player rejects any resource other than
+`lavalink.v4` encoded with `UNSUPPORTED`; it never uploads or proxies media.
 Plugin failures are core `DisTubeError` instances with `error.source` set to `"lavalink"`.
 
 See [installation](../guides/installation/), [queue and voice controls](../guides/guide/) and

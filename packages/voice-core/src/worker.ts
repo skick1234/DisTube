@@ -1,17 +1,15 @@
-import { readSync } from "node:fs";
-import { type FileHandle, open } from "node:fs/promises";
-import { parentPort, workerData } from "node:worker_threads";
+import { parentPort } from "node:worker_threads";
 import {
+  AV_CH_LAYOUT_STEREO,
+  AV_CHANNEL_ORDER_NATIVE,
   AV_CODEC_ID_OPUS,
   AV_LOG_QUIET,
   AV_NOPTS_VALUE,
-  AVERROR_EINVAL,
-  AVERROR_EIO,
+  AV_SAMPLE_FMT_S16,
   AVERROR_EOF,
   AVERROR_EXIT,
   AVERROR_INVALIDDATA,
   AVSEEK_FLAG_BACKWARD,
-  AVSEEK_SIZE,
   avSamplesGetBufferSize,
   type CodecContext,
   Decoder,
@@ -21,110 +19,30 @@ import {
   FFmpegError,
   FilterAPI,
   Frame,
-  type IOInputCallbacks,
   Log,
   Packet,
   type Stream,
 } from "node-av";
-
-export type Container = "webm" | "mp4";
-
-export type InputSource =
-  | Readonly<{ kind: "file"; path: string }>
-  | Readonly<{ kind: "ranged"; size: number; container?: Container }>
-  | Readonly<{ kind: "oneshot"; container?: Container }>;
-
-export interface WireError {
-  readonly name: string;
-  readonly message: string;
-  readonly code?: string | number;
-  readonly cause?: WireError;
-  readonly errors?: readonly WireError[];
-}
-
-export type ToWorker =
-  | Readonly<{
-      type: "open";
-      track: number;
-      input: number;
-      source: InputSource;
-      volume: number;
-      chain: string | undefined;
-      bitrate: number;
-      complexity: number;
-    }>
-  | Readonly<{ type: "seek"; track: number; request: number; input: number; source: InputSource; seconds: number }>
-  | Readonly<{ type: "filters"; track: number; request: number; chain: string | undefined }>
-  | Readonly<{ type: "volume"; track: number; percent: number }>
-  | Readonly<{ type: "bitrate"; track: number; bitrate: number }>
-  | Readonly<{ type: "credit"; track: number; count: number }>
-  | Readonly<{ type: "close"; track: number }>
-  | Readonly<{
-      type: "bytes";
-      input: number;
-      request: number;
-      chunk?: ArrayBuffer;
-      done?: boolean;
-      failed?: boolean;
-    }>
-  | Readonly<{ type: "granted"; permit: number }>
-  | Readonly<{ type: "exit" }>;
-
-export type PermitMessage =
-  | Readonly<{ type: "acquire"; permit: number }>
-  | Readonly<{ type: "release"; permit: number }>;
-
-export interface WorkerLimits {
-  readonly windowBytes: number;
-  readonly errorDepth: number;
-  readonly errorNodes: number;
-  readonly errorText: number;
-}
-
-export type FromWorker =
-  | Readonly<{ type: "opened"; track: number }>
-  | Readonly<{ type: "packets"; track: number; packets: ArrayBuffer[]; pts: number[] }>
-  | Readonly<{
-      type: "settled";
-      track: number;
-      request: number;
-      position?: number;
-      superseded?: boolean;
-      input?: number;
-      error?: WireError;
-    }>
-  | Readonly<{ type: "ended"; track: number }>
-  | Readonly<{ type: "failed"; track: number; stage: string; input?: number; error: WireError }>
-  | Readonly<{ type: "closed"; track: number }>
-  | Readonly<{
-      type: "read";
-      track: number;
-      input: number;
-      request: number;
-      start?: number;
-      end?: number;
-      want?: number;
-    }>
-  | Readonly<{ type: "cancel"; track: number; input: number; request: number }>
-  | Readonly<{ type: "retired"; track: number; input: number }>;
+import type { InputSource, ToWorker, WireError } from "./protocol.ts";
+import {
+  type ByteSource,
+  FileSource,
+  OneShotSource,
+  post,
+  RangedSource,
+  RemoteSource,
+  remotes,
+} from "./worker-input.ts";
 
 const OUTPUT_FORMAT = "aformat=sample_fmts=s16:sample_rates=48000:channel_layouts=stereo";
 const VOLUME_FILTER = "volume@distube";
-const FILE_PROBE_BYTES = 256 * 1024;
-const REMOTE_PROBE_BYTES = 4 * 1024;
 const IO_BUFFER_BYTES = 16 * 1024;
 const BATCH_PACKETS = 5;
 
 const port = parentPort;
-const limits: WorkerLimits = workerData;
 const pipelines = new Map<number, Pipeline>();
-const remotes = new Map<number, RemoteSource>();
 const grants = new Map<number, () => void>();
 let nextPermit = 0;
-
-function post(message: FromWorker | PermitMessage, transfer: ArrayBuffer[] = []): void {
-  port?.postMessage(message, transfer);
-}
 
 async function withPermit<T>(signal: AbortSignal, work: () => Promise<T>): Promise<T> {
   const permit = ++nextPermit;
@@ -148,352 +66,15 @@ async function withPermit<T>(signal: AbortSignal, work: () => Promise<T>): Promi
   }
 }
 
-function wire(value: unknown, depth = 0, budget = { nodes: 0 }): WireError {
+function wire(value: unknown, withCause = true): WireError {
   if (!(value instanceof Error)) return { name: "Error", message: "Non-error cause" };
-  if (depth >= limits.errorDepth || budget.nodes >= limits.errorNodes) {
-    return { name: "Error", message: "Error cause truncated" };
-  }
-  budget.nodes += 1;
-  try {
-    const own = Object.getOwnPropertyDescriptor(value, "code");
-    const code = value instanceof FFmpegError ? value.code : own && "value" in own ? own.value : undefined;
-    const cause = Object.getOwnPropertyDescriptor(value, "cause");
-    return {
-      name: String(value.name).slice(0, limits.errorText),
-      message: String(value.message).slice(0, limits.errorText),
-      ...(typeof code === "string" || typeof code === "number" ? { code } : {}),
-      ...(cause && "value" in cause ? { cause: wire(cause.value, depth + 1, budget) } : {}),
-      ...(value instanceof AggregateError
-        ? { errors: Array.from(value.errors as unknown[], error => wire(error, depth + 1, budget)) }
-        : {}),
-    };
-  } catch {
-    return { name: "Error", message: "Uninspectable error cause" };
-  }
-}
-
-interface ByteSource {
-  readonly callbacks: IOInputCallbacks;
-  readonly failure: Error | undefined;
-  probe(): Promise<Buffer>;
-  waiting(): boolean;
-  close(): void | Promise<void>;
-}
-
-function seekTarget(offset: bigint, whence: number, position: number, size: number): number | undefined {
-  const base = whence & 3;
-  const target = base === 0 ? Number(offset) : base === 1 ? position + Number(offset) : size + Number(offset);
-  return Number.isSafeInteger(target) && target >= 0 ? target : undefined;
-}
-
-class FileSource implements ByteSource {
-  failure: Error | undefined;
-  readonly callbacks: IOInputCallbacks;
-  readonly #handle: FileHandle;
-  readonly #size: number;
-  #position = 0;
-  #closing?: Promise<void>;
-
-  private constructor(handle: FileHandle, size: number) {
-    this.#handle = handle;
-    this.#size = size;
-    this.callbacks = { read: bytes => this.#read(bytes), seek: (offset, whence) => this.#seek(offset, whence) };
-  }
-
-  static async open(path: string): Promise<FileSource> {
-    let handle: FileHandle | undefined;
-    try {
-      handle = await open(path, "r");
-      const { size } = await handle.stat();
-      return new FileSource(handle, size);
-    } catch (error: unknown) {
-      await handle?.close().catch(() => undefined);
-      throw new Error(`Playback file could not be opened: ${error instanceof Error ? error.message : ""}`, {
-        cause: error,
-      });
-    }
-  }
-
-  async probe(): Promise<Buffer> {
-    const bytes = Buffer.alloc(Math.min(this.#size, FILE_PROBE_BYTES));
-    const { bytesRead } = await this.#handle.read(bytes, 0, bytes.length, 0);
-    return bytes.subarray(0, bytesRead);
-  }
-
-  waiting(): boolean {
-    return false;
-  }
-
-  close(): Promise<void> {
-    this.#closing ??= this.#handle.close().catch(() => undefined);
-    return this.#closing;
-  }
-
-  #read(size: number): Buffer | number {
-    if (this.#closing) return AVERROR_EXIT;
-    try {
-      const bytes = Buffer.allocUnsafe(size);
-      const read = readSync(this.#handle.fd, bytes, 0, size, this.#position);
-      if (read === 0) return AVERROR_EOF;
-      this.#position += read;
-      return bytes.subarray(0, read);
-    } catch (error: unknown) {
-      this.failure = new Error("Playback file could not be read", { cause: error });
-      return AVERROR_EIO;
-    }
-  }
-
-  #seek(offset: bigint, whence: number): bigint | number {
-    if (whence & AVSEEK_SIZE) return BigInt(this.#size);
-    const target = seekTarget(offset, whence, this.#position, this.#size);
-    if (target === undefined) return AVERROR_EINVAL;
-    this.#position = target;
-    return BigInt(target);
-  }
-}
-
-class Chunks {
-  #chunks: Buffer[] = [];
-  length = 0;
-
-  push(chunk: Buffer): void {
-    if (chunk.length === 0) return;
-    this.#chunks.push(chunk);
-    this.length += chunk.length;
-  }
-
-  take(size: number): Buffer {
-    const parts: Buffer[] = [];
-    let remaining = Math.min(size, this.length);
-    while (remaining > 0) {
-      const head = this.#chunks[0] as Buffer;
-      if (head.length <= remaining) {
-        parts.push(head);
-        this.#chunks.shift();
-        remaining -= head.length;
-      } else {
-        parts.push(head.subarray(0, remaining));
-        this.#chunks[0] = head.subarray(remaining);
-        remaining = 0;
-      }
-    }
-    const taken = parts.length === 1 ? (parts[0] as Buffer) : Buffer.concat(parts);
-    this.length -= taken.length;
-    return taken;
-  }
-
-  peek(): Buffer {
-    return Buffer.concat(this.#chunks);
-  }
-
-  clear(): void {
-    this.#chunks = [];
-    this.length = 0;
-  }
-}
-
-abstract class RemoteSource implements ByteSource {
-  failure: Error | undefined;
-  readonly track: number;
-  readonly input: number;
-  protected readonly buffer = new Chunks();
-  protected ended = false;
-  protected closed = false;
-  protected firstWindowFilled = false;
-  #waiters: (() => void)[] = [];
-
-  constructor(track: number, input: number) {
-    this.track = track;
-    this.input = input;
-    remotes.set(input, this);
-  }
-
-  abstract readonly callbacks: IOInputCallbacks;
-
-  prefill(): Promise<void> {
-    return this.until(() => this.firstWindowFilled || this.ended);
-  }
-
-  async probe(): Promise<Buffer> {
-    await this.until(() => this.buffer.length >= REMOTE_PROBE_BYTES || this.ended);
-    return this.buffer.peek();
-  }
-
-  waiting(): boolean {
-    return this.buffer.length === 0 && !this.ended && !this.failure && !this.closed;
-  }
-
-  close(): void {
-    if (this.closed) return;
-    this.closed = true;
-    remotes.delete(this.input);
-    this.buffer.clear();
-    this.release();
-    this.wake();
-  }
-
-  abstract receive(message: Extract<ToWorker, { type: "bytes" }>): void;
-
-  protected abstract release(): void;
-
-  protected abstract consumed(bytes: number): void;
-
-  protected request(fields: { request: number; start?: number; end?: number; want?: number }): void {
-    post({ type: "read", track: this.track, input: this.input, ...fields });
-  }
-
-  protected fail(error: Error): void {
-    if (this.failure || this.closed) return;
-    this.failure = error;
-    this.release();
-    this.wake();
-  }
-
-  protected wake(): void {
-    for (const waiter of this.#waiters.splice(0)) waiter();
-  }
-
-  protected async until(settled: () => boolean): Promise<void> {
-    while (!settled() && !this.failure && !this.closed) await new Promise<void>(resolve => this.#waiters.push(resolve));
-  }
-
-  protected readBytes(size: number): Buffer | number | Promise<Buffer | number> {
-    if (this.closed) return AVERROR_EXIT;
-    if (this.buffer.length > 0) {
-      const chunk = this.buffer.take(size);
-      this.consumed(chunk.length);
-      return chunk;
-    }
-    if (this.failure) return AVERROR_EIO;
-    if (this.ended) return AVERROR_EOF;
-    return new Promise<void>(resolve => this.#waiters.push(resolve)).then(() => this.readBytes(size));
-  }
-}
-
-let nextRequest = 0;
-
-class OneShotSource extends RemoteSource {
-  readonly callbacks: IOInputCallbacks;
-  #requested?: number;
-
-  constructor(track: number, input: number) {
-    super(track, input);
-    this.callbacks = { read: size => this.readBytes(size) };
-    this.#pull();
-  }
-
-  receive(message: Extract<ToWorker, { type: "bytes" }>): void {
-    if (message.request !== this.#requested) return;
-    this.#requested = undefined;
-    this.firstWindowFilled = true;
-    if (message.failed) this.fail(new Error("Playback input failed"));
-    else if (message.done) this.ended = true;
-    else if (message.chunk) this.buffer.push(Buffer.from(message.chunk));
-    this.wake();
-    this.#pull();
-  }
-
-  protected consumed(): void {
-    this.#pull();
-  }
-
-  protected release(): void {
-    this.#requested = undefined;
-  }
-
-  #pull(): void {
-    if (this.#requested !== undefined || this.ended || this.failure || this.closed) return;
-    const want = limits.windowBytes - this.buffer.length;
-    if (want < limits.windowBytes / 2) return;
-    this.#requested = ++nextRequest;
-    this.request({ request: this.#requested, want });
-  }
-}
-
-class RangedSource extends RemoteSource {
-  readonly callbacks: IOInputCallbacks;
-  readonly #size: number;
-  #position = 0;
-  #fetched = 0;
-  #window?: { request: number; end: number };
-
-  constructor(track: number, input: number, size: number) {
-    super(track, input);
-    this.#size = size;
-    this.callbacks = {
-      read: bytes => this.readBytes(bytes),
-      seek: (offset, whence) => this.#seek(offset, whence),
-    };
-    this.#fill();
-  }
-
-  receive(message: Extract<ToWorker, { type: "bytes" }>): void {
-    const window = this.#window;
-    if (!window || message.request !== window.request) return;
-    if (message.failed) {
-      this.#window = undefined;
-      this.fail(new Error("Playback input failed"));
-      return;
-    }
-    if (message.chunk) {
-      this.buffer.push(Buffer.from(message.chunk));
-      this.wake();
-    }
-    if (!message.done) return;
-    this.#window = undefined;
-    this.#fetched = window.end + 1;
-    this.firstWindowFilled = true;
-    this.wake();
-    this.#fill();
-  }
-
-  async settled(): Promise<void> {
-    const window = this.#window;
-    if (window) await this.until(() => this.#window !== window);
-  }
-
-  protected consumed(bytes: number): void {
-    this.#position += bytes;
-    this.#fill();
-  }
-
-  protected release(): void {
-    const window = this.#window;
-    this.#window = undefined;
-    if (window) post({ type: "cancel", track: this.track, input: this.input, request: window.request });
-  }
-
-  #seek(offset: bigint, whence: number): bigint | number {
-    if (whence & AVSEEK_SIZE) return BigInt(this.#size);
-    const target = seekTarget(offset, whence, this.#position, this.#size);
-    if (target === undefined) return AVERROR_EINVAL;
-    if (target >= this.#position && target <= this.#position + this.buffer.length) {
-      this.buffer.take(target - this.#position);
-    } else {
-      this.release();
-      this.buffer.clear();
-      this.#fetched = target;
-      this.ended = false;
-    }
-    this.#position = target;
-    this.#fill();
-    return BigInt(target);
-  }
-
-  #fill(): void {
-    if (this.#window || this.closed || this.failure) return;
-    if (this.#fetched >= this.#size) {
-      this.ended = true;
-      this.wake();
-      return;
-    }
-    const room = limits.windowBytes - this.buffer.length;
-    if (room < limits.windowBytes / 2) return;
-    const start = this.#fetched;
-    const end = Math.min(this.#size, start + room) - 1;
-    this.#window = { request: ++nextRequest, end };
-    this.request({ request: this.#window.request, start, end });
-  }
+  const code = value instanceof FFmpegError ? value.code : (value as { code?: unknown }).code;
+  return {
+    name: value.name,
+    message: value.message,
+    ...(typeof code === "string" || typeof code === "number" ? { code } : {}),
+    ...(withCause && value.cause !== undefined ? { cause: wire(value.cause, false) } : {}),
+  };
 }
 
 class Input {
@@ -620,17 +201,39 @@ function graph(chain: string | undefined, volume: number): string {
   return `aresample=48000,${chain ? `${chain},` : ""}${VOLUME_FILTER}=${volume / 100},${OUTPUT_FORMAT}`;
 }
 
-/** One silent sample in the decoder's output format, or `undefined` when the decoder learns it only from data. */
-function silentSample({ sampleFormat, sampleRate, channelLayout }: CodecContext): Frame | undefined {
-  if (sampleFormat < 0 || sampleRate <= 0 || channelLayout.nbChannels <= 0) return undefined;
-  const { size } = avSamplesGetBufferSize(channelLayout.nbChannels, 1, sampleFormat, 1);
+const DEFAULT_LAYOUT = { nbChannels: 2, order: AV_CHANNEL_ORDER_NATIVE, mask: AV_CH_LAYOUT_STEREO };
+
+function silentSample(context: CodecContext | null): Frame {
+  const known =
+    context !== null && context.sampleFormat >= 0 && context.sampleRate > 0 && context.channelLayout.nbChannels > 0;
+  const format = known ? context.sampleFormat : AV_SAMPLE_FMT_S16;
+  const sampleRate = known ? context.sampleRate : 48_000;
+  const channelLayout = known ? context.channelLayout : DEFAULT_LAYOUT;
+  const { size } = avSamplesGetBufferSize(channelLayout.nbChannels, 1, format, 1);
   return Frame.fromAudioBuffer(Buffer.alloc(size), {
     nbSamples: 1,
-    format: sampleFormat,
+    format,
     sampleRate,
     channelLayout,
     timeBase: { num: 1, den: sampleRate },
   });
+}
+
+/** FilterAPI builds its graph on the first frame, so one silent sample builds it now and a bad chain fails here. */
+function checkedFilter(description: () => string, context: CodecContext | null): FilterAPI {
+  const filter = FilterAPI.create(description);
+  const sample = silentSample(context);
+  try {
+    for (const frame of filter.processAllSync(sample)) frame.free();
+    return filter;
+  } catch (error: unknown) {
+    filter.close();
+    throw Object.assign(new Error("Filter chain could not be applied", { cause: error }), {
+      code: "INVALID_ARGUMENT",
+    });
+  } finally {
+    sample.free();
+  }
 }
 
 interface Transcoder {
@@ -1033,23 +636,8 @@ class Pipeline {
     });
   }
 
-  /** FilterAPI builds its graph on the first frame, so one silent sample builds it now and a bad chain fails here. */
   #createFilter(decoder: Decoder): FilterAPI {
-    const filter = FilterAPI.create(() => graph(this.#chain, this.#volume));
-    const context = decoder.getCodecContext();
-    const probe = context && silentSample(context);
-    if (!probe) return filter;
-    try {
-      for (const frame of filter.processAllSync(probe)) frame.free();
-      return filter;
-    } catch (error: unknown) {
-      filter.close();
-      throw Object.assign(new Error("Filter chain could not be applied", { cause: error }), {
-        code: "INVALID_ARGUMENT",
-      });
-    } finally {
-      probe.free();
-    }
+    return checkedFilter(() => graph(this.#chain, this.#volume), decoder.getCodecContext());
   }
 
   #dropTranscoder(): void {
@@ -1083,6 +671,15 @@ class Pipeline {
   }
 }
 
+function probe(track: number, chain: string): void {
+  try {
+    checkedFilter(() => graph(chain, 100), null).close();
+    post({ type: "settled", track, request: 0 });
+  } catch (error: unknown) {
+    post({ type: "settled", track, request: 0, error: wire(error) });
+  }
+}
+
 function receive(message: ToWorker): void {
   try {
     dispatch(message);
@@ -1108,6 +705,9 @@ function dispatch(message: ToWorker): void {
     }
     case "filters":
       pipelines.get(message.track)?.setFilters(message.request, message.chain);
+      return;
+    case "probe":
+      probe(message.track, message.chain);
       return;
     case "volume":
       pipelines.get(message.track)?.setVolume(message.percent);

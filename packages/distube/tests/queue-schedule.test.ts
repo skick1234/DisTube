@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { type DisTubeQueue, Playlist, type QueueItem } from "../src";
-import type { PlaybackPreparation } from "../src/integrations";
+import type { PlaybackResource } from "../src/integrations";
 import {
   deferred,
   type FakePlayer,
@@ -10,6 +10,7 @@ import {
   record,
   required,
   settle,
+  thrown,
   VOICE_CHANNEL,
 } from "./support/harness";
 
@@ -97,7 +98,7 @@ describe("insertion position", () => {
 describe("jump", () => {
   it("jumps by position with requeue: the target plays and the skipped items return to the tail", async () => {
     const { harness, queue, player } = await playing(["a", "b", "c", "d"]);
-    const events = record(harness.distube, ["queue.item.finished", "queue.history.added", "queue.item.started"]);
+    const events = record(harness.distube, ["queue.item.finished", "queue.item.started"]);
 
     await queue.jump(2, { requeue: true });
     await settle();
@@ -113,7 +114,7 @@ describe("jump", () => {
 
   it("jumps by ID without requeue: the skipped items enter history in order", async () => {
     const { harness, queue } = await playing(["a", "b", "c", "d"]);
-    const events = record(harness.distube, ["queue.item.finished", "queue.history.added", "queue.item.started"]);
+    const events = record(harness.distube, ["queue.item.finished", "queue.item.started"]);
     const target = required(queue.upcoming[1]);
 
     await queue.jump(target.id);
@@ -122,7 +123,7 @@ describe("jump", () => {
     expect(queue.current).toBe(target);
     expect(waiting(queue)).toEqual(["d"]);
     expect(remembered(queue)).toEqual(["a", "b"]);
-    expect(events).toEqual(["queue.history.added", "queue.history.added", "queue.item.started"]);
+    expect(events).toEqual(["queue.item.started"]);
     await harness.distube.dispose();
   });
 
@@ -137,6 +138,61 @@ describe("jump", () => {
     expect(queue.current?.song.id).toBe("a");
     expect(waiting(queue)).toEqual(["b"]);
     await harness.distube.dispose();
+  });
+
+  it.each([3, 4, "missing"])(
+    "rejects jump(%s) outside upcoming INVALID_STATE and keeps the current item",
+    async target => {
+      const { queue, player } = await playing(["a", "b", "c"]);
+      await expect(queue.jump(target)).rejects.toMatchObject({ code: "INVALID_STATE" });
+      expect(queue.current?.song.id).toBe("a");
+      expect(player.playing).toBe("a");
+    },
+  );
+
+  it.each([
+    [1, "b", ["c"]],
+    [2, "c", []],
+  ] as const)("jump(%s) to the first and last upcoming positions plays %s", async (target, id, rest) => {
+    const { queue, player } = await playing(["a", "b", "c"]);
+    await queue.jump(target);
+    await settle();
+    expect(player.playing).toBe(id);
+    expect(queue.upcoming.map(item => item.song.id)).toEqual(rest);
+  });
+
+  it("jump to a later item aborts the head's preparation, and jump to the head keeps it", async () => {
+    const { harness, queue, player } = await playing(["a", "b", "c"]);
+    const held = deferred<PlaybackResource>();
+    harness.source.stream.mockImplementationOnce(() => held.promise);
+    await queue.skip();
+    await settle();
+    expect(harness.source.stream).toHaveBeenLastCalledWith(expect.objectContaining({ id: "b" }), expect.anything());
+
+    const kept = queue.jump(1);
+    await kept;
+    await settle();
+    expect(harness.source.disposed).not.toContain("b");
+    held.resolve(harness.source.resource("b"));
+    await settle();
+    expect(player.playing).toBe("b");
+
+    const second = deferred<PlaybackResource>();
+    let preparing: AbortSignal | undefined;
+    harness.source.stream.mockImplementationOnce((_song, options) => {
+      preparing = options.signal;
+      return second.promise;
+    });
+    await queue.add("d");
+    await queue.skip();
+    await settle();
+    const jumping = queue.jump(2);
+    expect(preparing?.aborted).toBe(true);
+    second.resolve(harness.source.resource("c"));
+    await jumping;
+    await settle();
+    expect(harness.source.disposed).toContain("c");
+    expect(player.playing).toBe("d");
   });
 });
 
@@ -180,7 +236,7 @@ describe("shuffle, clear and remove", () => {
     // Math.random() === 0 always picks index 0, which rotates the waiting list by one.
     const random = vi.spyOn(Math, "random").mockReturnValue(0);
     try {
-      await queue.shuffle();
+      queue.shuffle();
     } finally {
       random.mockRestore();
     }
@@ -190,44 +246,9 @@ describe("shuffle, clear and remove", () => {
     await harness.distube.dispose();
   });
 
-  it("clears the waiting list and cancels a pending preparation, disposing its late resource once", async () => {
-    const harness = playableSetup();
-    const prepared = deferred<PlaybackPreparation>();
-    let signal: AbortSignal | undefined;
-    const late = { disposed: 0 };
-    harness.source.stream.mockImplementationOnce(async song => harness.source.resourceFor(song));
-    harness.source.stream.mockImplementationOnce(async (_song, context) => {
-      signal = context.signal;
-      return prepared.promise;
-    });
-    const queue = await harness.distube.play(TARGET, "a");
-    await queue.add("b");
-    await queue.add("c");
-    await settle();
-    const player = harness.engine.players[0] as FakePlayer;
-    player.finish();
-    await settle();
-    // "b" is now being prepared behind the deferred stream.
-    expect(signal).toBeDefined();
-    expect(queue.current).toBeUndefined();
-
-    await queue.clear();
-
-    expect(queue.upcoming).toEqual([]);
-    expect(signal?.aborted).toBe(true);
-    prepared.resolve({
-      kind: "resource",
-      resource: { kind: "url", url: "https://stream.example/late", dispose: () => void late.disposed++ },
-    });
-    await settle();
-    expect(late.disposed).toBe(1);
-    expect(player.played).toHaveLength(1);
-    await harness.distube.dispose();
-  });
-
   it("keeps the current item playing when clear runs mid-track", async () => {
     const { harness, queue, player } = await playing(["a", "b", "c"]);
-    await queue.clear();
+    queue.clear();
     expect(queue.current?.song.id).toBe("a");
     expect(queue.upcoming).toEqual([]);
     expect(player.playing).toBe(queue.current?.song.id);
@@ -239,27 +260,28 @@ describe("shuffle, clear and remove", () => {
     const { harness, queue } = await playing(["a", "b", "c", "d", "e"]);
     const [b, c, d, e] = queue.upcoming as readonly QueueItem[];
 
-    expect((await queue.remove({ from: 2, to: 3 })).map(item => item.id)).toEqual([c?.id, d?.id]);
+    expect(queue.remove({ from: 2, to: 3 }).map(item => item.id)).toEqual([c?.id, d?.id]);
     expect(waiting(queue)).toEqual(["b", "e"]);
-    expect((await queue.remove(2)).map(item => item.id)).toEqual([e?.id]);
+    expect(queue.remove(2).map(item => item.id)).toEqual([e?.id]);
     expect(waiting(queue)).toEqual(["b"]);
-    expect((await queue.remove(required(b).id)).map(item => item.id)).toEqual([b?.id]);
+    expect(queue.remove(required(b).id).map(item => item.id)).toEqual([b?.id]);
     expect(waiting(queue)).toEqual([]);
     await harness.distube.dispose();
   });
 
   it("rejects malformed and non-upcoming remove targets without touching the queue", async () => {
     const { harness, queue } = await playing(["a", "b", "c"]);
-    await expect(queue.remove({ from: 3, to: 2 })).rejects.toMatchObject({ code: "INVALID_ARGUMENT" });
-    await expect(queue.remove({ from: 0, to: 1 })).rejects.toMatchObject({ code: "INVALID_ARGUMENT" });
-    await expect(queue.remove(0)).rejects.toMatchObject({ code: "INVALID_ARGUMENT" });
-    await expect(queue.remove({ from: 1, to: 5 })).rejects.toMatchObject({ code: "INVALID_STATE" });
-    await expect(queue.remove(3)).rejects.toMatchObject({ code: "INVALID_STATE" });
-    await expect(queue.remove("")).rejects.toMatchObject({
+    expect(thrown(() => queue.remove({ from: 3, to: 2 }))).toMatchObject({ code: "INVALID_ARGUMENT" });
+    expect(thrown(() => queue.remove({ from: 0, to: 1 }))).toMatchObject({ code: "INVALID_ARGUMENT" });
+    expect(thrown(() => queue.remove(0))).toMatchObject({ code: "INVALID_ARGUMENT" });
+    expect(thrown(() => queue.remove(null as never))).toMatchObject({ code: "INVALID_ARGUMENT" });
+    expect(thrown(() => queue.remove({ from: 1, to: 5 }))).toMatchObject({ code: "INVALID_STATE" });
+    expect(thrown(() => queue.remove(3))).toMatchObject({ code: "INVALID_STATE" });
+    expect(thrown(() => queue.remove(""))).toMatchObject({
       code: "INVALID_ARGUMENT",
       message: "Occurrence ID must be a non-empty string",
     });
-    await expect(queue.remove(required(queue.current).id)).rejects.toMatchObject({
+    expect(thrown(() => queue.remove(required(queue.current).id))).toMatchObject({
       code: "INVALID_STATE",
       message: "Occurrence is not upcoming in this queue",
     });
@@ -273,12 +295,23 @@ describe("shuffle, clear and remove", () => {
     await queue.stop();
     await expect(queue.jump(1)).rejects.toMatchObject({ code: "INVALID_STATE" });
     await expect(queue.previous()).rejects.toMatchObject({ code: "INVALID_STATE" });
-    await expect(queue.shuffle()).rejects.toMatchObject({ code: "INVALID_STATE" });
-    await expect(queue.clear()).rejects.toMatchObject({ code: "INVALID_STATE" });
-    await expect(queue.remove(1)).rejects.toMatchObject({ code: "INVALID_STATE" });
-    await expect(queue.move(required(b).id)).rejects.toMatchObject({ code: "INVALID_STATE" });
+    expect(thrown(() => queue.shuffle())).toMatchObject({ code: "INVALID_STATE" });
+    expect(thrown(() => queue.clear())).toMatchObject({ code: "INVALID_STATE" });
+    expect(thrown(() => queue.remove(1))).toMatchObject({ code: "INVALID_STATE" });
+    expect(thrown(() => queue.move(required(b).id))).toMatchObject({ code: "INVALID_STATE" });
     await expect(queue.skip()).rejects.toMatchObject({ code: "INVALID_STATE" });
-    await expect(queue.addRelated()).rejects.toMatchObject({ code: "INVALID_STATE" });
+    await harness.distube.dispose();
+  });
+
+  it("rejects a malformed edit on a deleted queue INVALID_ARGUMENT before the deletion check", async () => {
+    const { harness, queue } = await playing(["a", "b"]);
+    await queue.stop();
+    expect(thrown(() => queue.remove({ from: 3, to: 1 }))).toMatchObject({ code: "INVALID_ARGUMENT" });
+    expect(thrown(() => queue.move(""))).toMatchObject({ code: "INVALID_ARGUMENT" });
+    await expect(queue.jump(0)).rejects.toMatchObject({ code: "INVALID_ARGUMENT" });
+    expect(thrown(() => queue.setRepeat(9 as never))).toMatchObject({ code: "INVALID_ARGUMENT" });
+    expect(thrown(() => queue.setAutoplay("yes" as never))).toMatchObject({ code: "INVALID_ARGUMENT" });
+    await expect(queue.add("")).rejects.toMatchObject({ code: "INVALID_ARGUMENT" });
     await harness.distube.dispose();
   });
 });

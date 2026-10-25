@@ -3,7 +3,7 @@ import type { VoiceSession } from "distube/integrations";
 import { afterAll, describe, expect, it } from "vitest";
 // The Player is package-internal; a real session cannot reach Ready without a Discord socket, so the
 // decode hand-off is exercised directly against a real VoiceConnection instead.
-import { FilterRegistry } from "../../voice-core/src/filters";
+import { FilterRegistry } from "../../voice-core/src/engine";
 import { DiscordVoicePlayer } from "../../voice-core/src/player";
 import {
   type AudioOrigin,
@@ -60,6 +60,9 @@ describe("real @discordjs/voice", () => {
       selfDeaf: true,
       selfMute: false,
       join: async () => undefined,
+      setSelfState: async () => undefined,
+      voiceClosed: () => undefined,
+      rejoin: async () => undefined,
       release: async () => undefined,
       subscribe: () => () => undefined,
     };
@@ -70,6 +73,7 @@ describe("real @discordjs/voice", () => {
       opusComplexity: 10,
       readAhead: 25,
       releaseTransport: () => undefined,
+      onClosed: () => undefined,
     });
     try {
       const { promise: started, resolve: onStart } = Promise.withResolvers<void>();

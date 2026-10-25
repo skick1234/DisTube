@@ -1,10 +1,9 @@
-import type { Diagnostic } from "./contracts";
-import type { DisTubeQueue } from "./DisTubeQueue";
+import type { Diagnostic, VoiceChannelTarget } from "./contracts";
 import type { DisTubeError } from "./errors";
 import type { Playlist, QueueItem, Song } from "./media";
-import type { QueueState } from "./queue/state";
-import type { DisTubeVoice } from "./voice/DisTubeVoice";
-import type { VoiceChannelTarget } from "./voice/target";
+import type { DisTubeQueue } from "./queue";
+import type { QueueState } from "./queue-state";
+import type { DisTubeVoice } from "./voice";
 
 export interface BaseQueueEvent<Metadata = unknown, Target = VoiceChannelTarget> {
   readonly guildId: string;
@@ -21,10 +20,10 @@ export interface BaseVoiceEvent<Target = VoiceChannelTarget> {
 }
 
 /** Why a queue was deleted. */
-export type QueueDeleteReason = "stop" | "finished" | "replaced" | "voice-loss" | "leave" | "shutdown" | "failed";
+export type QueueDeleteReason = "stop" | "finished" | "voice-loss" | "leave" | "shutdown" | "failed";
 
 /** Why a guild's DisTubeVoice ended. */
-export type VoiceDisconnectReason = "left" | "platform" | "shutdown";
+export type VoiceDisconnectReason = "left" | "platform" | "shutdown" | "idle";
 
 export interface DisTubeEventMap<Metadata = unknown, Target = VoiceChannelTarget> {
   "queue.created": Readonly<BaseQueueEvent<Metadata, Target>>;
@@ -36,8 +35,6 @@ export interface DisTubeEventMap<Metadata = unknown, Target = VoiceChannelTarget
   "queue.item.started": Readonly<BaseQueueEvent<Metadata, Target> & { item: QueueItem<Metadata> }>;
   "queue.item.finished": Readonly<BaseQueueEvent<Metadata, Target> & { item: QueueItem<Metadata> }>;
   "queue.item.failed": Readonly<BaseQueueEvent<Metadata, Target> & { item: QueueItem<Metadata>; error: DisTubeError }>;
-  /** Follows the item's finished event. */
-  "queue.history.added": Readonly<BaseQueueEvent<Metadata, Target> & { item: QueueItem<Metadata> }>;
   /** Playback ran out of successors; `queue.deleted` follows. */
   "queue.finished": Readonly<BaseQueueEvent<Metadata, Target>>;
   "queue.autoplay.failed": Readonly<BaseQueueEvent<Metadata, Target> & { song: Song; error: DisTubeError }>;

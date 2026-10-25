@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { type DisTubeError, Playlist, Song, type SongData } from "../src";
-import { QueueItem } from "../src/media";
+import { queueItem } from "../src/media";
 
 const valid: SongData = {
   id: "song",
@@ -116,20 +116,20 @@ describe("media value validation", () => {
     expect(new Playlist({ ...playlist, songs: playlist.songs }).pluginData).toBe(pluginData);
   });
 
-  it("keeps occurrence dates defensive and generates a new identity each time", () => {
+  it("stamps each occurrence with a new identity and its creation time in epoch milliseconds", () => {
     const song = new Song(valid);
-    const item = new QueueItem({ song });
-    const first = item.addedAt;
-    first.setFullYear(2000);
-    expect(item.addedAt.getFullYear()).not.toBe(2000);
-    expect(new QueueItem({ song }).id).not.toBe(item.id);
+    const before = Date.now();
+    const item = queueItem(song);
+    expect(item.addedAt).toBeGreaterThanOrEqual(before);
+    expect(item.addedAt).toBeLessThanOrEqual(Date.now());
+    expect(queueItem(song).id).not.toBe(item.id);
   });
 
   it("keeps QueueItem metadata caller-owned while identity stays immutable", () => {
     const song = new Song(valid);
     const requester = { id: "user" };
     // Untyped: the metadata parameter defaults to `unknown`, so the slot takes anything.
-    const item = new QueueItem({ song, metadata: requester as unknown });
+    const item = queueItem<unknown>(song, requester);
     requester.id = "changed";
     expect(item.metadata).toBe(requester);
 
@@ -139,7 +139,7 @@ describe("media value validation", () => {
     }).toThrowError();
     expect(item.metadata).toBe(requester);
     expect(Object.isFrozen(requester)).toBe(false);
-    expect(new QueueItem({ song }).metadata).toBeUndefined();
+    expect(queueItem(song).metadata).toBeUndefined();
     expect(() => {
       (item as { id: string }).id = "forged";
     }).toThrowError();

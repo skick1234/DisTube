@@ -1,5 +1,8 @@
+import { availableParallelism } from "node:os";
 import { Readable } from "node:stream";
+import { Worker } from "node:worker_threads";
 import { DisTubeError } from "distube";
+import type { FromWorker, PermitMessage, ToWorker, WireError } from "./protocol";
 import {
   abortError,
   type ByteReply,
@@ -11,11 +14,13 @@ import {
   redactor,
   safeError,
   serveInput,
-} from "./input";
-import type { FromWorker, WireError } from "./pipeline-worker";
-import { attach, type Lease } from "./worker-pool";
+} from "./sources";
 
 const HOLD_POLL_MS = 20;
+const IDLE_EXIT_MS = 30_000;
+const POOL_SIZE = Math.max(1, Math.min(4, availableParallelism() - 1));
+const PERMITS = Math.max(1, (Number(process.env.UV_THREADPOOL_SIZE) || 4) - 1);
+const ENTRY = new URL(`./worker.${import.meta.url.endsWith(".ts") ? "ts" : "mjs"}`, import.meta.url);
 
 /** How a Track ended: its input reached the end, its owner closed it, or it failed with a redacted cause. */
 export type TrackOutcome =
@@ -174,11 +179,7 @@ export class Track {
     if (this.#closing || this.#settled) return;
     const settled = await this.#call(request => ({ type: "filters", track: this.#id, request, chain }));
     if (settled.superseded) throw new DisTubeError("INVALID_STATE", "Track ended before the filter chain was applied");
-    if (settled.error) {
-      throw new DisTubeError("INVALID_ARGUMENT", "Filter chain could not be applied", {
-        cause: safeError(fromWire(settled.error.cause ?? settled.error), this.#redact),
-      });
-    }
+    if (settled.error) throw filterRejection(settled.error, this.#redact);
   }
 
   /** Resolves once the new input holds audio at `seconds` and playback switched to it. */
@@ -194,12 +195,15 @@ export class Track {
       try {
         input = await this.#serve(seconds, controller.signal);
       } catch (error: unknown) {
-        if (controller.signal.aborted) throw new Error("Seek was superseded", { cause: error });
+        if (controller.signal.aborted) throw superseded(controller.signal);
         throw decodeFailure("seek", error, this.#redact);
       }
       const source = (this.#servers.get(input) as ByteServer).source;
       const settled = await this.#call(request => ({ type: "seek", track: this.#id, request, input, source, seconds }));
-      if (settled.superseded) throw new Error("Seek was superseded");
+      if (settled.superseded)
+        throw controller.signal.aborted
+          ? superseded(controller.signal)
+          : new DisTubeError("INVALID_STATE", "Track ended before the seek was applied");
       if (settled.error) throw this.#failure("seek", settled.error, settled.input);
       this.#inputEnded = false;
       this.#floor = { emitted: this.#emitted, seconds: settled.position ?? seconds };
@@ -371,4 +375,136 @@ export class Track {
 
 function isAbort(error: unknown): boolean {
   return error instanceof Error && error.name === "AbortError";
+}
+
+function superseded(signal: AbortSignal): DisTubeError {
+  return new DisTubeError("ABORTED", "Seek was superseded", { cause: signal.reason });
+}
+
+export async function probeFilters(chain: string): Promise<void> {
+  const track = ++nextId;
+  const { promise, resolve } = Promise.withResolvers<Extract<FromWorker, { type: "settled" | "failed" }>>();
+  const lease = attach(track, message => {
+    if (message.type === "settled" || message.type === "failed") resolve(message);
+  });
+  try {
+    lease.post({ type: "probe", track, chain });
+    const settled = await promise;
+    if (settled.type === "failed") throw fromWire(settled.error);
+    if (settled.error) throw filterRejection(settled.error, value => value);
+  } finally {
+    lease.detach();
+  }
+}
+
+function filterRejection(error: WireError, redact: (value: string) => string): DisTubeError {
+  return new DisTubeError("INVALID_ARGUMENT", "Filter chain could not be applied", {
+    cause: safeError(fromWire(error.cause ?? error), redact),
+  });
+}
+
+type Listener = (message: FromWorker) => void;
+
+interface Thread {
+  readonly worker: Worker;
+  readonly tracks: Map<number, Listener>;
+  readonly permits: Set<number>;
+  idle?: NodeJS.Timeout;
+}
+
+interface Lease {
+  post(message: ToWorker, transfer?: readonly ArrayBuffer[]): void;
+  detach(): void;
+}
+
+const threads: Thread[] = [];
+let queued: { readonly thread: Thread; readonly permit: number }[] = [];
+let available = PERMITS;
+
+function attach(track: number, listener: Listener): Lease {
+  const thread = pick();
+  clearTimeout(thread.idle);
+  thread.idle = undefined;
+  thread.tracks.set(track, listener);
+  thread.worker.ref();
+  return {
+    post: (message, transfer = []) => thread.worker.postMessage(message, transfer),
+    detach: () => {
+      if (!thread.tracks.delete(track) || thread.tracks.size > 0 || !threads.includes(thread)) return;
+      thread.worker.unref();
+      thread.idle = setTimeout(() => retire(thread), IDLE_EXIT_MS).unref();
+    },
+  };
+}
+
+function pick(): Thread {
+  let least: Thread | undefined;
+  for (const thread of threads) if (!least || thread.tracks.size < least.tracks.size) least = thread;
+  if (least && (least.tracks.size === 0 || threads.length >= POOL_SIZE)) return least;
+  return spawn();
+}
+
+function spawn(): Thread {
+  const worker = new Worker(ENTRY);
+  const thread: Thread = { worker, tracks: new Map(), permits: new Set() };
+  worker.on("message", (message: FromWorker | PermitMessage) => {
+    if (message.type === "acquire") acquire(thread, message.permit);
+    else if (message.type === "release") release(thread, message.permit);
+    else thread.tracks.get(message.track)?.(message);
+  });
+  worker.on("error", (error: Error) => lose(thread, error.message));
+  worker.on("exit", () => lose(thread, "Playback worker exited"));
+  threads.push(thread);
+  return thread;
+}
+
+// node-av documents that Worker.terminate() during a native call can abort the process, so an idle worker exits itself.
+function retire(thread: Thread): void {
+  if (thread.tracks.size > 0) return;
+  threads.splice(threads.indexOf(thread), 1);
+  thread.worker.postMessage({ type: "exit" } satisfies ToWorker, []);
+}
+
+// Native open and pre-read seek park a libuv pool thread until main delivers bytes, maybe via dns.lookup on that pool.
+function acquire(thread: Thread, permit: number): void {
+  if (available === 0) {
+    queued.push({ thread, permit });
+    return;
+  }
+  available -= 1;
+  thread.permits.add(permit);
+  thread.worker.postMessage({ type: "granted", permit } satisfies ToWorker, []);
+}
+
+function release(thread: Thread, permit: number): void {
+  if (thread.permits.delete(permit)) {
+    available += 1;
+    grantQueued();
+    return;
+  }
+  queued = queued.filter(entry => entry.thread !== thread || entry.permit !== permit);
+}
+
+function grantQueued(): void {
+  while (available > 0) {
+    const next = queued.shift();
+    if (!next) return;
+    acquire(next.thread, next.permit);
+  }
+}
+
+function lose(thread: Thread, message: string): void {
+  const index = threads.indexOf(thread);
+  if (index >= 0) threads.splice(index, 1);
+  clearTimeout(thread.idle);
+  queued = queued.filter(entry => entry.thread !== thread);
+  available += thread.permits.size;
+  thread.permits.clear();
+  grantQueued();
+  const tracks = [...thread.tracks];
+  thread.tracks.clear();
+  for (const [track, listener] of tracks) {
+    listener({ type: "failed", track, stage: "worker", error: { name: "Error", message } });
+    listener({ type: "closed", track });
+  }
 }

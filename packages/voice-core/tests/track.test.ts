@@ -1,14 +1,20 @@
 import { createReadStream } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
-import { createServer, type IncomingMessage, type RequestListener, type Server, type ServerResponse } from "node:http";
+import {
+  createServer,
+  type IncomingHttpHeaders,
+  type IncomingMessage,
+  type RequestListener,
+  type Server,
+  type ServerResponse,
+} from "node:http";
 import type { AddressInfo, Socket } from "node:net";
 import { join } from "node:path";
 import { PassThrough, Readable } from "node:stream";
 import type { ReaderPlaybackResource } from "distube/integrations";
 import { AVERROR_DECODER_NOT_FOUND, AVERROR_INVALIDDATA } from "node-av";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { DEFAULT_FILTERS } from "../src/filters";
-import { type LocalPlaybackResource, URL_READY_TIMEOUT_MS } from "../src/input";
+import { type LocalPlaybackResource, URL_READY_TIMEOUT_MS } from "../src/sources";
 import { Track } from "../src/track";
 import {
   bitrate,
@@ -21,7 +27,7 @@ import {
   take,
 } from "./support/media";
 
-const NIGHTCORE = DEFAULT_FILTERS.nightcore?.render(1.25);
+const NIGHTCORE = "asetrate=48000*1.25,aresample=48000,bass=g=5";
 
 let media: MediaFixtures;
 let opusPackets: Buffer[];
@@ -49,19 +55,6 @@ function open(
   return Track.open(resource, settings, signal);
 }
 
-function writeRange(body: Buffer, request: IncomingMessage, response: ServerResponse): void {
-  const range = request.headers.range?.match(/^bytes=(\d+)-(\d+)$/u);
-  if (!range) {
-    response.writeHead(200, { "content-length": String(body.length) });
-    response.end(body);
-    return;
-  }
-  const start = Number(range[1]);
-  const end = Math.min(Number(range[2]), body.length - 1);
-  response.writeHead(206, { "content-range": `bytes ${start}-${end}/${body.length}` });
-  response.end(body.subarray(start, end + 1));
-}
-
 async function listen(handler: RequestListener): Promise<string> {
   const server = createServer(handler);
   servers.push(server);
@@ -69,16 +62,15 @@ async function listen(handler: RequestListener): Promise<string> {
   return `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 }
 
-async function serveRanges(path: string): Promise<string> {
+async function serveFile(path: string): Promise<string> {
   const body = await readFile(path);
-  return `${await listen((request, response) => writeRange(body, request, response))}/audio`;
+  return `${await listen((_request, response) => response.end(body))}/audio`;
 }
 
 interface RedirectServer {
   readonly origin: string;
-  readonly size: number;
   readonly paths: string[];
-  readonly mediaStarts: number[];
+  readonly headers: IncomingHttpHeaders[];
   readonly redirectSockets: Socket[];
 }
 
@@ -87,7 +79,7 @@ async function serveRedirects(path: string): Promise<RedirectServer> {
   const body = await readFile(path);
   const signatures = new Set<string>();
   const paths: string[] = [];
-  const mediaStarts: number[] = [];
+  const headers: IncomingHttpHeaders[] = [];
   const redirectSockets: Socket[] = [];
   let issued = 0;
   const redirect = (request: IncomingMessage, response: ServerResponse, location: string): void => {
@@ -98,6 +90,7 @@ async function serveRedirects(path: string): Promise<RedirectServer> {
   const origin = await listen((request, response) => {
     const { pathname, searchParams } = new URL(request.url ?? "/", "http://127.0.0.1");
     paths.push(pathname);
+    headers.push(request.headers);
     const hops = Number(pathname.match(/^\/hops\/(\d+)$/u)?.[1]);
     if (hops > 1) redirect(request, response, `/hops/${hops - 1}`);
     else if (hops === 1) {
@@ -106,14 +99,14 @@ async function serveRedirects(path: string): Promise<RedirectServer> {
       redirect(request, response, `/audio?sig=${issued}`);
     } else if (pathname === "/ftp") redirect(request, response, "ftp://127.0.0.1/audio");
     else if (signatures.delete(searchParams.get("sig") ?? "")) {
-      mediaStarts.push(Number(request.headers.range?.match(/^bytes=(\d+)-/u)?.[1]));
-      writeRange(body, request, response);
+      response.writeHead(200, { "content-length": String(body.length) });
+      response.end(body);
     } else {
       response.writeHead(403);
       response.end();
     }
   });
-  return { origin, size: body.length, paths, mediaStarts, redirectSockets };
+  return { origin, paths, headers, redirectSockets };
 }
 
 function failingRange(): Readable {
@@ -135,17 +128,6 @@ function celt20(packet: Buffer): boolean {
 }
 
 describe("Track passthrough and transcode", () => {
-  it("passes 256 kbps WebM Opus through byte-identical under a 64 kbps target", async () => {
-    const track = await open({ kind: "file", path: media.opus }, { ...PLAIN, bitrate: 64_000 });
-
-    const sent = await drain(track);
-
-    expect(sent).toHaveLength(opusPackets.length);
-    expect(sent.every((packet, index) => packet.equals(opusPackets[index] as Buffer))).toBe(true);
-    await expect(track.outcome).resolves.toEqual({ type: "ended" });
-    await track.close();
-  });
-
   it("transcodes during a volume change and passes the source through again after it, from one input", async () => {
     const reader = await fileReader(media.opus);
     const track = await open(reader.resource);
@@ -289,22 +271,6 @@ describe("Track threads", () => {
 });
 
 describe("Track volume and filters", () => {
-  it("applies a filter to a one-shot stream without reopening it", async () => {
-    const stream = createReadStream(media.opus);
-    const track = await open({ kind: "stream", stream });
-
-    const before = await take(track.packets, 20);
-    await track.setFilters(DEFAULT_FILTERS.bassboost?.render(10));
-    const after = await drain(track);
-
-    expect(before.every((packet, index) => packet.equals(opusPackets[index] as Buffer))).toBe(true);
-    expect(after.length).toBeGreaterThan(250);
-    expect(after.slice(PLAIN.readAhead).every(packet => !opusPackets.some(source => source.equals(packet)))).toBe(true);
-    await expect(track.outcome).resolves.toEqual({ type: "ended" });
-    await track.close();
-    expect(stream.destroyed).toBe(true);
-  });
-
   it("reports source time under nightcore and keeps it when the filter is removed", async () => {
     const track = await open((await fileReader(media.hour)).resource, { ...PLAIN, chain: NIGHTCORE });
 
@@ -470,38 +436,6 @@ describe("Track seek", () => {
     await track.close();
   });
 
-  it("keeps playing from the old input when the seek target cannot be read", async () => {
-    const reader = await fileReader(media.hour, start => (start > 0 ? failingRange() : undefined));
-    const track = await open(reader.resource);
-    await take(track.packets, 1000);
-    const position = track.position;
-
-    const failure = await track.seek(30 * 60).then(
-      () => undefined,
-      (error: unknown) => error,
-    );
-    const later = await take(track.packets, 50);
-
-    expect(failure).toBeInstanceOf(Error);
-    expect(later).toHaveLength(50);
-    expect(track.position).toBeGreaterThan(position);
-    expect(track.position).toBeLessThan(position + 1.2);
-    expect(reader.readables.every(readable => readable.destroyed || reader.readables.at(0) === readable)).toBe(true);
-    await track.close();
-  });
-
-  it("refuses to seek a one-shot stream before touching it", async () => {
-    const stream = new PassThrough();
-    stream.write(await readFile(media.hour).then(bytes => bytes.subarray(0, 400_000)));
-    const track = await open({ kind: "stream", stream });
-    await take(track.packets, 5);
-
-    await expect(track.seek(2)).rejects.toMatchObject({ code: "UNSUPPORTED" });
-    expect(stream.destroyed).toBe(false);
-    expect(await take(track.packets, 5)).toHaveLength(5);
-    await track.close();
-  });
-
   it("plays on from the target when the input ends while a backward seek is pending", async () => {
     const bytes = await readFile(media.opus);
     const gates: { stream: PassThrough; start: number; end: number }[] = [];
@@ -635,14 +569,11 @@ describe("Track seek", () => {
     await track.close();
   });
 
-  it.each([
-    ["its header", () => true],
-    ["its target", (start: number) => start > 0],
-  ])("fences a seek stalled reading %s on close and joins every input", async (_stage, stallsAt) => {
+  it("fences a seek stalled reading its header on close and joins every input", async () => {
     const stalls: PassThrough[] = [];
     let stalling = false;
-    const reader = await fileReader(media.hour, start => {
-      if (!stalling || !stallsAt(start)) return undefined;
+    const reader = await fileReader(media.hour, () => {
+      if (!stalling) return undefined;
       const stalled = new PassThrough();
       stalls.push(stalled);
       return stalled;
@@ -662,6 +593,51 @@ describe("Track seek", () => {
     expect(await failure).toBeInstanceOf(Error);
     expect(reader.readables.every(readable => readable.destroyed)).toBe(true);
     await expect(track.outcome).resolves.toEqual({ type: "closed" });
+  });
+
+  it("rejects an overtaken seek ABORTED and lands on the later target", async () => {
+    const track = await open({ kind: "file", path: media.hour });
+    await take(track.packets, 5);
+    const first = track.seek(40 * 60).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+    await track.seek(37);
+
+    expect(await first).toMatchObject({ code: "ABORTED" });
+    expect(track.position).toBeGreaterThanOrEqual(37);
+    await track.close();
+  });
+
+  it("rejects a seek INVALID_STATE, not ABORTED, when the track fails before the seek lands", async () => {
+    let trapped = false;
+    let next = 0;
+    const gates: { stream: PassThrough; start: number; end: number }[] = [];
+    const reader = await fileReader(media.hour, (start, end) => {
+      if (!trapped) {
+        next = end + 1;
+        return undefined;
+      }
+      if (start === next) return failingRange();
+      const stream = new PassThrough();
+      gates.push({ stream, start, end });
+      return stream;
+    });
+    const track = await open(reader.resource);
+    await take(track.packets, 5);
+    trapped = true;
+    const seeking = track.seek(30 * 60).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+    await vi.waitFor(() => expect(gates).toHaveLength(1));
+    void take(track.packets, Number.POSITIVE_INFINITY).catch(() => undefined);
+    await expect(track.outcome).resolves.toMatchObject({ type: "failed" });
+    trapped = false;
+    for (const gate of gates) createReadStream(media.hour, { start: gate.start, end: gate.end }).pipe(gate.stream);
+
+    expect(await seeking).toMatchObject({ code: "INVALID_STATE" });
+    await track.close();
   });
 });
 
@@ -699,25 +675,6 @@ describe("Track failures", () => {
       );
     },
   );
-
-  it("reports one failure with a safe cause when a stream errors after start", async () => {
-    const bytes = await readFile(media.hour);
-    const stream = new PassThrough();
-    stream.write(bytes.subarray(0, 400_000));
-    const track = await open({ kind: "stream", stream });
-    await take(track.packets, 5);
-
-    stream.emit("error", new Error("socket reset at /private/audio.webm"));
-    await take(track.packets, Number.POSITIVE_INFINITY);
-    const outcome = await track.outcome;
-
-    expect(outcome.type).toBe("failed");
-    const error = outcome.type === "failed" ? outcome.error : undefined;
-    expect(error?.message).toContain("Decode failed during read");
-    expect(JSON.stringify([error?.message, (error?.cause as Error)?.message])).not.toContain("/private/audio.webm");
-    expect(stream.destroyed).toBe(true);
-    await track.close();
-  });
 
   it("rejects audio libav has no decoder for with the libav open error as cause", async () => {
     const failure = await open({ kind: "file", path: media.undecodable }).then(
@@ -851,43 +808,6 @@ describe("Track input contract", () => {
     expect(failure?.message).toContain("Decode failed during open");
     expect(failure?.message).toContain("ended before its byte range");
   });
-
-  it("bounds a cyclic and oversized error graph from a failing stream", async () => {
-    const stream = new PassThrough();
-    stream.write((await readFile(media.hour)).subarray(0, 400_000));
-    const track = await open({ kind: "stream", stream });
-    await take(track.packets, 5);
-    const cycle = new Error("token=private");
-    Object.defineProperty(cycle, "cause", { value: cycle });
-    const nativeError = new AggregateError(
-      Array.from({ length: 30 }, (_, index) =>
-        Object.assign(new Error(`error ${index} secret=private`), { code: "EIO" }),
-      ),
-      "many input failures",
-      { cause: cycle },
-    );
-
-    stream.destroy(nativeError);
-    await take(track.packets, Number.POSITIVE_INFINITY);
-    const outcome = await track.outcome;
-
-    const errors: Error[] = [];
-    const visit = (value: unknown): void => {
-      if (!(value instanceof Error) || errors.includes(value) || errors.length > 100) return;
-      errors.push(value);
-      visit(value.cause);
-      if (value instanceof AggregateError) for (const child of value.errors) visit(child);
-    };
-    visit(outcome.type === "failed" ? outcome.error : undefined);
-    const aggregate = errors.find(error => error instanceof AggregateError) as AggregateError | undefined;
-    expect(aggregate).toBeDefined();
-    expect(aggregate).not.toBe(nativeError);
-    expect(aggregate?.errors.length).toBeLessThan(12);
-    expect(errors.length).toBeLessThanOrEqual(16);
-    expect(errors.some(error => error.message === "Cyclic error cause")).toBe(true);
-    expect(errors.every(error => !error.message.includes("private"))).toBe(true);
-    await track.close();
-  });
 });
 
 describe("Track URL redirects", () => {
@@ -906,43 +826,35 @@ describe("Track URL redirects", () => {
     },
   );
 
+  it("sends none of the headers untyped code attaches to a URL resource, through every redirect", async () => {
+    const server = await serveRedirects(media.opus);
+    const resource = {
+      kind: "url",
+      url: `${server.origin}/hops/2`,
+      headers: { "X-Session": "private" },
+    } as LocalPlaybackResource;
+
+    const track = await open(resource);
+
+    expect(await take(track.packets, 10)).toHaveLength(10);
+    expect(server.paths).toEqual(["/hops/2", "/hops/1", "/audio"]);
+    expect(server.headers.map(headers => headers["x-session"])).toEqual([undefined, undefined, undefined]);
+    await track.close();
+  });
+
   it.each([
-    ["with headers", "/hops/1", { Authorization: "private" }, "with headers redirected", ["/hops/1"]],
-    [
-      "6 times",
-      "/hops/6",
-      undefined,
-      "too many times",
-      ["/hops/6", "/hops/5", "/hops/4", "/hops/3", "/hops/2", "/hops/1"],
-    ],
-    ["to FTP", "/ftp", undefined, "non-HTTP location", ["/ftp"]],
-  ])("rejects a URL redirected %s without requesting the media", async (_case, path, headers, reason, paths) => {
+    ["6 times", "/hops/6", "too many times", ["/hops/6", "/hops/5", "/hops/4", "/hops/3", "/hops/2", "/hops/1"]],
+    ["to FTP", "/ftp", "non-HTTP location", ["/ftp"]],
+  ])("rejects a URL redirected %s without requesting the media", async (_case, path, reason, paths) => {
     const server = await serveRedirects(media.opus);
 
-    const failure: unknown = await open({
-      kind: "url",
-      url: `${server.origin}${path}`,
-      ...(headers ? { headers } : {}),
-    }).then(
+    const failure: unknown = await open({ kind: "url", url: `${server.origin}${path}` }).then(
       () => undefined,
       (error: unknown) => error,
     );
 
     expect(failure).toMatchObject({ message: expect.stringContaining(reason) });
     expect(server.paths).toEqual(paths);
-  });
-
-  it("seeks a redirected seekable URL through a fresh redirect for every range", async () => {
-    const server = await serveRedirects(media.hour);
-    const track = await open({ kind: "url", url: `${server.origin}/hops/2`, seekable: true });
-    await take(track.packets, 10);
-
-    await track.seek(30 * 60);
-
-    expect(server.mediaStarts.some(start => start > server.size / 3)).toBe(true);
-    expect(track.position).toBeGreaterThanOrEqual(30 * 60);
-    expect(await take(track.packets, 10)).toHaveLength(10);
-    await track.close();
   });
 });
 
@@ -951,9 +863,7 @@ describe("Track input bounds", () => {
     "plays a %s whose packets are larger than the read-ahead to its end",
     async kind => {
       const resource: LocalPlaybackResource =
-        kind === "stream"
-          ? { kind, stream: createReadStream(media.huge) }
-          : { kind, url: await serveRanges(media.huge), seekable: true };
+        kind === "stream" ? { kind, stream: createReadStream(media.huge) } : { kind, url: await serveFile(media.huge) };
       const track = await open(resource);
 
       const packets = await drain(track);
@@ -1004,21 +914,5 @@ describe("Track input bounds", () => {
 
     expect(produced).toBeLessThan(1024 * 1024);
     await track.close();
-  });
-
-  it("creates, encodes, closes and collects pipelines repeatedly", async () => {
-    const collect = (globalThis as { gc?: () => void }).gc;
-    expect(collect).toBeTypeOf("function");
-    for (let round = 0; round < 20; round += 1) {
-      const track = await open((await fileReader(media.opus)).resource, { ...PLAIN, volume: 50, chain: NIGHTCORE });
-      expect(await take(track.packets, 25)).toHaveLength(25);
-      await track.seek(2);
-      track.setVolume(100);
-      expect(await take(track.packets, 25)).toHaveLength(25);
-      await track.close();
-      collect?.();
-    }
-    await new Promise(resolve => setImmediate(resolve));
-    collect?.();
   });
 });

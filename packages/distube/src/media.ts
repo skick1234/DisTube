@@ -58,7 +58,7 @@ function pad(value: number): string {
 }
 
 /** Deterministic, locale-independent clock rendering of whole seconds. */
-export function formatDuration(seconds: number): string {
+function formatDuration(seconds: number): string {
   const total = Math.floor(seconds);
   const hours = Math.floor(total / 3600);
   const minutes = Math.floor((total % 3600) / 60);
@@ -73,7 +73,7 @@ function requireNonEmpty(value: unknown, label: string): string {
   return value;
 }
 
-export interface PlaylistData<PluginData = unknown> {
+export type PlaylistData<PluginData = unknown, ListData = unknown> = {
   readonly id: string;
   readonly name: string;
   readonly url: string;
@@ -82,20 +82,23 @@ export interface PlaylistData<PluginData = unknown> {
   readonly songs: readonly Song<PluginData>[];
   readonly thumbnail?: string;
   /** Provider-owned playlist data. Core never reads it. */
-  readonly pluginData?: unknown;
-}
+  readonly pluginData?: ListData;
+} & (undefined extends ListData ? unknown : { readonly pluginData: ListData });
 
-/** Immutable provider playlist. `PluginData` types its Songs; the playlist's own slot stays provider-narrowed. */
-export class Playlist<PluginData = unknown> {
+/**
+ * Immutable provider playlist. `PluginData` types its Songs' `pluginData` and `ListData` the playlist's own; both are
+ * declared by the owning plugin, and core never reads them.
+ */
+export class Playlist<PluginData = unknown, ListData = unknown> {
   readonly id: string;
   readonly name: string;
   readonly url: string;
   readonly source: string;
   readonly songs: readonly Song<PluginData>[];
   readonly thumbnail?: string;
-  readonly pluginData: unknown;
+  readonly pluginData: ListData;
 
-  constructor(data: PlaylistData<PluginData>) {
+  constructor(data: PlaylistData<PluginData, ListData>) {
     if (!data) throw new DisTubeError("INVALID_ARGUMENT", "Playlist data must be an object");
     this.id = requireNonEmpty(data.id, "Playlist id");
     this.name = requireNonEmpty(data.name, "Playlist name");
@@ -106,7 +109,7 @@ export class Playlist<PluginData = unknown> {
     }
     this.songs = Object.freeze([...data.songs]);
     if (data.thumbnail !== undefined) this.thumbnail = requireNonEmpty(data.thumbnail, "Playlist thumbnail");
-    this.pluginData = data.pluginData;
+    this.pluginData = data.pluginData as ListData;
     Object.freeze(this);
   }
 
@@ -120,41 +123,19 @@ export class Playlist<PluginData = unknown> {
   }
 }
 
-export interface QueueItemData<Metadata = unknown> {
+/**
+ * One occurrence of a Song in a queue, frozen when created.
+ *
+ * `Metadata` is the client's caller-metadata type. Core stores the caller's reference and never reads it.
+ */
+export interface QueueItem<Metadata = unknown> {
+  readonly id: string;
   readonly song: Song;
-  readonly metadata?: Metadata;
+  readonly metadata: Metadata | undefined;
+  /** Creation time in epoch milliseconds. */
+  readonly addedAt: number;
 }
 
-/**
- * One occurrence of a Song in a queue.
- *
- * `Metadata` is the client's caller-metadata type. It exists only in the type system: core stores whatever
- * value it is handed and never reads, copies, validates, or constrains it.
- */
-export class QueueItem<Metadata = unknown> {
-  /** Caller-owned reference; core stores it without reading, copying, or interpreting it. */
-  readonly metadata: Metadata | undefined;
-  readonly #id: string;
-  readonly #song: Song;
-  readonly #addedAt: Date;
-
-  constructor(data: QueueItemData<Metadata>) {
-    this.#id = randomUUID();
-    this.#song = data.song;
-    this.#addedAt = new Date();
-    this.metadata = data.metadata;
-    Object.freeze(this);
-  }
-
-  get id(): string {
-    return this.#id;
-  }
-
-  get song(): Song {
-    return this.#song;
-  }
-
-  get addedAt(): Date {
-    return new Date(this.#addedAt.getTime());
-  }
+export function queueItem<Metadata>(song: Song, metadata?: Metadata): QueueItem<Metadata> {
+  return Object.freeze({ id: randomUUID(), song, metadata, addedAt: Date.now() });
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { DisTube, DisTubeError, type Song } from "../src";
+import { DisTube, DisTubeError, ErrorCode, Playlist, type Song } from "../src";
 import type { Plugin } from "../src/integrations";
 import {
   capture,
@@ -29,11 +29,28 @@ function construct(plugins: readonly Plugin[], options: object = {}): () => DisT
 
 const invalidArgument = expect.objectContaining({ code: "INVALID_ARGUMENT" });
 
+/** What another installed copy of the package throws: same name and code, different class. */
+class SecondCopyError extends Error {
+  readonly code = "NOT_FOUND";
+
+  constructor(message: string) {
+    super(message);
+    this.name = "DisTubeError";
+  }
+}
+
 describe("client construction", () => {
   it.each([
     { historySize: -1 },
     { historySize: 2.5 },
+    { maxPlaylistSongs: 0 },
+    { maxPlaylistSongs: 1.5 },
     { connectionTimeoutMs: 0 },
+    { connectionTimeoutMs: 2 ** 31 },
+    { idleTimeoutMs: -1 },
+    { idleTimeoutMs: 1.5 },
+    { idleTimeoutMs: Number.NaN },
+    { idleTimeoutMs: 2 ** 31 },
     { engine: { opusComplexity: 11 } },
     { engine: { bufferMs: 30 } },
     { engine: { bufferMs: 0 } },
@@ -41,18 +58,31 @@ describe("client construction", () => {
     expect(construct([new FakeSource("source")], options)).toThrowError(invalidArgument);
   });
 
-  it("rejects duplicate, empty and useless plugins", () => {
-    expect(construct([new FakeSource("same"), new FakeSource("same")])).toThrowError(invalidArgument);
-    expect(construct([new FakeSource("")])).toThrowError(invalidArgument);
-    expect(construct([{ name: "stream-only", stream: async () => ({ kind: "search", query: "q" }) }])).toThrowError(
-      invalidArgument,
-    );
+  it.each(["connectionTimeoutMs", "idleTimeoutMs"])("accepts %s at the timer ceiling 2147483647", option => {
+    expect(construct([new FakeSource("source")], { [option]: 2 ** 31 - 1 })).not.toThrow();
   });
 
-  it("requires stream from every discovering plugin unless an engine plugin plays them", () => {
-    const resolveOnly: Plugin = { name: "resolve-only", resolve: async () => undefined };
-    expect(construct([resolveOnly])).toThrowError(invalidArgument);
-    expect(construct([resolveOnly, { name: "remote", engine: new PreparingEngine() }])).not.toThrow();
+  it.each(["", " padded", "padded ", 42])("rejects the plugin name %j with INVALID_ARGUMENT", name => {
+    expect(construct([new FakeSource(name as string)])).toThrowError(invalidArgument);
+  });
+
+  it("rejects duplicate plugin names and a plugin with no operation", () => {
+    expect(construct([new FakeSource("same"), new FakeSource("same")])).toThrowError(invalidArgument);
+    expect(construct([{ name: "empty", dispose: () => undefined }])).toThrowError(invalidArgument);
+  });
+
+  it("accepts a plugin that has only stream", () => {
+    expect(construct([{ name: "clips", stream: async () => ({ kind: "file", path: "/clips/a.ogg" }) }])).not.toThrow();
+  });
+
+  it("accepts a plugin without stream only beside an engine plugin or another plugin with search and stream", () => {
+    const spotify: Plugin = { name: "spotify", resolve: async () => undefined, search: async () => [] };
+    const streamOnly: Plugin = { name: "clips", stream: async () => ({ kind: "file", path: "/clips/a.ogg" }) };
+    const searchOnly: Plugin = { name: "index", search: async () => [] };
+    expect(construct([spotify])).toThrowError(invalidArgument);
+    expect(construct([spotify, streamOnly, searchOnly])).toThrowError(invalidArgument);
+    expect(construct([spotify, new FakeSource("youtube")])).not.toThrow();
+    expect(construct([spotify, { name: "remote", engine: new PreparingEngine() }])).not.toThrow();
   });
 
   it("rejects a second engine plugin", () => {
@@ -161,11 +191,24 @@ describe("string routing", () => {
     expect(second.resolve).not.toHaveBeenCalled();
   });
 
-  it("passes a plugin-owned DisTubeError through unchanged", async () => {
+  it.each([
+    ["this copy", new DisTubeError("NOT_FOUND", "provider says no")],
+    ["a second copy", new SecondCopyError("provider says no")],
+  ])("passes a plugin-owned DisTubeError from %s through unchanged", async (_copy, failure) => {
     const harness = playableSetup();
-    const failure = new DisTubeError("NOT_FOUND", "provider says no");
     harness.source.resolve.mockRejectedValueOnce(failure);
     await expect(harness.distube.play(TARGET, "https://provider.example/item")).rejects.toBe(failure);
+  });
+
+  it("narrows by name and a known code, so a second copy's error matches and a plain Error with the code does not", () => {
+    const foreign = new SecondCopyError("gone");
+    expect(DisTubeError.is(foreign, ErrorCode.NOT_FOUND)).toBe(true);
+    expect(DisTubeError.is(foreign)).toBe(true);
+    expect(DisTubeError.is(foreign, ErrorCode.ABORTED)).toBe(false);
+    expect(DisTubeError.is(Object.assign(new Error("gone"), { code: "NOT_FOUND" }), ErrorCode.NOT_FOUND)).toBe(false);
+    expect(DisTubeError.is(Object.assign(new Error("gone"), { name: "DisTubeError", code: "YOUTUBE_GONE" }))).toBe(
+      false,
+    );
   });
 
   it("takes the first candidate of the first answering plugin, walking past misses and throws", async () => {
@@ -216,6 +259,27 @@ describe("string routing", () => {
     expect(queue.upcoming).toEqual([]);
     expect(harness.source.resolve).not.toHaveBeenCalled();
   });
+
+  it.each([
+    [
+      "a Playlist mixing an owned and an unowned Song",
+      new Playlist({
+        id: "mixed",
+        name: "Mixed",
+        url: "https://source.example/list/mixed",
+        source: "source",
+        songs: [media("source", "a"), media("elsewhere", "b")],
+      }),
+    ],
+    ["an object that is not media", { source: "source", id: "a" }],
+  ])("rejects %s INVALID_ARGUMENT before creating a queue", async (_name, input) => {
+    const harness = playableSetup();
+    const events = record(harness.distube, ["queue.created"]);
+    await expect(harness.distube.play(TARGET, input as Song)).rejects.toMatchObject({ code: "INVALID_ARGUMENT" });
+    await expect(harness.distube.resolve(input as Song)).rejects.toMatchObject({ code: "INVALID_ARGUMENT" });
+    expect(events).toEqual([]);
+    expect(harness.distube.queues.size).toBe(0);
+  });
 });
 
 describe("public search", () => {
@@ -242,7 +306,7 @@ describe("public search", () => {
     const resolveOnly: Plugin = {
       name: "resolve-only",
       resolve: async () => undefined,
-      stream: async () => ({ kind: "search", query: "q" }),
+      stream: async () => ({ kind: "file", path: "/q.ogg" }),
     };
     const harness = setup([first, resolveOnly]);
     await expect(harness.distube.search("q", { source: new FakeSource("foreign") })).rejects.toMatchObject({
@@ -262,6 +326,51 @@ describe("public search", () => {
   });
 });
 
+function playlistOf(count: number): Playlist {
+  return new Playlist({
+    id: "list",
+    name: "List",
+    url: mediaUrl("list"),
+    source: "source",
+    songs: Array.from({ length: count }, (_, index) => media("source", `s${index}`)),
+  });
+}
+
+const firstIds = (count: number): string[] => Array.from({ length: count }, (_, index) => `s${index}`);
+
+describe("playlist cap", () => {
+  it.each([
+    [undefined, 700, 500],
+    [3, 5, 3],
+    [5000, 700, 700],
+  ])(
+    "with maxPlaylistSongs %s, passes the cap to resolve and keeps the first Songs of a %s-Song Playlist",
+    async (maxPlaylistSongs, count, kept) => {
+      const harness = playableSetup("source", maxPlaylistSongs === undefined ? {} : { maxPlaylistSongs });
+      harness.source.resolve.mockImplementation(async () => playlistOf(count));
+      const added: string[][] = [];
+      harness.distube.on("queue.playlist.added", event => void added.push(event.items.map(item => item.song.id)));
+
+      const resolved = await harness.distube.resolve(mediaUrl("list"));
+      await harness.distube.play(TARGET, mediaUrl("list"));
+      await settle();
+
+      expect(harness.source.resolve).toHaveBeenCalledWith(
+        mediaUrl("list"),
+        expect.objectContaining({ maxPlaylistSongs: maxPlaylistSongs ?? 500 }),
+      );
+      expect((resolved as Playlist).songs.map(song => song.id)).toEqual(firstIds(kept));
+      expect(added).toEqual([firstIds(kept)]);
+    },
+  );
+
+  it("commits every Song of a Playlist passed in directly", async () => {
+    const harness = playableSetup("source", { maxPlaylistSongs: 10 });
+    const queue = await harness.distube.play(TARGET, playlistOf(20));
+    expect([queue.current, ...queue.upcoming].filter(item => item !== undefined)).toHaveLength(20);
+  });
+});
+
 describe("suggestions", () => {
   it("returns the first non-empty answer, skips plugins without suggest and propagates failures", async () => {
     const [first, second, third] = sources();
@@ -270,18 +379,19 @@ describe("suggestions", () => {
       throw new Error("suggest down");
     });
     const harness = setup([first, Object.assign(second, { suggest }), Object.assign(third, { suggest: failing })]);
-    await expect(harness.distube.getSuggestions("lo")).resolves.toEqual(["lofi"]);
+    await expect(harness.distube.suggest("lo")).resolves.toEqual(["lofi"]);
     expect(failing).not.toHaveBeenCalled();
 
     suggest.mockResolvedValueOnce([]);
-    await expect(harness.distube.getSuggestions("lo")).rejects.toMatchObject({ code: "SOURCE_FAILED" });
-    await expect(harness.distube.getSuggestions("lo", first)).resolves.toEqual([]);
+    await expect(harness.distube.suggest("lo")).rejects.toMatchObject({ code: "SOURCE_FAILED" });
+    await expect(harness.distube.suggest("lo", { source: first })).resolves.toEqual([]);
   });
 });
 
 describe("cancellation", () => {
-  it("rejects an already-aborted signal ABORTED before any plugin call", async () => {
+  it("rejects an already-aborted signal ABORTED before any plugin call or queue creation", async () => {
     const harness = playableSetup();
+    const events = record(harness.distube, ["queue.created", "queue.deleted"]);
     const controller = new AbortController();
     controller.abort("just a string");
     const failure = (await capture(
@@ -292,6 +402,8 @@ describe("cancellation", () => {
     await expect(harness.distube.play(TARGET, "a", { signal: controller.signal })).rejects.toMatchObject({
       code: "ABORTED",
     });
+    await settle();
+    expect(events).toEqual([]);
     expect(harness.distube.queues.size).toBe(0);
     expect(harness.source.resolve).not.toHaveBeenCalled();
     expect(harness.source.search).not.toHaveBeenCalled();
@@ -411,6 +523,25 @@ describe("disposal", () => {
     await expect(harness.distube.play(TARGET, "a")).rejects.toMatchObject({ code: "INVALID_STATE" });
     await expect(harness.distube.resolve("a")).rejects.toMatchObject({ code: "INVALID_STATE" });
     expect(first.search).not.toHaveBeenCalled();
+  });
+
+  it("rejects malformed arguments INVALID_ARGUMENT on a disposed client and a released voice", async () => {
+    const harness = playableSetup();
+    const voice = await harness.distube.voices.join(TARGET);
+    await harness.distube.dispose();
+    await expect(voice.move({ guildId: "other", id: VOICE_CHANNEL })).rejects.toMatchObject({
+      code: "INVALID_ARGUMENT",
+    });
+    await expect(harness.distube.play(TARGET, "")).rejects.toMatchObject({ code: "INVALID_ARGUMENT" });
+    await expect(harness.distube.voices.join(TARGET, { selfDeaf: "x" as never })).rejects.toMatchObject({
+      code: "INVALID_ARGUMENT",
+    });
+    await expect(voice.filters.set("")).rejects.toMatchObject({ code: "INVALID_ARGUMENT" });
+    await expect(voice.filters.toggle("")).rejects.toMatchObject({ code: "INVALID_ARGUMENT" });
+    await expect(harness.distube.resolve("")).rejects.toMatchObject({ code: "INVALID_ARGUMENT" });
+    await expect(harness.distube.search("")).rejects.toMatchObject({ code: "INVALID_ARGUMENT" });
+    await expect(harness.distube.suggest("")).rejects.toMatchObject({ code: "INVALID_ARGUMENT" });
+    expect(harness.adapter.createVoiceSession).toHaveBeenCalledTimes(1);
   });
 
   it("deletes every queue then leaves every voice with reason shutdown", async () => {

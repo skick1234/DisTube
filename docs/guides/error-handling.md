@@ -55,18 +55,19 @@ tokens and headers out of the errors they build.
 
 ## Cancellation
 
-`play`, `queue.add`, `resolve`, `search`, `getSuggestions` and `voices.join` accept `signal`. An already-aborted
+`play`, `queue.add`, `resolve`, `search`, `suggest` and `voices.join` accept `signal`. An already-aborted
 signal rejects `ABORTED` before any work starts. Cancellation before the insertion commits prevents it. After it
 commits, cancellation cannot undo it. An Error abort reason becomes `cause`. Deleting the queue or disposing the
 client supersedes pending work with `INVALID_STATE`.
 
-For `voice.play`, aborting before the track starts rejects `ABORTED`, and aborting afterwards ends the track as
-`stopped`.
+A `signal` passed to a plugin's `stream` or `prepare` aborts when the item is skipped, jumped over or its queue is
+deleted. Throw the signal's reason, for example with `signal.throwIfAborted()`.
 
 ## Backend and cleanup failures
 
-A filter, volume or bitrate change commits only after the Player acknowledges it. A failure leaves the last
-acknowledged value and rejects with `VOICE_FAILED`, or `UNSUPPORTED` when the engine cannot do it.
+A filter or volume change commits only after the Player acknowledges it. A failure leaves the last
+acknowledged value and rejects with `VOICE_FAILED`, or `UNSUPPORTED` when the engine cannot do it. A filter chain the built-in engine cannot build rejects
+`INVALID_ARGUMENT` and keeps the previous chain.
 
 `dispose()` and `leave()` attempt every cleanup even if one fails. Failures reject one `AggregateError` inside a
 `DisTubeError`. The code is `VOICE_FAILED` when a voice or queue cleanup failed, otherwise `SOURCE_FAILED`. A

@@ -2,14 +2,10 @@ import { type ClientRequest, request as httpRequest, type IncomingMessage } from
 import { request as httpsRequest } from "node:https";
 import type { Readable } from "node:stream";
 import type { EncodedPlaybackResource, PlaybackResource } from "distube/integrations";
-import type { InputSource, WireError } from "./pipeline-worker";
+import { type InputSource, WINDOW_BYTES, type WireError } from "./protocol";
 
 export type LocalPlaybackResource = Exclude<PlaybackResource, EncodedPlaybackResource>;
 
-export const MAX_DIAGNOSTIC_BYTES = 4096;
-export const MAX_ERROR_DEPTH = 4;
-export const MAX_ERROR_NODES = 12;
-export const WINDOW_BYTES = 256 * 1024;
 export const URL_READY_TIMEOUT_MS = 10_000;
 const MAX_REDIRECTS = 5;
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
@@ -22,7 +18,7 @@ const MANIFEST_CONTENT_TYPES = new Set([
 ]);
 
 export function isSeekable(resource: LocalPlaybackResource): boolean {
-  return resource.kind !== "stream" && (resource.kind !== "url" || resource.seekable === true);
+  return resource.kind !== "stream" && resource.kind !== "url";
 }
 
 /** One answer to a worker read: a chunk, the end of the range or stream, or a failure. */
@@ -56,35 +52,8 @@ export async function serveInput(
         return new OneShotServer(resource.open(seconds, lifetime.signal), resource.container, lifetime, redact, reply);
       case "reader":
         return new RangedServer(resource.size, resource.container, resource.read, lifetime, redact, reply);
-      case "url": {
-        if (resource.seekable !== true) {
-          const opened = await openUrl(resource.url, resource.headers, signal, redact);
-          return new OneShotServer(opened.response, undefined, lifetime, redact, reply);
-        }
-        const first = await openUrl(resource.url, resource.headers, signal, redact, {
-          start: 0,
-          end: WINDOW_BYTES - 1,
-        });
-        if (first.size === undefined) return new OneShotServer(first.response, undefined, lifetime, redact, reply);
-        let initial: Readable | undefined = first.response;
-        return new RangedServer(
-          first.size,
-          undefined,
-          async (start, end, abort) => {
-            if (initial && start === 0) {
-              const response = initial;
-              initial = undefined;
-              return response;
-            }
-            initial?.destroy();
-            initial = undefined;
-            return (await openUrl(resource.url, resource.headers, abort, redact, { start, end })).response;
-          },
-          lifetime,
-          redact,
-          reply,
-        );
-      }
+      case "url":
+        return new OneShotServer(await openUrl(resource.url, signal, redact), undefined, lifetime, redact, reply);
     }
   } catch (error: unknown) {
     lifetime.abort();
@@ -326,21 +295,11 @@ function toBuffer(chunk: unknown): Buffer {
   throw new TypeError("Playback input must yield bytes");
 }
 
-interface OpenedUrl {
-  readonly response: IncomingMessage;
-  readonly size?: number;
-}
-
 async function openUrl(
   value: string,
-  headers: Readonly<Record<string, string>> | undefined,
   signal: AbortSignal,
   redact: (value: string) => string,
-  range?: { readonly start: number; readonly end: number },
-): Promise<OpenedUrl> {
-  const url = new URL(value);
-  const followsRedirects = Object.keys(headers ?? {}).length === 0;
-  const requestHeaders = { ...headers, ...(range ? { Range: `bytes=${range.start}-${range.end}` } : {}) };
+): Promise<IncomingMessage> {
   return await new Promise((resolve, reject) => {
     if (signal.aborted) {
       reject(abortError());
@@ -367,7 +326,7 @@ async function openUrl(
     const send = (target: URL): void => {
       try {
         const makeRequest = target.protocol === "https:" ? httpsRequest : httpRequest;
-        const sent = makeRequest(target, { headers: requestHeaders, method: "GET" }, response => {
+        const sent = makeRequest(target, { method: "GET" }, response => {
           response.on("error", () => undefined);
           if (settled) {
             response.destroy();
@@ -376,7 +335,6 @@ async function openUrl(
           const status = response.statusCode ?? 0;
           const location = REDIRECT_STATUSES.has(status) ? response.headers.location : undefined;
           if (location !== undefined) {
-            if (!followsRedirects) return finish(new Error("Playback URL with headers redirected"), response);
             if (redirects === MAX_REDIRECTS) {
               return finish(new Error("Playback URL redirected too many times"), response);
             }
@@ -399,18 +357,13 @@ async function openUrl(
             finish(new Error("Playback URL returned a nested media manifest"), response);
             return;
           }
-          const size = status === 206 ? rangeSize(response.headers["content-range"]) : undefined;
-          if (range && range.start > 0 && size === undefined) {
-            finish(new Error("Playback URL ignored the requested byte range"), response);
-            return;
-          }
           settled = true;
           acceptedResponse = response;
           clearTimeout(timer);
           detachAbort();
           const detachCancel = listenForAbort(signal, () => response.destroy(abortError()));
           response.once("close", detachCancel);
-          resolve({ response, ...(size === undefined ? {} : { size }) });
+          resolve(response);
         });
         request = sent;
         sent.once("error", error => {
@@ -421,14 +374,8 @@ async function openUrl(
         finish(safeInputError("Playback URL request failed", error, redact));
       }
     };
-    send(url);
+    send(new URL(value));
   });
-}
-
-function rangeSize(header: string | undefined): number | undefined {
-  const total = header?.match(/^bytes \d+-\d+\/(\d+)$/u)?.[1];
-  const size = total === undefined ? Number.NaN : Number(total);
-  return Number.isSafeInteger(size) && size > 0 ? size : undefined;
 }
 
 function listenForAbort(signal: AbortSignal, abort: () => void): () => void {
@@ -444,18 +391,9 @@ export function abortError(): Error {
   return new DOMException("The playback operation was aborted", "AbortError");
 }
 
-/** Redacts the resource's own URL, header values and path, then known credential shapes, within the budget. */
 export function redactor(resource: LocalPlaybackResource): (value: string) => string {
-  const privateValues =
-    resource.kind === "url"
-      ? [resource.url, ...Object.values(resource.headers ?? {})]
-      : resource.kind === "file"
-        ? [resource.path]
-        : [];
-  return value => {
-    for (const secret of privateValues) if (secret) value = value.split(secret).join("<redacted>");
-    return boundedDiagnostic(value);
-  };
+  const secret = resource.kind === "url" ? resource.url : resource.kind === "file" ? resource.path : undefined;
+  return value => (secret ? value.split(secret).join("<redacted>") : value);
 }
 
 export function decodeFailure(stage: string, error: unknown, redact: (value: string) => string): Error {
@@ -464,98 +402,21 @@ export function decodeFailure(stage: string, error: unknown, redact: (value: str
 }
 
 export function fromWire(wire: WireError): Error {
-  const cause = wire.cause ? { cause: fromWire(wire.cause) } : undefined;
-  const error = wire.errors
-    ? new AggregateError(wire.errors.map(fromWire), wire.message, cause)
-    : new Error(wire.message, cause);
+  const error = new Error(wire.message, wire.cause ? { cause: fromWire(wire.cause) } : undefined);
   error.name = wire.name;
-  if (wire.code !== undefined) Object.defineProperty(error, "code", { value: wire.code, enumerable: true });
-  return error;
+  return wire.code === undefined ? error : Object.assign(error, { code: wire.code });
 }
 
-export function safeInputError(label: string, value: unknown, redact: (value: string) => string): Error {
-  const cause = safeError(value, redact, errorBudget());
-  return new Error(boundUtf8(`${label}: ${cause.message}`, 512), { cause });
+function safeInputError(label: string, value: unknown, redact: (value: string) => string): Error {
+  const cause = safeError(value, redact);
+  return new Error(`${label}: ${cause.message}`, { cause });
 }
 
-interface ErrorBudget {
-  readonly seen: WeakSet<object>;
-  nodes: number;
-  bytes: number;
-}
-
-function errorBudget(): ErrorBudget {
-  return { seen: new WeakSet(), nodes: 0, bytes: MAX_DIAGNOSTIC_BYTES };
-}
-
-export function safeError(value: unknown, redact: (value: string) => string, budget = errorBudget(), depth = 0): Error {
-  if (depth >= MAX_ERROR_DEPTH || budget.nodes >= MAX_ERROR_NODES) return new Error("Error cause truncated");
+export function safeError(value: unknown, redact: (value: string) => string, withCause = true): Error {
   if (!(value instanceof Error)) return new Error("Non-error cause");
-  if (budget.seen.has(value)) return new Error("Cyclic error cause");
-  budget.seen.add(value);
-  budget.nodes += 1;
-  const safeText = (text: string): string => {
-    const result = boundUtf8(redact(text), budget.bytes);
-    budget.bytes -= Buffer.byteLength(result, "utf8");
-    return result;
-  };
-  try {
-    const name = safeText(value.name);
-    const code = Object.getOwnPropertyDescriptor(value, "code");
-    const safeCode = code && "value" in code && typeof code.value === "string" ? safeText(code.value) : code?.value;
-    const message = safeText(value.message);
-    const cause = Object.getOwnPropertyDescriptor(value, "cause");
-    const safeCause = cause && "value" in cause ? safeError(cause.value, redact, budget, depth + 1) : undefined;
-    const errors = Object.getOwnPropertyDescriptor(value, "errors");
-    const children: Error[] = [];
-    if (value instanceof AggregateError && errors && "value" in errors && Array.isArray(errors.value)) {
-      for (let index = 0; index < errors.value.length && budget.nodes < MAX_ERROR_NODES; index += 1) {
-        const child = Object.getOwnPropertyDescriptor(errors.value, String(index));
-        children.push(safeError(child && "value" in child ? child.value : undefined, redact, budget, depth + 1));
-      }
-    }
-    const safe =
-      value instanceof AggregateError
-        ? new AggregateError(children, message, safeCause ? { cause: safeCause } : undefined)
-        : new Error(message, safeCause ? { cause: safeCause } : undefined);
-    safe.name = name;
-    if (typeof safeCode === "string" || (typeof safeCode === "number" && Number.isFinite(safeCode))) {
-      Object.defineProperty(safe, "code", { value: safeCode, enumerable: true });
-    }
-    return safe;
-  } catch {
-    return new Error("Uninspectable error cause");
-  }
-}
-
-function boundedDiagnostic(value: string): string {
-  return boundUtf8(redactDiagnostic(value), MAX_DIAGNOSTIC_BYTES);
-}
-
-function redactDiagnostic(value: string): string {
-  return value
-    .replace(/\b(?:https?|wss?|rtmp):\/\/[^\s<>"'`\\]+/giu, "<redacted-url>")
-    .replace(/(?:[A-Za-z]:[\\/]|\/(?:[^\s<>:"'`\\]+\/)+)[^\s<>:"'`\\]*/gu, "<redacted-path>")
-    .replace(
-      /\b(?:authorization|proxy-authorization|cookie|set-cookie|x-api-key|x-amz-(?:security-token|signature|credential)|x-goog-signature)\s*:\s*[^\r\n]*/giu,
-      "<redacted>",
-    )
-    .replace(
-      /\b(?:api[_-]?key|access[_-]?token|refresh[_-]?token|client[_-]?secret|token|signature|sig|key|password|secret|credential|x[-_](?:api[-_]?key|amz[-_](?:security[-_]?token|signature|credential)|goog[-_]?signature))\b\s*([=:])\s*(?:"[^"]*"|'[^']*'|[^\s,;]+)/giu,
-      "$1<redacted>",
-    )
-    .replace(/\bBearer\s+[^\s,;]+/giu, "Bearer <redacted>");
-}
-
-function boundUtf8(value: string, limit: number): string {
-  if (Buffer.byteLength(value, "utf8") <= limit) return value;
-  let size = 0;
-  let bounded = "";
-  for (const character of value) {
-    const characterSize = Buffer.byteLength(character, "utf8");
-    if (size + characterSize > limit) break;
-    bounded += character;
-    size += characterSize;
-  }
-  return bounded;
+  const cause = withCause && value.cause !== undefined ? { cause: safeError(value.cause, redact, false) } : undefined;
+  const safe = new Error(redact(value.message), cause);
+  safe.name = value.name;
+  const code: unknown = (value as { code?: unknown }).code;
+  return typeof code === "string" || typeof code === "number" ? Object.assign(safe, { code }) : safe;
 }

@@ -4,9 +4,16 @@ Music queues and voice playback for Discord bots.
 
 ## Install
 
-```sh
+```sh title="npm"
+npm install distube @distube/discordjs @distube/youtube @distube/ytdl-core discord.js @discordjs/voice
+```
+
+```sh title="Bun"
 bun add distube @distube/discordjs @distube/youtube @distube/ytdl-core discord.js @discordjs/voice
 ```
+
+For Oceanic, install `@distube/oceanic oceanic.js` instead of `@distube/discordjs discord.js`. See
+[Installation](https://distube.js.org/distube/guides/installation/).
 
 ## Example
 

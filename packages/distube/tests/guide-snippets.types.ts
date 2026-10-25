@@ -1,11 +1,11 @@
 // Maintained guide examples use only the published entry points. Build core before checking this file.
 
 import type { Readable } from "node:stream";
-import { DisTube, type DisTubeVoice, Song } from "distube";
+import { DisTube, Song } from "distube";
 import type {
   Adapter,
   Engine,
-  PlaybackPreparation,
+  PlaybackResource,
   Player,
   Plugin,
   VoiceSession,
@@ -39,9 +39,9 @@ class ClipSource implements Plugin<ClipData> {
     return song ? [song] : [];
   }
 
-  async stream(song: Song<ClipData>, options: { readonly signal: AbortSignal }): Promise<PlaybackPreparation> {
+  async stream(song: Song<ClipData>, options: { readonly signal: AbortSignal }): Promise<PlaybackResource> {
     options.signal.throwIfAborted();
-    return { kind: "resource", resource: { kind: "url", url: song.url } };
+    return { kind: "url", url: song.url };
   }
 }
 
@@ -61,17 +61,31 @@ const remote: Plugin = {
   engine: {
     filters: new Map(),
     createPlayer: async () => player,
-    prepare: async (song, { stream }) => {
-      const preparation = await stream?.();
-      return preparation?.kind === "resource"
-        ? preparation.resource
-        : { kind: "encoded", format: "remote", encoded: song.id };
+    prepare: async (song, { signal }) => {
+      signal.throwIfAborted();
+      return { kind: "encoded", format: "remote", encoded: song.id };
     },
   },
 };
 
+declare const freshReadable: () => Readable;
+
+const sounds: Plugin = {
+  name: "sounds",
+  async stream(song) {
+    return song.id === "live"
+      ? { kind: "stream", stream: freshReadable() }
+      : { kind: "file", path: `/sounds/${song.id}.mp3` };
+  },
+};
+
 const clips = new ClipSource();
-const distube = new DisTube<RequestMetadata, NativeChannel>({ adapter, plugins: [clips], engine: { bufferMs: 400 } });
+const distube = new DisTube<RequestMetadata, NativeChannel>({
+  adapter,
+  plugins: [clips, sounds],
+  maxPlaylistSongs: 1000,
+  engine: { bufferMs: 400 },
+});
 const remoteDistube = new DisTube({ adapter, plugins: [clips, remote] });
 
 async function musicCommand(channel: NativeChannel): Promise<void> {
@@ -84,23 +98,23 @@ async function musicCommand(channel: NativeChannel): Promise<void> {
   await queue.jump(1);
   await queue.previous();
   await queue.seek(5);
+  await queue.pause();
+  const paused: boolean = queue.paused;
+  await queue.resume();
+  queue.shuffle();
+  const removed = queue.remove(1);
+  void [paused, removed];
+  const completions: readonly string[] = await distube.suggest("cli", { source: clips });
+  void completions;
   const results = await distube.search("clip", { source: clips, limit: 5 });
   const plays: number | undefined = results[0]?.pluginData.plays;
   void plays;
 }
 
-async function directInputs(voice: DisTubeVoice<NativeChannel>, freshReadable: () => Readable): Promise<void> {
-  const end = await voice.play({ kind: "file", path: "/absolute/clip.mp3" }, { onStart: () => undefined });
-  const reason: "finished" | "stopped" | "replaced" = end.reason;
-  void reason;
-  await voice.play({
-    kind: "url",
-    url: "https://audio.example/private.mp3",
-    headers: { Authorization: "Bearer token" },
-    seekable: true,
-  });
-  await voice.setBitrate("auto");
-  await voice.play({ kind: "stream", stream: freshReadable() }, { signal: AbortSignal.timeout(30_000) });
+async function soundCommand(channel: NativeChannel): Promise<void> {
+  const airhorn = new Song({ source: "sounds", id: "airhorn", name: "Airhorn", url: "https://example.audio/airhorn" });
+  const queue = await distube.play(channel, airhorn, { next: true });
+  await queue.stop();
 }
 
-void [musicCommand, directInputs, remoteDistube];
+void [musicCommand, soundCommand, remoteDistube];

@@ -10,10 +10,7 @@ function minimal(name: string, hits: readonly string[] = []): Plugin {
     name,
     search: async (query: string) => hits.filter(hit => hit === query).map(hit => media(name, hit)),
     resolve: async (): Promise<Song | Playlist | undefined> => undefined,
-    stream: async (song: Song) => ({
-      kind: "resource" as const,
-      resource: { kind: "url" as const, url: `https://stream.example/${song.id}` },
-    }),
+    stream: async (song: Song) => ({ kind: "url" as const, url: `https://stream.example/${song.id}` }),
   };
 }
 
@@ -67,7 +64,7 @@ describe("search and suggestions", () => {
     const foreign = new FakeSource("foreign");
     const harness = setup([configured]);
     await expect(harness.distube.search("q", { source: foreign })).rejects.toMatchObject({ code: "INVALID_ARGUMENT" });
-    await expect(harness.distube.getSuggestions("q", foreign)).rejects.toMatchObject({ code: "INVALID_ARGUMENT" });
+    await expect(harness.distube.suggest("q", { source: foreign })).rejects.toMatchObject({ code: "INVALID_ARGUMENT" });
     await expect(harness.distube.search("   ")).rejects.toMatchObject({ code: "INVALID_ARGUMENT" });
     await expect(harness.distube.search("q", { limit: 0 })).rejects.toMatchObject({ code: "INVALID_ARGUMENT" });
     await expect(harness.distube.search("q", { offset: -1 })).rejects.toMatchObject({ code: "INVALID_ARGUMENT" });
@@ -81,8 +78,8 @@ describe("search and suggestions", () => {
     const many = { ...minimal("many"), suggest: vi.fn(async () => Array.from({ length: 30 }, (_, i) => `s${i}`)) };
     const harness = setup([silent, many]);
 
-    expect(await harness.distube.getSuggestions("lo", silent)).toEqual([]);
-    const suggestions = await harness.distube.getSuggestions("lo");
+    expect(await harness.distube.suggest("lo", { source: silent })).toEqual([]);
+    const suggestions = await harness.distube.suggest("lo");
     expect(suggestions).toHaveLength(25);
     expect(suggestions[0]).toBe("s0");
     expect(many.suggest).toHaveBeenCalledWith("lo", expect.objectContaining({ signal: expect.any(AbortSignal) }));
@@ -96,12 +93,12 @@ describe("search and suggestions", () => {
     controller.abort("cancelled");
     const options = { signal: controller.signal };
     await expect(harness.distube.search("a", options)).rejects.toMatchObject({ code: "ABORTED" });
-    await expect(harness.distube.getSuggestions("a", undefined, options)).rejects.toMatchObject({ code: "ABORTED" });
+    await expect(harness.distube.suggest("a", options)).rejects.toMatchObject({ code: "ABORTED" });
     expect(source.suggest).not.toHaveBeenCalled();
 
     await harness.distube.dispose();
     await expect(harness.distube.search("a")).rejects.toMatchObject({ code: "INVALID_STATE" });
-    await expect(harness.distube.getSuggestions("a")).rejects.toMatchObject({ code: "INVALID_STATE" });
+    await expect(harness.distube.suggest("a")).rejects.toMatchObject({ code: "INVALID_STATE" });
   });
 
   it("wraps an unexpected search or suggest failure as SOURCE_FAILED once and passes a DisTubeError through", async () => {
@@ -125,9 +122,9 @@ describe("search and suggestions", () => {
     const suggesting = { ...minimal("suggesting"), suggest: vi.fn(async () => [] as readonly string[]) };
     const other = setup([suggesting]);
     suggesting.suggest.mockRejectedValueOnce(boom);
-    await expect(other.distube.getSuggestions("lo")).rejects.toMatchObject({ code: "SOURCE_FAILED", cause: boom });
+    await expect(other.distube.suggest("lo")).rejects.toMatchObject({ code: "SOURCE_FAILED", cause: boom });
     suggesting.suggest.mockRejectedValueOnce(owned);
-    await expect(other.distube.getSuggestions("lo", suggesting)).rejects.toBe(owned);
+    await expect(other.distube.suggest("lo", { source: suggesting })).rejects.toBe(owned);
     await harness.distube.dispose();
     await other.distube.dispose();
   });

@@ -14,6 +14,8 @@ export const ErrorCode = {
 
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];
 
+const CODES: ReadonlySet<unknown> = new Set(Object.values(ErrorCode));
+
 export interface DisTubeErrorOptions extends ErrorOptions {
   /** The plugin the failure came from. */
   readonly source?: string;
@@ -30,14 +32,18 @@ export class DisTubeError<Code extends ErrorCode = ErrorCode> extends Error {
     if (options?.source !== undefined) this.source = options.source;
   }
 
-  /** Narrows `error` to a DisTubeError, carrying exactly `code` when given. */
+  /**
+   * Narrows `error` to a DisTubeError, carrying exactly `code` when given. Matches by `name` and `code` rather than
+   * class identity, so an error from another installed copy of the package narrows too.
+   */
   static is<Code extends ErrorCode = ErrorCode>(error: unknown, code?: Code): error is DisTubeError<Code> {
-    return error instanceof DisTubeError && (code === undefined || error.code === code);
+    if (!(error instanceof Error) || error.name !== "DisTubeError" || !("code" in error)) return false;
+    return code === undefined ? CODES.has(error.code) : error.code === code;
   }
 }
 
 export function toDisTubeError(code: ErrorCode, message: string, error: unknown, source?: string): DisTubeError {
-  if (error instanceof DisTubeError) return error;
+  if (DisTubeError.is(error)) return error;
   return new DisTubeError(code, message, { cause: error, ...(source === undefined ? {} : { source }) });
 }
 
@@ -52,4 +58,14 @@ export function requireBoolean(value: unknown, name: string): void {
 
 export function throwIfAborted(signal: AbortSignal | undefined): void {
   if (signal?.aborted) throw abortError(signal);
+}
+
+export function requireInteger(value: number, name: string, min: number, max = Infinity): void {
+  if (!Number.isInteger(value) || value < min || value > max)
+    throw new DisTubeError(ErrorCode.INVALID_ARGUMENT, `${name} must be an integer from ${min} to ${max}`);
+}
+
+export function requireQuery(query: string): void {
+  if (typeof query !== "string" || query.trim().length === 0)
+    throw new DisTubeError(ErrorCode.INVALID_ARGUMENT, "Query must be a non-empty string");
 }

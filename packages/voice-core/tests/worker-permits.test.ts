@@ -1,84 +1,122 @@
-import { EventEmitter } from "node:events";
 import type * as Os from "node:os";
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { FromWorker, PermitMessage } from "../src/pipeline-worker";
-import type { TrackSettings } from "../src/track";
-import type * as Pool from "../src/worker-pool";
+import type { Player, TrackEnd } from "distube/integrations";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import type { FromWorker, PermitMessage, ToWorker } from "../src/protocol";
+import { CHANNEL, gatewayAdapter, resetNative } from "./support/native";
 
-const PLAIN: TrackSettings = { volume: 100, chain: undefined, bitrate: 510_000, opusComplexity: 10, readAhead: 25 };
+vi.mock("@discordjs/voice", async () => (await import("./support/native")).voiceModule());
 
-class FakeWorker extends EventEmitter {
-  readonly posted: unknown[] = [];
-  readonly ref = vi.fn();
-  readonly unref = vi.fn();
-
-  postMessage(message: unknown): void {
-    this.posted.push(message);
-  }
-
-  send(message: FromWorker | PermitMessage): void {
-    this.emit("message", message);
-  }
-
-  granted(): unknown[] {
-    return this.posted.filter(message => (message as { type?: string }).type === "granted");
-  }
+interface FakeWorker {
+  readonly posted: ToWorker[];
+  send(message: FromWorker | PermitMessage): void;
+  emit(event: string, ...args: unknown[]): boolean;
 }
 
 const workers = vi.hoisted((): FakeWorker[] => []);
 
-vi.mock("node:worker_threads", () => ({
-  Worker: vi.fn(function Worker() {
-    const worker = new FakeWorker();
-    workers.push(worker);
-    return worker;
-  }),
-}));
+vi.mock("node:worker_threads", async () => {
+  const { EventEmitter: Emitter } = await import("node:events");
+  class Fake extends Emitter implements FakeWorker {
+    readonly posted: ToWorker[] = [];
+    readonly ref = vi.fn();
+    readonly unref = vi.fn();
+
+    postMessage(message: ToWorker): void {
+      this.posted.push(message);
+      if (message.type === "close") queueMicrotask(() => this.send({ type: "closed", track: message.track }));
+    }
+
+    send(message: FromWorker | PermitMessage): void {
+      this.emit("message", message);
+    }
+  }
+  return {
+    Worker: vi.fn(function Worker() {
+      const worker = new Fake();
+      workers.push(worker);
+      return worker;
+    }),
+  };
+});
 vi.mock("node:os", async importOriginal => ({
   ...(await importOriginal<typeof Os>()),
   availableParallelism: () => 2,
 }));
 
-async function opened(worker: FakeWorker, opening: Promise<unknown>): Promise<void> {
-  await vi.waitFor(() => expect(worker.posted).toContainEqual(expect.objectContaining({ type: "open" })));
-  const open = worker.posted.find(message => (message as { type?: string }).type === "open") as { track: number };
-  worker.send({ type: "opened", track: open.track });
-  await opening;
-}
+const cleanups: (() => Promise<unknown>)[] = [];
+const answered = new Set<number>();
 
-async function pool(): Promise<typeof Pool> {
-  vi.resetModules();
-  vi.stubEnv("UV_THREADPOOL_SIZE", "3");
-  return await import("../src/worker-pool");
-}
-
-beforeEach(() => {
-  workers.length = 0;
+beforeAll(() => vi.stubEnv("UV_THREADPOOL_SIZE", "3"));
+afterAll(() => vi.unstubAllEnvs());
+beforeEach(resetNative);
+afterEach(async () => {
+  for (const cleanup of cleanups.splice(0).toReversed()) await cleanup().catch(() => undefined);
+  for (const worker of workers.splice(0)) worker.emit("exit", 0);
 });
 
-describe("worker pool", () => {
-  it("keeps one libuv pool thread free by holding further native opens until a permit is released", async () => {
-    const { attach } = await pool();
-    attach(1, vi.fn());
-    const [worker] = workers as [FakeWorker];
+async function createPlayer(): Promise<Player> {
+  const { DiscordVoiceEngine, DiscordVoiceSession } = await import("../src");
+  const session = await DiscordVoiceSession.connect({
+    guildId: "guild",
+    channelId: CHANNEL,
+    clientUserId: "bot",
+    adapterCreator: gatewayAdapter().creator,
+    selfDeaf: true,
+    selfMute: false,
+    timeoutMs: 50,
+    channelBitrate: () => 64_000,
+    preflight: () => undefined,
+  });
+  const player = await new DiscordVoiceEngine({ opusComplexity: 10, bufferMs: 500 }).createPlayer(session, {
+    onClosed: () => undefined,
+  });
+  cleanups.push(
+    () => session.release(),
+    () => player.release(),
+  );
+  return player;
+}
+
+/** Plays a file on `player` and answers its open from the newest worker, as the real worker would. */
+async function playing(player: Player): Promise<{ worker: FakeWorker; ended: Promise<TrackEnd> }> {
+  const { promise: started, resolve } = Promise.withResolvers<void>();
+  const ended = player.play(
+    { kind: "file", path: "/dev/null" },
+    { signal: new AbortController().signal, onStart: resolve },
+  );
+  void ended.catch(() => undefined);
+  const worker = await vi.waitFor(() => {
+    const newest = workers.at(-1);
+    const open = newest?.posted.find(message => message.type === "open" && !answered.has(message.track));
+    if (!newest || open?.type !== "open") throw new Error("No open posted yet");
+    answered.add(open.track);
+    newest.send({ type: "opened", track: open.track });
+    return newest;
+  });
+  await started;
+  return { worker, ended };
+}
+
+function granted(worker: FakeWorker): number[] {
+  return worker.posted.flatMap(message => (message.type === "granted" ? [message.permit] : []));
+}
+
+describe("playback worker pool", () => {
+  it("keeps one libuv pool thread free by holding a third native open until a permit is released", async () => {
+    const { worker } = await playing(await createPlayer());
 
     worker.send({ type: "acquire", permit: 1 });
     worker.send({ type: "acquire", permit: 2 });
     worker.send({ type: "acquire", permit: 3 });
-    const whileExhausted = worker.granted();
+    const whileExhausted = granted(worker);
     worker.send({ type: "release", permit: 1 });
 
-    expect(whileExhausted).toEqual([
-      { type: "granted", permit: 1 },
-      { type: "granted", permit: 2 },
-    ]);
-    expect(worker.granted()).toContainEqual({ type: "granted", permit: 3 });
+    expect(whileExhausted).toEqual([1, 2]);
+    expect(granted(worker)).toEqual([1, 2, 3]);
   });
 
   it("drops a waiting permit that its open abandoned", async () => {
-    const { attach } = await pool();
-    attach(1, vi.fn());
-    const [worker] = workers as [FakeWorker];
+    const { worker } = await playing(await createPlayer());
     worker.send({ type: "acquire", permit: 1 });
     worker.send({ type: "acquire", permit: 2 });
     worker.send({ type: "acquire", permit: 3 });
@@ -86,72 +124,29 @@ describe("worker pool", () => {
     worker.send({ type: "release", permit: 3 });
     worker.send({ type: "release", permit: 1 });
 
-    expect(worker.granted()).not.toContainEqual({ type: "granted", permit: 3 });
+    expect(granted(worker)).toEqual([1, 2]);
   });
 
-  it("fails every track of a crashed worker exactly once with its cause, frees its permits and starts a fresh worker", async () => {
-    const { attach } = await pool();
-    const first = vi.fn();
-    const second = vi.fn();
-    attach(1, first);
-    attach(2, second);
-    const [lost] = workers as [FakeWorker];
+  it("fails the playing track with the crash cause, frees the worker's permits and plays the next track on a fresh worker", async () => {
+    const player = await createPlayer();
+    const { worker: lost, ended } = await playing(player);
     lost.send({ type: "acquire", permit: 1 });
     lost.send({ type: "acquire", permit: 2 });
 
     lost.emit("error", new Error("native crash"));
     lost.emit("exit", 1);
-    attach(3, vi.fn());
-    const fresh = workers[1] as FakeWorker;
+
+    await expect(ended).rejects.toThrow("native crash");
+    const { worker: fresh } = await playing(player);
     fresh.send({ type: "acquire", permit: 1 });
-
-    for (const [listener, track] of [
-      [first, 1],
-      [second, 2],
-    ] as const) {
-      expect(listener.mock.calls).toEqual([
-        [{ type: "failed", track, stage: "worker", error: { name: "Error", message: "native crash" } }],
-        [{ type: "closed", track }],
-      ]);
-    }
-    expect(workers).toHaveLength(2);
-    expect(fresh.granted()).toEqual([{ type: "granted", permit: 1 }]);
-  });
-
-  it("settles a Track on a lost worker and stops sending its controls there", async () => {
-    await pool();
-    const { Track } = await import("../src/track");
-    const opening = Track.open({ kind: "file", path: "/dev/null" }, PLAIN, new AbortController().signal);
-    const worker = await vi.waitFor(() => {
-      const [spawned] = workers;
-      if (!spawned) throw new Error("No worker yet");
-      return spawned;
-    });
-    await opened(worker, opening);
-    const track = await opening;
-
-    worker.emit("error", new Error("native crash"));
-    worker.emit("exit", 1);
-    const sentBefore = worker.posted.length;
-    await track.setFilters("volume=0.5");
-    track.setVolume(50);
-
-    await expect(track.outcome).resolves.toMatchObject({ type: "failed" });
-    expect(worker.posted.slice(sentBefore)).toEqual([]);
+    expect(fresh).not.toBe(lost);
+    expect(granted(fresh)).toEqual([1]);
   });
 
   it("rejects a filter change the lost worker never answered", async () => {
-    await pool();
-    const { Track } = await import("../src/track");
-    const opening = Track.open({ kind: "file", path: "/dev/null" }, PLAIN, new AbortController().signal);
-    const worker = await vi.waitFor(() => {
-      const [spawned] = workers;
-      if (!spawned) throw new Error("No worker yet");
-      return spawned;
-    });
-    await opened(worker, opening);
-    const track = await opening;
-    const applying = track.setFilters("volume=0.5");
+    const player = await createPlayer();
+    const { worker } = await playing(player);
+    const applying = player.setFilters([{ name: "bassboost" }]);
     await vi.waitFor(() => expect(worker.posted).toContainEqual(expect.objectContaining({ type: "filters" })));
 
     worker.emit("error", new Error("native crash"));

@@ -1,5 +1,6 @@
-import type { Engine, FilterDefinitionInfo, FilterEntry } from "../contracts";
-import { DisTubeError, ErrorCode } from "../errors";
+import type { Engine, FilterDefinitionInfo, FilterEntry } from "./contracts";
+import { DisTubeError, ErrorCode } from "./errors";
+import type { Connection, Guild } from "./guild";
 
 /** One selected preset as `voice.filters.entries` reports it. */
 export interface FilterSelection {
@@ -8,20 +9,19 @@ export interface FilterSelection {
   readonly label: string;
 }
 
-export type FilterChange = (entries: readonly FilterEntry[]) => readonly FilterEntry[];
-
 export const NO_FILTERS: readonly FilterEntry[] = Object.freeze([]);
 
 /** A voice's ordered filter set. Each change renders through the Player and commits once it acknowledges. */
 export class FilterManager {
   readonly #engine: Engine;
-  readonly #read: () => readonly FilterEntry[];
-  readonly #commit: (change: FilterChange) => Promise<void>;
+  readonly #guild: Pick<Guild<unknown>, "setFilters">;
+  readonly #connection: Connection;
 
-  constructor(engine: Engine, read: () => readonly FilterEntry[], commit: (change: FilterChange) => Promise<void>) {
+  /** @internal */
+  constructor(engine: Engine, guild: Pick<Guild<unknown>, "setFilters">, connection: Connection) {
     this.#engine = engine;
-    this.#read = read;
-    this.#commit = commit;
+    this.#guild = guild;
+    this.#connection = connection;
   }
 
   /** Every preset the engine renders. */
@@ -30,40 +30,40 @@ export class FilterManager {
   }
 
   get names(): readonly string[] {
-    return this.#read().map(entry => entry.name);
+    return this.#connection.entries.map(entry => entry.name);
   }
 
   get entries(): readonly FilterSelection[] {
-    return this.#read().map(entry => ({
+    return this.#connection.entries.map(entry => ({
       ...entry,
       label: this.#engine.filters.get(entry.name)?.label(entry.value) ?? entry.name,
     }));
   }
 
   has(name: string): boolean {
-    return this.#read().some(entry => entry.name === name);
+    return this.#connection.entries.some(entry => entry.name === name);
   }
 
   /** Selects a preset, replacing its value in place when already selected. An omitted value uses the preset default. */
-  set(name: string, value?: number): Promise<void> {
-    return this.#commit(entries => withEntry(entries, this.#resolve(name, value)));
+  async set(name: string, value?: number): Promise<void> {
+    const entry = this.#resolve(name, value);
+    return this.#guild.setFilters(this.#connection, entries => withEntry(entries, entry));
   }
 
   /** Removes a selected preset, otherwise behaves as `set`. */
-  toggle(name: string, value?: number): Promise<void> {
-    return this.#commit(entries =>
-      entries.some(entry => entry.name === name)
-        ? withoutEntry(entries, name)
-        : withEntry(entries, this.#resolve(name, value)),
+  async toggle(name: string, value?: number): Promise<void> {
+    const entry = this.#resolve(name, value);
+    return this.#guild.setFilters(this.#connection, entries =>
+      entries.some(existing => existing.name === name) ? withoutEntry(entries, name) : withEntry(entries, entry),
     );
   }
 
   remove(name: string): Promise<void> {
-    return this.#commit(entries => withoutEntry(entries, name));
+    return this.#guild.setFilters(this.#connection, entries => withoutEntry(entries, name));
   }
 
   clear(): Promise<void> {
-    return this.#commit(() => NO_FILTERS);
+    return this.#guild.setFilters(this.#connection, () => NO_FILTERS);
   }
 
   #resolve(name: string, value: number | undefined): FilterEntry {

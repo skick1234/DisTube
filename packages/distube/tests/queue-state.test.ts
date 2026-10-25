@@ -1,9 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { Song } from "../src";
-import { RepeatMode } from "../src/enums";
-import { QueueItem } from "../src/media";
+import { type QueueItem, queueItem } from "../src/media";
 import {
-  clearQueue,
   clearUpcoming,
   failFirst,
   finishCurrent,
@@ -16,11 +14,9 @@ import {
   type QueueState,
   removeItem,
   removeRange,
-  setAutoplay,
-  setRepeat,
   shuffle,
   startFirst,
-} from "../src/queue/state";
+} from "../src/queue-state";
 
 const song = new Song({
   id: "song",
@@ -29,7 +25,7 @@ const song = new Song({
   duration: 1,
   source: "source",
 });
-const item = () => new QueueItem({ song });
+const item = (): QueueItem => queueItem(song);
 const ids = (items: readonly QueueItem[]): string[] => items.map(entry => entry.id);
 
 /** A playing state: the first item is current, the rest wait. */
@@ -161,33 +157,5 @@ describe("history and settings", () => {
     expect(popped?.item).toBe(b);
     expect(ids(popped?.state.history ?? [])).toEqual(ids([a]));
     expect(popHistory(IDLE_QUEUE_STATE)).toBeUndefined();
-  });
-
-  it("changes scheduling settings without mutating identity, and keeps no-ops identical", () => {
-    const a = item();
-    const started = playing([a]);
-    const repeating = setRepeat(started, RepeatMode.Queue);
-    expect(repeating.current).toBe(a);
-    expect(repeating.current?.song).toBe(song);
-    expect(Object.isFrozen(repeating)).toBe(true);
-    expect(setRepeat(started, RepeatMode.Off)).toBe(started);
-    expect(setRepeat(started, RepeatMode.Song).repeat).toBe("song");
-    expect(setAutoplay(started, false)).toBe(started);
-    expect(setAutoplay(started, true).autoplay).toBe(true);
-  });
-
-  it("clears every schedule value terminally", () => {
-    const a = item();
-    const busy = setAutoplay(setRepeat(pushHistory(playing([a, item()]), item(), 5), RepeatMode.Queue), true);
-    expect(clearQueue(busy)).toBe(IDLE_QUEUE_STATE);
-    expect(clearQueue(IDLE_QUEUE_STATE)).toBe(IDLE_QUEUE_STATE);
-    expect(IDLE_QUEUE_STATE).toEqual({
-      current: undefined,
-      upcoming: [],
-      history: [],
-      status: "idle",
-      repeat: "off",
-      autoplay: false,
-    });
   });
 });

@@ -15,14 +15,14 @@ Pass `{ next: true }` to insert at the front of `upcoming`, or `{ at }` for a ze
 
 Registration is synchronous. The queue is idle with no items until the insertion commits. `queue.created` does not
 mean the request succeeded. If the first insertion fails, the queue is deleted with `queue.deleted` reason
-`failed`. Stop prevents that request's late result from entering a replacement queue.
+`failed`. `queue.stop()` prevents that request's late result from entering a replacement queue.
 
 ## How do I search or autocomplete?
 
 Pass a query to `play`, `queue.add` or `distube.resolve` and core takes the first plugin that answers, in `plugins`
 order. To show choices, call `distube.search(query, { source: youtube, limit: 5 })` with the plugin instance you
 configured. Results are typed by that plugin's `pluginData`. For slash-command autocomplete call
-`distube.getSuggestions(query, youtube)`. A query no plugin answers rejects `NO_RESULT`.
+`distube.suggest(query, { source: youtube })`. A query no plugin answers rejects `NO_RESULT`.
 
 ## Why is a provider URI treated as a query?
 
@@ -38,8 +38,8 @@ selfMute })`.
 
 ## Which settings survive queue deletion?
 
-Volume, bitrate, filters, self-deaf and self-mute live on `DisTubeVoice` and last until `voice.leave()` or
-`distube.voices.leave(guildId)`. Change them with `voice.setVolume`, `voice.setBitrate`, `voice.filters.set(name,
+Volume, filters, self-deaf and self-mute live on `DisTubeVoice` and last until `voice.leave()` or
+`distube.voices.leave(guildId)`. Change them with `voice.setVolume`, `voice.filters.set(name,
 value?)`, `voice.setSelfDeaf` and `voice.setSelfMute`. Repeat, autoplay and history live on the queue and go with
 it. To clear filters when a queue ends, call `voice.filters.clear()` from a `queue.deleted` listener.
 
@@ -51,8 +51,7 @@ it. To clear filters when a queue ends, call `voice.filters.clear()` from a `que
 
 ## What deletes a queue?
 
-Stop, running out of items, a failed first insertion, voice leave, a lost voice session, a direct `voice.play`
-that replaces the queue's track, and `distube.dispose()`. The `reason` on `queue.deleted` says which. Stop and
+Stop, running out of items, a failed first insertion, voice leave, a lost voice session and `distube.dispose()`. The `reason` on `queue.deleted` says which. Stop and
 running out of items keep the voice connected.
 
 ## How do I go back or jump?
@@ -61,11 +60,32 @@ running out of items keep the voice connected.
 the front of `upcoming`. `queue.jump(3)` starts the third waiting item. Pass `{ requeue: true }` to keep the
 skipped items at the tail instead of sending them to history. History holds `historySize` items (default 10).
 
-## Can the bot play a sound without a queue?
+## Can the bot play a sound between songs?
 
-Yes. `const voice = await distube.voices.join(channel)`, then `await voice.play({ kind: "file", path })`. The
-promise resolves with `{ reason }` when the track ends. If a queue is playing on that voice, the clip replaces the
-track and the queue is deleted with reason `replaced`.
+Yes, as the next item. Music does not mix with the clip. Write a plugin with a `stream` method that maps a clip ID to a fresh file or stream resource, then call
+`distube.play(channel, clipSong, { next: true })`. The clip is a Song at the front of `upcoming`; when music is playing, call `queue.skip()`
+to start it at once, and do not skip an idle queue. See [clips](../direct-inputs/).
+
+## How do I pause or seek?
+
+`await queue.pause()`, `await queue.resume()` and `await queue.seek(seconds)`. A pause ends with its item, so the
+next item starts unpaused. Seeking a `url` or `stream` resource rejects `UNSUPPORTED`.
+
+## How do I limit playlist size?
+
+Set `maxPlaylistSongs` (default 500). Core and the official plugins keep the first N Songs of a Playlist resolved from a URL and do not
+reject a longer one. A Playlist you pass to `play` or `add` is not cut.
+
+## Can the bot join a stage channel?
+
+Yes. The bot joins suppressed and a user promotes it to speaker. DisTube checks Connect but not Speak for a stage
+channel, so the join succeeds without it. Audio is heard once the bot is promoted, which keeps the same voice
+connection.
+
+## Why did the bot leave on its own?
+
+A voice with no queue leaves after `idleTimeoutMs` (default 300000) and publishes `voice.disconnected`
+with reason `idle`. Set `idleTimeoutMs: 0` for a bot that stays.
 
 ## Which package handles voice?
 

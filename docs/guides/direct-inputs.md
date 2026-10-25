@@ -1,91 +1,91 @@
 ---
-title: Direct playback inputs
-description: Play files, URLs and streams directly on a voice, and what ends a track.
+title: Clips and playback resources
+description: Play application-owned clips as Songs, and the resource shapes a plugin returns from stream.
 sidebar:
   order: 4
 ---
 
-Music commands use `const queue = await distube.play(channel, query)` and queue controls. Direct playback suits an
-application-owned clip or audio the bot generates. Join a voice without a queue, then call `voice.play`.
+Every track plays through the guild queue. A sound clip is a Song whose plugin has only a `stream` method. The
+plugin maps the clip ID to a fresh resource each time core asks for it.
 
 ```ts
 import { createReadStream } from "node:fs";
 import { resolve } from "node:path";
-import type { DisTube, VoiceChannelTarget } from "distube";
-import type { PlaybackResource } from "distube/integrations";
+import { DisTube, Song } from "distube";
+import type { VoiceChannelTarget } from "distube";
+import type { Adapter, Plugin } from "distube/integrations";
 
-declare const distube: DisTube;
+declare const adapter: Adapter;
 declare const channel: VoiceChannelTarget;
-declare const accessToken: string;
+declare const music: Plugin;
 
-const voice = await distube.voices.join(channel);
-const clipPath = resolve("clips/welcome.mp3");
-
-const end = await voice.play({ kind: "file", path: clipPath }, { onStart: () => console.log("audible") });
-console.log(end.reason);
-
-const authenticated: PlaybackResource = {
-  kind: "url",
-  url: "https://audio.example/private.mp3",
-  headers: { Authorization: `Bearer ${accessToken}` },
-  seekable: true,
+const clips: Plugin = {
+  name: "clips",
+  async stream(song) {
+    const path = resolve("clips", `${song.id}.mp3`);
+    return song.id === "live" ? { kind: "stream", stream: createReadStream(path) } : { kind: "file", path };
+  },
 };
-await voice.play(authenticated, { signal: AbortSignal.timeout(30_000) });
 
-await voice.play({ kind: "stream", stream: createReadStream(clipPath) });
-await voice.leave();
+const distube = new DisTube({ adapter, plugins: [music, clips] });
+
+const welcome = new Song({ source: "clips", id: "welcome", name: "Welcome", url: "https://bot.example/clips/welcome" });
+const wasPlaying = distube.getQueue(channel.guildId)?.current !== undefined;
+const queue = await distube.play(channel, welcome, { next: true });
+if (wasPlaying) await queue.skip();
 ```
 
-`voice.play(resource, { signal?, onStart? })` returns a promise that settles when the track ends.
+`distube.play(channel, song, { next: true })` joins the channel, creates the queue if there is none and inserts the
+clip at the front of `upcoming`. Without a `skip`, the clip starts when the current item ends. When music is playing, `queue.skip()` moves the
+current item to history and starts the clip at once. Skip only in that case: in an idle queue the clip is already
+the current item, and a skip would drop it. The clip is a normal queue item, so `queue.item.started`,
+`queue.item.finished` and `queue.item.failed` describe it, and `queue.add(clip, { next: true })` does the same on a
+queue you already hold.
 
-| Result                   | Meaning                                                        |
-| ------------------------ | -------------------------------------------------------------- |
-| `{ reason: "finished" }` | The media played to its end.                                   |
-| `{ reason: "stopped" }`  | `voice.stop()`, or the signal aborted after the track started. |
-| `{ reason: "replaced" }` | Another `voice.play` replaced this track.                      |
-| Rejection `ABORTED`      | The signal aborted before the track started.                   |
-| Rejection `VOICE_FAILED` | The Player failed, or the session was lost.                    |
+A Song needs `source`, `id`, `name` and `url`. Core only passes a Song to the plugin named by its `source`. A path
+passed to `distube.play` as a string is a search query, not a file, so build the Song yourself. Keep private paths
+and credentials out of Song fields, `pluginData` and events.
 
-The last writer wins. A second `voice.play` ends the first call as `replaced` before the new track starts. If a
-queue was driving the voice, the queue is deleted with `queue.deleted` reason `replaced`, so a clip never gets cut
-off by the queue. Queue `skip`, `jump` and `previous` stop only the track the queue started.
+To stop the clip and everything after it, `await queue.stop()`. A track ends as `finished` when the media plays to
+its end. A failed preparation or playback publishes `queue.item.failed` and the queue moves on.
 
-A path passed to `distube.play` is a search query, not a file. To queue clips, write a small plugin that maps clip
-IDs to fresh resources in `stream`. Keep private paths and credentials out of Song fields, `pluginData` and events.
+## Resources
+
+`stream(song, { signal })` returns a `PlaybackResource`. It is a plain object whose `kind` selects the shape.
 
 | Kind      | Required data                                                    | Seekable                   |
 | --------- | ---------------------------------------------------------------- | -------------------------- |
-| `url`     | Absolute HTTP(S) `url`; optional `headers`                       | Only with `seekable: true` |
+| `url`     | Public absolute HTTP(S) `url`, fetched without headers           | Never                      |
 | `file`    | Absolute `path`                                                  | Yes                        |
 | `stream`  | Node `Readable` in `stream`                                      | Never; one shot            |
 | `reader`  | `size`, `container`, and `read(start, end, signal)`              | Yes                        |
 | `timed`   | `container`, and `open(seconds, signal)`                         | Yes                        |
 | `encoded` | `format` and `encoded`, playable only by the engine that made it | Only with `seekable: true` |
 
-The resource union is exported as types from `distube/integrations`. Resources are plain objects. `voice.seek(seconds)` on a started track
-rejects `UNSUPPORTED` when the active resource cannot seek or the engine cannot, and `INVALID_ARGUMENT` for a
-negative or non-finite value. A Player rejects a kind it cannot play with `UNSUPPORTED`, and the built-in engine
-does not play `encoded` resources.
+The resource union is exported as types from `distube/integrations`. Authenticated or seekable HTTP media is a
+`reader` or `timed` resource. `queue.seek(seconds)` on a started item rejects `UNSUPPORTED` when the resource or the
+engine cannot seek, and `INVALID_ARGUMENT` for a negative or non-finite value. A Player rejects a kind it cannot
+play with `UNSUPPORTED`, and the built-in engine does not play `encoded` resources.
+
+A queue also rejects a seek beyond a known Song duration with `INVALID_ARGUMENT`. A missing duration does not
+block a seek.
 
 ## Ownership
 
-Create a new resource for every `voice.play`. A readable is single-use. `voice.play` disposes the resource once
-the Player stops reading it: it calls the optional `dispose()`, and a `replaced` call settles without waiting for
-that disposal. Files and plain URL values need no disposer. Supply `dispose` for extra owned state, such as a
-temporary file. A failing disposer is reported through `onDiagnostic`.
+Return a new resource from every `stream` call. A readable is single-use. Core disposes the resource exactly once,
+after the track ends or when it drops a prepared item before playback, by calling the optional `dispose()`. Files
+and plain URL values need no disposer. Supply `dispose` for extra owned state, such as a temporary file. A failing
+disposer is reported through `onDiagnostic`.
 
 ## Built-in engine
 
 The built-in engine plays `url`, `file`, `stream`, `reader` and `timed` resources. Its read-ahead and Opus settings
-come from the `engine` option, see the [guide](../guide/#options). Streams and non-seekable URLs reject `seek` with
+come from the `engine` option, see the [guide](../guide/#options). Streams and URLs reject `seek` with
 `UNSUPPORTED` before they change playback.
-
-A queue also rejects a seek beyond a known Song duration with `INVALID_ARGUMENT`. A missing duration does not
-block a seek.
 
 ## Remote playback
 
 Put an engine plugin such as Lavalink in `plugins`. The adapter keeps the gateway session and passes its
 credentials to the engine, and the built-in engine is not created. Such an engine prepares each Song itself,
-usually as an `encoded` resource, so direct `voice.play` of `file` and `stream` resources works only if that engine
-supports them. An operation it cannot perform rejects `UNSUPPORTED`. See the [Lavalink page](../../plugins/lavalink/).
+usually as an `encoded` resource, so a clip plugin's `stream` is never called for it. An operation the engine cannot
+perform rejects `UNSUPPORTED`. See the [Lavalink page](../../plugins/lavalink/).

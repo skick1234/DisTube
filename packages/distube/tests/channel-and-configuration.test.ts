@@ -46,7 +46,7 @@ describe("adapter target normalization", () => {
     const voice = await harness.distube.voices.join(native);
     expect(harness.adapter.createVoiceSession).toHaveBeenCalledWith(
       { guildId: GUILD, channelId: VOICE_CHANNEL },
-      { selfDeaf: true, selfMute: false, timeoutMs: 15_000 },
+      { selfDeaf: true, selfMute: false, timeoutMs: 15_000, signal: expect.any(AbortSignal) },
     );
     const queue = await harness.distube.play(native, "a");
     expect(queue.guildId).toBe(GUILD);

@@ -11,7 +11,9 @@ An `Adapter<Target>` owns one platform's voice gateway presence. It has three me
   synchronous. Throw to refuse a target, such as one with conflicting guild IDs. The caller gets
   `INVALID_ARGUMENT` with your error as `cause`.
 - `createVoiceSession(target, options)` returns the guild's `VoiceSession`, joined to the channel with
-  `options: { selfDeaf, selfMute, timeoutMs }`.
+  `options: { selfDeaf, selfMute, timeoutMs, signal? }`. When `signal` aborts because `voices.leave` or `dispose`
+  superseded the join, reject `ABORTED` promptly and release what you created, including when the abort lands in
+  the acknowledgement tick.
 - `createEngine(settings)` returns the built-in `Engine`. `settings` is `{ filters?, opusComplexity, bufferMs }`
   from `DisTubeOptions`. Core calls it unless a plugin carries an engine.
 
@@ -42,19 +44,27 @@ A `VoiceSession` exposes:
 
 - `guildId`, `clientUserId` and the occupied `channelId`.
 - `bitrate`, the channel bitrate in bits per second. The built-in engine encodes at the lower of the source
-  bitrate and `voice.setBitrate`'s value, or this value when the bitrate is `"auto"`.
+  bitrate and this value.
 - `gateway`, the current credentials `{ channelId, sessionId, token, endpoint }`, or `undefined` until the first
   connection settles. They carry no native objects.
 - `selfDeaf` and `selfMute`.
-- `join(channelId, options?)`, which moves the bot or changes `selfDeaf` and `selfMute` and resolves after the
-  platform acknowledges. An omitted flag keeps its current value. Core routes the voice's self-deaf, self-mute and
-  move changes through it.
-- `release()`. Overlapping callers share one teardown.
+- `join(channelId, options?)`, which joins or moves the bot and resolves after the platform acknowledges. An omitted
+  flag keeps its current value.
+- `setSelfState({ selfDeaf?, selfMute? })`, which writes only the flags, in the channel the session holds when the
+  write runs, and resolves after the acknowledgement. It rebuilds nothing and publishes no `connected`. Core routes
+  `voice.setSelfDeaf` and `voice.setSelfMute` through it and never through `join`.
+- `voiceClosed(code)`, which an engine with its own voice socket calls with the Discord close code. The session
+  applies its own policy and ignores the call once `release` started.
+- `rejoin()`, which leaves and rejoins the current channel and resolves after `connected` with fresh credentials.
+- `release()`. Overlapping callers share one teardown, and a later `join`, `setSelfState` or `rejoin` rejects.
 - `subscribe(listener)`, which returns an unsubscribe function.
 
-Recoverable connection changes are your recovery policy. Publish `{ type: "disconnected" }` once, when that policy
+`join`, `setSelfState`, `rejoin` and `release` run one at a time in call order.
+
+Recovery is bounded. Close codes 4006 and 4009 rejoin the current channel, at most 3 times in any 60 s window per
+guild. Codes 4004, 4011, 4016, 4017, 4021 and 4022 end the voice at once without spending the budget. Publish `{ type: "disconnected" }` once, when that policy
 is spent, and republish `{ type: "connected", channelId, gateway }` whenever the credentials change. Only the
-terminal disconnect reaches core. It rejects the active `voice.play` with `VOICE_FAILED`, deletes the queue with
+terminal disconnect reaches core. It fails the current item with `VOICE_FAILED`, deletes the queue with
 reason `voice-loss` and publishes `voice.disconnected`. A platform rejection of a voice-state update surfaces as
 `VOICE_FAILED` with no native object, token or endpoint in the cause chain.
 
@@ -63,29 +73,34 @@ resolve providers, change queue state or send bot messages.
 
 ## Engine and Player
 
-An `Engine` has `filters`, `createPlayer(session)` and an optional `prepare(song, context)`.
+An `Engine` has `filters`, `createPlayer(session, { onClosed })` and an optional `prepare(song, { signal })`.
 
 - `filters` is a `ReadonlyMap<string, FilterDefinitionInfo>` describing every preset the engine renders. Entries
   carry `default`, `min`, `max`, `acceptsValue` and `label(value?)`. Core validates names and clamps values with
   it, and exposes it as `voice.filters.definitions`.
 - `prepare` is for engines that replace core's preparation. When present, core calls it for every Song instead of
-  the owning plugin's `stream`. `context` is `{ signal, stream? }`, where `stream` calls the owning plugin on
-  demand and is absent when the engine's own plugin owns the Song.
+  any plugin's `stream`. It receives `{ signal }` only, so an engine that wants a source plugin's media searches
+  or loads it itself.
 
 `createPlayer` runs lazily on the first track of a voice. The Player lives as long as the voice, and only
-`DisTubeVoice` creates and releases it. A Player implements:
+core's per-guild owner creates and releases it. A Player implements:
 
 - `position`, the elapsed seconds of the active track, or `0`.
 - `play(resource, { signal, onStart })`, which plays the resource, replaces any current track and settles with a
-  `TrackEnd` when the track ends. Call `onStart` once when audio starts. When `signal` aborts, end the track as
+  `TrackEnd` when the track ends. A new track starts unpaused whatever the previous track's pause. Call `onStart` once when audio starts. When `signal` aborts, end the track as
   `stopped`.
 - `pause`, `resume`, `seek`, `setVolume(percent)`, `stopTrack` and `release`.
 - `setFilters(entries)`, which renders the ordered `{ name, value? }` entries as one change. An empty list clears
   them.
-- Optional `setBitrate(bitrate)` and `updateVoiceGateway(gateway)`. `bitrate` is bits per second, or `undefined` to
-  follow `session.bitrate`. Without `setBitrate`, `voice.setBitrate(number)` rejects `UNSUPPORTED`.
+- Optional `updateVoiceGateway(gateway)`.
+- `release`, the single teardown. Concurrent, repeated and post-close calls settle from it, and a later `play` or
+  control rejects.
 
-A Player cannot dispose the resource it plays. `DisTubeVoice` does that after the Player stops reading it. The
+When the Player closes itself, for example on a lost socket, call `onClosed(error)` once, no later than the tick in
+which you reject the pending `play`. A queue starts its next item as soon as that rejection settles, so core
+must drop the dead Player first. The Player rejects its pending `play` and every later call except `release`. Never
+call `onClosed` for `release`.
+A Player cannot dispose the resource it plays. Core does that after the Player stops reading it. The
 Player owns every native audio object, listener and timer it creates. An operation the backend cannot perform
 rejects with `DisTubeError(ErrorCode.UNSUPPORTED, message)`. Core reports any other rejection as `VOICE_FAILED`.
 
@@ -122,7 +137,7 @@ const engine: Engine = {
     ["bassboost", { default: 10, min: 0, max: 20, acceptsValue: true, label: value => `Bass +${value ?? 10}dB` }],
     ["earwax", { acceptsValue: false, label: () => "earwax" }],
   ]),
-  createPlayer: async () => player,
+  createPlayer: async (_session, _options) => player,
 };
 void engine;
 ```
@@ -140,10 +155,10 @@ the voice session and hands its gateway credentials to the engine's Players thro
 
 ## Ownership
 
-Queue deletion stops the track and detaches the queue. It does not touch filters, volume, bitrate, self-deaf or
+Queue deletion stops the track and detaches the queue. It does not touch filters, volume, self-deaf or
 self-mute, and it does not release the Player. `Player.release` runs when the voice leaves, before
 `VoiceSession.release`. A later queue cannot reuse either.
 
 Adapter packages import `Adapter`, `Engine`, `EngineSettings`, `FilterDefinitionInfo`, `Player`, `TrackOptions`,
-`TrackEnd`, `VoiceSession`, `VoiceSessionOptions` and `VoiceTarget` as types from `distube/integrations`. Official
+`PlayerOptions`, `TrackEnd`, `VoiceSession`, `VoiceSessionOptions` and `VoiceTarget` as types from `distube/integrations`. Official
 adapters export one class each and take the platform client as their only argument.

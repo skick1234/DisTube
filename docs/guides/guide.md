@@ -28,16 +28,18 @@ console.log(queue === registered);
 
 ## Options
 
-| Option                  | Default  | Meaning                                                                                                 |
-| ----------------------- | -------- | ------------------------------------------------------------------------------------------------------- |
-| `adapter`               | none     | The platform Adapter. Required.                                                                         |
-| `plugins`               | none     | Ordered array of sources. At most one may carry an `engine`, which replaces the built-in one. Required. |
-| `historySize`           | 10       | Ended items each queue remembers. `0` disables history.                                                 |
-| `filters`               | built-in | Filter presets merged over the built-in engine's. Ignored when an engine plugin is configured.          |
-| `connectionTimeoutMs`   | 15000    | How long a voice join waits.                                                                            |
-| `onDiagnostic`          | none     | Receives listener failures and plugin diagnostics.                                                      |
-| `engine.opusComplexity` | 10       | Opus encoder complexity, 0 to 10. Lower uses less CPU.                                                  |
-| `engine.bufferMs`       | 500      | Read-ahead in milliseconds, a positive multiple of 20.                                                  |
+| Option                  | Default  | Meaning                                                                                                  |
+| ----------------------- | -------- | -------------------------------------------------------------------------------------------------------- |
+| `adapter`               | none     | The platform Adapter. Required.                                                                          |
+| `plugins`               | none     | Ordered array of sources. At most one may carry an `engine`, which replaces the built-in one. Required.  |
+| `maxPlaylistSongs`      | 500      | Songs kept from a Playlist resolved from a URL. Core and official plugins truncate instead of rejecting. |
+| `historySize`           | 10       | Ended items each queue remembers. `0` disables history.                                                  |
+| `filters`               | built-in | Filter presets merged over the built-in engine's. Ignored when an engine plugin is configured.           |
+| `connectionTimeoutMs`   | 15000    | How long a voice join waits.                                                                             |
+| `idleTimeoutMs`         | 300000   | How long a voice may sit with no queue before it leaves. `0` never leaves.                               |
+| `onDiagnostic`          | none     | Receives listener failures and plugin diagnostics.                                                       |
+| `engine.opusComplexity` | 10       | Opus encoder complexity, 0 to 10. Lower uses less CPU.                                                   |
+| `engine.bufferMs`       | 500      | Read-ahead in milliseconds, a positive multiple of 20.                                                   |
 
 `bufferMs` is added latency. The engine keeps `bufferMs / 20` packets ahead, so a volume or filter change becomes
 audible up to `bufferMs` later. The `engine` section configures the built-in engine only. An invalid option rejects
@@ -67,9 +69,13 @@ rejects `INVALID_ARGUMENT`. A Playlist inserts its Songs contiguously.
 ## Queue controls
 
 `DisTubeQueue` exposes readonly `current`, `upcoming`, `history`, `status` (`idle`, `playing` or `paused`),
-`repeat`, `autoplay`, `position` (elapsed seconds, zero without a current item) and `voice`. `pause`, `resume`
-and `seek` forward to the voice. `status` follows the voice's paused state, including a direct `voice.pause()`.
-`skip` ends the current item and moves to the next without applying song repeat.
+`repeat`, `autoplay`, `paused`, `position` (elapsed seconds, zero without a started item) and `voice`.
+
+- `pause()` and `resume()` commit once the Player acknowledges and are idempotent. A pause ends with its item, so
+  the next item starts unpaused.
+- `seek(seconds)` moves within the current item. It rejects `UNSUPPORTED` for a `url` or `stream` resource or an
+  engine that cannot seek, and `INVALID_ARGUMENT` for a negative value or one past a known duration.
+- `skip()` ends the current item and moves to the next without applying song repeat.
 
 - `jump(target, { requeue? })` takes a waiting item ID or a one-based position in `upcoming`. Without `requeue`
   the current item and everything before the target go to history. With it they are appended to the tail.
@@ -77,42 +83,42 @@ and `seek` forward to the voice. `status` follows the voice's paused state, incl
   occurrence of the newest history Song.
 - `shuffle()` reorders `upcoming` and never touches the current item.
 - `clear()` empties `upcoming`. The current item keeps playing.
-- `remove(target)` accepts an item ID, a one-based position or an inclusive range `{ from, to }`, and resolves with
-  the removed items.
+- `remove(target)` accepts an item ID, a one-based position or an inclusive range `{ from, to }`, and returns the
+  removed items.
 - `move(itemId, beforeItemId?)` moves a waiting item before another one, or to the tail when the destination is
   omitted.
-- `addRelated()` appends one related occurrence of the current or most recent Song and resolves with it.
 
-Positions resolve when the edit commits, so a concurrent insert cannot make a positional remove delete the wrong
-item. Malformed values reject `INVALID_ARGUMENT`. Current, stale and non-waiting IDs or positions reject
-`INVALID_STATE`.
+`remove`, `move`, `shuffle`, `clear`, `setRepeat` and `setAutoplay` are synchronous and take effect before they
+return. `add` and `play` are the asynchronous edits. The synchronous edits throw `INVALID_ARGUMENT` for malformed values and `INVALID_STATE` for current, stale or
+non-waiting IDs or positions. A Playlist passed directly to `play` or `add` is not cut by `maxPlaylistSongs`.
 
 `setRepeat("off" | "song" | "queue")` and `setAutoplay(boolean)` belong to the queue and reset with it. Autoplay
 asks the owning plugin's `related` for a Song that follows the item that last finished or was skipped, and passes
 the history as an exclusion list. A failure publishes `queue.autoplay.failed`.
 
 `history` holds the most recently finished or skipped items, newest last, bounded by `historySize`. An item skipped
-while it was still preparing never played and does not enter history. Failed items never enter it. Every append
-publishes `queue.history.added`.
+while it was still preparing never played and does not enter history. Failed items never enter it. Read
+`queue.history` after `queue.item.finished`.
 
-`stop()` unregisters and deletes the queue immediately, publishes `queue.deleted` with reason `stop`, then stops
-the voice's track. Other controls on a deleted queue reject `INVALID_STATE`. A later `play` registers a fresh queue
+Each `QueueItem` has `id`, `song`, `metadata` and `addedAt`, the creation time in epoch milliseconds.
+
+`stop()` unregisters and deletes the queue immediately, publishes `queue.deleted` with reason `stop` and keeps the
+voice with its settings. Other controls on a deleted queue reject `INVALID_STATE`. A later `play` registers a fresh queue
 over the same voice.
 
 ## Voice
 
-Get a `DisTubeVoice` through `queue.voice` or `distube.voices.get(guildId)`, or join without a queue with
+`DisTubeVoice` holds the connection and its settings and plays nothing. Get one through `queue.voice` or
+`distube.voices.get(guildId)`, or join without a queue with
 `await distube.voices.join(channel, { selfDeaf?, selfMute?, signal? })`. The join options apply when the join
 creates the connection (self-deaf defaults to on, self-mute to off). Read the live `channelId`, `volume`,
-`bitrate`, `selfDeaf`, `selfMute`, `paused`, `position` and `filters`. Use `voice.move(channel)` for a move within
+`selfDeaf`, `selfMute` and `filters`. Use `voice.move(channel)` for a move within
 the guild. `voice.leave()` and `distube.voices.leave(guildId)` delete the attached queue, release the Player and
 the session, and publish `voice.disconnected` with reason `left`. Both are idempotent.
 
 - `setVolume(percent)` takes a finite number from 0 to 100. The default is 100.
-- `setBitrate(bps | "auto")` takes an integer from 6000 to 510000, or `"auto"` to follow the channel's bitrate
-  (the default). A value set before the first track applies when the Player starts. An engine that cannot change
-  bitrate rejects a number with `UNSUPPORTED`.
-- `setSelfDeaf(enabled)` and `setSelfMute(enabled)` update the bot's voice state.
+- `setSelfDeaf(enabled)` and `setSelfMute(enabled)` update the bot's voice state without rejoining. The encoder
+  follows the channel's bitrate.
 - `filters` is a manager with `set(name, value?)`, `toggle(name, value?)`, `remove(name)`, `clear()`, `has(name)`,
   `names`, `entries` (`{ name, value?, label }`) and `definitions` (`{ default, min, max, acceptsValue, label() }`
   per preset). A ranged preset clamps its value. A fixed preset rejects one with `INVALID_ARGUMENT`. A preset the
@@ -122,13 +128,12 @@ The built-in presets are `3d`, `bassboost`, `earwax`, `echo`, `flanger`, `gate`,
 `nightcore`, `phaser`, `surround`, `tremolo` and `vaporwave`. Add or override presets with the top-level `filters`
 option.
 
-The voice can play on its own: `await voice.play(resource, { signal?, onStart? })` resolves with
-`{ reason: "finished" | "stopped" | "replaced" }` when the track ends. See [direct inputs](../direct-inputs/).
-`stop()`, `pause()`, `resume()` and `seek(seconds)` act on the active track. A new `play` replaces the current
-track, whether it came from the queue or from your code (last writer wins).
+Only the queue starts a track, so a guild has one playback owner. To play a clip over music, add a Song from a
+stream-only plugin with `distube.play(channel, clip, { next: true })`. See [clips](../direct-inputs/).
 
-Volume, bitrate, filters, self-deaf and self-mute stay on the voice when a queue is deleted. `voices.leave(guildId)`
-releases the voice and those settings, and a later connection starts with defaults. To clear filters when a queue
+Volume, filters, self-deaf and self-mute stay on the voice when a queue is deleted. `voices.leave(guildId)`
+releases the voice and those settings, and a later connection starts with defaults. A voice with no
+queue leaves after `idleTimeoutMs` with `voice.disconnected` reason `idle`. To clear filters when a queue
 ends, call `voice.filters.clear()` from a `queue.deleted` listener.
 
 ## Search and suggestions
@@ -136,8 +141,8 @@ ends, call `voice.filters.clear()` from a `queue.deleted` listener.
 `distube.search(query, { source?, limit?, offset?, signal? })` returns ranked Songs. The defaults are limit 10 and
 offset 0, and an offset past the available results returns an empty list. With `source` set to a configured plugin
 instance it searches only that plugin and types `pluginData` by it. Without it, plugins are consulted in order and
-the first non-empty result wins. `distube.getSuggestions(query, source?)` returns up to 25 completions from the
-named plugin or the first one that answers. A plugin instance that is not configured on this client rejects
+the first non-empty result wins. `distube.suggest(query, { source?, signal? })` returns up to 25 completions from
+the named plugin or the first one that answers. A plugin instance that is not configured on this client rejects
 `INVALID_ARGUMENT`. Plugin errors propagate.
 
 ## Metadata, events and teardown

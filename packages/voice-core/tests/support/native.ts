@@ -12,8 +12,16 @@ export const GATEWAY = { channelId: "channel", sessionId: "session", token: "tok
 
 export const CHANNEL = "channel";
 
-/** The platform gateway half, shared by remote-only and late local-transport tests. */
-export function gatewayAdapter(userId = "bot"): {
+/**
+ * The platform gateway half, shared by remote-only and late local-transport tests.
+ *
+ * Like Discord, it answers a write that changes only the self flags with a voice state update alone, and
+ * any other join with both packets.
+ */
+export function gatewayAdapter(
+  userId = "bot",
+  endpoint = GATEWAY.endpoint,
+): {
   readonly creator: DiscordGatewayAdapterCreator;
   readonly sendPayload: ReturnType<typeof vi.fn>;
   readonly destroy: ReturnType<typeof vi.fn>;
@@ -31,17 +39,24 @@ export function gatewayAdapter(userId = "bot"): {
       self_mute: selfMute,
     } as Parameters<DiscordGatewayAdapterLibraryMethods["onVoiceStateUpdate"]>[0]);
   };
-  const server = (token = GATEWAY.token, endpoint: string | null = GATEWAY.endpoint): void => {
-    methods?.onVoiceServerUpdate({ guild_id: "guild", token, endpoint });
+  const server = (token = GATEWAY.token, at: string | null = endpoint): void => {
+    methods?.onVoiceServerUpdate({ guild_id: "guild", token, endpoint: at });
   };
+  let joined: { channelId: string; selfDeaf?: boolean; selfMute?: boolean } | undefined;
   const sendPayload = vi.fn(
     (payload: { d?: { channel_id?: string | null; self_deaf?: boolean; self_mute?: boolean } }) => {
       const channelId = payload.d?.channel_id;
-      if (channelId)
+      if (channelId) {
+        const selfDeaf = payload.d?.self_deaf;
+        const selfMute = payload.d?.self_mute;
+        const flagsOnly =
+          joined?.channelId === channelId && (joined.selfDeaf !== selfDeaf || joined.selfMute !== selfMute);
+        joined = { channelId, selfDeaf, selfMute };
         queueMicrotask(() => {
-          state(channelId, GATEWAY.sessionId, payload.d?.self_deaf, payload.d?.self_mute);
-          server();
+          state(channelId, GATEWAY.sessionId, selfDeaf, selfMute);
+          if (!flagsOnly) server();
         });
+      }
       return true;
     },
   );

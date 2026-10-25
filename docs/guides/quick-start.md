@@ -34,7 +34,7 @@ const voice = queue.voice;
 await voice?.setVolume(80);
 await voice?.filters.set("bassboost", 15);
 
-const suggestions = await distube.getSuggestions("lo", youtube);
+const suggestions = await distube.suggest("lo", { source: youtube });
 const results = await distube.search("lofi", { source: youtube, limit: 5 });
 console.log(suggestions[0], results[0]?.pluginData.views);
 
@@ -43,13 +43,16 @@ stopErrors();
 await distube.dispose();
 ```
 
+On Oceanic, use `new OceanicAdapter(client)` from `@distube/oceanic` with an Oceanic `Client` and channel; the rest is
+the same. [Installation](../installation/) shows both setups.
+
 `play` registers the guild queue before it returns, then resolves the media, joins or reuses the voice and inserts
 the result. The returned promise settles after the insertion. Playback starts or fails later and reports through
 `queue.item.started` and `queue.item.failed`. A failed first insertion deletes its empty queue with
 `queue.deleted` reason `failed`.
 
-A Spotify Song keeps its Spotify URL as identity. To play it, core searches the other plugins in order, for example
-YouTube then SoundCloud.
+A Spotify Song keeps its Spotify URL as identity. Spotify cannot stream, so core searches the other plugins in order for
+the track name and artists and plays the first result.
 
 The example bot in the `example` repository shows Discord replies, queue lookup, events and error
 handling, one command per file.

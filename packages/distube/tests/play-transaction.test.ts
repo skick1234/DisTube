@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { Playlist, type Song } from "../src";
+import { type DisTubeError, Playlist, type Song } from "../src";
 import {
   capture,
   deferred,
+  deletions,
   FakeVoiceSession,
   GUILD,
   media,
@@ -10,6 +11,7 @@ import {
   playableSetup,
   record,
   required,
+  settle,
   VOICE_CHANNEL,
 } from "./support/harness";
 
@@ -407,6 +409,30 @@ describe("transactional play", () => {
     expect(queue.current?.song.id).toBe("active");
   });
 
+  it("keeps a move committed when the caller aborts the insertion after the join", async () => {
+    const harness = playableSetup();
+    const queue = await harness.distube.play(TARGET, "a");
+    await settle();
+    const controller = new AbortController();
+    const session = harness.adapter.session;
+    session.join.mockImplementationOnce(async channelId => {
+      session.channelId = channelId;
+      controller.abort();
+    });
+    const events = record(harness.distube, ["queue.item.added", "queue.item.started", "queue.item.failed"]);
+
+    await expect(harness.distube.play(MOVED_TARGET, "b", { signal: controller.signal })).rejects.toMatchObject({
+      code: "ABORTED",
+    });
+    await settle();
+
+    expect(harness.source.search).toHaveBeenLastCalledWith("b", expect.anything());
+    expect(queue.voice?.channelId).toBe(MOVED_TARGET.id);
+    expect(harness.engine.player.playing).toBe("a");
+    expect(queue.upcoming).toEqual([]);
+    expect(events).toEqual([]);
+  });
+
   it("keeps the previous channel when movement itself fails", async () => {
     const harness = playableSetup();
     const started = deferred<void>();
@@ -421,5 +447,93 @@ describe("transactional play", () => {
     expect(harness.distube.voices.get(GUILD)?.channelId).toBe(VOICE_CHANNEL);
     expect(queue.current?.song.id).toBe("active");
     expect(queue.upcoming).toEqual([]);
+  });
+});
+
+describe("insertion steps", () => {
+  it("rejects queue.add on a provisional queue whose guild has no voice and commits nothing", async () => {
+    const harness = playableSetup();
+    const reasons = deletions(harness.distube);
+    const events = record(harness.distube, ["queue.item.added", "queue.item.started"]);
+    const gate = harness.adapter.gateCreateSession();
+    const started = capture(harness.distube.play(TARGET, "a"));
+    const queue = required(harness.distube.getQueue(GUILD));
+    const adding = capture(queue.add("b"));
+    await settle();
+    gate.reject(new Error("gateway down"));
+
+    expect(await started).toMatchObject({ code: "VOICE_FAILED" });
+    expect(await adding).toMatchObject({ code: "INVALID_STATE" });
+    await settle();
+    expect(queue.upcoming).toEqual([]);
+    expect(events).toEqual([]);
+    expect(reasons).toEqual(["failed"]);
+  });
+
+  it("commits mixed queue.add, play and queue.add from one tick in call order when they resolve in reverse", async () => {
+    const harness = playableSetup();
+    const queue = await harness.distube.play(TARGET, "a");
+    await settle();
+    const held = new Map(["b", "c", "d"].map(id => [id, deferred<readonly Song[]>()]));
+    harness.source.search.mockImplementation(query => required(held.get(query)).promise);
+
+    const steps = Promise.all([queue.add("b"), harness.distube.play(TARGET, "c"), queue.add("d")]);
+    for (const id of ["d", "c", "b"]) required(held.get(id)).resolve([media("source", id)]);
+    await steps;
+
+    expect(queue.upcoming.map(item => item.song.id)).toEqual(["b", "c", "d"]);
+  });
+
+  it("drops a provider error that settles after the queue was deleted", async () => {
+    const harness = playableSetup();
+    const queue = await harness.distube.play(TARGET, "a");
+    await settle();
+    const held = deferred<readonly Song[]>();
+    harness.source.search.mockImplementationOnce(() => held.promise);
+    const adding = capture(queue.add("b"));
+    await settle();
+    await queue.stop();
+    held.reject(new Error("provider saw the abort"));
+
+    const failure = (await adding) as DisTubeError;
+    expect(failure.code).toBe("INVALID_STATE");
+    expect(failure.cause).toBeUndefined();
+  });
+
+  it("keeps a move failure as the cause when the queue was deleted during the move", async () => {
+    const harness = playableSetup();
+    const queue = await harness.distube.play(TARGET, "a");
+    await settle();
+    const move = deferred<void>();
+    harness.adapter.session.join.mockImplementationOnce(() => move.promise);
+    const moving = capture(harness.distube.play(MOVED_TARGET, "b"));
+    await settle();
+    await queue.stop();
+    const down = new Error("gateway down");
+    move.reject(down);
+
+    const failure = (await moving) as DisTubeError;
+    expect(failure.code).toBe("INVALID_STATE");
+    expect(failure.cause).toMatchObject({ code: "VOICE_FAILED" });
+    expect((failure.cause as DisTubeError).cause).toBe(down);
+  });
+
+  it("dispose waits for an in-flight insertion step before disposing plugins", async () => {
+    const harness = playableSetup();
+    const queue = await harness.distube.play(TARGET, "a");
+    await settle();
+    const held = deferred<readonly Song[]>();
+    harness.source.search.mockImplementationOnce(() => held.promise);
+    const adding = capture(queue.add("b"));
+    await settle();
+
+    const disposing = harness.distube.dispose();
+    await settle();
+    expect(harness.source.dispose).not.toHaveBeenCalled();
+
+    held.resolve([media("source", "b")]);
+    await disposing;
+    expect(harness.source.dispose).toHaveBeenCalledTimes(1);
+    expect(await adding).toMatchObject({ code: "INVALID_STATE" });
   });
 });

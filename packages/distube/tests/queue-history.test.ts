@@ -44,7 +44,7 @@ describe("bounded history", () => {
 
   it("keeps nothing at zero, so previous has nothing to return to", async () => {
     const { harness, queue, player } = await playing(["a", "b"], 0);
-    const events = record(harness.distube, ["queue.item.finished", "queue.history.added"]);
+    const events = record(harness.distube, ["queue.item.finished"]);
     player.finish();
     await settle();
     expect(remembered(queue)).toEqual([]);
@@ -66,16 +66,13 @@ describe("bounded history", () => {
 
   it("appends the skipped item to history without publishing queue.item.finished", async () => {
     const { harness, queue } = await playing(["a", "b"]);
-    const events = record(harness.distube, ["queue.item.finished", "queue.history.added", "queue.item.started"]);
-    const skipped: string[] = [];
-    harness.distube.on("queue.history.added", event => skipped.push(event.item.song.id));
+    const events = record(harness.distube, ["queue.item.finished", "queue.item.started"]);
 
     await queue.skip();
     await settle();
 
-    expect(events).toEqual(["queue.history.added", "queue.item.started"]);
-    expect(skipped).toEqual(["a"]);
-    expect(queue.history[0]?.song.id).toBe("a");
+    expect(events).toEqual(["queue.item.started"]);
+    expect(queue.history.map(item => item.song.id)).toEqual(["a"]);
     await harness.distube.dispose();
   });
 
@@ -97,7 +94,7 @@ describe("related media", () => {
   it("seeds autoplay with the last finished item even when history keeps nothing", async () => {
     const { harness, queue, player } = await playing(["a"], 0);
     harness.source.related.mockResolvedValue(media("source", "related"));
-    await queue.setAutoplay(true);
+    queue.setAutoplay(true);
     player.finish();
     await settle();
 
@@ -116,7 +113,7 @@ describe("related media", () => {
       excluded.push([...context.exclude]);
       return media("source", "related");
     });
-    await queue.setAutoplay(true);
+    queue.setAutoplay(true);
     player.finish();
     await settle();
     player.finish();
@@ -125,33 +122,6 @@ describe("related media", () => {
     expect(excluded).toHaveLength(1);
     expect(excluded[0]?.map(song => song.id)).toEqual(["a", "b"]);
     expect(queue.current?.song.id).toBe("related");
-    await harness.distube.dispose();
-  });
-
-  it("addRelated appends one occurrence for the current Song and publishes queue.item.added", async () => {
-    const { harness, queue } = await playing(["a"]);
-    harness.source.related.mockResolvedValue(media("source", "related"));
-    const events = record(harness.distube, ["queue.item.added"]);
-
-    const item = await queue.addRelated();
-    await settle();
-
-    expect(item.song.id).toBe("related");
-    expect(queue.upcoming.map(upcoming => upcoming.id)).toEqual([item.id]);
-    expect(events).toEqual(["queue.item.added"]);
-    expect(harness.source.related).toHaveBeenCalledWith(
-      expect.objectContaining({ id: "a" }),
-      expect.objectContaining({ exclude: [] }),
-    );
-    await harness.distube.dispose();
-  });
-
-  it("addRelated rejects SOURCE_FAILED when the owning source declines", async () => {
-    const { harness, queue } = await playing(["a"]);
-    harness.source.related.mockResolvedValue(undefined);
-    await expect(queue.addRelated()).rejects.toMatchObject({ code: "SOURCE_FAILED" });
-    expect(queue.upcoming).toEqual([]);
-    expect(harness.distube.getQueue(GUILD)).toBe(queue);
     await harness.distube.dispose();
   });
 });

@@ -30,13 +30,13 @@ declare const either: typeof youtube | typeof soundcloud;
 const union: Promise<readonly Song[]> = distube.search("lofi", { source: either });
 
 // Suggestions are strings and accept an optional source and signal.
-const suggestions: Promise<readonly string[]> = distube.getSuggestions("lo", youtube);
-const fallback: Promise<readonly string[]> = distube.getSuggestions("lo");
-const signalled: Promise<readonly string[]> = distube.getSuggestions("lo", undefined, {
-  signal: new AbortController().signal,
-});
+const suggestions: Promise<readonly string[]> = distube.suggest("lo", { source: youtube });
+const fallback: Promise<readonly string[]> = distube.suggest("lo");
+const signalled: Promise<readonly string[]> = distube.suggest("lo", { signal: new AbortController().signal });
+// @ts-expect-error the source is an option, not a positional argument
+distube.suggest("lo", youtube);
 // @ts-expect-error suggestions are not Songs
-const notSongs: Promise<readonly Song[]> = distube.getSuggestions("lo");
+const notSongs: Promise<readonly Song[]> = distube.suggest("lo");
 
 // A plugin declares its data once and its Songs carry it.
 const plugin: Plugin<YouTubeData> = {

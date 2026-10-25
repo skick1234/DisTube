@@ -30,10 +30,6 @@
       "rules": { "import/namespace": "off" }
     },
     {
-      "files": ["packages/voice-core/src/worker-pool.ts"],
-      "rules": { "unicorn/require-post-message-target-origin": "off" }
-    },
-    {
       "files": ["packages/distube/src/**"],
       "rules": {
         "no-restricted-imports": [

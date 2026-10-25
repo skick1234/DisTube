@@ -1,6 +1,6 @@
 import type { DiscordGatewayAdapterCreator } from "@discordjs/voice";
-import { DiscordVoiceEngine, DiscordVoiceSession } from "@distube/voice-core/discord";
-import type { Client, VoiceBasedChannel } from "discord.js";
+import { DiscordVoiceEngine, DiscordVoiceSession } from "@distube/voice-core";
+import { ChannelType, type Client, type Guild, PermissionFlagsBits, type VoiceBasedChannel } from "discord.js";
 import type {
   Adapter,
   Engine,
@@ -29,15 +29,9 @@ export class DiscordJSAdapter implements Adapter<VoiceBasedChannel> {
   async createVoiceSession(target: VoiceTarget, options: VoiceSessionOptions): Promise<VoiceSession> {
     const guild = this.#client.guilds.cache.get(target.guildId);
     if (!guild) throw new Error(`Discord guild is unavailable: ${target.guildId}`);
-    const channel = guild.channels.cache.get(target.channelId);
-    if (!channel) throw new Error(`Discord voice channel is unavailable: ${target.channelId}`);
-    if (!channel.isVoiceBased()) throw new Error(`Discord channel is not voice-capable: ${target.channelId}`);
-    if (channel.guildId !== target.guildId) {
-      throw new Error(`Discord voice channel ${target.channelId} does not belong to guild ${target.guildId}`);
-    }
     const clientUserId = this.#client.user?.id;
     if (!clientUserId) throw new Error("Discord client user is unavailable");
-    return DiscordVoiceSession.connect({
+    return await DiscordVoiceSession.connect({
       ...target,
       ...options,
       clientUserId,
@@ -46,10 +40,30 @@ export class DiscordJSAdapter implements Adapter<VoiceBasedChannel> {
         const current = guild.channels.cache.get(channelId);
         return current?.isVoiceBased() ? current.bitrate : DISCORD_DEFAULT_BITRATE;
       },
+      preflight: channelId => preflight(guild, channelId, clientUserId),
     });
   }
 
   createEngine(settings: EngineSettings): Engine {
     return new DiscordVoiceEngine(settings);
+  }
+}
+
+function preflight(guild: Guild, channelId: string, clientUserId: string): void {
+  const channel = guild.channels.cache.get(channelId);
+  if (!channel) throw new Error(`Discord voice channel is unavailable: ${channelId}`);
+  if (!channel.isVoiceBased()) throw new Error(`Discord channel is not voice-capable: ${channelId}`);
+  if (channel.guildId !== guild.id) {
+    throw new Error(`Discord voice channel ${channelId} does not belong to guild ${guild.id}`);
+  }
+  const permissions = channel.permissionsFor(clientUserId);
+  if (!permissions?.has(PermissionFlagsBits.Connect)) {
+    throw new Error(`Discord voice channel ${channelId} denies the bot Connect`);
+  }
+  if (channel.type !== ChannelType.GuildStageVoice && !permissions.has(PermissionFlagsBits.Speak)) {
+    throw new Error(`Discord voice channel ${channelId} denies the bot Speak`);
+  }
+  if (channel.full && !permissions.has(PermissionFlagsBits.MoveMembers)) {
+    throw new Error(`Discord voice channel ${channelId} is full and the bot lacks Move Members`);
   }
 }

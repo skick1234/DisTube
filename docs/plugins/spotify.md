@@ -10,7 +10,11 @@ Short `spotify.link` and `spotify.app.link` links expand to the URL they share, 
 
 Install alongside `distube` and your adapter. Include a playable source such as YouTube:
 
-```sh
+```sh title="npm"
+npm install @distube/spotify @distube/youtube @distube/ytdl-core
+```
+
+```sh title="Bun"
 bun add @distube/spotify @distube/youtube @distube/ytdl-core
 ```
 
@@ -26,8 +30,9 @@ import { DisTube } from "distube";
 declare const client: Client;
 declare const voiceChannel: VoiceBasedChannel;
 
+const youtube = new YouTubePlugin();
 const spotify = new SpotifyPlugin();
-const distube = new DisTube({ adapter: new DiscordJSAdapter(client), plugins: [spotify, new YouTubePlugin()] });
+const distube = new DisTube({ adapter: new DiscordJSAdapter(client), plugins: [spotify, youtube] });
 const results = await distube.search("artist track", { source: spotify, limit: 5 });
 const first = results[0];
 if (first) await distube.play(voiceChannel, first);
@@ -35,22 +40,21 @@ if (first) await distube.play(voiceChannel, first);
 
 ## Options and playback
 
-`SpotifyPluginOptions` has two optional fields, which must be supplied together:
+`SpotifyPlugin` takes no options and no credentials. It always uses Spotify's anonymous web-player authentication. This unofficial method may stop working
+or face rate limits. Spotify has no `related`, so autoplay publishes `queue.autoplay.failed` after a Spotify Song.
 
-- `clientId`: the Spotify application client ID for client-credentials authentication.
-- `clientSecret`: the matching Spotify application client secret.
-
-Without credentials, the plugin uses anonymous web-player authentication. This unofficial method may stop working
-or face rate limits. Related-track lookup for autoplay requires credentials.
-
-Spotify does not return audio. Its `stream` returns a search request made from the track name and artists, so
-configure another playable source after it. The built-in engine searches other configured plugins in order and
-prepares only the first candidate from each until one works. The public Song and queue item remain Spotify's.
-[Lavalink](../lavalink/) uses its own preparation order.
+Spotify has no `stream`, so core plays its Songs through the search fallback. It searches every other plugin that
+has `search` and `stream`, in the order of `plugins`, for the track name and artists with limit 1, and plays the
+first candidate that prepares. The public Song and queue item remain Spotify's. If every plugin finds nothing, the
+item fails `NO_RESULT`; if some failed, it fails `SOURCE_FAILED` with an `AggregateError` of the failures. The client
+constructor rejects Spotify when no other plugin has `search` and `stream`. An engine plugin such as
+[Lavalink](../lavalink/) prepares every Song itself and the fallback never runs.
 
 Songs expose `album`, `explicit` and `popularity` through typed `pluginData`. Search clamps `limit` to 50 and uses
-a zero-based `offset`; an offset above 1000 returns no results. Provider failures are core `DisTubeError` instances
-with codes such as `NOT_FOUND`, `UNAVAILABLE` and `RATE_LIMITED`, with `error.source` set to `"spotify"`.
+a zero-based `offset`; an offset above 1000 returns no results. Playlists and albums keep their first
+`maxPlaylistSongs` tracks. Provider failures are core `DisTubeError` instances with codes such as `NOT_FOUND`,
+`UNAVAILABLE` and `RATE_LIMITED`, with `error.source` set to `"spotify"`. Each failure inside that `AggregateError`
+keeps the code and source of the plugin that failed; none is a Spotify error.
 
 See the [quick start](../guides/quick-start/), [queue and voice controls](../guides/guide/) and
 [error handling](../guides/error-handling/) guides.

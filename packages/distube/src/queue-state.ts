@@ -1,6 +1,11 @@
-import { QueueStatus, RepeatMode } from "../enums";
-import { DisTubeError } from "../errors";
-import type { QueueItem } from "../media";
+import { DisTubeError } from "./errors";
+import type { QueueItem } from "./media";
+
+/** How a naturally finished QueueItem is reconsidered before progression. */
+export type RepeatMode = "off" | "song" | "queue";
+
+/** Committed playback status of a DisTubeQueue. */
+export type QueueStatus = "idle" | "playing" | "paused";
 
 /**
  * The committed schedule of one DisTubeQueue: an immutable value replaced on every commit.
@@ -23,8 +28,8 @@ export const IDLE_QUEUE_STATE: QueueState = Object.freeze({
   current: undefined,
   upcoming: NO_ITEMS,
   history: NO_ITEMS,
-  status: QueueStatus.Idle,
-  repeat: RepeatMode.Off,
+  status: "idle",
+  repeat: "off",
   autoplay: false,
 });
 
@@ -51,7 +56,7 @@ export function startFirst(current: QueueState): { readonly item: QueueItem; rea
   if (!item || current.current) return undefined;
   return Object.freeze({
     item,
-    state: patch(current, { upcoming: current.upcoming.slice(1), current: item, status: QueueStatus.Playing }),
+    state: patch(current, { upcoming: current.upcoming.slice(1), current: item, status: "playing" }),
   });
 }
 
@@ -61,7 +66,7 @@ export function failFirst(current: QueueState, itemId: string): QueueState {
 }
 
 export function finishCurrent(current: QueueState): QueueState {
-  return patch(current, { current: undefined, status: QueueStatus.Idle });
+  return patch(current, { current: undefined, status: "idle" });
 }
 
 /** Removes one upcoming occurrence by its stable ID. */
@@ -118,7 +123,7 @@ export function jumpTo(
   const skipped = [...(current.current ? [current.current] : []), ...current.upcoming.slice(0, index)];
   const upcoming = [...current.upcoming.slice(index), ...(requeue ? skipped : [])];
   return Object.freeze({
-    state: patch(current, { current: undefined, status: QueueStatus.Idle, upcoming }),
+    state: patch(current, { current: undefined, status: "idle", upcoming }),
     skipped: Object.freeze(skipped),
   });
 }
@@ -150,17 +155,4 @@ export function popHistory(current: QueueState): { readonly item: QueueItem; rea
   const item = current.history.at(-1);
   if (!item) return undefined;
   return Object.freeze({ item, state: patch(current, { history: current.history.slice(0, -1) }) });
-}
-
-export function setRepeat(current: QueueState, repeat: RepeatMode): QueueState {
-  return current.repeat === repeat ? current : patch(current, { repeat });
-}
-
-export function setAutoplay(current: QueueState, autoplay: boolean): QueueState {
-  return current.autoplay === autoplay ? current : patch(current, { autoplay });
-}
-
-/** The terminal state: nothing current, waiting or remembered, with scheduling settings reset. */
-export function clearQueue(current: QueueState): QueueState {
-  return current === IDLE_QUEUE_STATE ? current : IDLE_QUEUE_STATE;
 }

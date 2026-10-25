@@ -1,7 +1,7 @@
 import type { VoiceSession } from "distube/integrations";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { DiscordVoiceEngine, DiscordVoiceSession } from "../src/discord";
-import { FilterRegistry } from "../src/filters";
+import { DiscordVoiceEngine, DiscordVoiceSession } from "../src";
+import { FilterRegistry } from "../src/engine";
 import { CHANNEL, gatewayAdapter, latest, native, resetNative } from "./support/native";
 
 vi.mock("@discordjs/voice", async () => (await import("./support/native")).voiceModule());
@@ -15,8 +15,10 @@ const OPTIONS = {
   selfMute: false,
   timeoutMs: 50,
   channelBitrate: () => 64_000,
+  preflight: () => undefined,
 };
 const SETTINGS = { opusComplexity: 10, bufferMs: 500 };
+const PLAYER_OPTIONS = { onClosed: () => undefined };
 
 beforeEach(resetNative);
 
@@ -25,7 +27,7 @@ describe("engine", () => {
     const engine = new DiscordVoiceEngine(SETTINGS);
     const session = await DiscordVoiceSession.connect(OPTIONS);
 
-    const player = await engine.createPlayer(session);
+    const player = await engine.createPlayer(session, PLAYER_OPTIONS);
 
     expect(latest.connection.subscribe).toHaveBeenCalledWith(latest.player);
     expect(player.position).toBe(0);
@@ -41,7 +43,7 @@ describe("engine", () => {
       throw failure;
     });
     try {
-      await expect(engine.createPlayer(session)).rejects.toMatchObject({
+      await expect(engine.createPlayer(session, PLAYER_OPTIONS)).rejects.toMatchObject({
         code: "VOICE_FAILED",
         message: expect.stringContaining("node-av native binding, which runs on glibc 2.28 or newer"),
       });
@@ -56,7 +58,9 @@ describe("engine", () => {
     const engine = new DiscordVoiceEngine(SETTINGS);
     const foreign = { guildId: "guild", channelId: CHANNEL } as unknown as VoiceSession;
 
-    await expect(engine.createPlayer(foreign)).rejects.toThrow("only plays through its own package's VoiceSession");
+    await expect(engine.createPlayer(foreign, PLAYER_OPTIONS)).rejects.toThrow(
+      "only plays through its own package's VoiceSession",
+    );
   });
 
   it("exposes its merged preset metadata", () => {
@@ -81,25 +85,11 @@ describe("filter registry", () => {
     );
   });
 
-  it("renders a ranged preset from its value, defaulting and clamping to the declared range", () => {
+  it("renders a ranged preset from the value core committed", () => {
     const registry = new FilterRegistry();
 
     expect(registry.render([{ name: "bassboost", value: 15 }])).toBe("bass=g=15");
-    expect(registry.render([{ name: "bassboost" }])).toBe("bass=g=10");
-    expect(registry.render([{ name: "bassboost", value: 50 }])).toBe("bass=g=20");
     expect(registry.render([{ name: "nightcore", value: 1.5 }])).toBe("asetrate=48000*1.5,aresample=48000,bass=g=5");
-    expect(registry.render([{ name: "vaporwave", value: 0.1 }])).toBe("asetrate=48000*0.5,aresample=48000,bass=g=5");
-  });
-
-  it("refuses a value on a fixed preset and a value that is not a finite number", () => {
-    const registry = new FilterRegistry();
-
-    expect(() => registry.render([{ name: "echo", value: 2 }])).toThrowError(
-      expect.objectContaining({ code: "INVALID_ARGUMENT", message: "Filter echo does not take a value" }),
-    );
-    expect(() => registry.render([{ name: "bassboost", value: Number.NaN }])).toThrowError(
-      expect.objectContaining({ code: "INVALID_ARGUMENT" }),
-    );
   });
 
   it("overrides a built-in preset and adds new ones", () => {
@@ -109,7 +99,6 @@ describe("filter registry", () => {
     });
 
     expect(registry.render([{ name: "echo" }, { name: "house", value: 3 }])).toBe("aecho=1,volume=3");
-    expect(registry.render([{ name: "house", value: 9 }])).toBe("volume=5");
   });
 
   it("describes every preset for command option building", () => {

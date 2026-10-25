@@ -5,6 +5,7 @@
   "compilerOptions": {
     "rootDir": "../..",
     "noEmit": true,
+    "allowImportingTsExtensions": true,
     "paths": {
       "distube": ["../distube/src/index.ts"],
       "distube/integrations": ["../distube/src/integrations.ts"]

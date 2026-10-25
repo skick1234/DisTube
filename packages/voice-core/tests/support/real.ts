@@ -1,4 +1,13 @@
+import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { createServer } from "node:http";
+import { createServer as createSecureServer } from "node:https";
+import { createSocket } from "node:dgram";
+import type { Duplex } from "node:stream";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { getCACertificates, setDefaultCACertificates } from "node:tls";
 import type { DiscordGatewayAdapterCreator, DiscordGatewayAdapterLibraryMethods } from "@discordjs/voice";
 
 export const REAL_GUILD = "real-guild";
@@ -99,4 +108,159 @@ export async function serveAudio(): Promise<AudioOrigin> {
         server.close(error => (error ? reject(error) : resolve()));
       }),
   };
+}
+
+export interface VoiceGatewayServer {
+  /** The `host:port` a voice server update names, as Discord sends it. */
+  readonly endpoint: string;
+  /** Voice WebSocket connections the library has opened so far. */
+  readonly connections: number;
+  /** Whether a new voice socket is answered up to Ready; a silent one never gets past Identify. */
+  answers: boolean;
+  /** Closes every open voice socket with `code`, as Discord does when it ends a voice session. */
+  close(code: number): void;
+  /** Stops listening and drops every socket, so the library's next dial is refused. */
+  stop(): Promise<void>;
+}
+
+const WEBSOCKET_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
+const SSRC = 1;
+
+let certificate: { readonly key: Buffer; readonly cert: Buffer } | undefined;
+
+/**
+ * A local Discord voice server over TLS and UDP. It completes the voice handshake far enough for the real
+ * library to reach Ready: Hello, Ready, IP discovery and a session description without DAVE.
+ */
+export async function serveVoiceGateway(): Promise<VoiceGatewayServer> {
+  const { key, cert } = trustedCertificate();
+  const udp = createSocket("udp4");
+  udp.on("message", (message, remote) => {
+    if (message.length !== 74 || message.readUInt16BE(0) !== 1) return;
+    const reply = Buffer.alloc(74);
+    reply.writeUInt16BE(2, 0);
+    reply.writeUInt16BE(70, 2);
+    reply.writeUInt32BE(SSRC, 4);
+    reply.write(remote.address, 8);
+    reply.writeUInt16BE(remote.port, 72);
+    udp.send(reply, remote.port, remote.address);
+  });
+  await new Promise<void>(resolve => udp.bind(0, "127.0.0.1", resolve));
+  const sockets = new Set<Duplex>();
+  let connections = 0;
+  const server = createSecureServer({ key, cert });
+  const gateway: VoiceGatewayServer = {
+    endpoint: "",
+    get connections() {
+      return connections;
+    },
+    answers: true,
+    close: code => {
+      for (const socket of sockets) socket.end(Buffer.from([0x88, 2, code >> 8, code & 0xff]));
+    },
+    stop: async () => {
+      const closed = new Promise<void>(resolve => server.close(() => resolve()));
+      for (const socket of sockets) socket.destroy();
+      udp.close();
+      await closed;
+    },
+  };
+  server.on("upgrade", (request, socket: Duplex) => {
+    connections += 1;
+    sockets.add(socket);
+    socket.on("error", () => undefined);
+    socket.on("close", () => sockets.delete(socket));
+    const accept = createHash("sha1")
+      .update(`${request.headers["sec-websocket-key"]}${WEBSOCKET_GUID}`)
+      .digest("base64");
+    socket.write(
+      `HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ${accept}\r\n\r\n`,
+    );
+    if (!gateway.answers) return;
+    const send = (packet: unknown): void => void socket.write(textFrame(JSON.stringify(packet)));
+    send({ op: 8, d: { heartbeat_interval: 60_000 } });
+    readTextFrames(socket, text => {
+      const packet = JSON.parse(text) as { op: number; d: { t?: number; data?: { mode?: string } } };
+      if (packet.op === 0) {
+        const { port } = udp.address();
+        send({ op: 2, d: { ssrc: SSRC, ip: "127.0.0.1", port, modes: ["aead_aes256_gcm_rtpsize"] } });
+      } else if (packet.op === 1) {
+        send({ op: 4, d: { mode: packet.d.data?.mode, secret_key: Array(32).fill(1), dave_protocol_version: 0 } });
+      } else if (packet.op === 3) {
+        send({ op: 6, d: { t: packet.d.t } });
+      }
+    });
+  });
+  await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address();
+  if (typeof address === "string" || address === null) throw new Error("Expected a TCP address");
+  return Object.assign(gateway, { endpoint: `127.0.0.1:${address.port}` });
+}
+
+function textFrame(text: string): Buffer {
+  const payload = Buffer.from(text);
+  const header =
+    payload.length < 126
+      ? Buffer.from([0x81, payload.length])
+      : Buffer.from([0x81, 126, payload.length >> 8, payload.length & 0xff]);
+  return Buffer.concat([header, payload]);
+}
+
+/** Unmasks the client's text frames; the library sends nothing larger than a 16-bit length here. */
+function readTextFrames(socket: Duplex, onText: (text: string) => void): void {
+  let pending = Buffer.alloc(0);
+  socket.on("data", (chunk: Buffer) => {
+    pending = Buffer.concat([pending, chunk]);
+    while (pending.length >= 2) {
+      const short = pending[1] & 0x7f;
+      const offset = short === 126 ? 4 : 2;
+      if (pending.length < offset) return;
+      const length = short === 126 ? pending.readUInt16BE(2) : short;
+      const end = offset + 4 + length;
+      if (pending.length < end) return;
+      const mask = pending.subarray(offset, offset + 4);
+      const payload = Buffer.from(pending.subarray(offset + 4, end)).map((byte, index) => byte ^ mask[index % 4]);
+      const opcode = pending[0] & 0x0f;
+      pending = pending.subarray(end);
+      if (opcode === 1) onText(Buffer.from(payload).toString());
+    }
+  });
+}
+
+/** A throwaway certificate for 127.0.0.1 that this process trusts, because the library only dials `wss://`. */
+function trustedCertificate(): { readonly key: Buffer; readonly cert: Buffer } {
+  if (certificate) return certificate;
+  const directory = mkdtempSync(join(tmpdir(), "voice-gateway-"));
+  try {
+    const keyPath = join(directory, "key.pem");
+    const certPath = join(directory, "cert.pem");
+    execFileSync(
+      "openssl",
+      [
+        "req",
+        "-x509",
+        "-newkey",
+        "ec",
+        "-pkeyopt",
+        "ec_paramgen_curve:prime256v1",
+        "-nodes",
+        "-days",
+        "1",
+        "-subj",
+        "/CN=127.0.0.1",
+        "-addext",
+        "subjectAltName=IP:127.0.0.1",
+        "-keyout",
+        keyPath,
+        "-out",
+        certPath,
+      ],
+      { stdio: "ignore" },
+    );
+    certificate = { key: readFileSync(keyPath), cert: readFileSync(certPath) };
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+  setDefaultCACertificates([...getCACertificates("default"), certificate.cert]);
+  return certificate;
 }

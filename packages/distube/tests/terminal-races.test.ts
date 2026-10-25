@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
-import type { Song } from "../src";
-import type { PlaybackPreparation, PlaybackResource } from "../src/integrations";
+import type { DisTubeQueue, QueueItem, Song } from "../src";
+import type { PlaybackResource } from "../src/integrations";
 import {
   capture,
   deferred,
+  deletions,
   FakePlayer,
-  FakeSource,
   flushMicrotasks,
   GUILD,
   media,
@@ -14,7 +14,6 @@ import {
   record,
   required,
   settle,
-  setup,
   VOICE_CHANNEL,
 } from "./support/harness";
 
@@ -27,15 +26,10 @@ const QUEUE_EVENTS = [
   "queue.item.started",
   "queue.item.finished",
   "queue.item.failed",
-  "queue.history.added",
   "queue.finished",
   "queue.autoplay.failed",
   "queue.deleted",
 ] as const;
-
-function clip(id: string): PlaybackResource {
-  return { kind: "url", url: `https://stream.example/${id}` };
-}
 
 async function playing(ids: readonly string[]) {
   const harness = playableSetup();
@@ -79,33 +73,42 @@ describe("commit races", () => {
 });
 
 describe("edits during preparation", () => {
-  it("aborts a preparation the edit displaced, disposes its late resource and plays the new head", async () => {
-    const harness = playableSetup();
-    const preparation = deferred<PlaybackPreparation>();
-    let signal: AbortSignal | undefined;
-    harness.source.stream.mockImplementationOnce(async (_song, options) => {
-      signal = options.signal;
-      return preparation.promise;
-    });
-    const queue = await harness.distube.play(TARGET, "a");
-    await queue.add("b");
-    await settle();
-    const [a, b] = queue.upcoming;
+  it.each([
+    ["move", (queue: DisTubeQueue, a: QueueItem): void => queue.move(a.id), ["b"], ["c", "a"]],
+    ["remove", (queue: DisTubeQueue, a: QueueItem): void => void queue.remove(a.id), ["b"], ["c"]],
+    ["clear", (queue: DisTubeQueue): void => void queue.clear(), [], []],
+    ["skip", (queue: DisTubeQueue): void => void queue.skip(), ["b"], ["c"]],
+  ] as const)(
+    "aborts a preparation that %s displaced, disposes its late resource once and plays only the new head",
+    async (_edit, edit, played, upcoming) => {
+      const harness = playableSetup();
+      const preparation = deferred<PlaybackResource>();
+      let signal: AbortSignal | undefined;
+      harness.source.stream.mockImplementationOnce(async (_song, options) => {
+        signal = options.signal;
+        return preparation.promise;
+      });
+      const queue = await harness.distube.play(TARGET, "a");
+      await queue.add("b");
+      await queue.add("c");
+      await settle();
+      const a = required(queue.upcoming[0]);
 
-    await queue.move(required(a).id);
-    expect(signal?.aborted).toBe(true);
-    preparation.resolve(harness.source.resourceFor(required(a).song));
-    await settle();
+      edit(queue, a);
+      expect(signal?.aborted).toBe(true);
+      preparation.resolve(harness.source.resource("a"));
+      await settle();
 
-    expect(harness.source.disposed).toEqual(["a"]);
-    expect(queue.current).toBe(b);
-    expect(queue.upcoming).toEqual([a]);
-    expect(harness.engine.player.played).toEqual(["b"]);
-  });
+      expect(harness.source.disposed).toEqual(["a"]);
+      expect(harness.engine.players.flatMap(player => player.played)).toEqual(played);
+      expect(queue.history).toEqual([]);
+      expect(queue.upcoming.map(item => item.song.id)).toEqual(upcoming);
+    },
+  );
 
   it("keeps preparing when the edit leaves the item first", async () => {
     const harness = playableSetup();
-    const preparation = deferred<PlaybackPreparation>();
+    const preparation = deferred<PlaybackResource>();
     let signal: AbortSignal | undefined;
     harness.source.stream.mockImplementationOnce(async (_song, options) => {
       signal = options.signal;
@@ -116,40 +119,13 @@ describe("edits during preparation", () => {
     await queue.add("c");
     await settle();
 
-    await queue.remove(2);
+    queue.remove(2);
     await queue.add("z");
     expect(signal?.aborted).toBe(false);
-    preparation.resolve(harness.source.resourceFor(required(queue.upcoming[0]).song));
+    preparation.resolve(harness.source.resource(required(queue.upcoming[0]).song.id));
     await settle();
     expect(harness.engine.player.played).toEqual(["a"]);
     expect(queue.upcoming.map(item => item.song.id)).toEqual(["c", "z"]);
-  });
-
-  it("disposes a fallback candidate that completes after its item was removed", async () => {
-    const owner = new FakeSource("owner");
-    const fallback = new FakeSource("fallback");
-    const candidate = deferred<PlaybackPreparation>();
-    owner.resolve.mockImplementation(async url => media("owner", url.split("/").pop() as string));
-    owner.stream.mockImplementation(async song =>
-      song.id === "a" ? { kind: "search", query: "a" } : owner.resourceFor(song),
-    );
-    fallback.search.mockResolvedValue([media("fallback", "candidate")]);
-    fallback.stream.mockReturnValue(candidate.promise);
-    const harness = setup([owner, fallback]);
-
-    const queue = await harness.distube.play(TARGET, mediaUrl("a", "owner"));
-    await harness.distube.play(TARGET, mediaUrl("b", "owner"));
-    await harness.distube.play(TARGET, mediaUrl("c", "owner"));
-    await settle();
-    const stuck = required(queue.upcoming[0]);
-
-    await queue.remove(stuck.id);
-    candidate.resolve(fallback.resourceFor(media("fallback", "candidate")));
-    await settle();
-
-    expect(fallback.disposed).toEqual(["candidate"]);
-    expect(queue.current?.song.id).toBe("b");
-    expect(queue.upcoming.map(item => item.song.id)).toEqual(["c"]);
   });
 
   it("leaves the running item alone when an insertion appends to the tail", async () => {
@@ -196,7 +172,7 @@ describe("stop overlaps", () => {
 
   it("waits for an in-flight preparation and disposes its late resource once without an item event", async () => {
     const harness = playableSetup();
-    const preparation = deferred<PlaybackPreparation>();
+    const preparation = deferred<PlaybackResource>();
     const preparationStarted = deferred<void>();
     harness.source.stream.mockImplementationOnce(async () => {
       preparationStarted.resolve();
@@ -218,7 +194,7 @@ describe("stop overlaps", () => {
     });
     await settle();
     expect(stopped).toBe(false);
-    preparation.resolve(harness.source.resourceFor(song));
+    preparation.resolve(harness.source.resource(song.id));
     await stopping;
 
     expect(harness.source.disposed).toEqual([song.id]);
@@ -242,9 +218,7 @@ describe("stop overlaps", () => {
     expect(player.played).toEqual([]);
     expect(harness.source.disposed).toEqual(["a"]);
     expect(events).toEqual(["queue.deleted"]);
-    const voice = required(harness.distube.voices.get(GUILD));
-    expect(voice.position).toBe(0);
-    void voice.play(clip("later"));
+    await harness.distube.play(TARGET, "later");
     await settle();
     expect(player.played).toEqual(["later"]);
   });
@@ -256,14 +230,11 @@ describe("stop overlaps", () => {
       const disposal = deferred<void>();
       let hold = false;
       harness.source.stream.mockImplementation(async song => ({
-        kind: "resource",
-        resource: {
-          kind: "url",
-          url: `https://stream.example/${song.id}`,
-          dispose: async () => {
-            if (hold) await disposal.promise;
-            harness.source.disposed.push(song.id);
-          },
+        kind: "url",
+        url: `https://stream.example/${song.id}`,
+        dispose: async () => {
+          if (hold) await disposal.promise;
+          harness.source.disposed.push(song.id);
         },
       }));
       const queue = await harness.distube.play(TARGET, "a");
@@ -329,20 +300,30 @@ describe("stop overlaps", () => {
     await expect(queue.resume()).rejects.toMatchObject({ code: "INVALID_STATE" });
   });
 
-  it("detaches on natural exhaustion before cleanup so a listener can play directly", async () => {
-    const { harness, player } = await playing(["a"]);
-    const voice = required(harness.distube.voices.get(GUILD));
+  it("detaches on natural exhaustion before cleanup so a deletion listener can play a new queue", async () => {
+    const { harness, queue, player } = await playing(["a"]);
     const log = record(harness.distube, QUEUE_EVENTS);
-    harness.distube.on("queue.finished", () => {
-      expect(harness.distube.getQueue(GUILD)).toBeUndefined();
-      void voice.play(clip("direct"));
+    const seen: unknown[] = [];
+    harness.distube.on("queue.deleted", () => {
+      seen.push(harness.distube.getQueue(GUILD));
+      void harness.distube.play(TARGET, "next");
     });
 
     player.finish();
     await settle();
 
-    expect(log).toEqual(["queue.item.finished", "queue.history.added", "queue.finished", "queue.deleted"]);
-    expect(player.playing).toBe("direct");
+    expect(seen).toEqual([undefined]);
+    expect(log.slice(0, 3)).toEqual(["queue.item.finished", "queue.finished", "queue.deleted"]);
+    expect(harness.distube.getQueue(GUILD)).not.toBe(queue);
+    expect(player.playing).toBe("next");
+  });
+
+  it("publishes only queue.deleted when queue.stop ends a playing item", async () => {
+    const { harness, queue } = await playing(["a", "b"]);
+    const events = record(harness.distube, ["queue.item.finished", "queue.item.failed", "queue.deleted"]);
+    await queue.stop();
+    await settle();
+    expect(events).toEqual(["queue.deleted"]);
   });
 });
 
@@ -371,36 +352,23 @@ describe("voice terminal overlaps", () => {
     expect(harness.distube.voices.has(GUILD)).toBe(false);
   });
 
-  it("rejects a direct play VOICE_FAILED when the disconnect cancels its start", async () => {
+  it("fails the item VOICE_FAILED when restoring settings onto the new Player fails, then plays on a fresh Player", async () => {
     const harness = playableSetup();
-    const voice = await harness.distube.voices.join(TARGET);
-    const player = new FakePlayer();
-    harness.engine.gateCreate().resolve(player);
-    const starting = player.gate("play");
-    const events = record(harness.distube, ["voice.disconnected"]);
-    const direct = capture(voice.play(clip("a")));
-    await starting.entered;
-
-    harness.adapter.session.disconnect(new Error("gateway lost"));
-    starting.resolve();
-    expect(await direct).toMatchObject({ code: "VOICE_FAILED" });
-    await settle();
-    expect(events).toEqual(["voice.disconnected"]);
-  });
-
-  it("rejects a direct play VOICE_FAILED when restoring settings onto the new Player fails", async () => {
-    const harness = playableSetup();
-    const voice = await harness.distube.voices.join(TARGET);
     const player = new FakePlayer();
     harness.engine.gateCreate().resolve(player);
     const cause = new Error("volume boom");
     player.setVolume.mockRejectedValueOnce(cause);
+    const failures: unknown[] = [];
+    harness.distube.on("queue.item.failed", event => void failures.push(event.error));
 
-    await expect(voice.play(clip("a"))).rejects.toMatchObject({ code: "VOICE_FAILED", cause });
+    const queue = await harness.distube.play(TARGET, "a");
+    await queue.add("b");
+    await settle();
+
+    expect(failures).toMatchObject([{ code: "VOICE_FAILED", cause }]);
     expect(player.played).toEqual([]);
     expect(player.release).toHaveBeenCalledTimes(1);
-    void voice.play(clip("b"));
-    await settle();
+    expect(harness.engine.player).not.toBe(player);
     expect(harness.engine.player.playing).toBe("b");
   });
 
@@ -411,20 +379,6 @@ describe("voice terminal overlaps", () => {
     expect(harness.source.disposed).toEqual(["a"]);
     expect(player.release).toHaveBeenCalledTimes(1);
     expect(harness.adapter.session.release).toHaveBeenCalledTimes(1);
-  });
-
-  it("deletes the guild's queue before releasing the voice it played through", async () => {
-    const { harness, queue } = await playing(["a"]);
-    const order: string[] = [];
-    harness.distube.on("queue.deleted", () => void order.push("queue.deleted"));
-    harness.distube.on("voice.disconnected", event => void order.push(`voice.disconnected:${event.reason}`));
-    harness.adapter.session.release.mockImplementation(async () => void order.push("session.release"));
-
-    await harness.distube.voices.leave(GUILD);
-    await settle();
-
-    expect(order).toEqual(["queue.deleted", "session.release", "voice.disconnected:left"]);
-    expect(queue.current).toBeUndefined();
   });
 
   it("joins an in-flight stop and disposes plugins only after every queue and voice settles", async () => {
@@ -449,5 +403,67 @@ describe("voice terminal overlaps", () => {
     expect(order.filter(step => step === "queue.deleted")).toHaveLength(2);
     expect(order.indexOf("plugin.dispose")).toBeGreaterThan(order.lastIndexOf("session.release"));
     await expect(harness.distube.play(TARGET, "c")).rejects.toMatchObject({ code: "INVALID_STATE" });
+  });
+});
+
+describe("pending work", () => {
+  it.each([
+    ["resolves", "b", undefined],
+    ["fails", undefined, "finished"],
+  ] as const)(
+    "parks the driver after the last item while a step is pending, then continues when it %s",
+    async (_name, next, reason) => {
+      const { harness, queue, player } = await playing(["a"]);
+      const held = deferred<readonly Song[]>();
+      harness.source.search.mockImplementationOnce(() => held.promise);
+      const adding = capture(queue.add("b"));
+      await settle();
+      const events = record(harness.distube, ["queue.finished"]);
+      const reasons = deletions(harness.distube);
+      player.finish();
+      await settle();
+      expect(events).toEqual([]);
+      expect(harness.distube.getQueue(GUILD)).toBe(queue);
+
+      if (next) held.resolve([media("source", next)]);
+      else held.reject(new Error("search down"));
+      await adding;
+      await settle();
+      expect(player.playing).toBe(next);
+      expect(events).toEqual(reason ? ["queue.finished"] : []);
+      expect(reasons).toEqual(reason ? [reason] : []);
+    },
+  );
+
+  it("starts the first item while a later step is still resolving", async () => {
+    const harness = playableSetup();
+    const held = deferred<readonly Song[]>();
+    harness.source.search.mockImplementationOnce(async query => [media("source", query)]);
+    harness.source.search.mockImplementationOnce(() => held.promise);
+    const started = harness.distube.play(TARGET, "a");
+    const adding = required(harness.distube.getQueue(GUILD)).add("b");
+    await started;
+    await settle();
+    expect(harness.engine.player.playing).toBe("a");
+    held.resolve([media("source", "b")]);
+    await adding;
+  });
+
+  it("keeps a queue's steps independent of a deleted queue's step for the same guild", async () => {
+    const harness = playableSetup();
+    const held = deferred<readonly Song[]>();
+    const first = await harness.distube.play(TARGET, "a");
+    await settle();
+    harness.source.search.mockImplementationOnce(() => held.promise);
+    const stale = capture(first.add("b"));
+    await settle();
+    await first.stop();
+
+    const replacement = await harness.distube.play(TARGET, "c");
+    await settle();
+    expect(harness.engine.player.playing).toBe("c");
+    held.resolve([media("source", "b")]);
+    expect(await stale).toMatchObject({ code: "INVALID_STATE" });
+    expect(replacement.upcoming).toEqual([]);
   });
 });

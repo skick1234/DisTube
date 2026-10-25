@@ -1,7 +1,7 @@
 import { defineConfig } from "tsdown";
 
 export default defineConfig({
-  entry: { index: "src/index.ts", "pipeline-worker": "../voice-core/src/pipeline-worker.ts" },
+  entry: { index: "src/index.ts", worker: "../voice-core/src/worker.ts" },
   // The private shared implementation lives outside this package, so declarations are generated
   // from a repository-rooted tsconfig that can see both trees.
   tsconfig: "../../tsconfig.build.json",
@@ -11,5 +11,6 @@ export default defineConfig({
   sourcemap: false,
   clean: true,
   outputOptions: { exports: "named" },
+  inputOptions: { experimental: { attachDebugInfo: "none" } },
   deps: { neverBundle: ["distube", "oceanic.js", "@discordjs/voice"] },
 });

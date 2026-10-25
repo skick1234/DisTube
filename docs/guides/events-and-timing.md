@@ -15,7 +15,6 @@ Subscribe to typed dotted names on the client:
 | `queue.item.started`    | `item`                                           |
 | `queue.item.finished`   | `item`                                           |
 | `queue.item.failed`     | `item`, `error`                                  |
-| `queue.history.added`   | `item`, after the item's finished event          |
 | `queue.finished`        | Playback ran out of items                        |
 | `queue.autoplay.failed` | `song`, `error`                                  |
 | `queue.deleted`         | `reason`                                         |
@@ -30,13 +29,13 @@ Queue events carry `guildId`, the `queue`, a captured `state` (`current`, `upcom
 | ------------ | -------------------------------------------------------- |
 | `stop`       | `queue.stop()`                                           |
 | `finished`   | The queue ran out of items. `queue.finished` came first. |
-| `replaced`   | `voice.play` started a track while the queue was playing |
 | `voice-loss` | The voice session was lost                               |
 | `leave`      | `voice.leave()` or `voices.leave(guildId)`               |
 | `shutdown`   | `distube.dispose()`                                      |
 | `failed`     | The first insertion failed and left the queue empty      |
 
-`voice.disconnected` reasons are `left`, `platform` and `shutdown`. It publishes once per voice, after that
+`voice.disconnected` reasons are `left`, `platform`, `shutdown` and `idle`, the last when a voice with no
+queue outlasts `idleTimeoutMs`. It publishes once per voice, after that
 guild's `queue.deleted`.
 
 ## Register and unsubscribe
@@ -65,12 +64,12 @@ Insertion publishes one `queue.item.added` for a Song or one `queue.playlist.add
 do not also emit individual events. `play` resolves after that commit. Preparation or playback can still fail, and
 that reports `queue.item.failed` for the original item.
 
-Each item gets at most one of `queue.item.finished` or `queue.item.failed`. `queue.history.added` follows a finished
-item. Failed items do not enter history. When the queue runs out, `queue.finished` fires, then `queue.deleted` with
+Each item gets at most one of `queue.item.finished` or `queue.item.failed`. A finished or skipped item enters
+`queue.history`. Failed items do not. When the queue runs out, `queue.finished` fires, then `queue.deleted` with
 reason `finished`. When the voice session is lost during a track, the order is `queue.item.failed`,
 `queue.deleted` with reason `voice-loss`, then `voice.disconnected`.
 
-Deleting a queue does not touch the voice's volume, bitrate, filters, self-deaf or self-mute.
+Deleting a queue does not touch the voice's volume, filters, self-deaf or self-mute.
 
 ## Typed caller metadata
 

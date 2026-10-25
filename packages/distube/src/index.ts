@@ -8,11 +8,9 @@ export type {
   Plugin,
   PluginDataOf,
   ResolvableInput as PlayInput,
-  TrackEnd,
+  VoiceChannelTarget,
 } from "./contracts";
-export { DisTube, type DisTubeOptions, type PlayOptions, type SearchRequest } from "./DisTube";
-export type { AddOptions, DisTubeQueue, JumpOptions, RemoveTarget } from "./DisTubeQueue";
-export type { QueueStatus, RepeatMode } from "./enums";
+export { DisTube, type DisTubeOptions, type PlayOptions, type SearchRequest, type SuggestRequest } from "./client";
 export { DisTubeError, type DisTubeErrorOptions, ErrorCode } from "./errors";
 export type {
   BaseQueueEvent,
@@ -23,9 +21,8 @@ export type {
   QueueDeleteReason,
   VoiceDisconnectReason,
 } from "./events";
-export { Playlist, type PlaylistData, type QueueItem, type QueueItemData, Song, type SongData } from "./media";
-export type { QueueState } from "./queue/state";
-export type { DisTubeVoice, PlayTrackOptions } from "./voice/DisTubeVoice";
-export type { FilterManager, FilterSelection } from "./voice/filters";
-export type { VoiceChannelTarget } from "./voice/target";
-export type { VoiceJoinOptions, VoiceManager } from "./voice/VoiceManager";
+export type { FilterManager, FilterSelection } from "./filters";
+export { Playlist, type PlaylistData, type QueueItem, Song, type SongData } from "./media";
+export type { AddOptions, DisTubeQueue, JumpOptions, RemoveTarget } from "./queue";
+export type { QueueState, QueueStatus, RepeatMode } from "./queue-state";
+export type { DisTubeVoice, VoiceJoinOptions, VoiceManager } from "./voice";

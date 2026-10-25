@@ -6,9 +6,7 @@
   "license": "MIT",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts",
-    "./core": "./src/index.ts",
-    "./discord": "./src/discord.ts"
+    ".": "./src/index.ts"
   },
   "scripts": {
     "check": "oxlint --deny-warnings && oxfmt --check",

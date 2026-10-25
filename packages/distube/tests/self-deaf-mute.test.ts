@@ -20,7 +20,7 @@ describe("self-deaf and self-mute", () => {
 
     expect(harness.adapter.createVoiceSession).toHaveBeenCalledWith(
       { guildId: GUILD, channelId: VOICE_CHANNEL },
-      { selfDeaf: true, selfMute: false, timeoutMs: 15_000 },
+      { selfDeaf: true, selfMute: false, timeoutMs: 15_000, signal: expect.any(AbortSignal) },
     );
     expect(required(harness.adapter.sessions[0]).states).toEqual([{ selfDeaf: true, selfMute: false }]);
     expect([voice.selfDeaf, voice.selfMute]).toEqual([true, false]);
@@ -33,7 +33,7 @@ describe("self-deaf and self-mute", () => {
 
     expect(harness.adapter.createVoiceSession).toHaveBeenCalledWith(
       { guildId: GUILD, channelId: VOICE_CHANNEL },
-      { selfDeaf: false, selfMute: true, timeoutMs: 15_000 },
+      { selfDeaf: false, selfMute: true, timeoutMs: 15_000, signal: expect.any(AbortSignal) },
     );
     expect([voice.selfDeaf, voice.selfMute]).toEqual([false, true]);
   });
@@ -47,10 +47,11 @@ describe("self-deaf and self-mute", () => {
       selfDeaf: true,
       selfMute: false,
       timeoutMs: 15_000,
+      signal: expect.any(AbortSignal),
     });
   });
 
-  it("updates the gateway state at runtime and commits after acknowledgement", async () => {
+  it("writes runtime flags through setSelfState, never join, and commits after acknowledgement", async () => {
     const harness = playableSetup();
     const voice = await harness.distube.voices.join(channel);
     const session = required(harness.adapter.sessions[0]);
@@ -58,8 +59,8 @@ describe("self-deaf and self-mute", () => {
     await voice.setSelfDeaf(false);
     await voice.setSelfMute(true);
 
-    expect(session.join).toHaveBeenNthCalledWith(1, VOICE_CHANNEL, { selfDeaf: false });
-    expect(session.join).toHaveBeenNthCalledWith(2, VOICE_CHANNEL, { selfMute: true });
+    expect(session.setSelfState.mock.calls).toEqual([[{ selfDeaf: false }], [{ selfMute: true }]]);
+    expect(session.join).not.toHaveBeenCalled();
     expect(session.states.slice(1)).toEqual([
       { selfDeaf: false, selfMute: false },
       { selfDeaf: false, selfMute: true },
@@ -72,7 +73,7 @@ describe("self-deaf and self-mute", () => {
     const voice = await harness.distube.voices.join(channel);
     const session = required(harness.adapter.sessions[0]);
     const failure = new Error("gateway rejected");
-    session.join.mockRejectedValueOnce(failure);
+    session.setSelfState.mockRejectedValueOnce(failure);
 
     await expect(voice.setSelfMute(true)).rejects.toMatchObject({ code: "VOICE_FAILED", cause: failure });
 
@@ -90,7 +91,7 @@ describe("self-deaf and self-mute", () => {
       code: "INVALID_ARGUMENT",
     });
 
-    expect(session.join).not.toHaveBeenCalled();
+    expect(session.setSelfState).not.toHaveBeenCalled();
   });
 
   it("survives queue.stop and a later play on the same voice", async () => {
@@ -144,6 +145,24 @@ describe("self-deaf and self-mute", () => {
     expect(session.release).toHaveBeenCalledTimes(1);
   });
 
+  it("starts a fresh session creation for the next join after every waiter abandoned the previous one", async () => {
+    const harness = playableSetup();
+    const creation = harness.adapter.gateCreateSession();
+    const controller = new AbortController();
+    const abandoned = capture(harness.distube.voices.join(channel, { signal: controller.signal }));
+    await settle();
+    controller.abort();
+    expect(await abandoned).toMatchObject({ code: "ABORTED" });
+    const late = new FakeVoiceSession(GUILD, VOICE_CHANNEL);
+    creation.resolve(late);
+    await settle();
+    expect(late.release).toHaveBeenCalledTimes(1);
+
+    const voice = await harness.distube.voices.join(channel);
+    expect(harness.distube.voices.get(GUILD)).toBe(voice);
+    expect(harness.adapter.createVoiceSession).toHaveBeenCalledTimes(2);
+  });
+
   it("aborts only its own caller when a concurrent join shares the session creation", async () => {
     const harness = playableSetup();
     const creation = harness.adapter.gateCreateSession();
@@ -165,6 +184,19 @@ describe("self-deaf and self-mute", () => {
     expect(harness.adapter.createVoiceSession).toHaveBeenCalledTimes(1);
   });
 
+  it("re-joining an existing voice writes only the flags that differ", async () => {
+    const harness = playableSetup();
+    const voice = await harness.distube.voices.join(channel);
+    const session = required(harness.adapter.sessions[0]);
+
+    await harness.distube.voices.join(channel, { selfDeaf: true, selfMute: false });
+    expect(session.setSelfState).not.toHaveBeenCalled();
+    await harness.distube.voices.join(channel, { selfDeaf: true, selfMute: true });
+
+    expect(session.setSelfState.mock.calls).toEqual([[{ selfMute: true }]]);
+    expect([voice.selfDeaf, voice.selfMute]).toEqual([true, true]);
+  });
+
   it("keeps the session's current state when the voice moves", async () => {
     const harness = playableSetup();
     const voice = await harness.distube.voices.join(channel);
@@ -177,5 +209,31 @@ describe("self-deaf and self-mute", () => {
     expect(session.join).toHaveBeenCalledWith("other");
     expect(session.channelId).toBe("other");
     expect([voice.selfDeaf, voice.selfMute]).toEqual([false, false]);
+  });
+
+  it("writes a self flag set during a held move to the channel the move acknowledged", async () => {
+    const harness = playableSetup();
+    const voice = await harness.distube.voices.join(channel);
+    const session = harness.adapter.session;
+    const ack = session.gateJoin();
+
+    const writtenIn: string[] = [];
+    const write = required(session.setSelfState.getMockImplementation());
+    session.setSelfState.mockImplementationOnce(async state => {
+      writtenIn.push(session.channelId);
+      return write(state);
+    });
+
+    const moving = voice.move({ guildId: GUILD, id: "second" });
+    const muting = voice.setSelfMute(true);
+    await settle();
+    expect(session.setSelfState).not.toHaveBeenCalled();
+    ack.resolve();
+    await Promise.all([moving, muting]);
+
+    expect(session.join.mock.calls).toEqual([["second"]]);
+    expect(session.setSelfState.mock.calls).toEqual([[{ selfMute: true }]]);
+    expect(writtenIn).toEqual(["second"]);
+    expect([voice.channelId, voice.selfMute]).toEqual(["second", true]);
   });
 });

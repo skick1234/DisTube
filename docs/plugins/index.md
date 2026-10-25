@@ -17,7 +17,11 @@ A plugin with an `engine`, such as Lavalink, replaces the adapter's built-in eng
 
 Install the sources you need alongside `distube` and your adapter:
 
-```sh
+```sh title="npm"
+npm install @distube/youtube @distube/ytdl-core @distube/soundcloud @distube/spotify
+```
+
+```sh title="Bun"
 bun add @distube/youtube @distube/ytdl-core @distube/soundcloud @distube/spotify
 ```
 
@@ -38,6 +42,7 @@ const distube = new DisTube({
 });
 ```
 
-Spotify supplies metadata and a playback search query, so include another plugin that can play the result.
+Spotify supplies metadata only. Core plays its Songs through the first other plugin with `search` and `stream` whose
+top result prepares, so list one such as YouTube.
 At most one plugin may carry an engine. See the [quick start](../guides/quick-start/),
 [plugin authoring](../guides/plugin-authoring/) and [error handling](../guides/error-handling/) guides.
