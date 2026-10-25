@@ -65,7 +65,7 @@ it("rejects invalid voice settings before committing state", async () => {
   const voice = await harness.distube.voices.join(channel);
   await expect(voice.setVolume(Number.NaN)).rejects.toMatchObject({ code: "INVALID_ARGUMENT" });
   await expect(voice.setVolume(-1)).rejects.toMatchObject({ code: "INVALID_ARGUMENT" });
-  await expect(voice.setVolume(101)).rejects.toMatchObject({ code: "INVALID_ARGUMENT" });
+  await expect(voice.setVolume(1001)).rejects.toMatchObject({ code: "INVALID_ARGUMENT" });
   await expect(voice.setSelfDeaf("yes" as never)).rejects.toMatchObject({ code: "INVALID_ARGUMENT" });
   await expect(voice.filters.set(1 as never)).rejects.toMatchObject({ code: "INVALID_ARGUMENT" });
   await expect(voice.filters.set("")).rejects.toMatchObject({ code: "INVALID_ARGUMENT" });

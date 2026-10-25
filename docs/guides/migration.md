@@ -29,7 +29,7 @@ self-deaf and self-mute.
 | `distube.play(vc, song, { position: 1 })`                         | `await queue.add(input, { next: true })` or `{ at: 0 }`                                                                               |
 | `queue.filters.add("bassboost")`, `.remove(name)`, `.clear()`     | `await voice.filters.set("bassboost", 15)`, `.remove(name)`, `.clear()`                                                               |
 | the `reverse` filter                                              | removed                                                                                                                               |
-| `queue.setVolume(50)`, `queue.volume`                             | `await voice.setVolume(50)`, `voice.volume`                                                                                           |
+| `queue.setVolume(50)`, `queue.volume`                             | `await voice.setVolume(50)`, `voice.volume`; 0 to 1000, and the built-in engine clips above 100                                       |
 | `queue.setRepeatMode(RepeatMode.SONG)`, `queue.repeatMode`        | `queue.setRepeat("song")`, `queue.repeat`                                                                                             |
 | `queue.toggleAutoplay()`                                          | `queue.setAutoplay(!queue.autoplay)`                                                                                                  |
 | `queue.currentTime`                                               | `queue.position`                                                                                                                      |

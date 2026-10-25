@@ -12,6 +12,8 @@ export interface VoiceJoinOptions {
   readonly signal?: AbortSignal;
 }
 
+const MAX_VOLUME = 1000;
+
 export function normalizeTarget<Target>(adapter: Adapter<Target>, target: Target): VoiceTarget {
   let normalized: VoiceTarget;
   try {
@@ -67,10 +69,10 @@ export class DisTubeVoice<Target = VoiceChannelTarget> {
     return this.#connection.session.selfMute;
   }
 
-  /** Percentage from 0 to 100; committed once the Player applies it. */
+  /** Percentage from 0 to 1000; committed once the Player applies it. The built-in engine clips above 100. */
   async setVolume(percent: number): Promise<void> {
-    if (!Number.isFinite(percent) || percent < 0 || percent > 100)
-      throw new DisTubeError(ErrorCode.INVALID_ARGUMENT, "Volume must be between 0 and 100");
+    if (!Number.isFinite(percent) || percent < 0 || percent > MAX_VOLUME)
+      throw new DisTubeError(ErrorCode.INVALID_ARGUMENT, `Volume must be between 0 and ${MAX_VOLUME}`);
     await this.#guild.setVolume(this.#connection, percent);
   }
 

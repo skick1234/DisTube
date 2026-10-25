@@ -270,7 +270,22 @@ describe("Track threads", () => {
   });
 });
 
+async function toneLoudness(volume: number): Promise<number> {
+  const track = await open({ kind: "file", path: media.toneThenSilence }, { ...PLAIN, volume });
+  const tone = await take(track.packets, 50);
+  await track.close();
+  return peak(tone.slice(2), media.opus);
+}
+
 describe("Track volume and filters", () => {
+  it("amplifies a 0.61-scale tone to full scale at volume 300", async () => {
+    const [plain, amplified] = [await toneLoudness(100), await toneLoudness(300)];
+
+    expect(plain).toBeGreaterThan(0.55);
+    expect(plain).toBeLessThan(0.7);
+    expect(amplified).toBeGreaterThan(0.95);
+  });
+
   it("reports source time under nightcore and keeps it when the filter is removed", async () => {
     const track = await open((await fileReader(media.hour)).resource, { ...PLAIN, chain: NIGHTCORE });
 

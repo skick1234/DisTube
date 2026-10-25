@@ -159,7 +159,7 @@ export interface Player {
   /** Ends the active track as `stopped`, leaving the Player usable. */
   stopTrack(): Promise<void>;
   seek(seconds: number): Promise<void>;
-  /** Percentage, kept for later tracks. */
+  /** Percentage from 0 to 1000, kept for later tracks. */
   setVolume(percent: number): Promise<void>;
   /** Renders the ordered filter set; an empty list clears it. */
   setFilters(entries: readonly FilterEntry[]): Promise<void>;

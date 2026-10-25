@@ -116,7 +116,8 @@ creates the connection (self-deaf defaults to on, self-mute to off). Read the li
 the guild. `voice.leave()` and `distube.voices.leave(guildId)` delete the attached queue, release the Player and
 the session, and publish `voice.disconnected` with reason `left`. Both are idempotent.
 
-- `setVolume(percent)` takes a finite number from 0 to 100. The default is 100.
+- `setVolume(percent)` takes a finite number from 0 to 1000. The default is 100. Above 100 the built-in engine
+  amplifies and clips loud tracks; there is no limiter.
 - `setSelfDeaf(enabled)` and `setSelfMute(enabled)` update the bot's voice state without rejoining. The encoder
   follows the channel's bitrate.
 - `filters` is a manager with `set(name, value?)`, `toggle(name, value?)`, `remove(name)`, `clear()`, `has(name)`,

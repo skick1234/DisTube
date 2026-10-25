@@ -277,6 +277,17 @@ describe("seek", () => {
 });
 
 describe("voice volume", () => {
+  it("applies volumes up to 1000 and rejects 1001 without a Player command", async () => {
+    const { harness, voice, player } = await playing(["a"]);
+    player.setVolume.mockClear();
+    await voice.setVolume(1000);
+    await voice.setVolume(250);
+    await expect(voice.setVolume(1001)).rejects.toMatchObject({ code: "INVALID_ARGUMENT" });
+    expect(player.setVolume.mock.calls).toEqual([[1000], [250]]);
+    expect(voice.volume).toBe(250);
+    await harness.distube.dispose();
+  });
+
   it("rejects a volume change the Player refused and keeps the previous setting", async () => {
     const { harness, voice, player } = await playing(["a"]);
     player.setVolume.mockRejectedValueOnce(new Error("mixer offline"));
