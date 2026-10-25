@@ -1,6 +1,6 @@
 {
   "name": "@distube/discordjs",
-  "version": "6.0.0",
+  "version": "0.0.0",
   "description": "discord.js adapter for DisTube",
   "license": "MIT",
   "files": [

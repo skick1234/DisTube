@@ -1,6 +1,6 @@
 {
   "name": "distube",
-  "version": "6.0.0",
+  "version": "5.2.3",
   "description": "Minimal queue and playback orchestration for Discord audio",
   "license": "MIT",
   "files": [

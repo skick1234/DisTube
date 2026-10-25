@@ -22,7 +22,7 @@
     },
     "packages/discordjs": {
       "name": "@distube/discordjs",
-      "version": "6.0.0",
+      "version": "0.0.0",
       "dependencies": {
         "node-av": "6.2.0-beta.33",
       },
@@ -39,11 +39,11 @@
     },
     "packages/distube": {
       "name": "distube",
-      "version": "6.0.0",
+      "version": "5.2.3",
     },
     "packages/oceanic": {
       "name": "@distube/oceanic",
-      "version": "6.0.0",
+      "version": "0.0.0",
       "dependencies": {
         "node-av": "6.2.0-beta.33",
       },
