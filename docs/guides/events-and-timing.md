@@ -12,13 +12,16 @@ Subscribe to typed dotted names on the client:
 | `queue.created`         | Registration of an empty queue                   |
 | `queue.item.added`      | `item`                                           |
 | `queue.playlist.added`  | `playlist`, `items`                              |
-| `queue.item.started`    | `item`                                           |
+| `queue.item.started`    | `item`, optional `fallback`                      |
 | `queue.item.finished`   | `item`                                           |
 | `queue.item.failed`     | `item`, `error`                                  |
 | `queue.finished`        | Playback ran out of items                        |
 | `queue.autoplay.failed` | `song`, `error`                                  |
 | `queue.deleted`         | `reason`                                         |
 | `voice.disconnected`    | `voice`, `channelId`, `reason`, optional `error` |
+
+`fallback` is the Song that actually plays when the item's plugin has no `stream`, such as the YouTube video a
+Spotify track was found as. `item.song` stays the Spotify Song.
 
 Queue events carry `guildId`, the `queue`, a captured `state` (`current`, `upcoming`, `history`, `status`,
 `repeat`, `autoplay`) and the commit `timestamp`. Voice events carry `guildId`, `voice` and `timestamp`.

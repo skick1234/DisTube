@@ -32,7 +32,8 @@ export interface DisTubeEventMap<Metadata = unknown, Target = VoiceChannelTarget
   "queue.playlist.added": Readonly<
     BaseQueueEvent<Metadata, Target> & { playlist: Playlist; items: readonly QueueItem<Metadata>[] }
   >;
-  "queue.item.started": Readonly<BaseQueueEvent<Metadata, Target> & { item: QueueItem<Metadata> }>;
+  /** `fallback` is the Song another plugin's search found and played, when the item's own plugin has no `stream`. */
+  "queue.item.started": Readonly<BaseQueueEvent<Metadata, Target> & { item: QueueItem<Metadata>; fallback?: Song }>;
   "queue.item.finished": Readonly<BaseQueueEvent<Metadata, Target> & { item: QueueItem<Metadata> }>;
   "queue.item.failed": Readonly<BaseQueueEvent<Metadata, Target> & { item: QueueItem<Metadata>; error: DisTubeError }>;
   /** Playback ran out of successors; `queue.deleted` follows. */

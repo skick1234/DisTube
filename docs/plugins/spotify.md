@@ -45,9 +45,10 @@ or face rate limits. Spotify has no `related`, so autoplay publishes `queue.auto
 
 Spotify has no `stream`, so core plays its Songs through the search fallback. It searches every other plugin that
 has `search` and `stream`, in the order of `plugins`, for the track name and artists with limit 1, and plays the
-first candidate that prepares. The public Song and queue item remain Spotify's. If every plugin finds nothing, the
-item fails `NO_RESULT`; if some failed, it fails `SOURCE_FAILED` with an `AggregateError` of the failures. Either
-error carries the searched text as `error.query`. The client
+first candidate that prepares. The public Song and queue item remain Spotify's; `queue.item.started` carries the
+candidate as `fallback`, so you can show which video played. If every plugin finds nothing, the item fails
+`NO_RESULT`; if some failed, it fails `SOURCE_FAILED` with an `AggregateError` of the failures. Either error carries
+the searched text as `error.query`. The client
 constructor rejects Spotify when no other plugin has `search` and `stream`. An engine plugin such as
 [Lavalink](../lavalink/) prepares every Song itself and the fallback never runs.
 

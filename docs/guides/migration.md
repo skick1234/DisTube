@@ -40,6 +40,7 @@ self-deaf and self-mute.
 | `on`, `once`, `off`, `removeAllListeners`                         | `const off = distube.on(name, listener)`; call `off()`                                                                                |
 | `queue.textChannel`                                               | your own `Map` keyed by `queue.guildId`                                                                                               |
 | `error.errorCode === "SPOTIFY_NOT_FOUND"`                         | `DisTubeError.is(error, ErrorCode.NOT_FOUND)` and `error.source === "spotify"`                                                        |
+| `song.stream.song`, the Song a Spotify track played through       | `event.fallback` on `"queue.item.started"`                                                                                            |
 | the query parsed out of `Cannot find "<query>"`                   | `error.query` on the `NO_RESULT` or `SOURCE_FAILED` core raises after asking every plugin                                             |
 | playlist-specific messages such as `Unknown Playlist`             | `error.media === "playlist"` on `NOT_FOUND`, `UNAVAILABLE` or `NO_RESULT`                                                             |
 | `shutdown()`                                                      | `await distube.dispose()`                                                                                                             |

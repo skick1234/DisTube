@@ -158,26 +158,36 @@ export async function relatedSong(
   return next && owned(owner, next);
 }
 
+export interface PreparedSong {
+  readonly resource: PlaybackResource;
+  /** The candidate the search fallback prepared in place of the Song. */
+  readonly fallback?: Song;
+}
+
 export async function prepareSong(
   plugins: readonly Plugin[],
   engine: Engine,
   song: Song,
   signal: AbortSignal,
-): Promise<PlaybackResource> {
+): Promise<PreparedSong> {
   const owner = ownerOf(plugins, song);
   if (!owner) throw new DisTubeError(ErrorCode.SOURCE_FAILED, `No plugin named ${song.source} is configured`);
   const prepare = engine.prepare?.bind(engine);
-  if (prepare)
-    return call(plugins.find(plugin => plugin.engine === engine) ?? owner, signal, () => prepare(song, { signal }));
+  if (prepare) {
+    const preparer = plugins.find(plugin => plugin.engine === engine) ?? owner;
+    return { resource: await call(preparer, signal, () => prepare(song, { signal })) };
+  }
   const stream = owner.stream?.bind(owner);
-  if (stream) return call(owner, signal, () => stream(song, { signal }));
+  if (stream) return { resource: await call(owner, signal, () => stream(song, { signal })) };
   const query = song.artist === undefined ? song.name : `${song.name} ${song.artist}`;
   return firstFound(plugins, signal, `No plugin could play ${song.name}`, query, async plugin => {
     const search = plugin.search?.bind(plugin);
     const prepareCandidate = plugin.stream?.bind(plugin);
     if (!search || !prepareCandidate) return undefined;
-    const [candidate] = await call(plugin, signal, () => search(query, { signal, limit: 1, offset: 0 }));
-    return candidate && call(plugin, signal, () => prepareCandidate(owned(plugin, candidate), { signal }));
+    const [found] = await call(plugin, signal, () => search(query, { signal, limit: 1, offset: 0 }));
+    if (!found) return undefined;
+    const fallback = owned(plugin, found);
+    return { resource: await call(plugin, signal, () => prepareCandidate(fallback, { signal })), fallback };
   });
 }
 

@@ -366,9 +366,9 @@ export class DisTubeQueue<Metadata = unknown, Target = VoiceChannelTarget> {
     const signal = AbortSignal.any([this.#lifetime.signal, controller.signal]);
     this.#attempt = attempt;
     try {
-      let resource;
+      let prepared;
       try {
-        resource = await prepareSong(plugins, engine, item.song, signal);
+        prepared = await prepareSong(plugins, engine, item.song, signal);
       } catch (error: unknown) {
         if (signal.aborted) return;
         this.#state = failFirst(this.#state, item.id);
@@ -382,7 +382,9 @@ export class DisTubeQueue<Metadata = unknown, Target = VoiceChannelTarget> {
       const started = startFirst(this.#state);
       if (signal.aborted || started?.item !== item || !this.voice) {
         const voiceLost = !this.voice && !signal.aborted;
-        await disposeResource(resource).catch((error: unknown) => this.#report("queue.resource.dispose", error));
+        await disposeResource(prepared.resource).catch((error: unknown) =>
+          this.#report("queue.resource.dispose", error),
+        );
         if (voiceLost) void this.delete("voice-loss");
         return;
       }
@@ -390,7 +392,10 @@ export class DisTubeQueue<Metadata = unknown, Target = VoiceChannelTarget> {
       attempt.playing = true;
       let end: TrackEnd;
       try {
-        end = await this.#guild.playTrack(resource, signal, () => this.#emit("queue.item.started", { item }));
+        const { resource, fallback } = prepared;
+        end = await this.#guild.playTrack(resource, signal, () =>
+          this.#emit("queue.item.started", fallback ? { item, fallback } : { item }),
+        );
       } catch (error: unknown) {
         if (signal.aborted) return;
         this.#state = finishCurrent(this.#state);

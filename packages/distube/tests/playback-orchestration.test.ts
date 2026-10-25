@@ -195,19 +195,30 @@ describe("search fallback for a plugin without stream", () => {
     const soundcloud = new FakeSource("soundcloud");
     youtube.search.mockResolvedValue([media("youtube", "yt-first"), media("youtube", "yt-second")]);
     youtube.stream.mockRejectedValue(new Error("unplayable"));
-    soundcloud.search.mockResolvedValue([media("soundcloud", "sc-first")]);
+    const candidate = media("soundcloud", "sc-first");
+    soundcloud.search.mockResolvedValue([candidate]);
     const harness = setup([spotify, youtube, soundcloud]);
     const started: unknown[] = [];
-    harness.distube.on("queue.item.started", event => void started.push(event.item));
+    const fallbacks: unknown[] = [];
+    harness.distube.on("queue.item.started", event => {
+      started.push(event.item);
+      fallbacks.push(event.fallback);
+    });
 
     const song = spotifySong("Artist B");
     const queue = await harness.distube.play(TARGET, song);
     await settle();
+    const first = queue.current;
+    await queue.add(media("soundcloud", "own-stream"));
+    await queue.skip();
+    await settle();
 
-    expect(youtube.stream.mock.calls.map(([candidate]) => candidate.id)).toEqual(["yt-first"]);
-    expect(harness.engine.player.played).toEqual(["sc-first"]);
-    expect(started).toEqual([queue.current]);
-    expect(queue.current?.song).toBe(song);
+    expect(youtube.stream.mock.calls.map(([found]) => found.id)).toEqual(["yt-first"]);
+    expect(harness.engine.player.played).toEqual(["sc-first", "own-stream"]);
+    expect(started[0]).toBe(first);
+    expect(first?.song).toBe(song);
+    expect(fallbacks).toEqual([candidate, undefined]);
+    expect(fallbacks[0]).toBe(candidate);
     await harness.distube.dispose();
   });
 
