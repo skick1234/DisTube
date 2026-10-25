@@ -100,7 +100,9 @@ the history as an exclusion list. A failure publishes `queue.autoplay.failed`.
 while it was still preparing never played and does not enter history. Failed items never enter it. Read
 `queue.history` after `queue.item.finished`.
 
-Each `QueueItem` has `id`, `song`, `metadata` and `addedAt`, the creation time in epoch milliseconds.
+Each `QueueItem` has `id`, `song`, `metadata`, `autoplay` and `addedAt`, the creation time in epoch milliseconds.
+`autoplay` is true for an item autoplay added. Its `metadata` is the same reference as the item it was related
+from, so a bot keeps its text channel and can credit itself as the requester.
 
 `stop()` unregisters and deletes the queue immediately, publishes `queue.deleted` with reason `stop` and keeps the
 voice with its settings. Other controls on a deleted queue reject `INVALID_STATE`. A later `play` registers a fresh queue

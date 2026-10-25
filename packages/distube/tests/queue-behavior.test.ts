@@ -113,6 +113,33 @@ describe("autoplay", () => {
     expect(harness.distube.getQueue(GUILD)).toBe(queue);
   });
 
+  it("marks the related item as autoplay and carries the metadata of the item it followed", async () => {
+    const harness = playableSetup();
+    const requester = { member: "user-1", channel: "text-1" };
+    harness.source.related.mockResolvedValueOnce(media("source", "related"));
+    const added: { autoplay: boolean; metadata: unknown }[] = [];
+    harness.distube.on("queue.item.added", ({ item }) => void added.push(item));
+    const queue = await harness.distube.play(TARGET, "a", { metadata: requester });
+    queue.setAutoplay(true);
+    queue.setRepeat("song");
+    await settle();
+    const first = required(queue.current);
+
+    queue.setRepeat("off");
+    await queue.skip();
+    await settle();
+    const related = required(queue.current);
+    queue.setRepeat("song");
+    required(harness.engine.players[0]).finish();
+    await settle();
+
+    expect([first.autoplay, related.song.id, related.autoplay]).toEqual([false, "related", true]);
+    expect(related.metadata).toBe(requester);
+    expect(added.at(-1)).toBe(related);
+    expect([required(queue.current).id === related.id, required(queue.current).autoplay]).toEqual([false, true]);
+    expect(required(queue.current).metadata).toBe(requester);
+  });
+
   it("drops a related lookup that a committed user add outran", async () => {
     const { harness, queue, player } = await playing(["a"]);
     const lookup = deferred<Song | undefined>();

@@ -24,6 +24,7 @@ self-deaf and self-mute.
 | `queue.jump(2)`, `queue.previous()`, `queue.shuffle()`            | `await queue.jump(2)`, `await queue.previous()`, `queue.shuffle()`                                                                    |
 | `queue.songs.splice(index, 1)`                                    | `queue.remove(index)` or `queue.remove({ from: 2, to: 4 })`                                                                           |
 | `queue.addRelatedSong()`                                          | no v6 method; `queue.setAutoplay(true)`, or call the plugin's `related(song, { signal, exclude })` and pass the result to `queue.add` |
+| autoplay songs credited to `queue.clientMember`                   | `item.autoplay === true`; `item.metadata` is the metadata of the item it followed                                                     |
 | `queue.pause()`, `queue.resume()`                                 | unchanged: `await queue.pause()`, `await queue.resume()`; a pause ends with its item, so the next item starts unpaused                |
 | `queue.seek(seconds)`, `queue.stop()`                             | unchanged; `stop()` deletes the queue and keeps the voice                                                                             |
 | `distube.play(vc, song, { position: 1 })`                         | `await queue.add(input, { next: true })` or `{ at: 0 }`                                                                               |

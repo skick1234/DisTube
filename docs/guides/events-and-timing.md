@@ -94,4 +94,5 @@ unsubscribe();
 ```
 
 Metadata is optional. Core stores the reference without reading, cloning or freezing it. Without a type parameter,
-metadata is `unknown` and needs narrowing before property reads.
+metadata is `unknown` and needs narrowing before property reads. An autoplay item, marked `item.autoplay`, carries
+the metadata of the item it was related from; check the flag before showing `requestedBy`.
