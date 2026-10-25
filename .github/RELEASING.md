@@ -7,14 +7,19 @@ and on every release tag. There is no freeze, fingerprint or release-candidate s
 
 ## Steps
 
-1. Merge the changesets for the release into `main` and run `bun run version-packages` (`changeset version`) on a
-   branch. Publish `distube` before an adapter that depends on its new public contract.
-2. Merge the version bump. The tagged commit must be green on the `Test` workflow.
-3. Push one tag per package, named `<package>@<version>`, for example `distube@6.0.0` or
-   `@distube/discordjs@6.0.0`.
-4. The `Publish` workflow checks the tag against the package manifest, runs `bun run verify`, runs `npm pack` in the
-   package directory and publishes the archive with `npm publish --provenance`. npm authenticates the job through
-   trusted publishing (GitHub OIDC); no npm token exists in CI. The CI run on the tagged commit is the release evidence.
+1. On `main`, commit `chore(Release): <package>@<version>`, for example `chore(Release): distube@6.0.0`. Its only
+   changes are that package's `version` and its workspace `version` line in `bun.lock` (`bun install` writes it).
+   A version changes in no other commit, and the repository keeps no changelog or changeset files. Release
+   `distube` before an adapter that depends on its new public contract.
+2. Push the commit. It must be green on the `Test` workflow.
+3. Push the tag `<package>@<version>` on that commit, for example `distube@6.0.0` or `@distube/discordjs@6.0.0`.
+4. The `Publish` workflow checks the tag against the package manifest and refuses unless the tagged commit is that
+   release commit. It runs `bun run verify`, runs `npm pack` in the package directory and publishes the archive
+   with `npm publish --provenance`. npm authenticates the job through trusted publishing (GitHub OIDC); no npm token
+   exists in CI. The CI run on the tagged commit is the release evidence.
+5. After the publish, the `release` job creates the GitHub release for the tag. Its notes list the conventional
+   commit subjects that touch the package since its previous `<package>@` tag, grouped by type, followed by
+   GitHub's generated notes. A version containing `-` is a prerelease.
 
 ## New packages
 
@@ -34,7 +39,7 @@ through `file:../DisTube/packages/<pkg>` links and run their own `verify` agains
 
 `bun install --frozen-lockfile` fails on manifest or lock drift. Regenerate `bun.lock` only with Bun 1.4.3.
 
-Narrow an adapter peer range with a breaking changeset and migration note before tagging.
+Narrow an adapter peer range in a `!` commit with a migration note before tagging.
 
 ## Documentation
 

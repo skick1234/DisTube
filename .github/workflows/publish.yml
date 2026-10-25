@@ -1,6 +1,7 @@
 name: Publish
-# Tag a verified commit as `<package>@<version>` (for example `distube@6.0.0` or
-# `@distube/discordjs@6.0.0`). CI verifies, packs that package and publishes it with provenance.
+# Tag the release commit `chore(Release): <package>@<version>` with `<package>@<version>` (for example
+# `distube@6.0.0` or `@distube/discordjs@6.0.0`). CI checks that commit, verifies, packs that package,
+# publishes it with provenance and creates the GitHub release.
 on:
   push:
     tags: ["*@*"]
@@ -9,6 +10,7 @@ jobs:
     name: Verify, pack and publish
     runs-on: ubuntu-latest
     outputs:
+      name: ${{ steps.tag.outputs.name }}
       directory: ${{ steps.tag.outputs.directory }}
       prerelease: ${{ steps.tag.outputs.prerelease }}
     permissions:
@@ -17,6 +19,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -48,8 +52,40 @@ jobs:
             echo "Tag $TAG does not match $manifest_name@$manifest_version" >&2
             exit 1
           fi
+          echo "name=$name" >> "$GITHUB_OUTPUT"
           echo "directory=$directory" >> "$GITHUB_OUTPUT"
           if [[ "$version" == *-* ]]; then echo "prerelease=true" >> "$GITHUB_OUTPUT"; else echo "prerelease=false" >> "$GITHUB_OUTPUT"; fi
+
+      - name: Check the tag is on its release commit
+        env:
+          TAG: ${{ github.ref_name }}
+          NAME: ${{ steps.tag.outputs.name }}
+          DIRECTORY: ${{ steps.tag.outputs.directory }}
+        run: |
+          fail() { echo "Tag $TAG is not on its release commit: $1" >&2; exit 1; }
+          [[ "$(git log -1 --format=%s)" == "chore(Release): $TAG" ]] || fail "the subject is not 'chore(Release): $TAG'"
+          [[ "$(git rev-list --parents -n 1 HEAD | wc -w)" == 2 ]] || fail "it does not have exactly one parent"
+          changed="$(git diff --name-only HEAD^ HEAD | sort | paste -sd ' ')"
+          [[ "$changed" == "$DIRECTORY/package.json" || "$changed" == "bun.lock $DIRECTORY/package.json" ]] ||
+            fail "it changes files other than $DIRECTORY/package.json and bun.lock"
+          git show "HEAD^:$DIRECTORY/package.json" > "$RUNNER_TEMP/before.json"
+          bun -e '
+            const [before, after] = await Promise.all(process.argv.slice(1).map((path) => Bun.file(path).json()));
+            const rest = (manifest) => JSON.stringify({ ...manifest, version: undefined });
+            process.exit(rest(before) === rest(after) && before.version !== after.version ? 0 : 1);
+          ' "$RUNNER_TEMP/before.json" "$DIRECTORY/package.json" || fail "$DIRECTORY/package.json changes more than its version"
+          if [[ "$changed" == bun.lock* ]]; then
+            git show HEAD^:bun.lock > "$RUNNER_TEMP/bun.lock"
+            bun -e '
+              const [lock, before, after, directory] = process.argv.slice(1);
+              const [from, to] = await Promise.all([before, after].map((path) => Bun.file(path).json()));
+              const entry = (version) => `"${directory}": {\n      "name": "${to.name}",\n      "version": "${version}",`;
+              const text = await Bun.file(lock).text();
+              const expected = text.replace(entry(from.version), entry(to.version));
+              process.exit(expected !== text && expected === (await Bun.file("bun.lock").text()) ? 0 : 1);
+            ' "$RUNNER_TEMP/bun.lock" "$RUNNER_TEMP/before.json" "$DIRECTORY/package.json" "$DIRECTORY" ||
+              fail "bun.lock changes more than the $NAME workspace version"
+          fi
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
@@ -64,6 +100,51 @@ jobs:
       - name: Publish
         working-directory: ${{ steps.tag.outputs.directory }}
         run: npm publish "$RUNNER_TEMP"/*.tgz --provenance --access public
+
+  release:
+    name: Create the GitHub release
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Release with notes since the package's previous tag
+        env:
+          TAG: ${{ github.ref_name }}
+          NAME: ${{ needs.publish.outputs.name }}
+          DIRECTORY: ${{ needs.publish.outputs.directory }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          previous="$(git describe --tags --abbrev=0 --match "$NAME@*" HEAD^ 2>/dev/null || true)"
+          git log --no-merges --format='%h%x09%s' "${previous:+$previous..}HEAD" -- "$DIRECTORY" |
+          awk -F '\t' '
+            BEGIN {
+              count = split("breaking feat fix perf refactor docs test build other", order, " ")
+              title["breaking"] = "Breaking changes"; title["feat"] = "Features"; title["fix"] = "Fixes"
+              title["perf"] = "Performance"; title["refactor"] = "Refactoring"; title["docs"] = "Documentation"
+              title["test"] = "Tests"; title["build"] = "Build and CI"; title["other"] = "Other changes"
+            }
+            $2 ~ /^chore\(Release\):/ { next }
+            {
+              type = "other"
+              if (match($2, /^[a-z]+(\([^)]*\))?!?:/)) {
+                head = substr($2, 1, RLENGTH)
+                if (head ~ /!:$/) type = "breaking"
+                else { sub(/[(:].*/, "", head); if (head == "ci") head = "build"; if (head in title) type = head }
+              }
+              items[type] = items[type] "- " $2 " (" $1 ")\n"
+            }
+            END { for (i = 1; i <= count; i++) if (order[i] in items) printf "### %s\n\n%s\n", title[order[i]], items[order[i]] }
+          ' > "$RUNNER_TEMP/notes.md"
+          args=(--verify-tag --title "$TAG" --generate-notes --notes "$(cat "$RUNNER_TEMP/notes.md")")
+          if [[ -n "$previous" ]]; then args+=(--notes-start-tag "$previous"); fi
+          if [[ "$TAG" == *-* ]]; then args+=(--prerelease); fi
+          gh release create "$TAG" "${args[@]}"
 
   docs:
     name: Publish documentation snapshot

@@ -81,8 +81,10 @@ CI installs with `--frozen-lockfile`, so manifest or lock drift fails.
 
 ## Releasing
 
-See [RELEASING.md](RELEASING.md). In short: `changeset version` on `main`, then push a
-`<package>@<version>` tag; CI verifies, `npm pack`s that package and publishes it with provenance through npm trusted publishing.
+See [RELEASING.md](RELEASING.md). In short: commit `chore(Release): <package>@<version>` with only that version
+bump, then push the `<package>@<version>` tag on it; CI checks the commit, verifies, `npm pack`s that package,
+publishes it with provenance through npm trusted publishing and creates the GitHub release. Do not change a version
+in any other commit.
 
 ## ⚖️ License
 
