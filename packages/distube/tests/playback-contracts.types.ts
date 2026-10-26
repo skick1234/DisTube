@@ -186,13 +186,17 @@ interface Requester {
 declare const typed: DisTube<Requester>;
 declare const untyped: DisTube;
 
-expectTypeOf<NonNullable<Awaited<ReturnType<DisTube<Requester>["play"]>>["current"]>["metadata"]>().toEqualTypeOf<
-  Requester | undefined
->();
-const typedFromQueue: string | undefined = typed.getQueue("guild")?.current?.metadata?.requestedBy;
+expectTypeOf<
+  NonNullable<Awaited<ReturnType<DisTube<Requester>["play"]>>["current"]>["metadata"]
+>().toEqualTypeOf<Requester>();
+expectTypeOf<NonNullable<Awaited<ReturnType<DisTube["play"]>>["current"]>["metadata"]>().toEqualTypeOf<undefined>();
+expectTypeOf<
+  NonNullable<Awaited<ReturnType<DisTube<Requester | undefined>["play"]>>["current"]>["metadata"]
+>().toEqualTypeOf<Requester | undefined>();
+const typedFromQueue: string | undefined = typed.getQueue("guild")?.current?.metadata.requestedBy;
 typed.on("queue.item.finished", event => {
   const captured: QueueState<Requester> = event.state;
-  return captured.history[0]?.metadata?.requestedBy;
+  return captured.history[0]?.metadata.requestedBy;
 });
 typed.on("queue.deleted", event => {
   const reason: "stop" | "finished" | "voice-loss" | "leave" | "shutdown" | "failed" = event.reason;
@@ -202,8 +206,31 @@ typed.on("queue.deleted", event => {
 typed.on("voice.track.finished", () => undefined);
 // @ts-expect-error metadata of the wrong shape fails before it can run
 typed.play({ guildId: "guild", id: "voice" }, "query", { metadata: { requester: "skick" } });
-// @ts-expect-error an omitted type parameter leaves metadata unknown
+// @ts-expect-error an omitted type parameter leaves metadata undefined
 untyped.getQueue("guild")?.current?.metadata?.requestedBy;
+
+const target = { guildId: "guild", id: "voice" };
+void untyped.play(target, "query");
+void untyped.play(target, "query", {});
+void untyped.play(target, "query", { metadata: undefined });
+// @ts-expect-error a client without a Metadata type takes no metadata
+void untyped.play(target, "query", { metadata: { requestedBy: "skick" } });
+// @ts-expect-error metadata is required when the type excludes undefined
+void typed.play(target, "query");
+// @ts-expect-error metadata is required when the type excludes undefined
+void typed.play(target, "query", {});
+// @ts-expect-error metadata is required when the type excludes undefined
+void typed.play(target, "query", { next: true });
+void typed.play(target, "query", { metadata: { requestedBy: "skick" } });
+declare const typedQueue: DisTubeQueue<Requester>;
+// @ts-expect-error queue.add requires metadata as play does
+void typedQueue.add("query");
+// @ts-expect-error queue.add requires metadata as play does
+void typedQueue.add("query", { at: 0 });
+void typedQueue.add("query", { at: 0, metadata: { requestedBy: "skick" } });
+declare const optional: DisTube<Requester | undefined>;
+void optional.play(target, "query");
+void optional.play(target, "query", {});
 
 void [
   authorized,

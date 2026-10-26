@@ -94,8 +94,13 @@ async function musicCommand(channel: NativeChannel): Promise<void> {
   });
   const voice = queue.voice;
   await voice?.setVolume(80);
-  await queue.add("https://example.audio/clip/1", { at: 0 });
+  await queue.add("https://example.audio/clip/1", { at: 0, metadata: { requestedBy: "user-id" } });
+  const found: typeof queue | undefined = distube.getQueue("guild-id");
+  void found;
+  const stop = distube.on("queue.item.started", ({ item, fallback }) => void [item.metadata.requestedBy, fallback]);
+  stop();
   await queue.jump(1);
+  await queue.skip();
   await queue.previous();
   await queue.seek(5);
   await queue.pause();
@@ -113,7 +118,7 @@ async function musicCommand(channel: NativeChannel): Promise<void> {
 
 async function soundCommand(channel: NativeChannel): Promise<void> {
   const airhorn = new Song({ source: "sounds", id: "airhorn", name: "Airhorn", url: "https://example.audio/airhorn" });
-  const queue = await distube.play(channel, airhorn, { next: true });
+  const queue = await distube.play(channel, airhorn, { next: true, metadata: { requestedBy: "user-id" } });
   await queue.stop();
 }
 

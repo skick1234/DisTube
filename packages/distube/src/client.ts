@@ -11,7 +11,7 @@ import { DisTubeError, ErrorCode, requireInteger, requireQuery, throwIfAborted }
 import { DisTubeEvents, type DisTubeEventListener, type DisTubeEventName } from "./events";
 import { Guilds } from "./guild";
 import type { Playlist, Song } from "./media";
-import { type AddOptions, type DisTubeQueue, validateAdd } from "./queue";
+import { type AddArguments, type AddOptions, type DisTubeQueue, validateAdd } from "./queue";
 import { resolveInput, searchSongs, suggestQueries, validateInput } from "./sources";
 import { normalizeTarget, VoiceManager } from "./voice";
 
@@ -50,7 +50,7 @@ export interface DisTubeOptions<Target = VoiceChannelTarget> {
   };
 }
 
-export type PlayOptions<Metadata = unknown> = AddOptions<Metadata>;
+export type PlayOptions<Metadata = undefined> = AddOptions<Metadata>;
 
 /** Options for `distube.search`. `source` narrows the result type to that plugin's data. */
 export interface SearchRequest<Source extends Plugin = Plugin> {
@@ -73,7 +73,7 @@ export interface SuggestRequest {
  * The public client. `Metadata` types `options.metadata` on every QueueItem, queue and event this client
  * hands back; core never reads it.
  */
-export class DisTube<Metadata = unknown, Target = VoiceChannelTarget> {
+export class DisTube<Metadata = undefined, Target = VoiceChannelTarget> {
   readonly voices: VoiceManager<Target>;
   readonly #plugins: readonly Plugin[];
   readonly #events: DisTubeEvents<Target>;
@@ -135,8 +135,9 @@ export class DisTube<Metadata = unknown, Target = VoiceChannelTarget> {
   play(
     target: Target,
     input: ResolvableInput,
-    options: PlayOptions<Metadata> = {},
+    ...args: AddArguments<Metadata>
   ): Promise<DisTubeQueue<Metadata, Target>> {
+    const options: AddOptions<unknown> = args[0] ?? {};
     try {
       const { guildId } = normalizeTarget(this.#guilds.config.adapter, target);
       validateAdd(this.#plugins, input, options);

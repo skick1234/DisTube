@@ -559,7 +559,7 @@ describe("idle voice", () => {
   it.each([
     [
       "a queue that finishes",
-      async (harness: ReturnType<typeof playableSetup>) => {
+      async (harness: ReturnType<typeof playableSetup<undefined>>) => {
         await harness.distube.play(TARGET, "a");
         await flushMicrotasks(30);
         harness.engine.player.finish();
@@ -568,7 +568,7 @@ describe("idle voice", () => {
     ],
     [
       "a first play whose step fails after the join",
-      async (harness: ReturnType<typeof playableSetup>) => {
+      async (harness: ReturnType<typeof playableSetup<undefined>>) => {
         const controller = new AbortController();
         const gate = harness.adapter.gateCreateSession();
         const playing = capture(harness.distube.play(TARGET, "a", { signal: controller.signal }));
@@ -582,7 +582,7 @@ describe("idle voice", () => {
     ],
     [
       "clear during the first preparation",
-      async (harness: ReturnType<typeof playableSetup>) => {
+      async (harness: ReturnType<typeof playableSetup<undefined>>) => {
         const held = deferred<PlaybackResource>();
         harness.source.stream.mockImplementationOnce(() => held.promise);
         const queue = await harness.distube.play(TARGET, "a");

@@ -32,10 +32,20 @@ import {
 import { disposeResource, prepareSong, relatedSong, resolveInput, songsOf, validateInput } from "./sources";
 import type { DisTubeVoice } from "./voice";
 
+/** Caller-owned reference stored on every QueueItem the call creates. Required when `Metadata` excludes `undefined`. */
+type MetadataOption<Metadata> = undefined extends Metadata
+  ? { readonly metadata?: Metadata }
+  : { readonly metadata: Metadata };
+
 /** Options for `distube.play` and `queue.add`. */
-export interface AddOptions<Metadata = unknown> {
-  /** Caller-owned reference stored on every QueueItem the call creates. */
-  readonly metadata?: Metadata;
+export type AddOptions<Metadata = undefined> = InsertOptions & MetadataOption<Metadata>;
+
+/** The trailing options argument, optional unless `metadata` is required. */
+export type AddArguments<Metadata> = undefined extends Metadata
+  ? [options?: AddOptions<Metadata>]
+  : [options: AddOptions<Metadata>];
+
+interface InsertOptions {
   /** Cancels the insertion; the call then rejects with `ABORTED` and adds nothing. */
   readonly signal?: AbortSignal;
   /** Zero-based position in `upcoming`, evaluated when the insertion commits. Past the end appends. */
@@ -70,7 +80,7 @@ const REPEAT_MODES: readonly unknown[] = ["off", "song", "queue"] satisfies read
  * Schedule edits commit before they return and throw instead of rejecting. A queue is deleted on stop, exhaustion,
  * voice loss, leave or shutdown; a deleted queue rejects every command except `stop` with `INVALID_STATE`.
  */
-export class DisTubeQueue<Metadata = unknown, Target = VoiceChannelTarget> {
+export class DisTubeQueue<Metadata = undefined, Target = VoiceChannelTarget> {
   readonly guildId: string;
   readonly #guild: Guild<Target>;
   readonly #lifetime = new AbortController();
@@ -134,7 +144,8 @@ export class DisTubeQueue<Metadata = unknown, Target = VoiceChannelTarget> {
   }
 
   /** Resolves `input` and commits it in call order. Rejects `INVALID_STATE` if the guild has no voice by then. */
-  add(input: ResolvableInput, options: AddOptions<Metadata> = {}): Promise<readonly QueueItem<Metadata>[]> {
+  add(input: ResolvableInput, ...args: AddArguments<Metadata>): Promise<readonly QueueItem<Metadata>[]> {
+    const options: AddOptions<unknown> = args[0] ?? {};
     try {
       validateAdd(this.#guild.config.plugins, input, options);
       this.#assertCurrent();
@@ -265,7 +276,11 @@ export class DisTubeQueue<Metadata = unknown, Target = VoiceChannelTarget> {
   }
 
   /** @internal */
-  admit(input: ResolvableInput, options: AddOptions, join: () => Promise<unknown>): Promise<readonly QueueItem[]> {
+  admit(
+    input: ResolvableInput,
+    options: AddOptions<unknown>,
+    join: () => Promise<unknown>,
+  ): Promise<readonly QueueItem[]> {
     return this.#enqueue(input, options, join);
   }
 
@@ -281,7 +296,11 @@ export class DisTubeQueue<Metadata = unknown, Target = VoiceChannelTarget> {
     return this.#loop;
   }
 
-  #enqueue(input: ResolvableInput, options: AddOptions, join?: () => Promise<unknown>): Promise<readonly QueueItem[]> {
+  #enqueue(
+    input: ResolvableInput,
+    options: AddOptions<unknown>,
+    join?: () => Promise<unknown>,
+  ): Promise<readonly QueueItem[]> {
     this.#pending += 1;
     const { plugins, maxPlaylistSongs } = this.#guild.config;
     const signal = options.signal ? AbortSignal.any([this.#lifetime.signal, options.signal]) : this.#lifetime.signal;
@@ -321,7 +340,7 @@ export class DisTubeQueue<Metadata = unknown, Target = VoiceChannelTarget> {
     else void this.delete("failed");
   }
 
-  #commit(media: Song | Playlist, options: AddOptions): readonly QueueItem[] {
+  #commit(media: Song | Playlist, options: AddOptions<unknown>): readonly QueueItem[] {
     const items = songsOf(media).map(song => queueItem(song, options.metadata));
     this.#edit(insertAt(this.#state, items, options.next ? 0 : options.at));
     this.#inserted = true;
@@ -543,7 +562,7 @@ function untilAborted<Value>(promise: Promise<Value>, signal: AbortSignal): Prom
   });
 }
 
-export function validateAdd(plugins: readonly Plugin[], input: ResolvableInput, options: AddOptions): void {
+export function validateAdd(plugins: readonly Plugin[], input: ResolvableInput, options: AddOptions<unknown>): void {
   validateInput(plugins, input);
   if (options.at !== undefined) requireInteger(options.at, "at", 0);
   if (options.next !== undefined) requireBoolean(options.next, "next");

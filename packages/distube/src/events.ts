@@ -5,7 +5,7 @@ import type { DisTubeQueue } from "./queue";
 import type { QueueState } from "./queue-state";
 import type { DisTubeVoice } from "./voice";
 
-export interface BaseQueueEvent<Metadata = unknown, Target = VoiceChannelTarget> {
+export interface BaseQueueEvent<Metadata = undefined, Target = VoiceChannelTarget> {
   readonly guildId: string;
   readonly queue: DisTubeQueue<Metadata, Target>;
   readonly state: QueueState<Metadata>;
@@ -25,7 +25,7 @@ export type QueueDeleteReason = "stop" | "finished" | "voice-loss" | "leave" | "
 /** Why a guild's DisTubeVoice ended. */
 export type VoiceDisconnectReason = "left" | "platform" | "shutdown" | "idle";
 
-export interface DisTubeEventMap<Metadata = unknown, Target = VoiceChannelTarget> {
+export interface DisTubeEventMap<Metadata = undefined, Target = VoiceChannelTarget> {
   "queue.created": Readonly<BaseQueueEvent<Metadata, Target>>;
   "queue.item.added": Readonly<BaseQueueEvent<Metadata, Target> & { item: QueueItem<Metadata> }>;
   /** One resolved Playlist committed as a whole; its items publish no per-item events. */
@@ -47,7 +47,7 @@ export interface DisTubeEventMap<Metadata = unknown, Target = VoiceChannelTarget
 }
 
 export type DisTubeEventName = keyof DisTubeEventMap;
-export type DisTubeEventListener<Name extends DisTubeEventName, Metadata = unknown, Target = VoiceChannelTarget> = (
+export type DisTubeEventListener<Name extends DisTubeEventName, Metadata = undefined, Target = VoiceChannelTarget> = (
   event: DisTubeEventMap<Metadata, Target>[Name],
 ) => unknown;
 

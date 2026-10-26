@@ -25,7 +25,7 @@ const song = new Song({
   duration: 1,
   source: "source",
 });
-const item = (): QueueItem => queueItem(song);
+const item = (): QueueItem => queueItem(song, undefined);
 const ids = (items: readonly QueueItem[]): string[] => items.map(entry => entry.id);
 
 /** A playing state: the first item is current, the rest wait. */

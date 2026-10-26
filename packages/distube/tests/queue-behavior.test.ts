@@ -114,7 +114,7 @@ describe("autoplay", () => {
   });
 
   it("marks the related item as autoplay and carries the metadata of the item it followed", async () => {
-    const harness = playableSetup();
+    const harness = playableSetup<unknown>();
     const requester = { member: "user-1", channel: "text-1" };
     harness.source.related.mockResolvedValueOnce(media("source", "related"));
     const added: { autoplay: boolean; metadata: unknown }[] = [];

@@ -18,15 +18,15 @@ const TARGET = { guildId: GUILD, id: VOICE_CHANNEL };
 
 /** A playing queue holding `ids` in order: the first is current, the rest are waiting. */
 async function playing(ids: readonly string[], metadata?: unknown) {
-  const harness = playableSetup();
+  const harness = playableSetup<unknown>();
   const queue = await harness.distube.play(TARGET, ids[0] as string, { metadata });
   for (const id of ids.slice(1)) await queue.add(id, { metadata });
   await settle();
   return { harness, queue, player: harness.engine.players[0] as FakePlayer };
 }
 
-const waiting = (queue: DisTubeQueue): string[] => queue.upcoming.map(item => item.song.id);
-const remembered = (queue: DisTubeQueue): string[] => queue.history.map(item => item.song.id);
+const waiting = <Metadata>(queue: DisTubeQueue<Metadata>): string[] => queue.upcoming.map(item => item.song.id);
+const remembered = <Metadata>(queue: DisTubeQueue<Metadata>): string[] => queue.history.map(item => item.song.id);
 
 describe("insertion position", () => {
   it("inserts with next and at, appending past the end", async () => {

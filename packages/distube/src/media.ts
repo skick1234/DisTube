@@ -132,13 +132,13 @@ export interface QueueItem<Metadata = unknown> {
   readonly id: string;
   readonly song: Song;
   /** For an autoplay item, the `metadata` of the item it was related from. */
-  readonly metadata: Metadata | undefined;
+  readonly metadata: Metadata;
   /** Whether autoplay added this occurrence rather than a caller. Repeat and `previous` replays keep it. */
   readonly autoplay: boolean;
   /** Creation time in epoch milliseconds. */
   readonly addedAt: number;
 }
 
-export function queueItem<Metadata>(song: Song, metadata?: Metadata, autoplay = false): QueueItem<Metadata> {
+export function queueItem<Metadata>(song: Song, metadata: Metadata, autoplay = false): QueueItem<Metadata> {
   return Object.freeze({ id: randomUUID(), song, metadata, autoplay, addedAt: Date.now() });
 }

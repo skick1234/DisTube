@@ -68,14 +68,14 @@ export function capture<Value>(promise: Promise<Value>): Promise<Value | Error> 
 }
 
 /** Records the reason of every `queue.deleted`, in publication order. */
-export function deletions(distube: DisTube): string[] {
+export function deletions<Metadata>(distube: DisTube<Metadata>): string[] {
   const reasons: string[] = [];
   distube.on("queue.deleted", event => void reasons.push(event.reason));
   return reasons;
 }
 
 /** Records the order in which the named events are published. */
-export function record(distube: DisTube, names: readonly DisTubeEventName[]): string[] {
+export function record<Metadata>(distube: DisTube<Metadata>, names: readonly DisTubeEventName[]): string[] {
   const log: string[] = [];
   for (const name of names) distube.on(name, () => log.push(name));
   return log;
@@ -463,11 +463,11 @@ export const GUILD = "guild";
 export const VOICE_CHANNEL = "voice";
 export const CHANNEL: VoiceChannelTarget = { id: VOICE_CHANNEL, guildId: GUILD };
 
-export interface Harness {
+export interface Harness<Metadata = undefined> {
   readonly adapter: FakeAdapter;
   readonly engine: FakeEngine;
   readonly diagnostics: ReturnType<typeof vi.fn<(diagnostic: Diagnostic) => void>>;
-  readonly distube: DisTube;
+  readonly distube: DisTube<Metadata>;
 }
 
 export interface HarnessOptions extends Partial<Omit<DisTubeOptions, "adapter" | "plugins" | "engine">> {
@@ -476,12 +476,15 @@ export interface HarnessOptions extends Partial<Omit<DisTubeOptions, "adapter" |
   readonly tuning?: DisTubeOptions["engine"];
 }
 
-export function setup(plugins: readonly Plugin[], options: HarnessOptions = {}): Harness {
+export function setup<Metadata = undefined>(
+  plugins: readonly Plugin[],
+  options: HarnessOptions = {},
+): Harness<Metadata> {
   const { engine: fakeEngine, adapter: fakeAdapter, tuning, ...rest } = options;
   const engine = fakeEngine ?? new FakeEngine();
   const adapter = fakeAdapter ?? new FakeAdapter(engine);
   const diagnostics = vi.fn<(diagnostic: Diagnostic) => void>();
-  const distube = new DisTube({
+  const distube = new DisTube<Metadata>({
     adapter,
     plugins,
     onDiagnostic: diagnostics,
@@ -501,14 +504,14 @@ function idOf(input: string): string {
 }
 
 /** A single-source harness whose plugin answers every input: a URL through `resolve`, a query through `search`. */
-export function playableSetup(
+export function playableSetup<Metadata = undefined>(
   name = "source",
   options: HarnessOptions = {},
-): Harness & { readonly source: FakeSource } {
+): Harness<Metadata> & { readonly source: FakeSource } {
   const source = new FakeSource(name);
   source.resolve.mockImplementation(async url => media(name, idOf(url)));
   source.search.mockImplementation(async query => [media(name, idOf(query))]);
-  return { ...setup([source], options), source };
+  return { ...setup<Metadata>([source], options), source };
 }
 
 /** Starts playback of `ids` in order and waits until the first one is playing. */

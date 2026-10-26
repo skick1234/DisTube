@@ -119,10 +119,10 @@ describe("media value validation", () => {
   it("stamps each occurrence with a new identity and its creation time in epoch milliseconds", () => {
     const song = new Song(valid);
     const before = Date.now();
-    const item = queueItem(song);
+    const item = queueItem(song, undefined);
     expect(item.addedAt).toBeGreaterThanOrEqual(before);
     expect(item.addedAt).toBeLessThanOrEqual(Date.now());
-    expect(queueItem(song).id).not.toBe(item.id);
+    expect(queueItem(song, undefined).id).not.toBe(item.id);
   });
 
   it("keeps QueueItem metadata caller-owned while identity stays immutable", () => {
@@ -139,7 +139,6 @@ describe("media value validation", () => {
     }).toThrowError();
     expect(item.metadata).toBe(requester);
     expect(Object.isFrozen(requester)).toBe(false);
-    expect(queueItem(song).metadata).toBeUndefined();
     expect(() => {
       (item as { id: string }).id = "forged";
     }).toThrowError();
