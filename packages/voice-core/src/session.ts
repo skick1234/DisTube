@@ -4,7 +4,12 @@ import type {
   VoiceConnection,
   VoiceConnectionState,
 } from "@discordjs/voice";
-import { entersState, joinVoiceChannel, VoiceConnectionStatus } from "@discordjs/voice";
+import {
+  entersState,
+  joinVoiceChannel,
+  VoiceConnectionDisconnectReason,
+  VoiceConnectionStatus,
+} from "@discordjs/voice";
 import { DisTubeError } from "distube";
 import type {
   JoinOptions,
@@ -30,6 +35,10 @@ const TERMINAL_CLOSE_CODES: ReadonlySet<number> = new Set([4004, 4011, 4016, 401
 const DISCONNECTED_CLOSE_CODE = 4014;
 const REJOIN_LIMIT = 3;
 const REJOIN_WINDOW_MS = 60_000;
+/** The gateway adapter contract has no ready signal, so a refused rejoin is polled until it goes out. */
+const RESEND_INTERVAL_MS = 1_000;
+
+type RecoveryEnd = VoiceConnectionStatus.Connecting | VoiceConnectionStatus.Ready;
 
 interface VoiceStateUpdate {
   readonly channel_id: string | null;
@@ -61,7 +70,8 @@ export class DiscordVoiceSession implements VoiceSession {
   #selfMute: boolean;
   #leaving = false;
   #rejoins: number[] = [];
-  #recovery?: ReturnType<typeof setTimeout>;
+  #recovery?: { readonly timer: ReturnType<typeof setTimeout>; readonly until: RecoveryEnd };
+  #stopResend = (): void => undefined;
   #released = false;
   #releasePromise?: Promise<void>;
 
@@ -262,16 +272,18 @@ export class DiscordVoiceSession implements VoiceSession {
     this.#leaving = leaveFirst;
     try {
       if (leaveFirst && !this.#sendUpdate({ channel_id: null, ...flags })) throw gatewayUnavailable();
-      await this.#request({ channel_id: channelId, ...flags }, () => this.#gateway?.channelId === channelId);
+      await this.#request({ channel_id: channelId, ...flags }, () => this.#gateway?.channelId === channelId, true);
     } finally {
       this.#leaving = false;
     }
   }
 
-  #request(update: VoiceStateUpdate, acknowledged: () => boolean): Promise<void> {
+  #request(update: VoiceStateUpdate, acknowledged: () => boolean, resend = false): Promise<void> {
     const { promise, resolve, reject } = Promise.withResolvers<void>();
+    let stopResend: (() => void) | undefined;
     const finish = (): void => {
       clearTimeout(timer);
+      stopResend?.();
       this.#waiters.delete(check);
     };
     const fail = (error: unknown): void => {
@@ -288,7 +300,9 @@ export class DiscordVoiceSession implements VoiceSession {
     const timer = setTimeout(() => fail(new Error("Discord gateway membership timed out")), this.#options.timeoutMs);
     this.#waiters.add(check);
     try {
-      if (!this.#sendUpdate(update)) fail(gatewayUnavailable());
+      if (this.#sendUpdate(update)) return promise;
+      if (resend) stopResend = this.#resendUntilSent(() => this.#sendUpdate(update), fail);
+      else fail(gatewayUnavailable());
     } catch (error) {
       fail(error);
     }
@@ -306,15 +320,36 @@ export class DiscordVoiceSession implements VoiceSession {
     return this.#gatewayAdapter.sendPayload(payload);
   }
 
+  #resendUntilSent(send: () => boolean, onError: (error: unknown) => void): () => void {
+    const timer = setInterval(() => {
+      try {
+        if (!this.#released && !send()) return;
+      } catch (error) {
+        onError(error);
+      }
+      clearInterval(timer);
+    }, RESEND_INTERVAL_MS);
+    return () => clearInterval(timer);
+  }
+
   /** The library's own join after a voice socket close; its leave stays suppressed because the session owns it. */
   #forward(payload: VoiceStatePayload): boolean {
     if (this.#released || payload.d.channel_id === null) return false;
-    let sent = false;
+    this.#stopResend();
+    const fail = (error: unknown): void =>
+      this.#terminate(new Error("Discord gateway could not send the voice rejoin", { cause: error }));
     try {
-      sent = this.#send(payload);
-    } catch {}
-    if (!sent) this.#terminate(new Error("Discord gateway could not send the voice rejoin"));
-    return sent;
+      if (this.#send(payload)) return true;
+    } catch (error) {
+      fail(error);
+      return false;
+    }
+    this.#armRecovery(
+      VoiceConnectionStatus.Ready,
+      new Error("Discord gateway refused the voice rejoin until the join timeout"),
+    );
+    this.#stopResend = this.#resendUntilSent(() => this.#send(payload), fail);
+    return false;
   }
 
   #watch(connection: VoiceConnection, previous: VoiceConnectionState, next: VoiceConnectionState): void {
@@ -324,17 +359,33 @@ export class DiscordVoiceSession implements VoiceSession {
     if (networking && networking !== ("networking" in previous ? previous.networking : undefined))
       networking.prependOnceListener("close", (code: number) => this.#socketClosed(connection, code));
     if (next.status === VoiceConnectionStatus.Ready) this.#recovered();
+    else if (next.status === VoiceConnectionStatus.Connecting) {
+      this.#stopResend();
+      if (this.#recovery?.until === VoiceConnectionStatus.Connecting) this.#recovered();
+    } else if (next.status === VoiceConnectionStatus.Disconnected) {
+      const close =
+        next.reason === VoiceConnectionDisconnectReason.WebSocketClose ? ` after close ${next.closeCode}` : "";
+      this.#armRecovery(
+        VoiceConnectionStatus.Connecting,
+        new Error(`Discord voice disconnected${close} and did not reconnect within the join timeout`),
+      );
+    }
   }
 
   /** Every other close makes the library send its own join, which counts against the budget until Ready. */
   #socketClosed(connection: VoiceConnection, code: number): void {
     if (this.#released || this.#connection !== connection || code === DISCONNECTED_CLOSE_CODE) return;
     if (this.#endedBy(code) || !this.#spendRejoin(code)) return;
-    clearTimeout(this.#recovery);
-    this.#recovery = setTimeout(
-      () => this.#terminate(new Error(`Discord voice did not reconnect after close ${code} within the join timeout`)),
-      this.#options.timeoutMs,
+    this.#recovered();
+    this.#armRecovery(
+      VoiceConnectionStatus.Ready,
+      new Error(`Discord voice did not reconnect after close ${code} within the join timeout`),
     );
+  }
+
+  #armRecovery(until: RecoveryEnd, error: Error): void {
+    if (this.#recovery) return;
+    this.#recovery = { timer: setTimeout(() => this.#terminate(error), this.#options.timeoutMs), until };
   }
 
   #endedBy(code: number): boolean {
@@ -355,8 +406,9 @@ export class DiscordVoiceSession implements VoiceSession {
   }
 
   #recovered(): void {
-    clearTimeout(this.#recovery);
+    clearTimeout(this.#recovery?.timer);
     this.#recovery = undefined;
+    this.#stopResend();
   }
 
   #terminate(error: Error): void {
