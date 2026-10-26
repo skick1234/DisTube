@@ -33,7 +33,8 @@
       "default": "./dist/index.mjs"
     },
     "./integrations": {
-      "types": "./dist/integrations.d.mts"
+      "types": "./dist/integrations.d.mts",
+      "default": "./dist/integrations.mjs"
     }
   },
   "scripts": {

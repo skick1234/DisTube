@@ -1,14 +1,15 @@
 import { createRequire } from "node:module";
 import { describe, expect, it } from "vitest";
 import * as root from "../src";
-import * as integrations from "../src/integrations";
 
 describe("public entry points", () => {
   it("exports exactly the application runtime values from the root", () => {
     expect(Object.keys(root).toSorted()).toEqual(["DisTube", "DisTubeError", "ErrorCode", "Playlist", "Song"]);
   });
 
-  it("exports only types from distube/integrations", () => {
+  it("loads distube/integrations at runtime without exporting values", async () => {
+    const integrations: object = await import("distube/integrations");
+
     expect(Object.keys(integrations)).toEqual([]);
   });
 
