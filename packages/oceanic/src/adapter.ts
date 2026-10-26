@@ -26,14 +26,14 @@ function isVoiceBased(channel: AnyGuildChannelWithoutThreads | undefined): chann
   return channel?.type === GUILD_VOICE || channel?.type === GUILD_STAGE_VOICE;
 }
 
-export class OceanicAdapter implements Adapter<VoiceChannel> {
+export class OceanicAdapter implements Adapter<VoiceChannel | StageChannel> {
   readonly #client: Client;
 
   constructor(client: Client) {
     this.#client = client;
   }
 
-  normalizeTarget(channel: VoiceChannel): VoiceTarget {
+  normalizeTarget(channel: VoiceChannel | StageChannel): VoiceTarget {
     if (channel.guild?.id && channel.guild.id !== channel.guildID) {
       throw new TypeError("Oceanic channel has conflicting guild identities");
     }

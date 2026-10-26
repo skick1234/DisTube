@@ -1,9 +1,13 @@
-import type { DisTube } from "distube";
-import type { VoiceChannel } from "oceanic.js";
+import { DisTube } from "distube";
+import type { Client, StageChannel, VoiceChannel } from "oceanic.js";
+import { OceanicAdapter } from "../src";
 
-declare const music: DisTube<{ requestedBy: string }>;
+declare const client: Client;
 declare const channel: VoiceChannel;
-void music.play(channel, "song", { metadata: { requestedBy: "user" } });
-void music.voices.join(channel);
+declare const stage: StageChannel;
+const music = new DisTube({ adapter: new OceanicAdapter(client), plugins: [] });
+void music.play(channel, "song");
+void music.play(stage, "song");
+void music.voices.join(stage);
 const voice = music.voices.get("guild");
-if (voice) void voice.move(channel);
+if (voice) void voice.move(stage);
