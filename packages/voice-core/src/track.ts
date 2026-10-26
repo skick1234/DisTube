@@ -320,8 +320,8 @@ export class Track {
     const local =
       input === undefined ? undefined : (this.#retiredFailures.get(input) ?? this.#servers.get(input)?.failure);
     if (input !== undefined) this.#retiredFailures.delete(input);
-    if (!local && error.code === "INVALID_ARGUMENT") {
-      return new DisTubeError("INVALID_ARGUMENT", error.message, {
+    if (!local && (error.code === "INVALID_ARGUMENT" || error.code === "SOURCE_FAILED")) {
+      return new DisTubeError(error.code, error.message, {
         cause: error.cause ? safeError(fromWire(error.cause), this.#redact) : undefined,
       });
     }

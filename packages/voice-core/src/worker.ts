@@ -38,6 +38,8 @@ const OUTPUT_FORMAT = "aformat=sample_fmts=s16:sample_rates=48000:channel_layout
 const VOLUME_FILTER = "volume@distube";
 const IO_BUFFER_BYTES = 16 * 1024;
 const BATCH_PACKETS = 5;
+const AUDIO_CONTAINERS = new Set(["matroska", "mov", "ogg", "mp3", "flac", "wav", "aac"]);
+const FORMAT_WHITELIST = [...AUDIO_CONTAINERS].join(",");
 
 const port = parentPort;
 const pipelines = new Map<number, Pipeline>();
@@ -153,7 +155,12 @@ async function openInput(
     const container = source.kind === "file" ? undefined : source.container;
     const format = container ? (container === "mp4" ? "mp4" : "matroska") : probedFormat(await bytes.probe(), bytes);
     demuxer = await withPermit(signal, async () => {
-      const opened = await Demuxer.open(bytes.callbacks, { format, bufferSize: IO_BUFFER_BYTES, signal });
+      const opened = await Demuxer.open(bytes.callbacks, {
+        format,
+        bufferSize: IO_BUFFER_BYTES,
+        options: { format_whitelist: FORMAT_WHITELIST },
+        signal,
+      });
       try {
         if (seconds > 0 && source.kind !== "oneshot") {
           FFmpegError.throwIfError(await opened.seek(seconds, -1, AVSEEK_FLAG_BACKWARD), "Seek failed");
@@ -182,6 +189,11 @@ function probedFormat(head: Buffer, source: ByteSource): string {
   const probed = Demuxer.probeFormatSync(head);
   const name = probed?.format.split(",", 1)[0];
   if (!name) throw source.failure ?? new FFmpegError(AVERROR_INVALIDDATA);
+  if (!AUDIO_CONTAINERS.has(name)) {
+    throw Object.assign(new Error(`Playback input is ${name}, not a single-file audio container`), {
+      code: "SOURCE_FAILED",
+    });
+  }
   return name;
 }
 

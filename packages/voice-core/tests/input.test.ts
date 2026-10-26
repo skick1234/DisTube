@@ -1,11 +1,13 @@
 import { EventEmitter } from "node:events";
 import { readFile } from "node:fs/promises";
 import type * as NodeHttp from "node:http";
-import { PassThrough } from "node:stream";
+import { basename } from "node:path";
+import { PassThrough, Readable } from "node:stream";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { type LocalPlaybackResource, URL_READY_TIMEOUT_MS } from "../src/sources";
 import { Track } from "../src/track";
 import { createMedia, type MediaFixtures, PLAIN, take } from "./support/media";
+import { silentWav } from "./support/real";
 
 const http = vi.hoisted(() => ({ request: vi.fn() }));
 vi.mock("node:http", async importOriginal => ({
@@ -174,5 +176,29 @@ describe("controlled URL input", () => {
 
     await expect(open({ kind: "url", url: "https://example.test" })).rejects.toThrow("Playback URL request failed");
     expect(vi.getTimerCount()).toBe(0);
+  });
+});
+
+describe("local input containers", () => {
+  it("rejects an ffconcat stream SOURCE_FAILED without playing the file it names", async () => {
+    const cwd = process.cwd();
+    process.chdir(media.dir);
+    try {
+      const list = Readable.from([Buffer.from(`ffconcat version 1.0\nfile ${basename(media.opus)}\n`)]);
+
+      const failure = await failureOf(open({ kind: "stream", stream: list }));
+
+      expect(failure).toMatchObject({ code: "SOURCE_FAILED" });
+      expect(failure.message).toContain("concat");
+    } finally {
+      process.chdir(cwd);
+    }
+  });
+
+  it("plays a WAV stream", async () => {
+    const track = await open({ kind: "stream", stream: Readable.from([Buffer.from(silentWav())]) });
+
+    expect(await take(track.packets, 10)).toHaveLength(10);
+    await track.close();
   });
 });
