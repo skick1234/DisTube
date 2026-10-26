@@ -1,11 +1,13 @@
 export type Container = "webm" | "mp4";
 
 export const WINDOW_BYTES = 256 * 1024;
+export const URL_READY_TIMEOUT_MS = 10_000;
 
 export type InputSource =
   | Readonly<{ kind: "file"; path: string }>
   | Readonly<{ kind: "ranged"; size: number; container?: Container }>
-  | Readonly<{ kind: "oneshot"; container?: Container }>;
+  | Readonly<{ kind: "oneshot"; container?: Container }>
+  | Readonly<{ kind: "hls"; url: string }>;
 
 export interface WireError {
   readonly name: string;

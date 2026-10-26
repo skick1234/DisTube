@@ -42,6 +42,8 @@ export interface MediaFixtures {
   readonly opus60: string;
   /** Five seconds of MP4 AAC at 160 kbps. */
   readonly aac: string;
+  /** Ten seconds of AAC in MPEG-TS, the segment format of live HLS, longer than libav's 7-second TS analysis. */
+  readonly ts: string;
   /** Five seconds of FLAC in Matroska, whose container reports no bitrate when streamed. */
   readonly flac: string;
   /** One hour of WebM Opus at 32 kbps, one encoded second repeated. */
@@ -62,6 +64,7 @@ export async function createMedia(): Promise<MediaFixtures> {
   const opus = join(dir, "opus.webm");
   const opus60 = join(dir, "opus60.webm");
   const aac = join(dir, "aac.m4a");
+  const ts = join(dir, "aac.ts");
   const flac = join(dir, "flac.mkv");
   const hour = join(dir, "hour.webm");
   const pcm = join(dir, "pcm.mkv");
@@ -71,6 +74,7 @@ export async function createMedia(): Promise<MediaFixtures> {
   await encode(opus, "webm", opusEncoder(256_000), 6);
   await encode(opus60, "webm", opusEncoder(96_000, 60), 2);
   await encode(aac, "mp4", Encoder.createSync(FF_ENCODER_AAC, { bitrate: 160_000, autoResample: true }), 5);
+  await encode(ts, "mpegts", Encoder.createSync(FF_ENCODER_AAC, { bitrate: 128_000, autoResample: true }), 10);
   await encode(flac, "matroska", Encoder.createSync(FF_ENCODER_FLAC), 5);
   await repeat(hour, 3600);
   await encode(pcm, "matroska", Encoder.createSync(FF_ENCODER_PCM_S16LE), 5, RATE);
@@ -83,6 +87,7 @@ export async function createMedia(): Promise<MediaFixtures> {
     opus,
     opus60,
     aac,
+    ts,
     flac,
     hour,
     pcm,

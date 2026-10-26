@@ -1,10 +1,12 @@
 import { EventEmitter } from "node:events";
 import { readFile } from "node:fs/promises";
-import type * as NodeHttp from "node:http";
+import * as NodeHttp from "node:http";
+import type { AddressInfo } from "node:net";
 import { basename } from "node:path";
 import { PassThrough, Readable } from "node:stream";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { type LocalPlaybackResource, URL_READY_TIMEOUT_MS } from "../src/sources";
+import { URL_READY_TIMEOUT_MS } from "../src/protocol";
+import type { LocalPlaybackResource } from "../src/sources";
 import { Track } from "../src/track";
 import { createMedia, type MediaFixtures, PLAIN, take } from "./support/media";
 import { silentWav } from "./support/real";
@@ -121,9 +123,9 @@ describe("controlled URL input", () => {
     expect(sent[0]?.response.destroyed).toBe(true);
   });
 
-  it("rejects a nested media manifest", async () => {
+  it("rejects a DASH manifest", async () => {
     answer = ({ response }) => {
-      response.headers["content-type"] = "application/vnd.apple.mpegurl";
+      response.headers["content-type"] = "application/dash+xml";
       return true;
     };
 
@@ -177,6 +179,147 @@ describe("controlled URL input", () => {
     await expect(open({ kind: "url", url: "https://example.test" })).rejects.toThrow("Playback URL request failed");
     expect(vi.getTimerCount()).toBe(0);
   });
+});
+
+type Route = (response: NodeHttp.ServerResponse) => void;
+
+interface Origin {
+  readonly url: string;
+  readonly requests: { readonly path: string; answered: boolean; closed: boolean }[];
+  paths(): string[];
+  close(): Promise<void>;
+}
+
+async function serve(routes: (url: string) => Record<string, Route>): Promise<Origin> {
+  const requests: Origin["requests"] = [];
+  let table: Record<string, Route> = {};
+  const server = NodeHttp.createServer((request, response) => {
+    const entry = { path: request.url ?? "", answered: false, closed: false };
+    requests.push(entry);
+    response.on("finish", () => (entry.answered = true));
+    response.on("close", () => (entry.closed = true));
+    const route = table[entry.path];
+    if (route) route(response);
+    else response.writeHead(404).end();
+  });
+  await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
+  const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  table = routes(url);
+  return {
+    url,
+    requests,
+    paths: () => requests.map(request => request.path),
+    close: () => {
+      server.closeAllConnections();
+      return new Promise(resolve => server.close(() => resolve()));
+    },
+  };
+}
+
+function playlist(segments: readonly string[]): Route {
+  const lines = ["#EXTM3U", "#EXT-X-VERSION:3", "#EXT-X-TARGETDURATION:1", "#EXT-X-MEDIA-SEQUENCE:0"];
+  for (const segment of segments) lines.push("#EXTINF:1.0,", segment);
+  lines.push("#EXT-X-ENDLIST", "");
+  return response => response.writeHead(200, { "content-type": "application/vnd.apple.mpegurl" }).end(lines.join("\n"));
+}
+
+function bytes(content: Buffer | string): Route {
+  return response => response.writeHead(200, { "content-type": "video/mp2t" }).end(content);
+}
+
+describe("HLS playlist URLs", () => {
+  let ts: Buffer;
+  let origin: Origin | undefined;
+
+  beforeAll(async () => {
+    ts = await readFile(media.ts);
+  });
+  beforeEach(async () => {
+    const actual = await vi.importActual<typeof NodeHttp>("node:http");
+    http.request.mockImplementation(actual.request);
+  });
+  afterEach(() => origin?.close());
+
+  it("plays a redirected playlist of MPEG-TS segments to the end from the redirect target", async () => {
+    const cut = Math.floor(ts.length / 2 / 188) * 188;
+    origin = await serve(() => ({
+      "/start": response => response.writeHead(302, { location: "/list.m3u8" }).end(),
+      "/list.m3u8": playlist(["a.ts", "b.ts"]),
+      "/a.ts": bytes(ts.subarray(0, cut)),
+      "/b.ts": bytes(ts.subarray(cut)),
+    }));
+
+    const track = await open({ kind: "url", url: `${origin.url}/start` });
+    await expect(track.seek(1)).rejects.toMatchObject({ code: "UNSUPPORTED" });
+    const packets = await take(track.packets, Number.POSITIVE_INFINITY);
+
+    expect(await track.outcome).toEqual({ type: "ended" });
+    expect(packets.length).toBeGreaterThanOrEqual(490);
+    expect(origin.paths().filter(path => path === "/start")).toHaveLength(1);
+    expect(origin.paths()).toContain("/b.ts");
+    await track.close();
+  });
+
+  it.each([
+    [
+      "that is a local file",
+      async (): Promise<Record<string, Route>> => ({ "/list.m3u8": playlist([`file://${media.ts}`]) }),
+    ],
+    [
+      "in Matroska",
+      async (): Promise<Record<string, Route>> => ({
+        "/list.m3u8": playlist(["a.mkv"]),
+        "/a.mkv": bytes(await readFile(media.opus)),
+      }),
+    ],
+  ])("rejects a segment %s SOURCE_FAILED before the track starts", async (_name, routes) => {
+    const table = await routes();
+    origin = await serve(() => table);
+
+    const failure = await failureOf(open({ kind: "url", url: `${origin.url}/list.m3u8` }));
+
+    expect(failure).toMatchObject({ code: "SOURCE_FAILED" });
+  });
+
+  it("closes a pending segment request when the track stops", async () => {
+    origin = await serve(() => ({
+      "/list.m3u8": playlist(["a.ts", "b.ts"]),
+      "/a.ts": bytes(ts),
+      "/b.ts": () => undefined,
+    }));
+    const track = await open({ kind: "url", url: `${origin.url}/list.m3u8` });
+    track.packets.on("data", () => undefined);
+    await vi.waitFor(() => expect(origin?.paths()).toContain("/b.ts"));
+
+    await track.close();
+
+    expect(await track.outcome).toEqual({ type: "closed" });
+    await vi.waitFor(() => expect(origin?.requests.find(request => request.path === "/b.ts")?.closed).toBe(true));
+    expect(origin.requests.find(request => request.path === "/b.ts")?.answered).toBe(false);
+  });
+
+  it("rejects SOURCE_FAILED and closes the request when the open outlasts its deadline", async () => {
+    let trickle: NodeJS.Timeout | undefined;
+    origin = await serve(() => ({
+      "/list.m3u8": playlist(["a.ts"]),
+      "/a.ts": response => {
+        response.writeHead(200, { "content-type": "video/mp2t" });
+        let offset = 0;
+        trickle = setInterval(() => {
+          response.write(ts.subarray(offset, offset + 188));
+          offset += 188;
+        }, 1_000);
+      },
+    }));
+
+    const started = performance.now();
+    const failure = await failureOf(open({ kind: "url", url: `${origin.url}/list.m3u8` }));
+    clearInterval(trickle);
+
+    expect(failure).toMatchObject({ code: "SOURCE_FAILED" });
+    expect(performance.now() - started).toBeLessThan(25_000);
+    await vi.waitFor(() => expect(origin?.requests.find(request => request.path === "/a.ts")?.closed).toBe(true));
+  }, 30_000);
 });
 
 describe("local input containers", () => {

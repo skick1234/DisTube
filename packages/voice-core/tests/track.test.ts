@@ -14,7 +14,8 @@ import { PassThrough, Readable } from "node:stream";
 import type { ReaderPlaybackResource } from "distube/integrations";
 import { AVERROR_DECODER_NOT_FOUND, AVERROR_INVALIDDATA } from "node-av";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { type LocalPlaybackResource, URL_READY_TIMEOUT_MS } from "../src/sources";
+import { URL_READY_TIMEOUT_MS } from "../src/protocol";
+import type { LocalPlaybackResource } from "../src/sources";
 import { Track } from "../src/track";
 import {
   bitrate,

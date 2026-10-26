@@ -2,15 +2,13 @@ import { type ClientRequest, request as httpRequest, type IncomingMessage } from
 import { request as httpsRequest } from "node:https";
 import type { Readable } from "node:stream";
 import type { EncodedPlaybackResource, PlaybackResource } from "distube/integrations";
-import { type InputSource, WINDOW_BYTES, type WireError } from "./protocol";
+import { type InputSource, URL_READY_TIMEOUT_MS, WINDOW_BYTES, type WireError } from "./protocol";
 
 export type LocalPlaybackResource = Exclude<PlaybackResource, EncodedPlaybackResource>;
 
-export const URL_READY_TIMEOUT_MS = 10_000;
 const MAX_REDIRECTS = 5;
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
-const MANIFEST_CONTENT_TYPES = new Set([
-  "application/dash+xml",
+const HLS_CONTENT_TYPES = new Set([
   "application/vnd.apple.mpegurl",
   "application/x-mpegurl",
   "audio/mpegurl",
@@ -45,15 +43,19 @@ export async function serveInput(
   try {
     switch (resource.kind) {
       case "file":
-        return new FileServer(resource.path, lifetime);
+        return new DirectServer({ kind: "file", path: resource.path }, lifetime);
       case "stream":
         return new OneShotServer(resource.stream, undefined, lifetime, redact, reply);
       case "timed":
         return new OneShotServer(resource.open(seconds, lifetime.signal), resource.container, lifetime, redact, reply);
       case "reader":
         return new RangedServer(resource.size, resource.container, resource.read, lifetime, redact, reply);
-      case "url":
-        return new OneShotServer(await openUrl(resource.url, signal, redact), undefined, lifetime, redact, reply);
+      case "url": {
+        const opened = await openUrl(resource.url, signal, redact);
+        return typeof opened === "string"
+          ? new DirectServer({ kind: "hls", url: opened }, lifetime)
+          : new OneShotServer(opened, undefined, lifetime, redact, reply);
+      }
     }
   } catch (error: unknown) {
     lifetime.abort();
@@ -61,13 +63,14 @@ export async function serveInput(
   }
 }
 
-class FileServer implements ByteServer {
+/** An input the worker's libav opens by path or URL, so no bytes pass through this server. */
+class DirectServer implements ByteServer {
   readonly source: InputSource;
   readonly failure = undefined;
   readonly #lifetime: AbortController;
 
-  constructor(path: string, lifetime: AbortController) {
-    this.source = { kind: "file", path };
+  constructor(source: InputSource, lifetime: AbortController) {
+    this.source = source;
     this.#lifetime = lifetime;
   }
 
@@ -299,7 +302,7 @@ async function openUrl(
   value: string,
   signal: AbortSignal,
   redact: (value: string) => string,
-): Promise<IncomingMessage> {
+): Promise<IncomingMessage | string> {
   return await new Promise((resolve, reject) => {
     if (signal.aborted) {
       reject(abortError());
@@ -353,8 +356,17 @@ async function openUrl(
             return;
           }
           const contentType = response.headers["content-type"]?.split(";", 1)[0]?.trim().toLowerCase();
-          if (contentType && MANIFEST_CONTENT_TYPES.has(contentType)) {
-            finish(new Error("Playback URL returned a nested media manifest"), response);
+          if (contentType === "application/dash+xml") {
+            finish(new Error("Playback URL returned a DASH manifest"), response);
+            return;
+          }
+          if (contentType && HLS_CONTENT_TYPES.has(contentType)) {
+            settled = true;
+            clearTimeout(timer);
+            detachAbort();
+            response.destroy();
+            sent.destroy();
+            resolve(target.href);
             return;
           }
           settled = true;

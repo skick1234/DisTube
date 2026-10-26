@@ -23,7 +23,7 @@ import {
   Packet,
   type Stream,
 } from "node-av";
-import type { InputSource, ToWorker, WireError } from "./protocol.ts";
+import { type InputSource, type ToWorker, URL_READY_TIMEOUT_MS, type WireError } from "./protocol.ts";
 import {
   type ByteSource,
   FileSource,
@@ -40,6 +40,13 @@ const IO_BUFFER_BYTES = 16 * 1024;
 const BATCH_PACKETS = 5;
 const AUDIO_CONTAINERS = new Set(["matroska", "mov", "ogg", "mp3", "flac", "wav", "aac"]);
 const FORMAT_WHITELIST = [...AUDIO_CONTAINERS].join(",");
+const HLS_OPEN_TIMEOUT_MS = 2 * URL_READY_TIMEOUT_MS;
+const HLS_OPTIONS = {
+  protocol_whitelist: "http,https,tls,tcp,crypto",
+  format_whitelist: "hls,mpegts,mov,aac,mp3",
+  http_multiple: "0",
+  rw_timeout: String(URL_READY_TIMEOUT_MS * 1000),
+};
 
 const port = parentPort;
 const pipelines = new Map<number, Pipeline>();
@@ -87,11 +94,18 @@ class Input {
   readonly start: number;
   readonly #track: number;
   readonly #demuxer: Demuxer;
-  readonly #source: ByteSource;
+  readonly #source: ByteSource | undefined;
   #reading?: Promise<number>;
   #closing?: Promise<void>;
 
-  constructor(track: number, id: number, demuxer: Demuxer, stream: Stream, source: ByteSource, start: number) {
+  constructor(
+    track: number,
+    id: number,
+    demuxer: Demuxer,
+    stream: Stream,
+    source: ByteSource | undefined,
+    start: number,
+  ) {
     this.#track = track;
     this.id = id;
     this.#demuxer = demuxer;
@@ -105,11 +119,11 @@ class Input {
   }
 
   get failure(): Error | undefined {
-    return this.#source.failure;
+    return this.#source?.failure;
   }
 
   waiting(): boolean {
-    return this.#source.waiting();
+    return this.#source?.waiting() ?? false;
   }
 
   async read(packet: Packet): Promise<number> {
@@ -123,7 +137,8 @@ class Input {
 
   close(): Promise<void> {
     this.#closing ??= (async () => {
-      await this.#source.close();
+      if (this.#source) await this.#source.close();
+      else this.#demuxer.interrupt();
       await this.#reading?.catch(() => undefined);
       await this.#demuxer.close().catch(() => undefined);
       post({ type: "retired", track: this.#track, input: this.id });
@@ -139,6 +154,7 @@ async function openInput(
   seconds: number,
   signal: AbortSignal,
 ): Promise<Input> {
+  if (source.kind === "hls") return await openPlaylist(track, id, source.url, signal);
   const bytes =
     source.kind === "file"
       ? await FileSource.open(source.path)
@@ -182,6 +198,35 @@ async function openInput(
     throw bytes.failure ?? error;
   } finally {
     signal.removeEventListener("abort", abort);
+  }
+}
+
+async function openPlaylist(track: number, id: number, url: string, signal: AbortSignal): Promise<Input> {
+  let demuxer: Demuxer | undefined;
+  try {
+    demuxer = await withPermit(signal, () => openWithin(url, signal));
+    const stream = demuxer.audio();
+    if (!stream) throw new Error("HLS playlist has no playable audio stream");
+    return new Input(track, id, demuxer, stream, undefined, 0);
+  } catch (error: unknown) {
+    await demuxer?.close().catch(() => undefined);
+    post({ type: "retired", track, input: id });
+    if (signal.aborted) throw error;
+    throw Object.assign(new Error("HLS playlist could not be opened", { cause: error }), { code: "SOURCE_FAILED" });
+  }
+}
+
+async function openWithin(url: string, signal: AbortSignal): Promise<Demuxer> {
+  const deadline = new AbortController();
+  const timer = setTimeout(() => deadline.abort(new Error("HLS playlist open timed out")), HLS_OPEN_TIMEOUT_MS);
+  try {
+    return await Demuxer.open(url, {
+      format: "hls",
+      options: HLS_OPTIONS,
+      signal: AbortSignal.any([signal, deadline.signal]),
+    });
+  } finally {
+    clearTimeout(timer);
   }
 }
 
