@@ -33,6 +33,7 @@ export interface DiscordVoiceSessionOptions extends VoiceTarget, VoiceSessionOpt
 const REJOIN_CLOSE_CODES: ReadonlySet<number> = new Set([4006, 4009]);
 const TERMINAL_CLOSE_CODES: ReadonlySet<number> = new Set([4004, 4011, 4016, 4017, 4021, 4022]);
 const DISCONNECTED_CLOSE_CODE = 4014;
+const DAVE_REQUIRED_CLOSE_CODE = 4017;
 const REJOIN_LIMIT = 3;
 const REJOIN_WINDOW_MS = 60_000;
 /** The gateway adapter contract has no ready signal, so a refused rejoin is polled until it goes out. */
@@ -206,7 +207,8 @@ export class DiscordVoiceSession implements VoiceSession {
     return this.#enqueue(() => this.#join(this.#channelId, state));
   }
   voiceClosed(code: number): void {
-    if (this.#released || this.#endedBy(code) || !REJOIN_CLOSE_CODES.has(code) || !this.#spendRejoin(code)) return;
+    if (this.#released || this.#endedBy(code, false) || !REJOIN_CLOSE_CODES.has(code) || !this.#spendRejoin(code))
+      return;
     this.#enqueue(() => this.#rejoin(false)).catch((error: unknown) => this.#terminate(asError(error)));
   }
   rejoin(): Promise<void> {
@@ -375,7 +377,7 @@ export class DiscordVoiceSession implements VoiceSession {
   /** Every other close makes the library send its own join, which counts against the budget until Ready. */
   #socketClosed(connection: VoiceConnection, code: number): void {
     if (this.#released || this.#connection !== connection || code === DISCONNECTED_CLOSE_CODE) return;
-    if (this.#endedBy(code) || !this.#spendRejoin(code)) return;
+    if (this.#endedBy(code, true) || !this.#spendRejoin(code)) return;
     this.#recovered();
     this.#armRecovery(
       VoiceConnectionStatus.Ready,
@@ -388,9 +390,9 @@ export class DiscordVoiceSession implements VoiceSession {
     this.#recovery = { timer: setTimeout(() => this.#terminate(error), this.#options.timeoutMs), until };
   }
 
-  #endedBy(code: number): boolean {
+  #endedBy(code: number, builtIn: boolean): boolean {
     if (!TERMINAL_CLOSE_CODES.has(code)) return false;
-    this.#terminate(new Error(`Discord voice closed with code ${code}`));
+    this.#terminate(new Error(terminalCloseMessage(code, builtIn)));
     return true;
   }
 
@@ -457,6 +459,12 @@ export class DiscordVoiceSession implements VoiceSession {
 
 function joinAborted(signal: AbortSignal): DisTubeError {
   return new DisTubeError("ABORTED", "Voice join was aborted", { cause: signal.reason });
+}
+
+function terminalCloseMessage(code: number, builtIn: boolean): string {
+  if (code !== DAVE_REQUIRED_CLOSE_CODE) return `Discord voice closed with code ${code}`;
+  const library = builtIn ? ", which needs @discordjs/voice 0.19.1 or newer" : "";
+  return `Discord voice closed with code ${code}: the channel requires DAVE end-to-end encryption${library}`;
 }
 
 function sessionReleased(): Error {

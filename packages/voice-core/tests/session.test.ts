@@ -610,6 +610,27 @@ describe("voice close recovery", () => {
     await session.release();
   });
 
+  it.each([
+    ["voiceClosed", false],
+    ["built-in connection", true],
+  ])("names DAVE in the disconnect after a 4017 close on the %s path", async (_path, builtIn) => {
+    const gateway = gatewayAdapter();
+    const local = builtIn ? await attached(gateway) : undefined;
+    const { session, events } = local ?? (await subscribed(gateway));
+
+    if (local) local.close(4017);
+    else session.voiceClosed(4017);
+    await settle();
+
+    const [event] = events;
+    expect(events).toHaveLength(1);
+    const message = event?.type === "disconnected" && event.reason === "failed" ? event.error.message : "";
+    expect(message).toContain("4017");
+    expect(message).toContain("DAVE end-to-end encryption");
+    if (builtIn) expect(message).toContain("@discordjs/voice 0.19.1 or newer");
+    else expect(message).not.toContain("@discordjs/voice");
+  });
+
   it("leaves and rejoins the held channel, resolving after connected carries the new token", async () => {
     const gateway = gatewayAdapter();
     const { session, events } = await subscribed(gateway);
