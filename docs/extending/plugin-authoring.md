@@ -2,12 +2,12 @@
 title: Plugin authoring
 description: Write a Plugin with typed pluginData and core error codes.
 sidebar:
-  order: 7
+  order: 1
 ---
 
 A `Plugin` has a non-empty `name` and at least one of `resolve`, `search`, `stream` or `engine`. `related`,
 `suggest` and `dispose` are independently optional. A plugin with only `stream` is valid. It plays Songs the
-application builds itself, such as [sound clips](../direct-inputs/). A plugin that returns Songs and has no `stream` plays through the [search fallback](#a-plugin-without-stream), or through an engine
+application builds itself, such as [sound clips](../../recipes/soundboard/). A plugin that returns Songs and has no `stream` plays through the [search fallback](#a-plugin-without-stream), or through an engine
 plugin's `prepare`. There is no `initialize` hook: constructors validate options only, and the first
 provider request happens on first use. Do not add no-op methods for missing capabilities.
 
@@ -18,10 +18,7 @@ required at construction. Omit it and Playlist data stays `unknown`. Return `Son
 Each one must have `source` equal to the plugin's `name`. `resolve` returns a Song, an ordered Playlist or
 `undefined` to decline. Throw for a provider failure.
 
-Core decides which method a string reaches. An absolute `http:` or `https:` URL goes to `resolve`. Every other
-non-empty string is a query and goes to `search`. That includes a provider URI such as `spotify:track:…`, which
-core cannot tell from a query like `artist: song title`. Accept your URI scheme in `search` if you want to serve it.
-A URL every plugin declines rejects `NO_RESULT`, and core does not retry it as a query.
+Core decides which method a string reaches, as described in [plugins and their order](../../get-started/how-distube-works/#plugins-and-their-order). Accept your own URI scheme, such as `spotify:track:...`, in `search` if you want to serve it.
 
 ```ts
 import { Song } from "distube";
@@ -69,19 +66,14 @@ Core never re-ranks across plugins. An empty array declines the query.
 | `distube.search`                   | `[]`: try the next plugin        | Rejects                                 |
 | `distube.suggest`                  | `[]`: try the next plugin        | Rejects                                 |
 
-A query takes the first Song of the first non-empty answer. When no plugin answers it rejects `NO_RESULT`. When
-some threw and none answered, it rejects `SOURCE_FAILED` with the failures in an `AggregateError` cause. An
-absolute URL no plugin resolves rejects `NO_RESULT`.
+The outcomes when every plugin declines or fails are in [plugins and their order](../../get-started/how-distube-works/#plugins-and-their-order).
 
 ## Preparing a Song
 
 `stream(song, { signal })` runs when a Song is about to play. Core calls the plugin named by `song.source`, and
 that plugin returns a `PlaybackResource`: a fresh, single-use `url`, `file`, `stream`, `reader`, `timed` or `encoded`
-resource. See [clips and resources](../direct-inputs/) for the shapes and cleanup rules. A `stream` that throws
+resource. See [playback resources](../playback-resources/) for the shapes and cleanup rules. A `stream` that throws
 fails the item with `queue.item.failed`, and core tries no other plugin.
-
-Core disposes each resource exactly once, after its track ends or when it drops a prepared item before playback.
-Put temporary files or sockets in `dispose`.
 
 Add an `engine` when the plugin plays media itself, as Lavalink does. See
 [adapter authoring](../adapter-authoring/#engine-plugins) for `onClosed`, pause and release rules. Its `engine.prepare(song, { signal })` replaces
@@ -126,7 +118,10 @@ void missing;
 ```
 
 A thrown `DisTubeError` reaches the caller unchanged, including one from a second copy of the package, which
-`DisTubeError.is` matches by name and code. Do not re-wrap aborts or plain errors, because core wraps them. Any other throw becomes `SOURCE_FAILED` with the original as
+`DisTubeError.is` matches by name and code, with three exceptions. `INVALID_ARGUMENT`, `INVALID_STATE` and `ABORTED`
+describe the caller's input, the queue and the caller's cancellation, so core re-wraps them as `SOURCE_FAILED` with
+the original as `cause`. Do not throw them for provider failures. When the caller aborted the signal you received,
+the caller gets `ABORTED` whatever you threw. Any other throw becomes `SOURCE_FAILED` with the original as
 `cause` and `source` set to your `name`. Core does not scrub messages, so keep credentials, signed URLs and encoded
 track data out of messages and causes. A bot checks `DisTubeError.is(error, ErrorCode.NOT_FOUND)` and reads
 `error.source`.

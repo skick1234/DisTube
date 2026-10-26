@@ -2,7 +2,7 @@
 title: Adapter authoring
 description: Write an Adapter and a playback Engine.
 sidebar:
-  order: 8
+  order: 3
 ---
 
 An `Adapter<Target>` owns one platform's voice gateway presence. It has three members:
@@ -35,7 +35,7 @@ const adapter: Adapter<NativeChannel> = {
   createVoiceSession: createGatewaySession,
   createEngine: () => localEngine,
 };
-const distube = new DisTube<unknown, NativeChannel>({ adapter, plugins: [source] });
+const distube = new DisTube<undefined, NativeChannel>({ adapter, plugins: [source] });
 ```
 
 ## VoiceSession
@@ -62,10 +62,12 @@ A `VoiceSession` exposes:
 `join`, `setSelfState`, `rejoin` and `release` run one at a time in call order.
 
 Recovery is bounded. Close codes 4006 and 4009 rejoin the current channel, at most 3 times in any 60 s window per
-guild. Codes 4004, 4011, 4016, 4017, 4021 and 4022 end the voice at once without spending the budget. Publish `{ type: "disconnected" }` once, when that policy
-is spent, and republish `{ type: "connected", channelId, gateway }` whenever the credentials change. Only the
-terminal disconnect reaches core. It fails the current item with `VOICE_FAILED`, deletes the queue with
-reason `voice-loss` and publishes `voice.disconnected`. A platform rejection of a voice-state update surfaces as
+guild. Codes 4004, 4011, 4016, 4017, 4021 and 4022 end the voice at once without spending the budget. Publish `{ type:
+"disconnected", reason: "failed", error }` once, when that policy is spent, and `{ type: "disconnected", reason:
+"removed" }` when the platform removes the bot from voice outside a `release`. Republish `{ type: "connected",
+channelId, gateway }` whenever the credentials change. Only the terminal disconnect reaches core. It deletes the queue
+with reason `voice-loss` and publishes `voice.disconnected` with reason `removed`, or `platform` with a
+`VOICE_DISCONNECTED` error whose `cause` is yours. A platform rejection of a voice-state update surfaces as
 `VOICE_FAILED` with no native object, token or endpoint in the cause chain.
 
 Keep native clients, channels, connections and platform events inside the adapter package. Never inspect Songs,

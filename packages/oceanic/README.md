@@ -50,7 +50,7 @@ The adapter joins the native voice connection in a group named after the bot's u
 hold separate connections. Code that fetches the connection with `getVoiceConnection(guildId)` from
 `@discordjs/voice` passes the group: `getVoiceConnection(guildId, clientUserId)`.
 
-See [installation requirements](https://distube.js.org/distube/guides/installation/),
-[quick start](https://distube.js.org/distube/guides/quick-start/),
-[queue and voice controls](https://distube.js.org/distube/guides/guide/) and
-[adapter authoring](https://distube.js.org/distube/guides/adapter-authoring/).
+See [installation requirements](https://distube.js.org/distube/get-started/installation/),
+[quick start](https://distube.js.org/distube/get-started/quick-start/),
+[queue controls](https://distube.js.org/distube/recipes/queue-controls/) and
+[adapter authoring](https://distube.js.org/distube/extending/adapter-authoring/).

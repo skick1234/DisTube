@@ -13,7 +13,7 @@ bun add distube @distube/discordjs @distube/youtube @distube/ytdl-core discord.j
 ```
 
 For Oceanic, install `@distube/oceanic oceanic.js` instead of `@distube/discordjs discord.js`. See
-[Installation](https://distube.js.org/distube/guides/installation/).
+[Installation](https://distube.js.org/distube/get-started/installation/).
 
 ## Example
 
@@ -36,8 +36,8 @@ const distube = new DisTube({
 await distube.play(voiceChannel, "never gonna give you up");
 ```
 
-See [installation requirements](https://distube.js.org/distube/guides/installation/),
-[quick start](https://distube.js.org/distube/guides/quick-start/),
-[queue and voice controls](https://distube.js.org/distube/guides/guide/),
+See [installation requirements](https://distube.js.org/distube/get-started/installation/),
+[quick start](https://distube.js.org/distube/get-started/quick-start/),
+[queue controls](https://distube.js.org/distube/recipes/queue-controls/),
 [plugins](https://distube.js.org/distube/plugins/) and
-[plugin authoring](https://distube.js.org/distube/guides/plugin-authoring/).
+[plugin authoring](https://distube.js.org/distube/extending/plugin-authoring/).

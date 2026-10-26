@@ -29,7 +29,7 @@ const distube = new DisTube({
 await distube.play(voiceChannel, "never gonna give you up");
 ```
 
-See [installation requirements](https://distube.js.org/distube/guides/installation/),
-[quick start](https://distube.js.org/distube/guides/quick-start/),
-[queue and voice controls](https://distube.js.org/distube/guides/guide/) and
+See [installation requirements](https://distube.js.org/distube/get-started/installation/),
+[quick start](https://distube.js.org/distube/get-started/quick-start/),
+[queue controls](https://distube.js.org/distube/recipes/queue-controls/) and
 [plugins](https://distube.js.org/distube/plugins/).

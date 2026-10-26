@@ -1,6 +1,8 @@
 ---
 title: Lavalink
 description: Configure remote playback and source lookup with @distube/lavalink.
+sidebar:
+  order: 5
 ---
 
 `@distube/lavalink` is a source plugin and playback engine over a pool of Lavalink v4.2 or later v4 nodes.
@@ -86,5 +88,5 @@ Preparation returns `encoded` resources with format `lavalink.v4`. Its Player re
 `lavalink.v4` encoded with `UNSUPPORTED`; it never uploads or proxies media.
 Plugin failures are core `DisTubeError` instances with `error.source` set to `"lavalink"`.
 
-See [installation](../guides/installation/), [queue and voice controls](../guides/guide/) and
-[error handling](../guides/error-handling/).
+See [installation](../../get-started/installation/), [queue](../../reference/queue/), [voice and filters](../../reference/voice-and-filters/) and
+[errors](../../reference/errors/).

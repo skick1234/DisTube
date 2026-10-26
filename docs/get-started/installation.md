@@ -6,12 +6,12 @@ sidebar:
 ---
 
 DisTube runs on Node.js `^22.22.2 || ^24.15.0 || >=26.0.0` or Bun. A bot needs `distube`, one adapter for its
-Discord library and at least one source plugin. The commands below add YouTube; see [plugins](../../plugins/) for
-SoundCloud, Spotify and Lavalink.
+Discord library and at least one source plugin. The commands below add YouTube. See [plugins](../../plugins/) for
+SoundCloud, Spotify, yt-dlp and Lavalink.
 
 ## discord.js
 
-Requires discord.js `^14.26.0` and `@discordjs/voice ^0.19.0`.
+Requires discord.js `^14.26.0` and `@discordjs/voice ^0.19.1`.
 
 ```sh title="npm"
 npm install distube @distube/discordjs @distube/youtube @distube/ytdl-core discord.js @discordjs/voice
@@ -38,7 +38,7 @@ const distube = new DisTube({
 
 ## Oceanic
 
-Requires Oceanic `^1.14.0` and `@discordjs/voice ^0.19.0`.
+Requires Oceanic `^1.14.0` and `@discordjs/voice ^0.19.1`.
 
 ```sh title="npm"
 npm install distube @distube/oceanic @distube/youtube @distube/ytdl-core oceanic.js @discordjs/voice
@@ -77,17 +77,20 @@ bun index.ts
 ```
 
 Node.js runs `index.ts` directly too when the file uses only erasable TypeScript syntax: types and `import type`,
-but no `enum` or parameter properties. Otherwise compile it with `tsc` first.
+but no `enum` or parameter properties. Otherwise compile it to JavaScript first.
 
-## Built-in engine
+## Hosting
 
-Each adapter bundles the built-in engine, which decodes with the `node-av` native binding. It needs glibc 2.28 or
-newer, so musl hosts such as Alpine are unsupported. A host that cannot load `node-av` fails the first playback
-with `VOICE_FAILED`. The built-in engine decodes in a worker pool that takes `UV_THREADPOOL_SIZE - 1` permits
-(at least one). Raise `UV_THREADPOOL_SIZE` above the default of 4 when the bot plays in many guilds at once.
+Each adapter bundles the built-in engine, which decodes with the `node-av` native binding. The adapters list `node-av`
+as an optional dependency, so a package manager that skips optional packages or cannot install it still installs the
+bot. It needs glibc 2.28 or newer, so musl hosts such as Alpine are unsupported. A host that cannot load `node-av`
+fails the first playback with `VOICE_FAILED`.
 
-Lavalink replaces the built-in engine, so a bot that uses it needs no local decoding. It requires Lavalink v4.2 or
+A bot that plays live streams or starts tracks in many guilds at once needs a larger libuv thread pool. See
+[size the thread pool](../../recipes/thread-pool/).
+
+Lavalink replaces the built-in engine, so a bot that uses it needs no local decoding and no `node-av`. It requires Lavalink v4.2 or
 newer within major 4.
 
-Next: the [quick start](../quick-start/) builds a bot that plays, queues and controls volume. See
-[direct inputs](../direct-inputs/) for clips and playback resources and [migration](../migration/) for the move from v5.
+Next, the [quick start](../quick-start/) builds a bot that plays, skips and stops. Coming from v5? Read the
+[migration guide](../migration/).
