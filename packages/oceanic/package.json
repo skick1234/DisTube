@@ -2,7 +2,16 @@
   "name": "@distube/oceanic",
   "version": "0.0.0",
   "description": "Oceanic adapter for DisTube",
+  "homepage": "https://distube.js.org/",
+  "bugs": {
+    "url": "https://github.com/skick1234/DisTube/issues"
+  },
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/skick1234/DisTube.git",
+    "directory": "packages/oceanic"
+  },
   "files": [
     "dist",
     "LICENSE",
