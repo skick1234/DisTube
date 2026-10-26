@@ -1,16 +1,35 @@
 import { defineConfig } from "tsdown";
 
-export default defineConfig({
-  entry: { index: "src/index.ts", worker: "../voice-core/src/worker.ts" },
-  // The private shared implementation lives outside this package, so declarations are generated
-  // from a repository-rooted tsconfig that can see both trees.
+const shared = {
   tsconfig: "../../tsconfig.build.json",
-  format: ["esm"],
   target: "es2022",
-  dts: true,
   sourcemap: false,
-  clean: true,
   outputOptions: { exports: "named" },
   inputOptions: { experimental: { attachDebugInfo: "none" } },
   deps: { neverBundle: ["distube", "discord.js", "@discordjs/voice"] },
-});
+} as const;
+
+const declarationsOnly = {
+  name: "declarations-only",
+  generateBundle(_: unknown, bundle: Record<string, unknown>) {
+    for (const file of Object.keys(bundle)) if (file.endsWith(".cjs")) delete bundle[file];
+  },
+};
+
+export default defineConfig([
+  {
+    ...shared,
+    entry: { index: "src/index.ts", worker: "../voice-core/src/worker.ts" },
+    format: ["esm"],
+    dts: true,
+    clean: true,
+  },
+  {
+    ...shared,
+    entry: { index: "src/index.ts" },
+    format: ["cjs"],
+    dts: true,
+    clean: false,
+    plugins: [declarationsOnly],
+  },
+]);
