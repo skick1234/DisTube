@@ -1,5 +1,5 @@
 import type { Diagnostic, VoiceChannelTarget } from "./contracts";
-import type { DisTubeError } from "./errors";
+import { DisTubeError, ErrorCode } from "./errors";
 import type { Playlist, QueueItem, Song } from "./media";
 import type { DisTubeQueue } from "./queue";
 import type { QueueState } from "./queue-state";
@@ -47,6 +47,21 @@ export interface DisTubeEventMap<Metadata = undefined, Target = VoiceChannelTarg
 }
 
 export type DisTubeEventName = keyof DisTubeEventMap;
+
+const EVENT_NAMES: ReadonlySet<string> = new Set(
+  Object.keys({
+    "queue.created": 0,
+    "queue.item.added": 0,
+    "queue.playlist.added": 0,
+    "queue.item.started": 0,
+    "queue.item.finished": 0,
+    "queue.item.failed": 0,
+    "queue.finished": 0,
+    "queue.autoplay.failed": 0,
+    "queue.deleted": 0,
+    "voice.disconnected": 0,
+  } satisfies Record<DisTubeEventName, 0>),
+);
 export type DisTubeEventListener<Name extends DisTubeEventName, Metadata = undefined, Target = VoiceChannelTarget> = (
   event: DisTubeEventMap<Metadata, Target>[Name],
 ) => unknown;
@@ -63,6 +78,8 @@ export class DisTubeEvents<Target = VoiceChannelTarget> {
   }
 
   on<Name extends DisTubeEventName>(name: Name, listener: DisTubeEventListener<Name, unknown, Target>): () => void {
+    if (!EVENT_NAMES.has(name))
+      throw new DisTubeError(ErrorCode.INVALID_ARGUMENT, `Unknown event name ${String(name)}`);
     const registration: Listener = event => listener(event);
     const listeners = this.#listeners.get(name) ?? new Set<Listener>();
     listeners.add(registration);

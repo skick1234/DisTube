@@ -505,6 +505,11 @@ describe("events and diagnostics", () => {
     await harness.distube.dispose();
   });
 
+  it("throws INVALID_ARGUMENT for a v5 event name", () => {
+    const harness = playableSetup();
+    expect(() => harness.distube.on("playSong" as never, vi.fn())).toThrowError(invalidArgument);
+  });
+
   it("isolates a failing listener and reports it once without affecting playback", async () => {
     const harness = playableSetup();
     const later = vi.fn();
