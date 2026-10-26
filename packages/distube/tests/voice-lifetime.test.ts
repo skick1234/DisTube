@@ -256,6 +256,43 @@ describe("deferred DisTubeVoice lifetime", () => {
     expect(await joining).toMatchObject({ code: "INVALID_STATE" });
   });
 
+  it("shutdown waits for the session release of an unawaited voices.leave before Plugin disposal", async () => {
+    const harness = playableSetup();
+    await harness.distube.voices.join(TARGET);
+    const release = harness.adapter.session.gateRelease();
+
+    const leaving = harness.distube.voices.leave(GUILD);
+    const shutdown = harness.distube.dispose();
+    await flushMicrotasks(32);
+
+    expect(harness.source.dispose).not.toHaveBeenCalled();
+    release.resolve();
+    await leaving;
+    await shutdown;
+    expect(harness.source.dispose).toHaveBeenCalledTimes(1);
+  });
+
+  it("shutdown rejects VOICE_FAILED with the release failure of a voice leave already in flight", async () => {
+    const harness = playableSetup();
+    await harness.distube.voices.join(TARGET);
+    const release = harness.adapter.session.gateRelease();
+    const releaseFailure = new Error("release failed");
+
+    const leaving = capture(harness.distube.voices.leave(GUILD));
+    const shutdown = capture(harness.distube.dispose());
+    release.reject(releaseFailure);
+
+    const leaveFailure = await leaving;
+    const failure = await shutdown;
+    expect(leaveFailure).toMatchObject({ code: "VOICE_FAILED", cause: releaseFailure });
+    expect(failure).toMatchObject({ code: "VOICE_FAILED" });
+    const aggregate = failure instanceof Error ? failure.cause : undefined;
+    expect(aggregate).toBeInstanceOf(AggregateError);
+    expect((aggregate as AggregateError).errors).toHaveLength(1);
+    expect((aggregate as AggregateError).errors[0]).toBe(leaveFailure);
+    expect(harness.source.dispose).toHaveBeenCalledTimes(1);
+  });
+
   it("releases a created session when DisTubeVoice construction fails", async () => {
     const harness = playableSetup();
     const session = new FakeVoiceSession(GUILD, VOICE_CHANNEL);

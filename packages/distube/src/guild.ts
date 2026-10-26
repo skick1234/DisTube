@@ -196,10 +196,11 @@ export class Guild<Target> {
     const join = this.#join;
     this.#join = undefined;
     join?.controller.abort();
-    const failures: unknown[] = [];
-    if (this.#live) await this.#end(this.#live.connection, "shutdown").catch((error: unknown) => failures.push(error));
+    const leaving = this.#leaving;
+    const ending = this.#live && this.#end(this.#live.connection, "shutdown");
+    const closes = await Promise.allSettled([leaving, ending]);
     await join?.voice.catch(() => undefined);
-    return failures;
+    return closes.flatMap(close => (close.status === "rejected" ? [close.reason] : []));
   }
 
   async playTrack(resource: PlaybackResource, signal: AbortSignal, onStart: () => void): Promise<TrackEnd> {
