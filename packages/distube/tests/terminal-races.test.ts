@@ -328,7 +328,7 @@ describe("stop overlaps", () => {
 });
 
 describe("voice terminal overlaps", () => {
-  it("fails the starting item, deletes the queue and disconnects once when the session drops before start", async () => {
+  it("deletes the queue and disconnects once, failing no item, when the session drops before start", async () => {
     const harness = playableSetup();
     const player = new FakePlayer();
     harness.engine.gateCreate().resolve(player);
@@ -346,7 +346,7 @@ describe("voice terminal overlaps", () => {
     starting.resolve();
     await settle();
 
-    expect(events).toEqual(["queue.item.failed", "queue.deleted", "voice.disconnected"]);
+    expect(events).toEqual(["queue.deleted", "voice.disconnected"]);
     expect(harness.source.disposed).toEqual(["a"]);
     expect(player.release).toHaveBeenCalledTimes(1);
     expect(harness.distube.voices.has(GUILD)).toBe(false);

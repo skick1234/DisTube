@@ -34,6 +34,7 @@ function describe(caught: DisTubeError): string {
     case ErrorCode.SOURCE_FAILED:
       return `provider ${caught.source ?? "core"}`;
     case ErrorCode.VOICE_FAILED:
+    case ErrorCode.VOICE_DISCONNECTED:
       return "voice";
     default: {
       const exhaustive: never = caught.code;

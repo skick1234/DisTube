@@ -23,7 +23,7 @@ export interface BaseVoiceEvent<Target = VoiceChannelTarget> {
 export type QueueDeleteReason = "stop" | "finished" | "voice-loss" | "leave" | "shutdown" | "failed";
 
 /** Why a guild's DisTubeVoice ended. */
-export type VoiceDisconnectReason = "left" | "platform" | "shutdown" | "idle";
+export type VoiceDisconnectReason = "left" | "removed" | "platform" | "shutdown" | "idle";
 
 export interface DisTubeEventMap<Metadata = undefined, Target = VoiceChannelTarget> {
   "queue.created": Readonly<BaseQueueEvent<Metadata, Target>>;
@@ -40,7 +40,11 @@ export interface DisTubeEventMap<Metadata = undefined, Target = VoiceChannelTarg
   "queue.finished": Readonly<BaseQueueEvent<Metadata, Target>>;
   "queue.autoplay.failed": Readonly<BaseQueueEvent<Metadata, Target> & { song: Song; error: DisTubeError }>;
   "queue.deleted": Readonly<BaseQueueEvent<Metadata, Target> & { reason: QueueDeleteReason }>;
-  /** Published once per DisTubeVoice, after that guild's `queue.deleted`. */
+  /**
+   * Published once per DisTubeVoice, after that guild's `queue.deleted`. `removed` means the platform removed the bot,
+   * such as a member disconnecting it, and carries no `error`. `platform` means the connection dropped beyond the
+   * Adapter's recovery and carries a VOICE_DISCONNECTED `error` whose `cause` is the Adapter's error.
+   */
   "voice.disconnected": Readonly<
     BaseVoiceEvent<Target> & { channelId: string; reason: VoiceDisconnectReason; error?: DisTubeError }
   >;

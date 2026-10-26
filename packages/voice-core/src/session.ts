@@ -146,7 +146,7 @@ export class DiscordVoiceSession implements VoiceSession {
         if (this.#released || state.user_id !== this.clientUserId || state.guild_id !== this.guildId) return;
         if (state.channel_id === null) {
           if (this.#leaving) this.#state = undefined;
-          else this.#terminate(new Error("Discord removed the bot from voice"));
+          else this.#disconnect({ type: "disconnected", reason: "removed" });
           return;
         }
         if (
@@ -360,12 +360,16 @@ export class DiscordVoiceSession implements VoiceSession {
   }
 
   #terminate(error: Error): void {
+    this.#disconnect({ type: "disconnected", reason: "failed", error });
+  }
+
+  #disconnect(event: Extract<VoiceSessionEvent, { type: "disconnected" }>): void {
     if (this.#released) return;
     const listeners = [...this.#listeners];
     void this.release().catch(() => undefined);
     for (const listener of listeners) {
       try {
-        listener({ type: "disconnected", error });
+        listener(event);
       } catch {}
     }
   }

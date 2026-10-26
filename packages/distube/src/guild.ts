@@ -367,11 +367,11 @@ export class Guild<Target> {
 
   #end(connection: Connection, reason: VoiceDisconnectReason, error?: DisTubeError): Promise<void> {
     const live = this.#live;
-    if (live?.connection !== connection) return this.#close(connection, error);
+    if (live?.connection !== connection) return this.#close(connection);
     this.#live = undefined;
     this.guilds.voices.delete(this.id);
     const { channelId } = connection;
-    const ending: Promise<void> = this.#close(connection, error).finally(() => {
+    const ending: Promise<void> = this.#close(connection).finally(() => {
       this.#left(ending);
       this.config.events.emit("voice.disconnected", {
         guildId: this.id,
@@ -392,13 +392,13 @@ export class Guild<Target> {
     this.#forgetIfIdle();
   }
 
-  #close(connection: Connection, error?: DisTubeError): Promise<void> {
+  #close(connection: Connection): Promise<void> {
     if (connection.closing) return connection.closing;
     connection.closed = true;
     connection.unsubscribe();
     this.#refreshIdle();
     const track = this.#track?.connection === connection ? this.#track : undefined;
-    track?.controller.abort(error ?? STOPPED);
+    track?.controller.abort(STOPPED);
     const player = connection.player;
     connection.closing = (async () => {
       const failures: unknown[] = [];
@@ -420,7 +420,7 @@ export class Guild<Target> {
   #onSessionEvent(connection: Connection, event: VoiceSessionEvent): void {
     if (connection.closed) return;
     if (event.type === "disconnected") {
-      this.#disconnected(connection, event.error);
+      this.#disconnected(connection, event.reason === "failed" ? event.error : undefined);
       return;
     }
     connection.channelId = event.channelId;
@@ -432,9 +432,11 @@ export class Guild<Target> {
 
   #disconnected(connection: Connection, cause?: Error): void {
     if (this.#live?.connection !== connection) return;
-    const error = new DisTubeError(ErrorCode.VOICE_FAILED, "Voice connection was lost", { cause });
-    void this.queue?.delete("voice-loss", error);
-    this.#end(connection, "platform", error).catch((failure: unknown) => this.#report("voice.disconnect", failure));
+    const error = cause && new DisTubeError(ErrorCode.VOICE_DISCONNECTED, "Voice connection was lost", { cause });
+    void this.queue?.delete("voice-loss");
+    this.#end(connection, error ? "platform" : "removed", error).catch((failure: unknown) =>
+      this.#report("voice.disconnect", failure),
+    );
   }
 
   #startedTrack(): { readonly track: Track; readonly player: Player } {
@@ -529,9 +531,7 @@ export class Guild<Target> {
 }
 
 function interruption(track: Track, signal: AbortSignal): TrackEnd | undefined {
-  const { aborted, reason } = track.controller.signal;
-  if (aborted && reason instanceof DisTubeError) throw reason;
-  return aborted || signal.aborted ? STOPPED : undefined;
+  return track.controller.signal.aborted || signal.aborted ? STOPPED : undefined;
 }
 
 function seekable(resource: PlaybackResource): boolean {

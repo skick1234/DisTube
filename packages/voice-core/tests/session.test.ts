@@ -299,7 +299,7 @@ describe("gateway session", () => {
     expect(gateway.destroy).toHaveBeenCalledTimes(1);
   });
 
-  it("treats gateway removal as terminal and isolates listener failures", async () => {
+  it("reports a removal while not leaving as a removed disconnect and isolates listener failures", async () => {
     const gateway = gatewayAdapter();
     const session = await DiscordVoiceSession.connect(options(gateway.creator));
     session.subscribe(() => {
@@ -311,7 +311,7 @@ describe("gateway session", () => {
     gateway.state(null);
     await settle();
 
-    expect(events).toHaveBeenCalledWith({ type: "disconnected", error: expect.any(Error) });
+    expect(events.mock.calls).toEqual([[{ type: "disconnected", reason: "removed" }]]);
     expect(session.gateway).toBeUndefined();
   });
 
@@ -393,7 +393,7 @@ describe("voice close recovery", () => {
       await settle();
 
       expect(events.slice(3).filter(event => event.type === "disconnected")).toEqual(
-        disconnects ? [{ type: "disconnected", error: expect.any(Error) }] : [],
+        disconnects ? [{ type: "disconnected", reason: "failed", error: expect.any(Error) }] : [],
       );
       expect(joins(gateway)).toHaveLength(disconnects ? 4 : 5);
       await session.release();
@@ -411,7 +411,11 @@ describe("voice close recovery", () => {
       await settle();
 
       expect(events).toEqual([
-        { type: "disconnected", error: expect.objectContaining({ message: expect.stringContaining(String(code)) }) },
+        {
+          type: "disconnected",
+          reason: "failed",
+          error: expect.objectContaining({ message: expect.stringContaining(String(code)) }),
+        },
       ]);
       expect(joins(gateway)).toHaveLength(1);
       expect(leaves(gateway)).toHaveLength(1);
@@ -426,7 +430,7 @@ describe("voice close recovery", () => {
     session.voiceClosed(4006);
     await settle();
 
-    expect(events).toEqual([{ type: "disconnected", error: expect.any(Error) }]);
+    expect(events).toEqual([{ type: "disconnected", reason: "failed", error: expect.any(Error) }]);
     expect(session.gateway).toBeUndefined();
   });
 
@@ -443,7 +447,7 @@ describe("voice close recovery", () => {
     await settle();
 
     expect(sent).toBe(false);
-    expect(events).toEqual([{ type: "disconnected", error: expect.any(Error) }]);
+    expect(events).toEqual([{ type: "disconnected", reason: "failed", error: expect.any(Error) }]);
     expect(leaves(gateway)).toHaveLength(1);
   });
 
@@ -481,7 +485,7 @@ describe("voice close recovery", () => {
 
     await expect(session.rejoin()).rejects.toThrow("timed out");
 
-    expect(events).toEqual([{ type: "disconnected", error: expect.any(Error) }]);
+    expect(events).toEqual([{ type: "disconnected", reason: "failed", error: expect.any(Error) }]);
     await expect(session.join(CHANNEL)).rejects.toThrow("released");
   });
 });

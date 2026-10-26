@@ -329,9 +329,12 @@ export class FakeVoiceSession implements VoiceSession {
     for (const listener of Array.from(this.listeners)) listener({ type: "connected", channelId, gateway });
   }
 
-  /** Reports the terminal disconnect the Adapter would publish once its recovery policy is spent. */
+  /** With an error, the Adapter's recovery policy is spent; without one, the platform removed the bot. */
   disconnect(error?: Error): void {
-    for (const listener of Array.from(this.listeners)) listener({ type: "disconnected", ...(error ? { error } : {}) });
+    const event: VoiceSessionEvent = error
+      ? { type: "disconnected", reason: "failed", error }
+      : { type: "disconnected", reason: "removed" };
+    for (const listener of Array.from(this.listeners)) listener(event);
   }
 }
 

@@ -9,6 +9,8 @@ export const ErrorCode = {
   RATE_LIMITED: "RATE_LIMITED",
   SOURCE_FAILED: "SOURCE_FAILED",
   VOICE_FAILED: "VOICE_FAILED",
+  /** An established voice connection dropped beyond the Adapter's recovery. */
+  VOICE_DISCONNECTED: "VOICE_DISCONNECTED",
   UNSUPPORTED: "UNSUPPORTED",
 } as const;
 

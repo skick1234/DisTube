@@ -289,11 +289,9 @@ export class DisTubeQueue<Metadata = undefined, Target = VoiceChannelTarget> {
   }
 
   /** @internal */
-  delete(reason: QueueDeleteReason, error?: DisTubeError): Promise<void> {
+  delete(reason: QueueDeleteReason): Promise<void> {
     if (this.#lifetime.signal.aborted) return this.#loop;
     this.#lifetime.abort();
-    const attempt = this.#attempt;
-    if (error && attempt?.playing) this.#emit("queue.item.failed", { item: attempt.item, error });
     this.#state = IDLE_QUEUE_STATE;
     this.#guild.unregister(this as DisTubeQueue<unknown, Target>);
     this.#emit("queue.deleted", { reason });

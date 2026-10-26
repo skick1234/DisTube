@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { type DisTube, DisTubeError } from "../src";
+import { type DisTube, DisTubeError, type DisTubeEventMap } from "../src";
 import type { PlaybackResource } from "../src/integrations";
 import {
   capture,
@@ -137,42 +137,38 @@ describe("voice presence", () => {
 });
 
 describe("terminal disconnect", () => {
-  it("publishes platform loss as item failure, queue deletion, then one disconnect", async () => {
-    const harness = playableSetup();
-    const queue = await harness.distube.play(TARGET, "a");
-    await harness.distube.play(TARGET, "b");
-    await settle();
-    const item = queue.current;
-    const order = record(harness.distube, ["queue.item.failed", "queue.deleted", "voice.disconnected"]);
-    const itemFailed = vi.fn();
-    harness.distube.on("queue.item.failed", itemFailed);
-    const deleted = vi.fn();
-    harness.distube.on("queue.deleted", event => deleted(event.reason));
-    const disconnected = vi.fn();
-    harness.distube.on("voice.disconnected", disconnected);
+  it.each([
+    ["a member removes the bot", undefined, "removed", undefined],
+    ["the connection drops", new Error("dropped"), "platform", "VOICE_DISCONNECTED"],
+  ] as const)(
+    "when %s, deletes the queue with voice-loss and no item failure, then disconnects once",
+    async (_case, cause, reason, code) => {
+      const harness = playableSetup();
+      await harness.distube.play(TARGET, "a");
+      await harness.distube.play(TARGET, "b");
+      await settle();
+      const order = record(harness.distube, ["queue.item.failed", "queue.deleted", "voice.disconnected"]);
+      const deleted = deletions(harness.distube);
+      const disconnected: DisTubeEventMap["voice.disconnected"][] = [];
+      harness.distube.on("voice.disconnected", event => void disconnected.push(event));
 
-    harness.adapter.sessions[0]?.disconnect(new Error("dropped"));
-    await settle();
+      harness.adapter.sessions[0]?.disconnect(cause);
+      await settle();
 
-    expect(order).toEqual(["queue.item.failed", "queue.deleted", "voice.disconnected"]);
-    expect(itemFailed).toHaveBeenCalledWith(
-      expect.objectContaining({ item, error: expect.objectContaining({ code: "VOICE_FAILED" }) }),
-    );
-    expect(deleted).toHaveBeenCalledWith("voice-loss");
-    expect(harness.engine.player.played).toEqual(["a"]);
-    expect(disconnected).toHaveBeenCalledWith(
-      expect.objectContaining({
-        guildId: GUILD,
-        reason: "platform",
-        error: expect.objectContaining({ code: "VOICE_FAILED" }),
-      }),
-    );
-    expect(harness.distube.voices.size).toBe(0);
+      expect(order).toEqual(["queue.deleted", "voice.disconnected"]);
+      expect(deleted).toEqual(["voice-loss"]);
+      expect(harness.engine.player.played).toEqual(["a"]);
+      expect(disconnected).toHaveLength(1);
+      const [event] = disconnected;
+      expect(event).toMatchObject({ guildId: GUILD, channelId: VOICE_CHANNEL, reason });
+      expect(event?.error?.code).toBe(code);
+      expect(event?.error?.cause).toBe(cause);
+      expect(harness.distube.voices.size).toBe(0);
 
-    // The DisTubeVoice already ended, so leaving publishes nothing more.
-    await harness.distube.voices.leave(GUILD);
-    expect(disconnected).toHaveBeenCalledTimes(1);
-  });
+      await harness.distube.voices.leave(GUILD);
+      expect(disconnected).toHaveLength(1);
+    },
+  );
 
   it("publishes a disconnect for a DisTubeVoice whose cleanup failed", async () => {
     const harness = playableSetup();
@@ -412,33 +408,8 @@ describe("deferred DisTubeVoice lifetime", () => {
     expect((failure.cause as AggregateError).errors).toEqual([playerFailure, sessionFailure]);
   });
 
-  it("does not let a reentrant failure listener publish queue deletion first", async () => {
-    const harness = playableSetup();
-    const started = deferred<void>();
-    once(harness.distube, "queue.item.started", () => started.resolve());
-    const queue = await harness.distube.play(TARGET, "first");
-    await started.promise;
-    const order: string[] = [];
-    const disconnected = deferred<void>();
-    harness.distube.on("queue.item.failed", () => {
-      order.push("failed:first-listener");
-      void queue.stop();
-    });
-    harness.distube.on("queue.item.failed", () => order.push("failed:second-listener"));
-    harness.distube.on("queue.deleted", () => order.push("deleted"));
-    once(harness.distube, "voice.disconnected", () => {
-      order.push("disconnected");
-      disconnected.resolve();
-    });
-
-    harness.adapter.sessions[0]?.disconnect(new Error("connection lost"));
-    await disconnected.promise;
-
-    expect(order).toEqual(["failed:first-listener", "failed:second-listener", "deleted", "disconnected"]);
-  });
-
   it.each(["Player first", "session first"] as const)(
-    "publishes one terminal item event when %s callbacks race",
+    "publishes no item failure when %s callbacks race with a dropped connection",
     async order => {
       const harness = playableSetup();
       const started = deferred<void>();
@@ -460,7 +431,7 @@ describe("deferred DisTubeVoice lifetime", () => {
       }
       await disconnected.promise;
 
-      expect(failures).toHaveBeenCalledTimes(1);
+      expect(failures).not.toHaveBeenCalled();
       expect(harness.distube.voices.has(GUILD)).toBe(false);
     },
   );

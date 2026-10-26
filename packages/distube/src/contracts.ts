@@ -192,8 +192,12 @@ export interface VoiceGatewayData {
 export type VoiceSessionEvent =
   /** The session settled on a channel. Republished whenever the gateway credentials change. */
   | Readonly<{ type: "connected"; channelId: string; gateway: VoiceGatewayData }>
-  /** The Adapter exhausted its recovery policy. Published at most once per session. */
-  | Readonly<{ type: "disconnected"; error?: Error }>;
+  /**
+   * The session ended, published at most once and never for `release`. `removed`: the platform removed the bot from
+   * voice, such as a member disconnecting it. `failed`: the Adapter exhausted its recovery policy.
+   */
+  | Readonly<{ type: "disconnected"; reason: "removed" }>
+  | Readonly<{ type: "disconnected"; reason: "failed"; error: Error }>;
 
 /** The bot's own voice flags for `join` and `setSelfState`. An omitted flag keeps the current one. */
 export interface JoinOptions {

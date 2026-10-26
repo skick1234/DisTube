@@ -81,7 +81,7 @@ describe("DiscordVoiceSession over the real voice library", () => {
     );
     await settle();
 
-    expect(events).toEqual([{ type: "disconnected", error: expect.any(Error) }]);
+    expect(events).toEqual([{ type: "disconnected", reason: "failed", error: expect.any(Error) }]);
     expect(joins(gateway)).toHaveLength(4);
     expect(leaves(gateway)).toHaveLength(1);
   });
@@ -106,7 +106,7 @@ describe("DiscordVoiceSession over the real voice library", () => {
     server.close(4006);
     await vi.waitFor(() => expect(events).toHaveLength(1), { timeout: 3 * TIMEOUT_MS });
 
-    expect(events).toEqual([{ type: "disconnected", error: expect.any(Error) }]);
+    expect(events).toEqual([{ type: "disconnected", reason: "failed", error: expect.any(Error) }]);
     expect(joins(gateway)).toHaveLength(2);
     expect(leaves(gateway)).toHaveLength(1);
   });
@@ -133,7 +133,11 @@ describe("DiscordVoiceSession over the real voice library", () => {
     await settle();
 
     expect(events).toEqual([
-      { type: "disconnected", error: expect.objectContaining({ message: expect.stringContaining(String(code)) }) },
+      {
+        type: "disconnected",
+        reason: "failed",
+        error: expect.objectContaining({ message: expect.stringContaining(String(code)) }),
+      },
     ]);
     expect(joins(gateway)).toHaveLength(1);
     expect(leaves(gateway)).toHaveLength(1);
