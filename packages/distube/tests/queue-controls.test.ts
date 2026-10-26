@@ -276,6 +276,83 @@ describe("seek", () => {
   });
 });
 
+const songs = (items: readonly { song: Song }[]): string[] => items.map(item => item.song.id);
+
+describe("commands issued while an item is ending", () => {
+  it("rejects a second skip in the same tick INVALID_STATE and records the skipped item once", async () => {
+    const { harness, queue, player } = await playing(["a", "b", "c"]);
+    const skipping = capture(queue.skip());
+    const second = capture(queue.skip());
+
+    expect(await second).toMatchObject({ code: "INVALID_STATE" });
+    expect(await skipping).toBeUndefined();
+    await settle();
+    expect(songs(queue.history)).toEqual(["a"]);
+    expect(queue.current?.song.id).toBe("b");
+    expect(songs(queue.upcoming)).toEqual(["c"]);
+    expect(player.played).toEqual(["a", "b"]);
+    await harness.distube.dispose();
+  });
+
+  it("replays the skipped item as a new occurrence when previous follows skip in the same tick", async () => {
+    const { harness, queue, player } = await playing(["a", "b", "c", "d"]);
+    player.finish();
+    await settle();
+    player.finish();
+    await settle();
+    const c = required(queue.current);
+
+    const commands = [capture(queue.skip()), capture(queue.previous())];
+    expect(await Promise.all(commands)).toEqual([undefined, undefined]);
+    await settle();
+
+    expect(songs(queue.history)).toEqual(["a", "b"]);
+    expect(queue.current?.song).toBe(c.song);
+    expect(queue.current?.id).not.toBe(c.id);
+    expect(songs(queue.upcoming)).toEqual(["d"]);
+    await harness.distube.dispose();
+  });
+
+  it("returns the ended item to upcoming once when previous is called twice in the same tick", async () => {
+    const { harness, queue, player } = await playing(["a", "b", "c", "d"]);
+    player.finish();
+    await settle();
+    player.finish();
+    await settle();
+    const [a, b] = queue.history;
+    const c = required(queue.current);
+    const d = required(queue.upcoming[0]);
+
+    const commands = [capture(queue.previous()), capture(queue.previous())];
+
+    expect(songs(queue.upcoming)).toEqual(["a", "b", "c", "d"]);
+    expect(queue.upcoming.map(item => item.id).slice(2)).toEqual([c.id, d.id]);
+    expect([queue.upcoming[0]?.id === a?.id, queue.upcoming[1]?.id === b?.id]).toEqual([false, false]);
+    expect(await Promise.all(commands)).toEqual([undefined, undefined]);
+    await harness.distube.dispose();
+  });
+
+  it("keeps every occurrence ID unique when previous follows a requeue jump in the same tick", async () => {
+    const { harness, queue, player } = await playing(["h", "a", "b", "c"]);
+    player.finish();
+    await settle();
+    const h = required(queue.history[0]);
+    const a = required(queue.current);
+    const [b, c] = queue.upcoming;
+
+    const commands = [capture(queue.jump(1, { requeue: true })), capture(queue.previous())];
+
+    expect(queue.upcoming[0]?.song).toBe(h.song);
+    expect(queue.upcoming[0]?.id).not.toBe(h.id);
+    expect(queue.upcoming.slice(1).map(item => item.id)).toEqual([b?.id, c?.id, a.id]);
+    expect(await Promise.all(commands)).toEqual([undefined, undefined]);
+    await settle();
+    const ids = [queue.current, ...queue.upcoming, ...queue.history].map(item => item?.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    await harness.distube.dispose();
+  });
+});
+
 describe("voice volume", () => {
   it("applies volumes up to 1000 and rejects 1001 without a Player command", async () => {
     const { harness, voice, player } = await playing(["a"]);

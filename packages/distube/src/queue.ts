@@ -67,6 +67,7 @@ interface Attempt {
   readonly controller: AbortController;
   readonly done: Promise<void>;
   playing: boolean;
+  ended: boolean;
 }
 
 type QueueEventName = Exclude<keyof DisTubeEventMap, "queue.created" | "voice.disconnected">;
@@ -232,8 +233,8 @@ export class DisTubeQueue<Metadata = undefined, Target = VoiceChannelTarget> {
   async skip(): Promise<void> {
     this.#assertAlive();
     const attempt = this.#attempt;
-    if (!attempt) throw new DisTubeError(ErrorCode.INVALID_STATE, "Queue has nothing playing");
-    if (attempt.playing) this.#end(attempt.item, false);
+    if (!attempt || attempt.ended) throw new DisTubeError(ErrorCode.INVALID_STATE, "Queue has nothing playing");
+    if (attempt.playing) this.#end(attempt, false);
     else this.#state = failFirst(this.#state, attempt.item.id);
     await this.#interrupt(attempt);
   }
@@ -246,7 +247,8 @@ export class DisTubeQueue<Metadata = undefined, Target = VoiceChannelTarget> {
     const index = typeof target === "string" ? this.#state.upcoming.findIndex(item => item.id === target) : target - 1;
     const jumped = jumpTo(this.#state, index, options.requeue === true);
     const attempt = this.#attempt;
-    if (attempt?.playing) this.#lastPlayed = attempt.item;
+    const playing = this.#playing();
+    if (playing) this.#lastPlayed = playing.item;
     this.#state = jumped.state;
     if (!options.requeue) for (const item of jumped.skipped) this.#remember(item);
     if (attempt && (attempt.playing || this.#state.upcoming[0] !== attempt.item)) await this.#interrupt(attempt);
@@ -259,7 +261,8 @@ export class DisTubeQueue<Metadata = undefined, Target = VoiceChannelTarget> {
     if (!popped) throw new DisTubeError(ErrorCode.INVALID_STATE, "Queue has no history to return to");
     const attempt = this.#attempt;
     const replay = queueItem(popped.item.song, popped.item.metadata, popped.item.autoplay);
-    const current = attempt?.playing ? [attempt.item] : [];
+    const playing = this.#playing();
+    const current = playing ? [playing.item] : [];
     this.#state = insertAt(finishCurrent(popped.state), [replay, ...current], 0);
     if (attempt) await this.#interrupt(attempt);
     else this.#kick();
@@ -381,7 +384,7 @@ export class DisTubeQueue<Metadata = undefined, Target = VoiceChannelTarget> {
     const { plugins, engine } = this.#guild.config;
     const controller = new AbortController();
     const done = Promise.withResolvers<void>();
-    const attempt: Attempt = { item, controller, done: done.promise, playing: false };
+    const attempt: Attempt = { item, controller, done: done.promise, playing: false, ended: false };
     const signal = AbortSignal.any([this.#lifetime.signal, controller.signal]);
     this.#attempt = attempt;
     try {
@@ -425,14 +428,16 @@ export class DisTubeQueue<Metadata = undefined, Target = VoiceChannelTarget> {
         });
         return;
       }
-      if (!signal.aborted) this.#end(item, end.reason === "finished");
+      if (!signal.aborted) this.#end(attempt, end.reason === "finished");
     } finally {
       this.#attempt = undefined;
       done.resolve();
     }
   }
 
-  #end(item: QueueItem, finished: boolean): void {
+  #end(attempt: Attempt, finished: boolean): void {
+    const { item } = attempt;
+    attempt.ended = true;
     this.#lastPlayed = item;
     this.#state = finishCurrent(this.#state);
     if (finished && this.#state.repeat !== "off") {
@@ -483,10 +488,16 @@ export class DisTubeQueue<Metadata = undefined, Target = VoiceChannelTarget> {
   }
 
   #started(): boolean {
-    return !this.#lifetime.signal.aborted && this.#attempt?.playing === true;
+    return !this.#lifetime.signal.aborted && this.#playing() !== undefined;
+  }
+
+  #playing(): Attempt | undefined {
+    const attempt = this.#attempt;
+    return attempt?.playing && !attempt.ended ? attempt : undefined;
   }
 
   #interrupt(attempt: Attempt): Promise<void> {
+    attempt.ended = true;
     attempt.controller.abort();
     return attempt.done;
   }
