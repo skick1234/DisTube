@@ -37,7 +37,7 @@ through `file:../DisTube/packages/<pkg>` links and run their own `verify` agains
 
 ## Dependency and documentation gates
 
-`bun install --frozen-lockfile` fails on manifest or lock drift. Regenerate `bun.lock` only with Bun 1.4.3.
+`bun install --frozen-lockfile` fails on manifest or lock drift. Regenerate `bun.lock` only with Bun 1.4.4.
 
 Narrow an adapter peer range in a `!` commit with a migration note before tagging.
 

@@ -52,7 +52,7 @@ We welcome contributions via pull requests!
 ## ⚙️ Development Environment
 
 - **Runtime**: Node.js >= 22.12.0
-- **Package Manager**: Bun 1.4.3 (the version pinned by the repository toolchain)
+- **Package Manager**: Bun 1.4.4 (the version pinned by the repository toolchain)
 - **Linter/Formatter**: [oxlint](https://oxc.rs/docs/guide/usage/linter) and [oxfmt](https://oxc.rs/docs/guide/usage/formatter)
 
 ## 📂 Directory Structure
