@@ -4,7 +4,7 @@ name: Publish
 # publishes it with provenance and creates the GitHub release.
 on:
   push:
-    tags: ["*@*"]
+    tags: ["distube@*", "@distube/*@*"]
 jobs:
   publish:
     name: Verify, pack and publish
@@ -99,7 +99,12 @@ jobs:
 
       - name: Publish
         working-directory: ${{ steps.tag.outputs.directory }}
-        run: npm publish "$RUNNER_TEMP"/*.tgz --provenance --access public
+        env:
+          PRERELEASE: ${{ steps.tag.outputs.prerelease }}
+        run: |
+          args=(--provenance --access public)
+          if [[ "$PRERELEASE" == "true" ]]; then args+=(--tag next); fi
+          npm publish "$RUNNER_TEMP"/*.tgz "${args[@]}"
 
   release:
     name: Create the GitHub release
