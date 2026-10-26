@@ -157,11 +157,15 @@ export async function relatedSong(
   song: Song,
   exclude: readonly Song[],
   signal: AbortSignal,
+  fallback?: Song,
 ): Promise<Song | undefined> {
-  const owner = ownerOf(plugins, song);
+  const seedOwner = ownerOf(plugins, song);
+  const useFallback = fallback !== undefined && !seedOwner?.related;
+  const seed = useFallback ? fallback : song;
+  const owner = useFallback ? ownerOf(plugins, fallback) : seedOwner;
   const related = owner?.related?.bind(owner);
   if (!owner || !related) return undefined;
-  const next = await call(owner, signal, () => related(song, { signal, exclude }));
+  const next = await call(owner, signal, () => related(seed, { signal, exclude }));
   return next && owned(owner, next);
 }
 

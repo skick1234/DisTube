@@ -1,15 +1,18 @@
 import { describe, expect, it } from "vitest";
 import { type DisTubeError, type DisTubeEventMap, type DisTubeQueue, Playlist, type Song } from "../src";
+import type { Plugin } from "../src/integrations";
 import {
   deferred,
   deletions,
   type FakePlayer,
+  FakeSource,
   GUILD,
   media,
   playableSetup,
   record,
   required,
   settle,
+  setup,
   thrown,
   VOICE_CHANNEL,
 } from "./support/harness";
@@ -341,6 +344,40 @@ describe("autoplay", () => {
     expect(player.playing).toBe("b");
     expect(events).toEqual([]);
     expect(reasons).toEqual([]);
+  });
+
+  it.each([
+    ["plays the candidate owner's related Song", "related", ["queue.item.added"]],
+    [
+      "reports the Spotify Song when the candidate owner finds none",
+      undefined,
+      ["queue.autoplay.failed", "queue.finished"],
+    ],
+  ] as const)("after a Spotify item played through a YouTube candidate, %s", async (_name, relatedId, events) => {
+    const spotify: Plugin = { name: "spotify", resolve: async () => undefined };
+    const youtube = new FakeSource("youtube");
+    const candidate = media("youtube", "candidate");
+    youtube.search.mockResolvedValue([candidate]);
+    youtube.related.mockResolvedValueOnce(relatedId === undefined ? undefined : media("youtube", relatedId));
+    const harness = setup([spotify, youtube]);
+    const log = record(harness.distube, ["queue.item.added", "queue.autoplay.failed", "queue.finished"]);
+    const failedSongs: Song[] = [];
+    harness.distube.on("queue.autoplay.failed", event => void failedSongs.push(event.song));
+    const song = media("spotify", "track");
+    const queue = await harness.distube.play(TARGET, song);
+    queue.setAutoplay(true);
+    await settle();
+    const added = log.length;
+
+    harness.engine.player.finish();
+    await settle();
+
+    expect(youtube.related).toHaveBeenCalledTimes(1);
+    expect(youtube.related.mock.calls[0]?.[0]).toBe(candidate);
+    expect(log.slice(added)).toEqual(events);
+    expect(harness.engine.player.playing).toBe(relatedId);
+    expect(failedSongs.map(failed => failed === song)).toEqual(relatedId === undefined ? [true] : []);
+    await harness.distube.dispose();
   });
 
   it("publishes no queue.finished when the queue is stopped during the lookup", async () => {
