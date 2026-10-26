@@ -25,7 +25,6 @@ export interface GuildConfig<Target> {
   readonly historySize: number;
   readonly maxPlaylistSongs: number;
   readonly connectionTimeoutMs: number;
-  readonly idleTimeoutMs: number;
   readonly lifetime: AbortSignal;
 }
 
@@ -114,7 +113,6 @@ export class Guild<Target> {
   #live?: Live<Target>;
   #join?: PendingJoin<Target>;
   #leaving?: Promise<void>;
-  #idle?: ReturnType<typeof setTimeout>;
   #track?: Track;
 
   constructor(guilds: Guilds<Target>, id: string) {
@@ -146,7 +144,6 @@ export class Guild<Target> {
     const queue = new DisTubeQueue<unknown, Target>(this);
     this.queue = queue;
     this.guilds.queues.set(this.id, queue);
-    this.#refreshIdle();
     return queue;
   }
 
@@ -154,7 +151,6 @@ export class Guild<Target> {
     if (this.queue !== queue) return;
     this.queue = undefined;
     this.guilds.queues.delete(this.id);
-    this.#refreshIdle();
     this.#forgetIfIdle();
   }
 
@@ -356,7 +352,6 @@ export class Guild<Target> {
     const voice = new DisTubeVoice(this, connection);
     this.#live = { connection, voice };
     this.guilds.voices.set(this.id, voice);
-    this.#refreshIdle();
     return voice;
   }
 
@@ -396,7 +391,6 @@ export class Guild<Target> {
     if (connection.closing) return connection.closing;
     connection.closed = true;
     connection.unsubscribe();
-    this.#refreshIdle();
     const track = this.#track?.connection === connection ? this.#track : undefined;
     track?.controller.abort(STOPPED);
     const player = connection.player;
@@ -504,21 +498,6 @@ export class Guild<Target> {
     const run = connection.channel.then(work);
     connection.channel = run.catch(() => undefined);
     return run;
-  }
-
-  #refreshIdle(): void {
-    const live = this.#live;
-    const { idleTimeoutMs } = this.config;
-    if (!live || this.queue) {
-      clearTimeout(this.#idle);
-      this.#idle = undefined;
-    } else if (!this.#idle && idleTimeoutMs > 0) {
-      this.#idle = setTimeout(() => {
-        this.#idle = undefined;
-        this.#end(live.connection, "idle").catch((error: unknown) => this.#report("voice.idle", error));
-      }, idleTimeoutMs);
-      this.#idle.unref();
-    }
   }
 
   #forgetIfIdle(): void {

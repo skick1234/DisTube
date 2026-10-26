@@ -34,7 +34,7 @@ function requireId(id: unknown, name: string): string {
 
 /**
  * One guild's voice connection and the settings that outlive its queues: volume, filters, self-deaf and self-mute.
- * Playback controls live on `DisTubeQueue`. With no queue the voice leaves after `DisTubeOptions.idleTimeoutMs`.
+ * Playback controls live on `DisTubeQueue`. The voice stays until `leave`, `dispose` or the platform ends it.
  */
 export class DisTubeVoice<Target = VoiceChannelTarget> {
   readonly filters: FilterManager;

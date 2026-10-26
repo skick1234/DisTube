@@ -23,7 +23,7 @@ export interface BaseVoiceEvent<Target = VoiceChannelTarget> {
 export type QueueDeleteReason = "stop" | "finished" | "voice-loss" | "leave" | "shutdown" | "failed";
 
 /** Why a guild's DisTubeVoice ended. */
-export type VoiceDisconnectReason = "left" | "removed" | "platform" | "shutdown" | "idle";
+export type VoiceDisconnectReason = "left" | "removed" | "platform" | "shutdown";
 
 export interface DisTubeEventMap<Metadata = undefined, Target = VoiceChannelTarget> {
   "queue.created": Readonly<BaseQueueEvent<Metadata, Target>>;

@@ -46,11 +46,8 @@ describe("client construction", () => {
     { maxPlaylistSongs: 0 },
     { maxPlaylistSongs: 1.5 },
     { connectionTimeoutMs: 0 },
+    { connectionTimeoutMs: Number.NaN },
     { connectionTimeoutMs: 2 ** 31 },
-    { idleTimeoutMs: -1 },
-    { idleTimeoutMs: 1.5 },
-    { idleTimeoutMs: Number.NaN },
-    { idleTimeoutMs: 2 ** 31 },
     { engine: { opusComplexity: 11 } },
     { engine: { bufferMs: 30 } },
     { engine: { bufferMs: 0 } },
@@ -58,8 +55,8 @@ describe("client construction", () => {
     expect(construct([new FakeSource("source")], options)).toThrowError(invalidArgument);
   });
 
-  it.each(["connectionTimeoutMs", "idleTimeoutMs"])("accepts %s at the timer ceiling 2147483647", option => {
-    expect(construct([new FakeSource("source")], { [option]: 2 ** 31 - 1 })).not.toThrow();
+  it("accepts connectionTimeoutMs at the timer ceiling 2147483647", () => {
+    expect(construct([new FakeSource("source")], { connectionTimeoutMs: 2 ** 31 - 1 })).not.toThrow();
   });
 
   it.each(["", " padded", "padded ", 42])("rejects the plugin name %j with INVALID_ARGUMENT", name => {

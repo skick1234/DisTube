@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { type DisTube, DisTubeError, type DisTubeEventMap } from "../src";
-import type { PlaybackResource } from "../src/integrations";
 import {
   capture,
   deferred,
@@ -21,8 +20,8 @@ import {
 
 const TARGET = { guildId: GUILD, id: VOICE_CHANNEL };
 const SECOND = "second-guild";
+type Playable = ReturnType<typeof playableSetup<undefined>>;
 const MOVED = { guildId: GUILD, id: "second" };
-const IDLE_MS = 1000;
 
 function disconnects(distube: DisTube): string[] {
   const reasons: string[] = [];
@@ -540,7 +539,7 @@ describe("deferred DisTubeVoice lifetime", () => {
   });
 });
 
-describe("idle voice", () => {
+describe("voice without a queue", () => {
   beforeEach(() => {
     vi.useFakeTimers();
   });
@@ -549,179 +548,29 @@ describe("idle voice", () => {
     vi.useRealTimers();
   });
 
-  it("leaves a voices.join with no play after idleTimeoutMs, releasing its session", async () => {
-    const harness = playableSetup("source", { idleTimeoutMs: IDLE_MS });
-    const left = disconnects(harness.distube);
-    await harness.distube.voices.join(TARGET);
-    const session = harness.adapter.session;
-
-    await advance(IDLE_MS - 1);
-    expect(left).toEqual([]);
-    await advance(1);
-
-    expect(left).toEqual(["idle"]);
-    expect(harness.distube.voices.has(GUILD)).toBe(false);
-    expect(session.release).toHaveBeenCalledTimes(1);
-  });
-
   it.each([
+    ["after voices.join with no play", async (_harness: Playable): Promise<void> => undefined],
     [
-      "a queue that finishes",
-      async (harness: ReturnType<typeof playableSetup<undefined>>) => {
+      "after its queue finishes",
+      async (harness: Playable): Promise<void> => {
         await harness.distube.play(TARGET, "a");
-        await flushMicrotasks(30);
-        harness.engine.player.finish();
+        await flushMicrotasks(20);
+        (harness.engine.players[0] as FakePlayer).finish();
+        await flushMicrotasks(20);
       },
-      ["finished"],
     ],
-    [
-      "a first play whose step fails after the join",
-      async (harness: ReturnType<typeof playableSetup<undefined>>) => {
-        const controller = new AbortController();
-        const gate = harness.adapter.gateCreateSession();
-        const playing = capture(harness.distube.play(TARGET, "a", { signal: controller.signal }));
-        await flushMicrotasks(30);
-        controller.abort();
-        gate.resolve(new FakeVoiceSession(GUILD, VOICE_CHANNEL));
-        expect(await playing).toMatchObject({ code: "ABORTED" });
-        expect(harness.distube.voices.has(GUILD)).toBe(true);
-      },
-      ["failed"],
-    ],
-    [
-      "clear during the first preparation",
-      async (harness: ReturnType<typeof playableSetup<undefined>>) => {
-        const held = deferred<PlaybackResource>();
-        harness.source.stream.mockImplementationOnce(() => held.promise);
-        const queue = await harness.distube.play(TARGET, "a");
-        await flushMicrotasks(30);
-        queue.clear();
-        held.resolve(harness.source.resource("a"));
-      },
-      ["finished"],
-    ],
-  ])("leaves on idle after %s", async (_name, reach, deleted) => {
-    const harness = playableSetup("source", { idleTimeoutMs: IDLE_MS });
-    const reasons = deletions(harness.distube);
-    const left = disconnects(harness.distube);
-
-    await reach(harness);
-    await flushMicrotasks(30);
-    expect(reasons).toEqual(deleted);
-    expect(harness.distube.voices.has(GUILD)).toBe(true);
-
-    await advance(IDLE_MS - 1);
-    expect(left).toEqual([]);
-    await advance(1);
-    expect(left).toEqual(["idle"]);
-  });
-
-  it("restarts the timer from a queue's deletion when a play came before the deadline", async () => {
-    const harness = playableSetup("source", { idleTimeoutMs: IDLE_MS });
-    const left = disconnects(harness.distube);
-    const voice = await harness.distube.voices.join(TARGET);
-    await advance(600);
-    const held = deferred<never>();
-    harness.source.search.mockImplementationOnce(() => held.promise);
-    const playing = capture(harness.distube.play(TARGET, "a"));
-    const queue = harness.distube.getQueue(GUILD);
-    await advance(600);
-    expect(left).toEqual([]);
-
-    await queue?.stop();
-    await advance(IDLE_MS - 1);
-    expect(left).toEqual([]);
-    expect(harness.distube.voices.get(GUILD)).toBe(voice);
-    await advance(1);
-    expect(left).toEqual(["idle"]);
-    held.reject(new Error("late"));
-    expect(await playing).toMatchObject({ code: "INVALID_STATE" });
-  });
-
-  it("stops a queue pending its first step with reason stop, keeps the voice and arms the timer", async () => {
-    const harness = playableSetup("source", { idleTimeoutMs: IDLE_MS });
-    const reasons = deletions(harness.distube);
-    const left = disconnects(harness.distube);
-    const voice = await harness.distube.voices.join(TARGET);
-    const held = deferred<never>();
-    harness.source.search.mockImplementationOnce(() => held.promise);
-    const playing = capture(harness.distube.play(TARGET, "a"));
-    await flushMicrotasks(30);
-
-    await harness.distube.getQueue(GUILD)?.stop();
-    await flushMicrotasks(30);
-    expect(reasons).toEqual(["stop"]);
-    expect(harness.distube.voices.get(GUILD)).toBe(voice);
-    await advance(IDLE_MS);
-    expect(left).toEqual(["idle"]);
-    held.reject(new Error("late"));
-    expect(await playing).toMatchObject({ code: "INVALID_STATE" });
-  });
-
-  it("stops a queue resolving its first input before any join with reason stop and never joins", async () => {
+  ] as const)("stays connected %s until the application leaves", async (_case, reach) => {
     const harness = playableSetup();
-    const reasons = deletions(harness.distube);
-    const held = deferred<never>();
-    harness.source.search.mockImplementationOnce(() => held.promise);
-    const playing = capture(harness.distube.play(TARGET, "a"));
-    await flushMicrotasks(30);
-
-    await harness.distube.getQueue(GUILD)?.stop();
-    held.reject(new Error("late"));
-    expect(await playing).toMatchObject({ code: "INVALID_STATE" });
-    expect(reasons).toEqual(["stop"]);
-    expect(harness.distube.voices.has(GUILD)).toBe(false);
-    expect(harness.adapter.createVoiceSession).not.toHaveBeenCalled();
-  });
-
-  it("holds the timer while a paused queue exists and arms it when the queue is deleted", async () => {
-    const harness = playableSetup("source", { idleTimeoutMs: IDLE_MS });
-    const left = disconnects(harness.distube);
-    const queue = await harness.distube.play(TARGET, "a");
-    await flushMicrotasks(30);
-    await queue.pause();
-    await advance(IDLE_MS * 5);
-    expect(left).toEqual([]);
-    expect(queue.status).toBe("paused");
-
-    await queue.stop();
-    await advance(IDLE_MS - 1);
-    expect(left).toEqual([]);
-    await advance(1);
-    expect(left).toEqual(["idle"]);
-  });
-
-  it("does not restart a running timer when voices.join moves the idle voice", async () => {
-    const harness = playableSetup("source", { idleTimeoutMs: IDLE_MS });
     const left = disconnects(harness.distube);
     await harness.distube.voices.join(TARGET);
-    await advance(600);
-    const voice = await harness.distube.voices.join({ guildId: GUILD, id: "second" });
-    expect(voice.channelId).toBe("second");
+    await reach(harness);
+    expect(harness.distube.getQueue(GUILD)).toBeUndefined();
 
-    await advance(400);
-    expect(left).toEqual(["idle"]);
-  });
+    await advance(3_600_000);
 
-  it("never leaves with idleTimeoutMs 0", async () => {
-    const harness = playableSetup("source", { idleTimeoutMs: 0 });
-    const left = disconnects(harness.distube);
-    await harness.distube.voices.join(TARGET);
-    await advance(300_000 * 10);
     expect(left).toEqual([]);
     expect(harness.distube.voices.has(GUILD)).toBe(true);
-  });
-
-  it("clears the timer on dispose", async () => {
-    const harness = playableSetup("source", { idleTimeoutMs: IDLE_MS });
-    const left = disconnects(harness.distube);
-    await harness.distube.voices.join(TARGET);
-    expect(vi.getTimerCount()).toBe(1);
-
-    await harness.distube.dispose();
-    expect(vi.getTimerCount()).toBe(0);
-    await advance(IDLE_MS);
-    expect(left).toEqual(["shutdown"]);
+    expect(harness.adapter.session.release).not.toHaveBeenCalled();
   });
 });
 
