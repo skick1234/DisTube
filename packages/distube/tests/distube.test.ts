@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { DisTube, DisTubeError, ErrorCode, Playlist, type Song } from "../src";
+import { DisTube, DisTubeError, ErrorCode, Playlist, Song } from "../src";
 import type { Plugin } from "../src/integrations";
 import {
   capture,
@@ -195,10 +195,27 @@ describe("string routing", () => {
   it.each([
     ["this copy", new DisTubeError("NOT_FOUND", "provider says no")],
     ["a second copy", new SecondCopyError("provider says no")],
+    ["a rate limit", new DisTubeError("RATE_LIMITED", "slow down")],
   ])("passes a plugin-owned DisTubeError from %s through unchanged", async (_copy, failure) => {
     const harness = playableSetup();
     harness.source.resolve.mockRejectedValueOnce(failure);
     await expect(harness.distube.play(TARGET, "https://provider.example/item")).rejects.toBe(failure);
+  });
+
+  it("wraps a plugin's own INVALID_ARGUMENT, INVALID_STATE or ABORTED as SOURCE_FAILED with the source and the original as cause", async () => {
+    const harness = playableSetup("acme");
+    harness.source.resolve.mockImplementationOnce(
+      async () => new Song({ id: "a", name: "", url: "u", source: "acme" }),
+    );
+    const failure = (await capture(harness.distube.play(TARGET, mediaUrl("a", "acme")))) as DisTubeError;
+    expect(failure).toMatchObject({ code: "SOURCE_FAILED", source: "acme" });
+    expect(failure.cause).toMatchObject({ code: "INVALID_ARGUMENT" });
+    for (const code of ["INVALID_STATE", "ABORTED"] as const) {
+      const rejected = new DisTubeError(code, "provider says so");
+      harness.source.resolve.mockRejectedValueOnce(rejected);
+      const rewrapped = (await capture(harness.distube.resolve(mediaUrl("b", "acme")))) as DisTubeError;
+      expect(rewrapped).toMatchObject({ code: "SOURCE_FAILED", source: "acme", cause: rejected });
+    }
   });
 
   it("narrows by name and a known code, so a second copy's error matches and a plain Error with the code does not", () => {
@@ -430,6 +447,22 @@ describe("cancellation", () => {
     expect(failure.code).toBe("ABORTED");
     expect(failure).not.toBe(reason);
     expect(failure.cause).toBe(reason);
+  });
+
+  it("keeps ABORTED when a plugin throws a pass-through DisTubeError after the caller aborted", async () => {
+    const harness = playableSetup();
+    const reached = deferred<void>();
+    const held = deferred<never>();
+    harness.source.resolve.mockImplementationOnce(async () => {
+      reached.resolve();
+      return held.promise;
+    });
+    const controller = new AbortController();
+    const resolving = capture(harness.distube.resolve(mediaUrl("a"), { signal: controller.signal }));
+    await reached.promise;
+    controller.abort();
+    held.reject(new DisTubeError("NOT_FOUND", "provider closed"));
+    expect(await resolving).toMatchObject({ code: "ABORTED" });
   });
 
   it("aborts a searching play, stops the chain and deletes the empty queue", async () => {

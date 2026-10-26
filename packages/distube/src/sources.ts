@@ -1,8 +1,14 @@
 import type { Engine, PlaybackResource, Plugin, ResolvableInput } from "./contracts";
-import { abortError, DisTubeError, ErrorCode, requireQuery, throwIfAborted, toDisTubeError } from "./errors";
+import { abortError, DisTubeError, ErrorCode, requireQuery, throwIfAborted } from "./errors";
 import { Playlist, Song } from "./media";
 
 const SUGGESTION_LIMIT = 25;
+
+const REWRAPPED: ReadonlySet<ErrorCode> = new Set([
+  ErrorCode.INVALID_ARGUMENT,
+  ErrorCode.INVALID_STATE,
+  ErrorCode.ABORTED,
+]);
 
 export interface SearchQuery {
   readonly source?: Plugin;
@@ -16,7 +22,8 @@ async function call<Value>(plugin: Plugin, signal: AbortSignal, operation: () =>
     return await operation();
   } catch (error: unknown) {
     if (signal.aborted) throw abortError(signal);
-    throw toDisTubeError(ErrorCode.SOURCE_FAILED, `${plugin.name} failed`, error, plugin.name);
+    if (DisTubeError.is(error) && !REWRAPPED.has(error.code)) throw error;
+    throw new DisTubeError(ErrorCode.SOURCE_FAILED, `${plugin.name} failed`, { cause: error, source: plugin.name });
   }
 }
 

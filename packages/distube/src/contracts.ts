@@ -114,8 +114,9 @@ export interface ResolveOptions {
  * that of every Playlist.
  *
  * A plugin has `name` and at least one of `resolve`, `search`, `stream` or `engine`. Core only passes Songs whose
- * `source` is this plugin's name. A thrown `DisTubeError` reaches the caller unchanged; any other throw
- * becomes `SOURCE_FAILED` with `source` set to `name`.
+ * `source` is this plugin's name. A thrown `DisTubeError` reaches the caller unchanged, except that
+ * `INVALID_ARGUMENT`, `INVALID_STATE` and `ABORTED` without a caller abort become `SOURCE_FAILED` with the original
+ * as `cause`. Any other throw becomes `SOURCE_FAILED` with `source` set to `name`.
  */
 export interface Plugin<Data = unknown, ListData = unknown> {
   readonly name: string;
