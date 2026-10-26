@@ -25,15 +25,17 @@
       "version": "0.0.0",
       "dependencies": {
         "@noble/ciphers": "^2.1.1",
-        "node-av": "6.2.0-beta.33",
       },
       "devDependencies": {
         "@discordjs/voice": "^0.19.2",
         "discord.js": "^14.27.0",
         "distube": "workspace:*",
       },
+      "optionalDependencies": {
+        "node-av": "6.2.0-beta.35",
+      },
       "peerDependencies": {
-        "@discordjs/voice": "^0.19.0",
+        "@discordjs/voice": "^0.19.1",
         "discord.js": "^14.26.0",
         "distube": "^6.0.0",
       },
@@ -47,15 +49,17 @@
       "version": "0.0.0",
       "dependencies": {
         "@noble/ciphers": "^2.1.1",
-        "node-av": "6.2.0-beta.33",
       },
       "devDependencies": {
         "@discordjs/voice": "^0.19.2",
         "distube": "workspace:*",
         "oceanic.js": "^1.14.0",
       },
+      "optionalDependencies": {
+        "node-av": "6.2.0-beta.35",
+      },
       "peerDependencies": {
-        "@discordjs/voice": "^0.19.0",
+        "@discordjs/voice": "^0.19.1",
         "distube": "^6.0.0",
         "oceanic.js": "^1.14.0",
       },
@@ -66,7 +70,7 @@
       "devDependencies": {
         "@discordjs/voice": "^0.19.2",
         "distube": "workspace:*",
-        "node-av": "6.2.0-beta.33",
+        "node-av": "6.2.0-beta.35",
       },
     },
   },
@@ -340,17 +344,17 @@
 
     "@sapphire/snowflake": ["@sapphire/snowflake@3.5.5", "", {}, "sha512-xzvBr1Q1c4lCe7i6sRnrofxeO1QTP/LKQ6A6qy0iB4x5yfiSfARMEQEghojzTNALDTcv8En04qYNIco9/K9eZQ=="],
 
-    "@seydx/node-av-darwin-arm64": ["@seydx/node-av-darwin-arm64@6.2.0-beta.33", "", { "os": "darwin", "cpu": "arm64" }, "sha512-MB8Cx4FC0vI5KDWqGcvd/77x17Rcmg0tqWhdUAwmPNH+0v2uLLO7sjHS7QdtvAcGcJAa+ijr4Hk1s3nzF0KAuA=="],
+    "@seydx/node-av-darwin-arm64": ["@seydx/node-av-darwin-arm64@6.2.0-beta.35", "", { "os": "darwin", "cpu": "arm64" }, "sha512-zPfSBSFxahcJoObnPfZ4eLHXSFRPw9qOaGomYZVSKrk33k7b9WTjG/7la9eE82EzJpW5sVuZhwj+4Rg9fClRTw=="],
 
-    "@seydx/node-av-darwin-x64": ["@seydx/node-av-darwin-x64@6.2.0-beta.33", "", { "os": "darwin", "cpu": "x64" }, "sha512-SvXsV3+2az4qFp4dEIZ987VGU8y+dp9eOTUZEa4TeOWjUDNdLZ3sBeP0ILWIAbgFT80oYE8wPnAQrr0ZFagGQg=="],
+    "@seydx/node-av-darwin-x64": ["@seydx/node-av-darwin-x64@6.2.0-beta.35", "", { "os": "darwin", "cpu": "x64" }, "sha512-JHQp98Gzv80gAC/k9f4SuFNodV17IWWMJ9KA/w7ezoIm82++2jHQJgeUHlJK4e61tyH+zSHQSidN807ivUv7DQ=="],
 
-    "@seydx/node-av-linux-arm64": ["@seydx/node-av-linux-arm64@6.2.0-beta.33", "", { "os": "linux", "cpu": "arm64" }, "sha512-UlOFk35VaJfLk6KQlxf2V+uNHjg+kIouTlRVE2Tw3jpQPzdycZ6KehmcHe07Xd95HC68an1qsevv5kVnSjnLBA=="],
+    "@seydx/node-av-linux-arm64": ["@seydx/node-av-linux-arm64@6.2.0-beta.35", "", { "os": "linux", "cpu": "arm64" }, "sha512-kMryBOheiMjxGvzOH4PnK+fItHI8yCEYNcRfpD1Bc8ErkI2B32fMoQzUlCiI1A4EqOzJX1zYbqCpgUMPgmWpKg=="],
 
-    "@seydx/node-av-linux-x64": ["@seydx/node-av-linux-x64@6.2.0-beta.33", "", { "os": "linux", "cpu": "x64" }, "sha512-4fEO5CHLvKQlqJRJgssvkCUe9F7yZHATKyyydwUtwRZtqXDB+Cz3bNmAEK0BM2U9fMgFoDYUA/8gWzLPPWC+BQ=="],
+    "@seydx/node-av-linux-x64": ["@seydx/node-av-linux-x64@6.2.0-beta.35", "", { "os": "linux", "cpu": "x64" }, "sha512-xx1R5k9uD0yutHk5tWylHuHwA/n99ApPNr7h1yO1iBqlrIWzpLDHWpg/4rg4EbvVoUBLFF/y8sOPWwbvDOoUTw=="],
 
-    "@seydx/node-av-win32-arm64-msvc": ["@seydx/node-av-win32-arm64-msvc@6.2.0-beta.33", "", { "os": "win32", "cpu": "arm64" }, "sha512-KV0Xui6sefSiE51OMnCp7VK5T8WSWhbGxFF167nSvQj43R0TRSm3HOgubwfp5bBdV6Zf3P99YrDAZipr0d056g=="],
+    "@seydx/node-av-win32-arm64-msvc": ["@seydx/node-av-win32-arm64-msvc@6.2.0-beta.35", "", { "os": "win32", "cpu": "arm64" }, "sha512-XjTVI3Rn7xQ9gtmjBaLBDKdo3Acki/oH8ZT0OZgjOjXUw1/Eyw0KVjrDtT9JIR7APQZEKw3KxWBEGBL4VPILfw=="],
 
-    "@seydx/node-av-win32-x64-msvc": ["@seydx/node-av-win32-x64-msvc@6.2.0-beta.33", "", { "os": "win32", "cpu": "x64" }, "sha512-tvlw1mBSd2wbWSZ/pytfqWvXzWQEU+ARJHpaJHWAh99M9l/5WMgSlmm09LgcadAUszfKfF2aIf9v2z4CrmqRtQ=="],
+    "@seydx/node-av-win32-x64-msvc": ["@seydx/node-av-win32-x64-msvc@6.2.0-beta.35", "", { "os": "win32", "cpu": "x64" }, "sha512-EL0mEWO0XDTBnVOTqlWD7kVArDuZ/d8rBXoqEOKsmJpky3LMy+ebBTwzhj9+JMns9MEZlLgB6Ow7D2gdxSr+Ag=="],
 
     "@snazzah/davey": ["@snazzah/davey@0.1.12", "", { "optionalDependencies": { "@snazzah/davey-android-arm-eabi": "0.1.12", "@snazzah/davey-android-arm64": "0.1.12", "@snazzah/davey-darwin-arm64": "0.1.12", "@snazzah/davey-darwin-x64": "0.1.12", "@snazzah/davey-freebsd-x64": "0.1.12", "@snazzah/davey-linux-arm-gnueabihf": "0.1.12", "@snazzah/davey-linux-arm64-gnu": "0.1.12", "@snazzah/davey-linux-arm64-musl": "0.1.12", "@snazzah/davey-linux-x64-gnu": "0.1.12", "@snazzah/davey-linux-x64-musl": "0.1.12", "@snazzah/davey-wasm32-wasi": "0.1.12", "@snazzah/davey-win32-arm64-msvc": "0.1.12", "@snazzah/davey-win32-ia32-msvc": "0.1.12", "@snazzah/davey-win32-x64-msvc": "0.1.12" } }, "sha512-V+NlX5931RwVamZhhEfZekMdcvXDKdMAmHW1AuGaykVQsNyBOq3bpmGpoKRBDCYgFWKIufJ0Dcg3m4cYhvUy6g=="],
 
@@ -600,7 +604,7 @@
 
     "nanoid": ["nanoid@3.3.11", "", { "bin": { "nanoid": "bin/nanoid.cjs" } }, "sha512-N8SpfPUnUp1bK+PMYW8qSWdl9U+wwNWI4QKxOYDy9JAro3WMX7p2OeVRF9v+347pnakNevPmiHhNmZ2HbFA76w=="],
 
-    "node-av": ["node-av@6.2.0-beta.33", "", { "dependencies": { "unzipper": "^0.12.5" }, "optionalDependencies": { "@seydx/node-av-darwin-arm64": "6.2.0-beta.33", "@seydx/node-av-darwin-x64": "6.2.0-beta.33", "@seydx/node-av-linux-arm64": "6.2.0-beta.33", "@seydx/node-av-linux-x64": "6.2.0-beta.33", "@seydx/node-av-win32-arm64-msvc": "6.2.0-beta.33", "@seydx/node-av-win32-x64-msvc": "6.2.0-beta.33" }, "peerDependencies": { "werift": "^0.24.3 || ^0.25.0" }, "optionalPeers": ["werift"] }, "sha512-qjHZmfaLxpZ1ndIu9Eie99HcC/BC4eicx6Uzhjv43cvSOi57+eTk4KVmRkHlwWs/506aWzAPDt3oRpAtQACOBw=="],
+    "node-av": ["node-av@6.2.0-beta.35", "", { "dependencies": { "unzipper": "^0.12.5" }, "optionalDependencies": { "@seydx/node-av-darwin-arm64": "6.2.0-beta.35", "@seydx/node-av-darwin-x64": "6.2.0-beta.35", "@seydx/node-av-linux-arm64": "6.2.0-beta.35", "@seydx/node-av-linux-x64": "6.2.0-beta.35", "@seydx/node-av-win32-arm64-msvc": "6.2.0-beta.35", "@seydx/node-av-win32-x64-msvc": "6.2.0-beta.35" }, "peerDependencies": { "werift": "^0.24.3 || ^0.25.0" }, "optionalPeers": ["werift"], "hasInstallScript": true }, "sha512-DZ3uFmnUpnuL3+hi8M2AmiP7FVtqXQmgxJANf9H1s6hZHy6cpj1dA+6i/H180ezeOKExFHzQHGwccOKGEokZVQ=="],
 
     "node-int64": ["node-int64@0.4.0", "", {}, "sha512-O5lz91xSOeoXP6DulyHfllpq+Eg00MWitZIbtPfoSEvqIHdl5gfcY6hYzDWnj0qD5tz52PI08u9qUvSVeUBeHw=="],
 

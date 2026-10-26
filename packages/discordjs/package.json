@@ -26,8 +26,7 @@
     "prepack": "bun run build"
   },
   "dependencies": {
-    "@noble/ciphers": "^2.1.1",
-    "node-av": "6.2.0-beta.33"
+    "@noble/ciphers": "^2.1.1"
   },
   "devDependencies": {
     "@discordjs/voice": "^0.19.2",
@@ -35,9 +34,12 @@
     "distube": "workspace:*"
   },
   "peerDependencies": {
-    "@discordjs/voice": "^0.19.0",
+    "@discordjs/voice": "^0.19.1",
     "discord.js": "^14.26.0",
     "distube": "^6.0.0"
+  },
+  "optionalDependencies": {
+    "node-av": "6.2.0-beta.35"
   },
   "engines": {
     "node": "^22.22.2 || ^24.15.0 || >=26.0.0"

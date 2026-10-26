@@ -14,6 +14,12 @@ bun add distube @distube/discordjs @distube/youtube @distube/ytdl-core discord.j
 
 ## Requirements
 
+The built-in engine decodes with `node-av`, an optional dependency. It needs glibc 2.28 or newer, so musl hosts such as
+Alpine are unsupported. A host that cannot load it fails the first playback with `VOICE_FAILED`. A bot whose engine
+comes from a plugin such as `@distube/lavalink` does not need `node-av`. The engine's decoding workers share
+`UV_THREADPOOL_SIZE - 1` permits, at least one. Raise `UV_THREADPOOL_SIZE` above its default of 4 for many guilds at
+once. `@discordjs/voice` `^0.19.1` is a peer dependency.
+
 The adapter depends on `@noble/ciphers`. If `generateDependencyReport()` from `@discordjs/voice` lists no cipher, the
 package manager hid it from `@discordjs/voice`; install `@noble/ciphers` in your application.
 
