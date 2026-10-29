@@ -69,6 +69,7 @@ lowest video resolution that carries the best audio. HLS formats, including most
 itself and this step is skipped.
 
 Failures are core `DisTubeError` instances with `error.source` set to `"yt-dlp"`. The message is yt-dlp's last `ERROR:`
-line with every URL cut to its origin, and the code is `NOT_FOUND`, `UNAVAILABLE`, `RATE_LIMITED`, `UNSUPPORTED` or `SOURCE_FAILED`.
+line with every URL cut to its origin, and the code is `NOT_FOUND`, `UNAVAILABLE`, `AGE_RESTRICTED`, `RATE_LIMITED`, `UNSUPPORTED` or `SOURCE_FAILED`. An age gate the site keeps
+without cookies is `AGE_RESTRICTED`.
 See the [quick start](../../get-started/quick-start/), [queue](../../reference/queue/) and
 [errors](../../reference/errors/).

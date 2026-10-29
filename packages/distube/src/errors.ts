@@ -12,7 +12,10 @@ export const ErrorCode = {
   /** An established voice connection dropped beyond the Adapter's recovery. */
   VOICE_DISCONNECTED: "VOICE_DISCONNECTED",
   UNSUPPORTED: "UNSUPPORTED",
-  /** The call did not set `allowAgeRestricted: true` and the Song, or every Song of the Playlist, is age-restricted. */
+  /**
+   * The media is age-restricted and was not added: the call did not set `allowAgeRestricted: true`, or the provider
+   * refused it without an age-verified account.
+   */
   AGE_RESTRICTED: "AGE_RESTRICTED",
 } as const;
 

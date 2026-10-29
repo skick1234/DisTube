@@ -211,7 +211,7 @@ The plugin sends every search, lookup and stream request through that instance.
 
 ### How a failure reaches your bot
 
-A song that fails to prepare arrives in the `queue.item.failed` event as `error`. `AGE_RESTRICTED` and `BOT_CHECK` arrive as a `DisTubeError` with code `UNAVAILABLE`. `AUTH_FAILED` is not translated by the plugin, so DisTube wraps it as `SOURCE_FAILED`. Both keep the original `YtdlError` as `error.cause`. A refused cookie can also arrive as `UNAVAILABLE` with an `AGE_RESTRICTED` cause, and only its signed-in attempts show `AUTH_FAILED`. A video link fails earlier, and `distube.play` rejects with the same codes and cause (see the [play command](../../recipes/play-command/)). Searches and playlist entries fail later, in `queue.item.failed`:
+A song that fails to prepare arrives in the `queue.item.failed` event as `error`. `BOT_CHECK` arrives as a `DisTubeError` with code `UNAVAILABLE`, and `AGE_RESTRICTED` with code `AGE_RESTRICTED`, the code DisTube also uses when a call does not allow age-restricted media. `AUTH_FAILED` is not translated by the plugin, so DisTube wraps it as `SOURCE_FAILED`. Both keep the original `YtdlError` as `error.cause`. A refused cookie can also arrive as `AGE_RESTRICTED`, and only its signed-in attempts show `AUTH_FAILED`. A video link fails earlier, and `distube.play` rejects with the same codes and cause (see the [play command](../../recipes/play-command/)). Searches and playlist entries fail later, in `queue.item.failed`:
 
 ```ts
 import { YtdlError } from "@distube/ytdl-core";

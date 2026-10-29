@@ -58,7 +58,9 @@ Call `deferReply()` before `play`. Resolving a URL or searching can take longer 
 `metadata` is stored on every item this call adds and comes back on every event for that item. Keep the text channel id there so later events know where to post.
 
 By default `play` rejects an age-restricted Song with `AGE_RESTRICTED`, drops the age-restricted Songs of a playlist,
-and `search` leaves them out. To let a server admin allow adult content, pass `allowAgeRestricted` on every call. Playlist Songs whose provider gives no answer stay, and autoplay does not apply the option.
+and `search` leaves them out. To let a server admin allow adult content, pass `allowAgeRestricted` on every call. A
+provider that refuses an age-gated video without an age-verified account, such as YouTube without a cookie, also
+rejects `AGE_RESTRICTED`, so check the setting you passed to word the reply. Playlist Songs whose provider gives no answer stay, and autoplay does not apply the option.
 
 ```ts
 declare const settings: { allowNsfw(guildId: string): boolean };
