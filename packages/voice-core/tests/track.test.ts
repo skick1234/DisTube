@@ -719,11 +719,13 @@ describe("Track input idle limits", () => {
           (error: unknown) => error,
         ),
       );
-      const waiting = open({ kind: "file", path: media.opus });
       await vi.waitFor(() => {
         for (const read of reads) expect(read.mock.calls).toContainEqual([]);
       });
 
+      const track = await open({ kind: "file", path: media.opus });
+      expect(await take(track.packets, 5)).toHaveLength(5);
+      await track.close();
       await vi.advanceTimersByTimeAsync(URL_READY_TIMEOUT_MS);
 
       for (const failure of failures) {
@@ -731,9 +733,6 @@ describe("Track input idle limits", () => {
           expect.stringContaining("stopped sending bytes"),
         );
       }
-      const track = await waiting;
-      expect(await take(track.packets, 5)).toHaveLength(5);
-      await track.close();
     } finally {
       vi.useRealTimers();
     }
