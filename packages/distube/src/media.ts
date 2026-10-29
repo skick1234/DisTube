@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { DisTubeError } from "./errors";
+import { DisTubeError, requireBoolean } from "./errors";
 
 export type SongData<PluginData = unknown> = {
   readonly source: string;
@@ -9,6 +9,8 @@ export type SongData<PluginData = unknown> = {
   readonly duration?: number;
   readonly thumbnail?: string;
   readonly artist?: string;
+  /** True when the provider marks the media for adults, false when it says it is not, absent when it did not say. Core never acts on it. */
+  readonly ageRestricted?: boolean;
   /** Provider-owned display and identity data. Core never reads it. */
   readonly pluginData?: PluginData;
 } & (undefined extends PluginData ? unknown : { readonly pluginData: PluginData });
@@ -27,6 +29,8 @@ export class Song<PluginData = unknown> {
   readonly duration?: number;
   readonly thumbnail?: string;
   readonly artist?: string;
+  /** True when the provider marks the media for adults, false when it says it is not, absent when it did not say. Core never acts on it. */
+  readonly ageRestricted?: boolean;
   readonly pluginData: PluginData;
 
   constructor(data: SongData<PluginData>) {
@@ -43,6 +47,10 @@ export class Song<PluginData = unknown> {
     }
     if (data.thumbnail !== undefined) this.thumbnail = requireNonEmpty(data.thumbnail, "Song thumbnail");
     if (data.artist !== undefined) this.artist = requireNonEmpty(data.artist, "Song artist");
+    if (data.ageRestricted !== undefined) {
+      requireBoolean(data.ageRestricted, "Song ageRestricted");
+      this.ageRestricted = data.ageRestricted;
+    }
     this.pluginData = data.pluginData as PluginData;
     Object.freeze(this);
   }

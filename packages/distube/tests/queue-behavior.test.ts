@@ -471,8 +471,8 @@ describe("queue occurrence edits and lifetime", () => {
   it("removes only the named occurrence when the same Song is added twice", async () => {
     const { harness, queue } = await playing(["a"]);
     const song = media("source", "duplicate");
-    const first = required((await queue.add(song))[0]);
-    const second = required((await queue.add(song))[0]);
+    const first = required((await queue.add(song, { allowAgeRestricted: true }))[0]);
+    const second = required((await queue.add(song, { allowAgeRestricted: true }))[0]);
     expect(first.song).toBe(song);
     expect(second.song).toBe(song);
     expect(first.id).not.toBe(second.id);

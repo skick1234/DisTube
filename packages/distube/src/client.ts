@@ -7,7 +7,7 @@ import type {
   ResolvableInput,
   VoiceChannelTarget,
 } from "./contracts";
-import { DisTubeError, ErrorCode, requireInteger, requireQuery, throwIfAborted } from "./errors";
+import { DisTubeError, ErrorCode, requireBoolean, requireInteger, requireQuery, throwIfAborted } from "./errors";
 import { DisTubeEvents, type DisTubeEventListener, type DisTubeEventName } from "./events";
 import { Guilds } from "./guild";
 import type { Playlist, Song } from "./media";
@@ -57,6 +57,12 @@ export interface SearchRequest<Source extends Plugin = Plugin> {
   /** Non-negative integer, default 0. */
   readonly offset?: number;
   readonly signal?: AbortSignal;
+  /**
+   * Unless `true`, leaves out results whose `ageRestricted` is true. Results whose answer is unknown stay; `play` checks
+   * them.
+   * @defaultValue `false`
+   */
+  readonly allowAgeRestricted?: boolean;
 }
 
 /** Options for `distube.suggest`. */
@@ -151,7 +157,7 @@ export class DisTube<Metadata = undefined, Target = VoiceChannelTarget> {
     return this.#run(
       options.signal,
       () => validateInput(this.#plugins, input),
-      signal => resolveInput(this.#plugins, input, signal, this.#guilds.config.maxPlaylistSongs),
+      signal => resolveInput(this.#plugins, input, signal, this.#guilds.config.maxPlaylistSongs, true),
     );
   }
 
@@ -171,6 +177,7 @@ export class DisTube<Metadata = undefined, Target = VoiceChannelTarget> {
         this.#validateSource(options.source);
         requireInteger(limit, "limit", 1);
         requireInteger(offset, "offset", 0);
+        if (options.allowAgeRestricted !== undefined) requireBoolean(options.allowAgeRestricted, "allowAgeRestricted");
       },
       signal => searchSongs(this.#plugins, query, { ...options, limit, offset }, signal),
     );

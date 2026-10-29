@@ -270,7 +270,7 @@ describe("string routing", () => {
     });
     expect(harness.distube.queues.size).toBe(0);
     await expect(harness.distube.resolve(media("elsewhere"))).rejects.toMatchObject({ code: "INVALID_ARGUMENT" });
-    const queue = await harness.distube.play(TARGET, song);
+    const queue = await harness.distube.play(TARGET, song, { allowAgeRestricted: true });
     await expect(queue.add(media("elsewhere"))).rejects.toMatchObject({ code: "INVALID_ARGUMENT" });
     expect(queue.upcoming).toEqual([]);
     expect(harness.source.resolve).not.toHaveBeenCalled();
@@ -384,6 +384,92 @@ describe("playlist cap", () => {
     const harness = playableSetup("source", { maxPlaylistSongs: 10 });
     const queue = await harness.distube.play(TARGET, playlistOf(20));
     expect([queue.current, ...queue.upcoming].filter(item => item !== undefined)).toHaveLength(20);
+  });
+});
+
+const rated = (source: string, id: string, ageRestricted?: boolean) =>
+  new Song({ id, name: id, url: mediaUrl(id, source), source, ageRestricted });
+const list = (...songs: Song[]) =>
+  new Playlist({ id: "list", name: "List", url: mediaUrl("list"), source: "source", songs });
+
+describe("age restriction", () => {
+  const restricted = expect.objectContaining({ code: ErrorCode.AGE_RESTRICTED });
+
+  it("refuses an age-restricted Song AGE_RESTRICTED without a queue by default and plays it when allowed", async () => {
+    const harness = playableSetup("source");
+    const adult = rated("source", "adult", true);
+
+    await expect(harness.distube.play(TARGET, adult)).rejects.toEqual(
+      expect.objectContaining({ code: ErrorCode.AGE_RESTRICTED, source: "source", media: "song" }),
+    );
+    await settle();
+    expect(harness.distube.getQueue(GUILD)).toBeUndefined();
+    expect(harness.source.resolve).not.toHaveBeenCalled();
+
+    const queue = await harness.distube.play(TARGET, adult, { allowAgeRestricted: true });
+    expect(queue.current?.song ?? queue.upcoming[0]?.song).toBe(adult);
+  });
+
+  it("drops a Playlist's age-restricted Songs, keeps unknown ones, and refuses a Playlist with nothing left", async () => {
+    const harness = playableSetup("source");
+    const added: string[][] = [];
+    harness.distube.on("queue.playlist.added", event => void added.push(event.items.map(item => item.song.id)));
+    await harness.distube.play(
+      TARGET,
+      list(rated("source", "a", false), rated("source", "b", true), rated("source", "c")),
+    );
+    expect(added).toEqual([["a", "c"]]);
+    await expect(harness.distube.play(TARGET, list(rated("source", "d", true)))).rejects.toEqual(
+      expect.objectContaining({ code: ErrorCode.AGE_RESTRICTED, media: "playlist" }),
+    );
+    expect(harness.source.resolve).not.toHaveBeenCalled();
+  });
+
+  it("looks up a searched Song whose answer is unknown by its url and queues that lookup's Song", async () => {
+    const harness = playableSetup("source");
+    harness.source.search.mockImplementation(async query => [rated("source", query)]);
+    harness.source.resolve.mockImplementation(async url =>
+      rated("source", url.split("/").pop() ?? "", url.endsWith("adult")),
+    );
+
+    await expect(harness.distube.play(TARGET, "adult")).rejects.toEqual(restricted);
+    expect(harness.source.resolve).toHaveBeenCalledWith(mediaUrl("adult", "source"), expect.anything());
+
+    const queue = await harness.distube.play(TARGET, "clean");
+    const [item] = [queue.current, ...queue.upcoming];
+    expect(item?.song).toBe(await harness.source.resolve.mock.results.at(-1)?.value);
+    expect(item?.song.ageRestricted).toBe(false);
+  });
+
+  it("does not look up again a Song a URL resolved without an answer", async () => {
+    const harness = playableSetup("source");
+    harness.source.resolve.mockImplementation(async () => rated("source", "unknown"));
+
+    await harness.distube.play(TARGET, mediaUrl("unknown"));
+    expect(harness.source.resolve).toHaveBeenCalledTimes(1);
+  });
+
+  it("leaves age-restricted results out of search, falling through to the next plugin when none remain", async () => {
+    const [first, second] = sources();
+    first.search.mockResolvedValue([rated("first", "adult", true)]);
+    second.search.mockResolvedValue([
+      rated("second", "clean", false),
+      rated("second", "adult", true),
+      rated("second", "unknown"),
+    ]);
+    const harness = setup([first, second]);
+
+    expect((await harness.distube.search("q")).map(song => song.id)).toEqual(["clean", "unknown"]);
+    const unfiltered = await harness.distube.search("q", { allowAgeRestricted: true });
+    expect(unfiltered.map(song => song.id)).toEqual(["adult"]);
+  });
+
+  it("rejects a non-boolean allowAgeRestricted INVALID_ARGUMENT before any plugin call", async () => {
+    const harness = playableSetup("source");
+    const option = { allowAgeRestricted: "no" as unknown as boolean };
+    await expect(harness.distube.play(TARGET, "query", option)).rejects.toEqual(invalidArgument);
+    await expect(harness.distube.search("query", option)).rejects.toEqual(invalidArgument);
+    expect(harness.source.search).not.toHaveBeenCalled();
   });
 });
 

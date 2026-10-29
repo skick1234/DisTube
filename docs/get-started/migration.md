@@ -77,7 +77,7 @@ Every v5 5.2.3 `DisTubeOptions` field. The constructor options are in the [optio
 | `emitNewSongOnly`              | removed; `queue.item.started` fires for every occurrence, so compare `event.item.song` with the last one in your listener      |
 | `savePreviousSongs`            | `historySize` (default 10); `0` disables history                                                                               |
 | `customFilters`                | `filters`                                                                                                                      |
-| `nsfw`                         | removed; an age-restricted video rejects `UNAVAILABLE`, so check the text channel before you call `play`                       |
+| `nsfw`                         | `allowAgeRestricted` on each `play`, `queue.add` and `search` call, so a guild setting decides it; default `false`             |
 | `emitAddSongWhenCreatingQueue` | removed; `queue.item.added` always fires, and `queue.created` fires first for a new queue                                      |
 | `emitAddListWhenCreatingQueue` | removed; `queue.playlist.added` always fires                                                                                   |
 | `joinNewVoiceChannel`          | removed; `play(channel, input)` always joins that channel, or moves the guild's voice there                                    |
@@ -127,10 +127,10 @@ Every v5 event. The v6 payloads are in the [events reference](../../reference/ev
 ## Error codes
 
 v6 has one `ErrorCode` list: `INVALID_ARGUMENT`, `INVALID_STATE`, `ABORTED`, `NO_RESULT`, `NOT_FOUND`,
-`UNAVAILABLE`, `RATE_LIMITED`, `SOURCE_FAILED`, `VOICE_FAILED`, `VOICE_DISCONNECTED` and `UNSUPPORTED`. The per-plugin code objects
+`UNAVAILABLE`, `RATE_LIMITED`, `SOURCE_FAILED`, `VOICE_FAILED`, `VOICE_DISCONNECTED`, `UNSUPPORTED` and `AGE_RESTRICTED`. The per-plugin code objects
 `YouTubeErrorCode`, `SoundCloudErrorCode`, `SpotifyErrorCode` and `LavalinkErrorCode` are gone. Check
-`DisTubeError.is(error, ErrorCode.NOT_FOUND)` and read `error.source` for the plugin. YouTube's age restriction is
-`UNAVAILABLE`. `PLUGIN_FAILED` and `QUEUE_FAILED` are gone too. Stop parsing messages: `error.query` holds the
+`DisTubeError.is(error, ErrorCode.NOT_FOUND)` and read `error.source` for the plugin. YouTube refusing an age-restricted
+video without a signed-in account is `UNAVAILABLE`. `PLUGIN_FAILED` and `QUEUE_FAILED` are gone too. Stop parsing messages: `error.query` holds the
 text that found nothing, and `error.media` says whether a failed lookup was for a `"song"` or a `"playlist"`.
 
 Every v5 code and where it went:
@@ -150,7 +150,8 @@ Every v5 code and where it went:
 | `NO_UP_NEXT`                                                                                                                            | none; `skip()` ends the queue                                                                                                                  |
 | `NO_EXTRACTOR_PLUGIN`                                                                                                                   | `INVALID_ARGUMENT` from `new DisTube` when no plugin can play                                                                                  |
 | `NO_RELATED`, `CANNOT_PLAY_RELATED`                                                                                                     | `queue.autoplay.failed` with `SOURCE_FAILED`                                                                                                   |
-| `UNAVAILABLE_VIDEO`, `UNPLAYABLE_FORMATS`, `NON_NSFW`                                                                                   | `UNAVAILABLE`                                                                                                                                  |
+| `UNAVAILABLE_VIDEO`, `UNPLAYABLE_FORMATS`                                                                                               | `UNAVAILABLE`                                                                                                                                  |
+| `NON_NSFW`                                                                                                                              | `AGE_RESTRICTED`, from a call without `allowAgeRestricted: true`                                                                               |
 | `NOT_SUPPORTED_URL`, `NO_RESULT`, `CANNOT_GET_SEARCH_QUERY`                                                                             | `NO_RESULT`, with `error.query`                                                                                                                |
 | `NO_VALID_SONG`, `CANNOT_RESOLVE_SONG`                                                                                                  | `INVALID_ARGUMENT`                                                                                                                             |
 | `NOT_SUPPORTED_SONG`, `CANNOT_GET_STREAM_URL`, `NO_STREAM_URL`                                                                          | `SOURCE_FAILED`                                                                                                                                |

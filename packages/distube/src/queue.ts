@@ -52,6 +52,13 @@ interface InsertOptions {
   readonly at?: number;
   /** Equivalent to `at: 0`. Mutually exclusive with `at`. */
   readonly next?: boolean;
+  /**
+   * Unless `true`, refuses an age-restricted Song with `AGE_RESTRICTED` and drops a Playlist's age-restricted Songs. A
+   * Song whose `ageRestricted` is unknown is first looked up by its `url` through its plugin, and the queue holds that
+   * lookup's Song. Playlist Songs are not looked up. Autoplay ignores it.
+   * @defaultValue `false`
+   */
+  readonly allowAgeRestricted?: boolean;
 }
 
 /** A waiting occurrence ID, a one-based position in `upcoming`, or an inclusive one-based range. */
@@ -308,7 +315,11 @@ export class DisTubeQueue<Metadata = undefined, Target = VoiceChannelTarget> {
     const signal = options.signal ? AbortSignal.any([this.#lifetime.signal, options.signal]) : this.#lifetime.signal;
     const step = this.#tail.then(async () => {
       this.#assertCurrent(options.signal);
-      const media = await this.#recheck(resolveInput(plugins, input, signal, maxPlaylistSongs), options.signal, signal);
+      const media = await this.#recheck(
+        resolveInput(plugins, input, signal, maxPlaylistSongs, options.allowAgeRestricted ?? false),
+        options.signal,
+        signal,
+      );
       if (join) await this.#recheck(join(), options.signal);
       else if (!this.#guild.voice)
         throw new DisTubeError(ErrorCode.INVALID_STATE, "The guild has no voice to add to; use distube.play");
@@ -578,6 +589,7 @@ export function validateAdd(plugins: readonly Plugin[], input: ResolvableInput, 
   validateInput(plugins, input);
   if (options.at !== undefined) requireInteger(options.at, "at", 0);
   if (options.next !== undefined) requireBoolean(options.next, "next");
+  if (options.allowAgeRestricted !== undefined) requireBoolean(options.allowAgeRestricted, "allowAgeRestricted");
   if (options.at !== undefined && options.next !== undefined)
     throw new DisTubeError(ErrorCode.INVALID_ARGUMENT, "next and at are mutually exclusive");
   throwIfAborted(options.signal);

@@ -32,6 +32,15 @@ describe("media value validation", () => {
     expect(Object.isFrozen(song)).toBe(true);
   });
 
+  it("keeps the provider's age restriction answer", () => {
+    expect(new Song({ ...valid, ageRestricted: true }).ageRestricted).toBe(true);
+    expect(new Song({ ...valid, ageRestricted: false }).ageRestricted).toBe(false);
+    expect(new Song(valid).ageRestricted).toBeUndefined();
+    expect(() => new Song({ ...valid, ageRestricted: "yes" as unknown as boolean })).toThrowError(
+      expect.objectContaining({ code: "INVALID_ARGUMENT", message: "Song ageRestricted must be a boolean" }),
+    );
+  });
+
   it.each(["thumbnail", "artist"] as const)("rejects an empty %s", key => {
     expect(() => new Song({ ...valid, [key]: "" })).toThrowError(expect.objectContaining({ code: "INVALID_ARGUMENT" }));
   });

@@ -23,6 +23,7 @@ Public failures use `DisTubeError`. It has a string `code` from the exported `Er
 | `VOICE_FAILED`       | The voice connection, the player or native cleanup failed                                                             |
 | `VOICE_DISCONNECTED` | An established voice connection dropped beyond the adapter's recovery, on `voice.disconnected` with reason `platform` |
 | `UNSUPPORTED`        | The engine or plugin cannot do this: an unknown filter preset, seek on a stream, search on a plugin without it        |
+| `AGE_RESTRICTED`     | A call without `allowAgeRestricted: true` got an age-restricted Song, or a Playlist of only age-restricted Songs      |
 
 Use `INVALID_ARGUMENT` to ask the user to correct input and `INVALID_STATE` to explain why a valid command cannot run
 now. No code promises that a retry succeeds. `RATE_LIMITED` usually clears after a wait.

@@ -57,6 +57,17 @@ Call `deferReply()` before `play`. Resolving a URL or searching can take longer 
 
 `metadata` is stored on every item this call adds and comes back on every event for that item. Keep the text channel id there so later events know where to post.
 
+By default `play` rejects an age-restricted Song with `AGE_RESTRICTED`, drops the age-restricted Songs of a playlist,
+and `search` leaves them out. To let a server admin allow adult content, pass `allowAgeRestricted` on every call. Playlist Songs whose provider gives no answer stay, and autoplay does not apply the option.
+
+```ts
+declare const settings: { allowNsfw(guildId: string): boolean };
+const text = interaction.channel;
+const nsfwChannel = (text?.isThread() ? text.parent?.nsfw : text?.nsfw) ?? false;
+const allowAgeRestricted = settings.allowNsfw(interaction.guildId) || nsfwChannel;
+await distube.play(channel, input, { metadata, allowAgeRestricted });
+```
+
 `DisTubeError.is(error, code)` narrows `error` to a `DisTubeError` with that code. Rethrow anything else, and have your interaction router reply with a generic failure. Do not show `error.cause` to users, because a provider error can contain request details.
 
 See also: [queue reference](../../reference/queue/), [errors reference](../../reference/errors/) and the example's [play.ts](https://github.com/distubejs/example/blob/v6/src/commands/play.ts).

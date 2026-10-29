@@ -26,6 +26,7 @@ function describe(caught: DisTubeError): string {
     case ErrorCode.INVALID_STATE:
     case ErrorCode.ABORTED:
     case ErrorCode.UNSUPPORTED:
+    case ErrorCode.AGE_RESTRICTED:
       return "caller";
     case ErrorCode.NO_RESULT:
     case ErrorCode.NOT_FOUND:

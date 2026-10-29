@@ -14,6 +14,7 @@ export interface SearchQuery {
   readonly source?: Plugin;
   readonly limit: number;
   readonly offset: number;
+  readonly allowAgeRestricted?: boolean;
 }
 
 async function call<Value>(plugin: Plugin, signal: AbortSignal, operation: () => Promise<Value>): Promise<Value> {
@@ -33,16 +34,30 @@ function owned<Media extends Song | Playlist>(plugin: Plugin, media: Media): Med
   return media;
 }
 
+function withSongs(playlist: Playlist, songs: readonly Song[]): Playlist {
+  return new Playlist({
+    id: playlist.id,
+    name: playlist.name,
+    url: playlist.url,
+    source: playlist.source,
+    songs,
+    thumbnail: playlist.thumbnail,
+    pluginData: playlist.pluginData,
+  });
+}
+
 function capped(media: Song | Playlist, maxPlaylistSongs: number): Song | Playlist {
   if (media instanceof Song || media.songs.length <= maxPlaylistSongs) return media;
-  return new Playlist({
-    id: media.id,
-    name: media.name,
-    url: media.url,
+  return withSongs(media, media.songs.slice(0, maxPlaylistSongs));
+}
+
+const allowed = (song: Song) => song.ageRestricted !== true;
+
+function ageRestricted(media: Song | Playlist): DisTubeError {
+  const kind = media instanceof Song ? "song" : "playlist";
+  return new DisTubeError(ErrorCode.AGE_RESTRICTED, `The ${kind} is age-restricted`, {
     source: media.source,
-    songs: media.songs.slice(0, maxPlaylistSongs),
-    thumbnail: media.thumbnail,
-    pluginData: media.pluginData,
+    media: kind,
   });
 }
 
@@ -72,6 +87,39 @@ function isAbsoluteUrl(input: string): boolean {
 }
 
 export async function resolveInput(
+  plugins: readonly Plugin[],
+  input: ResolvableInput,
+  signal: AbortSignal,
+  maxPlaylistSongs: number,
+  allowAgeRestricted: boolean,
+): Promise<Song | Playlist> {
+  const media = await mediaOf(plugins, input, signal, maxPlaylistSongs);
+  if (allowAgeRestricted) return media;
+  if (media instanceof Playlist) {
+    const songs = media.songs.filter(allowed);
+    if (songs.length === 0) throw ageRestricted(media);
+    return songs.length === media.songs.length ? media : withSongs(media, songs);
+  }
+  const fromUrl = typeof input === "string" && isAbsoluteUrl(input);
+  const song = fromUrl ? media : await lookedUp(plugins, media, signal, maxPlaylistSongs);
+  if (!allowed(song)) throw ageRestricted(song);
+  return song;
+}
+
+async function lookedUp(
+  plugins: readonly Plugin[],
+  song: Song,
+  signal: AbortSignal,
+  maxPlaylistSongs: number,
+): Promise<Song> {
+  const owner = ownerOf(plugins, song);
+  const resolve = owner?.resolve?.bind(owner);
+  if (song.ageRestricted !== undefined || !owner || !resolve) return song;
+  const found = await call(owner, signal, () => resolve(song.url, { signal, maxPlaylistSongs }));
+  return found instanceof Song ? owned(owner, found) : song;
+}
+
+async function mediaOf(
   plugins: readonly Plugin[],
   input: ResolvableInput,
   signal: AbortSignal,
@@ -132,7 +180,8 @@ export async function searchSongs(
     const songs = await call(plugin, signal, () =>
       search(query, { signal, limit: options.limit, offset: options.offset }),
     );
-    if (songs.length > 0) return songs.map(song => owned(plugin, song));
+    const kept = options.allowAgeRestricted ? songs : songs.filter(allowed);
+    if (kept.length > 0) return kept.map(song => owned(plugin, song));
   }
   return [];
 }
