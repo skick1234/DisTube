@@ -10,7 +10,7 @@ search completions. Its second plugin, `YouTubeMusicPlugin`, does the same for Y
 
 ## Install
 
-Install alongside `distube` and your adapter. `@distube/ytdl-core` is a peer dependency, version `^5.0.2`. The [installation guide](../../get-started/installation/) covers the rest of the setup:
+Install alongside `distube` and your adapter. `@distube/ytdl-core` is a peer dependency, version `^5.1.0`. The [installation guide](../../get-started/installation/) covers the rest of the setup:
 
 ```sh title="npm"
 npm install @distube/youtube @distube/ytdl-core

@@ -42,12 +42,17 @@ if (first) await distube.play(voiceChannel, first);
 
 ## Options and playback
 
-`SpotifyPlugin` takes no options and no credentials. It always uses Spotify's anonymous web-player authentication. This unofficial method may stop working
-or face rate limits.
+`SpotifyPlugin` takes no options and no credentials. Links resolve from Spotify's public `open.spotify.com/embed`
+page, which lists up to 100 tracks of a playlist or album and an artist's top tracks. Search and the full track list
+of a playlist, album or artist go through the web player's pathfinder API with the anonymous token the embed page
+carries. Search returns at most 50 results per call and none past the 1000th. That token is unofficial and can be
+rate limited or closed. When it fails during a collection, the Playlist keeps the tracks it
+already holds.
 
 Spotify has no `stream`, so core plays its Songs through the search fallback. It searches every other plugin that
 has `search` and `stream`, in the order of `plugins`, for the track name and artists with limit 1, and plays the
-first candidate that prepares. The public Song and queue item remain Spotify's; `queue.item.started` carries the
+first candidate that prepares. List `YouTubeMusicPlugin` before `YouTubePlugin` to search YouTube Music songs instead
+of videos. The public Song and queue item remain Spotify's; `queue.item.started` carries the
 candidate as `fallback`, so you can show which video played. If every plugin finds nothing, the item fails
 `NO_RESULT`; if some failed, it fails `SOURCE_FAILED` with an `AggregateError` of the failures. Either error carries
 the searched text as `error.query`. The client
@@ -59,9 +64,9 @@ seeded with that fallback Song, so a YouTube plugin adds a related video. The ad
 Spotify one. When the Spotify Song played with no fallback, as through Lavalink, autoplay publishes `queue.autoplay.failed`. An item
 that failed is not used as the autoplay seed.
 
-Songs expose `album`, `explicit` and `popularity` through typed `pluginData`. Search clamps `limit` to 50 and uses
+Songs carry Spotify's explicit flag as `song.ageRestricted`, and `album` in typed `pluginData` on album tracks and search results. Search clamps `limit` to 50 and uses
 a zero-based `offset`; an offset above 1000 returns no results. Playlists and albums keep their first
-`maxPlaylistSongs` tracks. Provider failures are core `DisTubeError` instances with codes such as `NOT_FOUND`,
+`maxPlaylistSongs` tracks and skip local files, podcast episodes and tracks Spotify marks unplayable. Provider failures are core `DisTubeError` instances with codes such as `NOT_FOUND`,
 `UNAVAILABLE` and `RATE_LIMITED`, with `error.source` set to `"spotify"`. Each failure inside that `AggregateError`
 keeps the code and source of the plugin that failed; none is a Spotify error. A failed track lookup carries
 `error.media` `"song"`, and a failed playlist, album or artist lookup `"playlist"`. A refused token has none.
