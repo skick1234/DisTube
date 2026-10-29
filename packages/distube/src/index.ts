@@ -22,7 +22,7 @@ export type {
   VoiceDisconnectReason,
 } from "./events";
 export type { FilterManager, FilterSelection } from "./filters";
-export { Playlist, type PlaylistData, type QueueItem, Song, type SongData } from "./media";
+export { Playlist, type PlaylistData, type QueueItem, Song, type SongData, type Thumbnail } from "./media";
 export type { AddOptions, DisTubeQueue, JumpOptions, RemoveTarget } from "./queue";
 export type { QueueState, QueueStatus, RepeatMode } from "./queue-state";
 export type { DisTubeVoice, VoiceJoinOptions, VoiceManager } from "./voice";

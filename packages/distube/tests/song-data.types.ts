@@ -1,4 +1,4 @@
-import { Playlist, type PlaylistData, type Plugin, Song, type SongData } from "distube";
+import { Playlist, type PlaylistData, type Plugin, Song, type SongData, type Thumbnail } from "distube";
 import { expectTypeOf } from "vitest";
 
 const identity = { source: "source", id: "song", name: "Song", url: "https://example.test/song" };
@@ -14,6 +14,10 @@ void missing;
 const optional = new Song<{ providerId: string } | undefined>(identity);
 expectTypeOf(optional.pluginData).toEqualTypeOf<{ providerId: string } | undefined>();
 expectTypeOf(new Song(identity).pluginData).toEqualTypeOf<unknown>();
+const art: readonly Thumbnail[] = [{ url: "https://example.test/art.jpg", width: 100, height: 100 }, { url: "x" }];
+expectTypeOf(new Song({ ...identity, thumbnails: art }).thumbnail).toEqualTypeOf<string | undefined>();
+// @ts-expect-error Plugins list thumbnails; the single thumbnail is derived.
+new Song({ ...identity, thumbnail: "https://example.test/art.jpg" });
 
 const song = new Song({ ...identity, pluginData: data });
 const list = { source: "source", id: "list", name: "List", url: "https://example.test/list", songs: [song] };

@@ -27,8 +27,8 @@ describe("media value validation", () => {
   it("accepts optional duration and display fields", () => {
     const { duration: _, ...withoutDuration } = valid;
     expect(new Song(withoutDuration).duration).toBeUndefined();
-    const song = new Song({ ...valid, thumbnail: "cover.jpg", artist: "Artist" });
-    expect(song).toMatchObject({ thumbnail: "cover.jpg", artist: "Artist", duration: 60 });
+    const song = new Song({ ...valid, artist: "Artist" });
+    expect(song).toMatchObject({ artist: "Artist", duration: 60 });
     expect(Object.isFrozen(song)).toBe(true);
   });
 
@@ -41,8 +41,10 @@ describe("media value validation", () => {
     );
   });
 
-  it.each(["thumbnail", "artist"] as const)("rejects an empty %s", key => {
-    expect(() => new Song({ ...valid, [key]: "" })).toThrowError(expect.objectContaining({ code: "INVALID_ARGUMENT" }));
+  it("rejects an empty artist", () => {
+    expect(() => new Song({ ...valid, artist: "" })).toThrowError(
+      expect.objectContaining({ code: "INVALID_ARGUMENT" }),
+    );
   });
 
   it("keeps a Playlist ordered and immutable", () => {
@@ -62,7 +64,7 @@ describe("media value validation", () => {
     expect(() => (playlist.songs as Song[]).push(second)).toThrowError();
   });
 
-  it("rejects malformed Playlist data and accepts an optional thumbnail", () => {
+  it("rejects malformed Playlist data", () => {
     expect(() => new Playlist(null as never)).toThrowError(
       expect.objectContaining<Partial<DisTubeError>>({
         code: "INVALID_ARGUMENT",
@@ -79,14 +81,6 @@ describe("media value validation", () => {
         }),
       );
     }
-
-    expect(() => new Playlist({ ...data, songs: [new Song(valid)], thumbnail: "" })).toThrowError(
-      expect.objectContaining<Partial<DisTubeError>>({
-        code: "INVALID_ARGUMENT",
-        message: "Playlist thumbnail must be a non-empty string",
-      }),
-    );
-    expect(new Playlist({ ...data, songs: [new Song(valid)], thumbnail: "cover.jpg" }).thumbnail).toBe("cover.jpg");
   });
 
   it("stores provider-owned pluginData by reference without cloning or freezing it", () => {
@@ -152,5 +146,69 @@ describe("media value validation", () => {
       (item as { id: string }).id = "forged";
     }).toThrowError();
     expect(item.song).toBe(song);
+  });
+});
+
+const sized = (width: number) => ({ url: `https://cdn.example/${width}.jpg`, width, height: width });
+const original = { url: "https://cdn.example/original.jpg" };
+const list = { id: "list", name: "List", url: "https://provider.example/list", source: "provider" };
+
+describe("thumbnails", () => {
+  it("keeps the plugin's order, frozen, and reads the last entry as the thumbnail", () => {
+    const thumbnails = [sized(120), sized(544), original];
+    const song = new Song({ ...valid, thumbnails });
+    const playlist = new Playlist({ ...list, songs: [song], thumbnails });
+    thumbnails.push(sized(1200));
+
+    for (const media of [song, playlist]) {
+      expect(media.thumbnails).toEqual([sized(120), sized(544), original]);
+      expect(media.thumbnail).toBe("https://cdn.example/original.jpg");
+      expect(Object.isFrozen(media.thumbnails)).toBe(true);
+      expect(Object.isFrozen(media.thumbnails[0])).toBe(true);
+    }
+  });
+
+  it("reads no thumbnail when none is listed", () => {
+    const song = new Song(valid);
+    const playlist = new Playlist({ ...list, songs: [song] });
+    for (const media of [song, playlist]) {
+      expect(media.thumbnails).toEqual([]);
+      expect(media.thumbnail).toBeUndefined();
+    }
+  });
+
+  it("accepts an unsized entry between sized ones", () => {
+    const thumbnails = [sized(120), original, sized(544)];
+    expect(new Song({ ...valid, thumbnails }).thumbnails).toEqual(thumbnails);
+  });
+
+  it.each([
+    ["decreasing widths", [sized(640), sized(300)], "Song thumbnail widths must not decrease"],
+    [
+      "a decrease across an unsized entry",
+      [sized(300), original, sized(120)],
+      "Song thumbnail widths must not decrease",
+    ],
+    ["an empty url", [{ url: "" }], "Song thumbnail url must be a non-empty string"],
+    ["a zero width", [{ url: "a.jpg", width: 0 }], "Song thumbnail width must be a positive integer"],
+    ["a fractional width", [{ url: "a.jpg", width: 1.5 }], "Song thumbnail width must be a positive integer"],
+    ["a negative height", [{ url: "a.jpg", height: -1 }], "Song thumbnail height must be a positive integer"],
+    ["a non-object entry", ["a.jpg"], "Song thumbnail must be an object"],
+    ["a non-list value", "a.jpg", "Song thumbnails must be a list"],
+  ])("rejects %s", (_, thumbnails, message) => {
+    expect(() => new Song({ ...valid, thumbnails: thumbnails as never })).toThrowError(
+      expect.objectContaining<Partial<DisTubeError>>({ code: "INVALID_ARGUMENT", message }),
+    );
+  });
+
+  it("rejects a Playlist thumbnail with a zero width", () => {
+    expect(
+      () => new Playlist({ ...list, songs: [new Song(valid)], thumbnails: [{ url: "a.jpg", width: 0 }] }),
+    ).toThrowError(
+      expect.objectContaining<Partial<DisTubeError>>({
+        code: "INVALID_ARGUMENT",
+        message: "Playlist thumbnail width must be a positive integer",
+      }),
+    );
   });
 });

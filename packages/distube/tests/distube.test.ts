@@ -342,12 +342,15 @@ describe("public search", () => {
   });
 });
 
+const PLAYLIST_ART = [{ url: "https://cdn.example/list-300.jpg", width: 300 }, { url: "https://cdn.example/list.jpg" }];
+
 function playlistOf(count: number): Playlist {
   return new Playlist({
     id: "list",
     name: "List",
     url: mediaUrl("list"),
     source: "source",
+    thumbnails: PLAYLIST_ART,
     songs: Array.from({ length: count }, (_, index) => media("source", `s${index}`)),
   });
 }
@@ -360,7 +363,7 @@ describe("playlist cap", () => {
     [3, 5, 3],
     [5000, 700, 700],
   ])(
-    "with maxPlaylistSongs %s, passes the cap to resolve and keeps the first Songs of a %s-Song Playlist",
+    "with maxPlaylistSongs %s, passes the cap to resolve and keeps the first Songs and the art of a %s-Song Playlist",
     async (maxPlaylistSongs, count, kept) => {
       const harness = playableSetup("source", maxPlaylistSongs === undefined ? {} : { maxPlaylistSongs });
       harness.source.resolve.mockImplementation(async () => playlistOf(count));
@@ -376,6 +379,7 @@ describe("playlist cap", () => {
         expect.objectContaining({ maxPlaylistSongs: maxPlaylistSongs ?? 500 }),
       );
       expect((resolved as Playlist).songs.map(song => song.id)).toEqual(firstIds(kept));
+      expect((resolved as Playlist).thumbnails).toEqual(PLAYLIST_ART);
       expect(added).toEqual([firstIds(kept)]);
     },
   );

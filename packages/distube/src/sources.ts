@@ -41,7 +41,7 @@ function withSongs(playlist: Playlist, songs: readonly Song[]): Playlist {
     url: playlist.url,
     source: playlist.source,
     songs,
-    thumbnail: playlist.thumbnail,
+    thumbnails: playlist.thumbnails,
     pluginData: playlist.pluginData,
   });
 }

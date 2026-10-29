@@ -1,13 +1,21 @@
 import { randomUUID } from "node:crypto";
 import { DisTubeError, requireBoolean } from "./errors";
 
+/** One image of a Song's or Playlist's artwork. A size is absent when the provider does not report it. */
+export interface Thumbnail {
+  readonly url: string;
+  readonly width?: number | undefined;
+  readonly height?: number | undefined;
+}
+
 export type SongData<PluginData = unknown> = {
   readonly source: string;
   readonly id: string;
   readonly name: string;
   readonly url: string;
   readonly duration?: number;
-  readonly thumbnail?: string;
+  /** Worst first, best last; `thumbnail` reads the last. Known widths must not decrease. */
+  readonly thumbnails?: readonly Thumbnail[];
   readonly artist?: string;
   /** True when the provider marks the media for adults, false when it says it is not, absent when it did not say. Core never acts on it. */
   readonly ageRestricted?: boolean;
@@ -27,7 +35,7 @@ export class Song<PluginData = unknown> {
   readonly name: string;
   readonly url: string;
   readonly duration?: number;
-  readonly thumbnail?: string;
+  readonly thumbnails: readonly Thumbnail[];
   readonly artist?: string;
   /** True when the provider marks the media for adults, false when it says it is not, absent when it did not say. Core never acts on it. */
   readonly ageRestricted?: boolean;
@@ -45,7 +53,7 @@ export class Song<PluginData = unknown> {
       }
       this.duration = data.duration;
     }
-    if (data.thumbnail !== undefined) this.thumbnail = requireNonEmpty(data.thumbnail, "Song thumbnail");
+    this.thumbnails = thumbnailList(data.thumbnails, "Song");
     if (data.artist !== undefined) this.artist = requireNonEmpty(data.artist, "Song artist");
     if (data.ageRestricted !== undefined) {
       requireBoolean(data.ageRestricted, "Song ageRestricted");
@@ -53,6 +61,11 @@ export class Song<PluginData = unknown> {
     }
     this.pluginData = data.pluginData as PluginData;
     Object.freeze(this);
+  }
+
+  /** The best image: the last of `thumbnails`. */
+  get thumbnail(): string | undefined {
+    return this.thumbnails.at(-1)?.url;
   }
 
   /** `h:mm:ss` from one hour, otherwise `m:ss`; `Live` when no duration is known. */
@@ -81,6 +94,39 @@ function requireNonEmpty(value: unknown, label: string): string {
   return value;
 }
 
+function requireSize(value: unknown, label: string): number {
+  if (typeof value !== "number" || !Number.isInteger(value) || value <= 0) {
+    throw new DisTubeError("INVALID_ARGUMENT", `${label} must be a positive integer`);
+  }
+  return value;
+}
+
+function thumbnailList(value: unknown, owner: string): readonly Thumbnail[] {
+  if (value === undefined) return Object.freeze([]);
+  if (!Array.isArray(value)) throw new DisTubeError("INVALID_ARGUMENT", `${owner} thumbnails must be a list`);
+  let widest = 0;
+  return Object.freeze(
+    value.map((entry: unknown) => {
+      if (typeof entry !== "object" || entry === null) {
+        throw new DisTubeError("INVALID_ARGUMENT", `${owner} thumbnail must be an object`);
+      }
+      const { url, width, height } = entry as Record<string, unknown>;
+      const thumbnail: { url: string; width?: number; height?: number } = {
+        url: requireNonEmpty(url, `${owner} thumbnail url`),
+      };
+      if (width !== undefined) {
+        thumbnail.width = requireSize(width, `${owner} thumbnail width`);
+        if (thumbnail.width < widest) {
+          throw new DisTubeError("INVALID_ARGUMENT", `${owner} thumbnail widths must not decrease`);
+        }
+        widest = thumbnail.width;
+      }
+      if (height !== undefined) thumbnail.height = requireSize(height, `${owner} thumbnail height`);
+      return Object.freeze(thumbnail);
+    }),
+  );
+}
+
 export type PlaylistData<PluginData = unknown, ListData = unknown> = {
   readonly id: string;
   readonly name: string;
@@ -88,7 +134,8 @@ export type PlaylistData<PluginData = unknown, ListData = unknown> = {
   readonly source: string;
   /** Ordered and non-empty; core creates one QueueItem per Song in this order. */
   readonly songs: readonly Song<PluginData>[];
-  readonly thumbnail?: string;
+  /** Worst first, best last; `thumbnail` reads the last. Known widths must not decrease. */
+  readonly thumbnails?: readonly Thumbnail[];
   /** Provider-owned playlist data. Core never reads it. */
   readonly pluginData?: ListData;
 } & (undefined extends ListData ? unknown : { readonly pluginData: ListData });
@@ -103,7 +150,7 @@ export class Playlist<PluginData = unknown, ListData = unknown> {
   readonly url: string;
   readonly source: string;
   readonly songs: readonly Song<PluginData>[];
-  readonly thumbnail?: string;
+  readonly thumbnails: readonly Thumbnail[];
   readonly pluginData: ListData;
 
   constructor(data: PlaylistData<PluginData, ListData>) {
@@ -116,9 +163,14 @@ export class Playlist<PluginData = unknown, ListData = unknown> {
       throw new DisTubeError("INVALID_ARGUMENT", "Playlist songs must be a non-empty list of Songs");
     }
     this.songs = Object.freeze([...data.songs]);
-    if (data.thumbnail !== undefined) this.thumbnail = requireNonEmpty(data.thumbnail, "Playlist thumbnail");
+    this.thumbnails = thumbnailList(data.thumbnails, "Playlist");
     this.pluginData = data.pluginData as ListData;
     Object.freeze(this);
+  }
+
+  /** The best image: the last of `thumbnails`. */
+  get thumbnail(): string | undefined {
+    return this.thumbnails.at(-1)?.url;
   }
 
   /** Sum of Song durations in seconds; an unknown duration counts as 0. */

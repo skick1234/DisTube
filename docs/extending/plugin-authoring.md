@@ -128,10 +128,15 @@ track data out of messages and causes. A bot checks `DisTubeError.is(error, Erro
 
 ## Song and playlist fields
 
-A Song has `source`, `id`, `name` and canonical `url`, optional `duration` (seconds), `thumbnail` and `artist`, and
+A Song has `source`, `id`, `name` and canonical `url`, optional `duration` (seconds), `thumbnails` and `artist`, and
 `pluginData`. `formattedDuration` is a getter. A Playlist has `source`, `id`, `name`, canonical `url`, optional
-`thumbnail`, a non-empty ordered `songs` array, `pluginData`, and computed `duration` and `formattedDuration`.
+`thumbnails`, a non-empty ordered `songs` array, `pluginData`, and computed `duration` and `formattedDuration`.
 Each source defines how it normalizes a missing duration.
+
+List every image size the provider serves as `thumbnails`, each `{ url, width?, height? }`, from worst to best.
+`thumbnail` reads the last entry, so put the original last. Leave out a size the provider does not report: an
+unsized entry may sit anywhere, but known widths must not decrease, or the constructor throws `INVALID_ARGUMENT`.
+Applications pick a size with `song.thumbnails.find(entry => (entry.width ?? Infinity) >= 300)`.
 
 Put provider display data such as view counts, uploader names and live flags in `pluginData`. Core stores the
 reference and never reads or freezes it. Keep signed URLs and temporary playback details out of it. They belong in
