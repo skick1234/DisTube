@@ -1,12 +1,12 @@
 ---
 title: YouTube
-description: Play YouTube videos and playlists with @distube/youtube and @distube/ytdl-core.
+description: Play YouTube videos and playlists, and search YouTube Music, with @distube/youtube and @distube/ytdl-core.
 sidebar:
   order: 2
 ---
 
 `@distube/youtube` resolves videos, playlists and channel uploads, searches, supplies related videos and suggests
-search completions.
+search completions. Its second plugin, `YouTubeMusicPlugin`, does the same for YouTube Music songs.
 
 ## Install
 
@@ -66,6 +66,47 @@ lookup or stream failure carries `error.media` `"song"`, a playlist lookup failu
 YouTube's bot check is `UNAVAILABLE` with `cause.code === "BOT_CHECK"`. The sections below explain how to sign in with a cookie. The
 ytdl-core [PO token guide](https://distube.js.org/ytdl-core/guides/po-tokens/) covers PO token providers.
 See [errors](../../reference/errors/#bot-check).
+
+## YouTube Music
+
+`YouTubeMusicPlugin`, named `youtube-music`, searches YouTube Music's songs, suggests YouTube Music's completions and
+continues autoplay from YouTube Music's radio. Its Songs play exactly like `YouTubePlugin`'s. Give both plugins one
+`Ytdl` and choose the catalog per call with `source`:
+
+```ts
+import { DiscordJSAdapter } from "@distube/discordjs";
+import { YouTubeMusicPlugin, YouTubePlugin } from "@distube/youtube";
+import { Ytdl } from "@distube/ytdl-core";
+import type { Client } from "discord.js";
+import { DisTube } from "distube";
+
+declare const client: Client;
+
+const ytdl = new Ytdl();
+const music = new YouTubeMusicPlugin({ ytdl });
+const youtube = new YouTubePlugin({ ytdl });
+const distube = new DisTube({ adapter: new DiscordJSAdapter(client), plugins: [music, youtube] });
+
+const songs = await distube.search("kevin macleod", { source: music });
+const videos = await distube.search("kevin macleod", { source: youtube });
+const completions = await distube.suggest("kevin macl", { source: music });
+```
+
+`YouTubeMusicPlugin` resolves `music.youtube.com` watch and playlist links. A watch link becomes one `youtube-music`
+Song and its `list` parameter is ignored. A playlist link to a curated `RDCLAK5uy_` list, an `OLAK5uy_` album or a
+user playlist becomes a `youtube-music` Playlist cut at `maxPlaylistSongs`. Generated mixes, channel and browse pages
+and every other YouTube URL go to `YouTubePlugin`. DisTube asks plugins in order, so list `YouTubeMusicPlugin` first
+to own Music links; listed after `YouTubePlugin`, or left out, those links become `youtube` Songs. Without `source`,
+`distube.search` also asks the plugins in order, so listing `YouTubeMusicPlugin` first makes music search the default.
+
+Autoplay follows the plugin that made the last Song. After a `youtube-music` Song it stays on the YouTube Music radio
+of the last Song the user picked: each autoplay Song records that radio as `pluginData.radioSeed`, and a Song from
+search or a link starts a new radio. A video played through either plugin counts as played for both.
+
+Songs link to `https://music.youtube.com/watch?v=<id>` and carry the same `pluginData` as YouTube Songs: `uploader`
+and `artist` hold the artists and `views` the play count. Search clamps `limit` to 20. Failures map to the same codes
+with `error.source` set to `"youtube-music"`. Search, suggestions and radio skip the cookie, so they show the
+signed-out catalog; links and playback use the `Ytdl` exactly as `YouTubePlugin` does.
 
 ## Sign in with a cookie
 
