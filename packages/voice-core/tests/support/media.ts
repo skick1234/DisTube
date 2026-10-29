@@ -14,6 +14,7 @@ import {
   Encoder,
   FF_ENCODER_AAC,
   FF_ENCODER_FLAC,
+  FF_ENCODER_LIBMP3LAME,
   FF_ENCODER_LIBOPUS,
   FF_ENCODER_PCM_S16LE,
   Frame,
@@ -56,6 +57,10 @@ export interface MediaFixtures {
   readonly huge: string;
   /** Two seconds of a loud 440 Hz tone, then eight seconds of silence, in PCM Matroska. */
   readonly toneThenSilence: string;
+  /** Twenty seconds of 128 kbps average-bitrate MP3, so frame sizes vary: a loud 440 Hz tone in even seconds, silence in odd ones. */
+  readonly pulses: string;
+  /** The same signal as `pulses` in PCM Matroska, which seeks exactly. */
+  readonly pulsesPcm: string;
   cleanup(): Promise<void>;
 }
 
@@ -71,6 +76,8 @@ export async function createMedia(): Promise<MediaFixtures> {
   const undecodable = join(dir, "undecodable.mkv");
   const huge = join(dir, "huge.mkv");
   const toneThenSilence = join(dir, "tone.mkv");
+  const pulses = join(dir, "pulses.mp3");
+  const pulsesPcm = join(dir, "pulses.mkv");
   await encode(opus, "webm", opusEncoder(256_000), 6);
   await encode(opus60, "webm", opusEncoder(96_000, 60), 2);
   await encode(aac, "mp4", Encoder.createSync(FF_ENCODER_AAC, { bitrate: 160_000, autoResample: true }), 5);
@@ -82,6 +89,15 @@ export async function createMedia(): Promise<MediaFixtures> {
   await renameCodec(undecodable, "A_PCM/INT/LIT", "A_XYZ/INT/LIT");
   await encode(huge, "matroska", Encoder.createSync(FF_ENCODER_PCM_S16LE), 11, 262_144);
   await encode(toneThenSilence, "matroska", Encoder.createSync(FF_ENCODER_PCM_S16LE), 10, 960, toneUntil(2 * RATE));
+  await encode(
+    pulses,
+    "mp3",
+    Encoder.createSync(FF_ENCODER_LIBMP3LAME, { bitrate: 128_000, autoResample: true, options: { abr: true } }),
+    20,
+    960,
+    evenSeconds,
+  );
+  await encode(pulsesPcm, "matroska", Encoder.createSync(FF_ENCODER_PCM_S16LE), 20, 960, evenSeconds);
   return {
     dir,
     opus,
@@ -94,6 +110,8 @@ export async function createMedia(): Promise<MediaFixtures> {
     undecodable,
     huge,
     toneThenSilence,
+    pulses,
+    pulsesPcm,
     cleanup: () => rm(dir, { recursive: true, force: true }),
   };
 }
@@ -145,6 +163,18 @@ function toneUntil(end: number): (start: number, count: number) => Buffer {
     }
     return buffer;
   };
+}
+
+function evenSeconds(start: number, count: number): Buffer {
+  const buffer = Buffer.alloc(count * 4);
+  for (let index = 0; index < count; index += 1) {
+    const sample = start + index;
+    if (Math.floor(sample / RATE) % 2 === 1) continue;
+    const value = Math.round(Math.sin((2 * Math.PI * 440 * sample) / RATE) * 20_000);
+    buffer.writeInt16LE(value, index * 4);
+    buffer.writeInt16LE(value, index * 4 + 2);
+  }
+  return buffer;
 }
 
 function frame(start: number, count: number, fill = samples): Frame {
@@ -246,25 +276,32 @@ export async function take(packets: Readable, count: number): Promise<Buffer[]> 
 }
 
 export async function peak(packets: readonly Buffer[], template: string): Promise<number> {
+  return Math.max(0, ...(await peaks(packets, template)));
+}
+
+/** The loudest sample of each packet, decoded in order by one decoder as a listener would hear the stream. */
+export async function peaks(packets: readonly Buffer[], template: string): Promise<number[]> {
   const demuxer = await Demuxer.open(template);
   const stream = demuxer.audio();
   if (!stream) throw new Error(`${template} has no audio stream`);
   const decoder = Decoder.createSync(stream);
   const packet = new Packet();
   packet.alloc();
-  let loudest = 0;
+  const loudest: number[] = [];
   try {
     for (const bytes of packets) {
       packet.data = bytes;
+      let level = 0;
       for (const decoded of decoder.decodeAllSync(packet)) {
         if (decoded.format !== AV_SAMPLE_FMT_FLTP) throw new Error("Expected planar float samples");
         for (const plane of decoded.data ?? []) {
           for (let offset = 0; offset + 4 <= decoded.nbSamples * 4; offset += 4) {
-            loudest = Math.max(loudest, Math.abs(plane.readFloatLE(offset)));
+            level = Math.max(level, Math.abs(plane.readFloatLE(offset)));
           }
         }
         decoded.free();
       }
+      loudest.push(level);
       packet.unref();
     }
     return loudest;
@@ -301,7 +338,7 @@ export async function fileReader(
     resource: {
       kind: "reader",
       size,
-      container: path.endsWith(".webm") ? "webm" : "mp4",
+      ...(path.endsWith(".mp3") ? {} : { container: path.endsWith(".webm") ? "webm" : "mp4" }),
       read(start, end) {
         probe.ranges.push([start, end]);
         const counter = new Transform({

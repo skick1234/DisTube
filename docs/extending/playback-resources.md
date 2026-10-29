@@ -14,12 +14,17 @@ and attachments, see [direct links](../../recipes/direct-links/).
 | `url`     | Public absolute HTTP(S) `url`, fetched without headers           | Never                      |
 | `file`    | Absolute `path`                                                  | Yes                        |
 | `stream`  | Node `Readable` in `stream`                                      | Never; one shot            |
-| `reader`  | `size`, `container`, and `read(start, end, signal)`              | Yes                        |
-| `timed`   | `container`, and `open(seconds, signal)`                         | Yes                        |
+| `reader`  | `size`, `read(start, end, signal)`, optional `container`         | Yes                        |
+| `timed`   | `open(seconds, signal)`, optional `container`                    | Yes                        |
 | `encoded` | `format` and `encoded`, playable only by the engine that made it | Only with `seekable: true` |
 
 Import the resource types from `distube/integrations`. Authenticated or seekable HTTP media is a `reader` or `timed`
 resource.
+
+`container` (`"webm"` or `"mp4"`) makes the built-in engine open that container without looking at the bytes. Leave it
+out for anything else: the engine identifies the format from the first bytes and accepts Matroska or WebM, MP4, Ogg,
+MP3, FLAC, WAV or AAC. An MP3 has no seek index, so a seek on an MP3 `reader` reads every byte from the start of the
+file to the target.
 
 Seek errors are on the [queue reference](../../reference/queue/). A player rejects a kind it cannot play with
 `UNSUPPORTED`.

@@ -39,11 +39,12 @@ export interface StreamPlaybackResource {
   dispose?(): void | Promise<void>;
 }
 
-/** Byte-addressable media the engine seeks through the container index. */
+/** Byte-addressable media the engine seeks through the container index, or from the start for MP3. */
 export interface ReaderPlaybackResource {
   readonly kind: "reader";
   readonly size: number;
-  readonly container: "webm" | "mp4";
+  /** Forces this container; when absent, the engine identifies the format from the bytes. */
+  readonly container?: "webm" | "mp4";
   /** Returns bytes `start` through `end` inclusive; `signal` aborts when the engine no longer needs them. */
   read(start: number, end: number, signal: AbortSignal): Readable;
   dispose?(): void | Promise<void>;
@@ -52,7 +53,8 @@ export interface ReaderPlaybackResource {
 /** Media that can only start at a time; `open` returns the container header, then media from at or before `seconds`. */
 export interface TimedPlaybackResource {
   readonly kind: "timed";
-  readonly container: "webm" | "mp4";
+  /** Forces this container; when absent, the engine identifies the format from the bytes. */
+  readonly container?: "webm" | "mp4";
   open(seconds: number, signal: AbortSignal): Readable;
   dispose?(): void | Promise<void>;
 }

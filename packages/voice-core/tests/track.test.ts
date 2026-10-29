@@ -24,6 +24,7 @@ import {
   type MediaFixtures,
   PLAIN,
   peak,
+  peaks,
   sourcePackets,
   take,
 } from "./support/media";
@@ -383,6 +384,26 @@ describe("Track filter races", () => {
   });
 });
 
+function isTone(level: number): boolean {
+  return level > 0.3;
+}
+
+function isSilent(level: number): boolean {
+  return level < 0.02;
+}
+
+/** Packets after a seek to `target` in the pulses signal until audio switches at the next whole second; `heard` holds every packet so far. */
+async function packetsToNextSecond(track: Track, heard: Buffer[], target: number): Promise<number> {
+  await track.seek(target);
+  const start = heard.length + track.packets.readableLength;
+  heard.push(...(await take(track.packets, start - heard.length + 16)));
+  const levels = (await peaks(heard, media.opus)).slice(start);
+  const [landed, next] = Math.floor(target) % 2 === 0 ? [isTone, isSilent] : [isSilent, isTone];
+  const switched = levels.findIndex((level, index) => index >= 2 && next(level));
+  expect(levels.slice(2, switched).every(landed)).toBe(true);
+  return switched;
+}
+
 describe("Track seek", () => {
   it("seeks to the start while the platform still plays the final packets, without ending", async () => {
     const track = await open({ kind: "file", path: media.opus });
@@ -454,6 +475,21 @@ describe("Track seek", () => {
     expect(track.position).toBeGreaterThanOrEqual(90);
     expect(track.position).toBeLessThan(90.1);
     await track.close();
+  });
+
+  it("lands a containerless MP3 reader within one packet of where an exact PCM seek lands", async () => {
+    const reader = await fileReader(media.pulses);
+    const mp3 = await open(reader.resource);
+    const pcm = await open({ kind: "file", path: media.pulsesPcm });
+    const heardMp3 = await take(mp3.packets, 20);
+    const heardPcm = await take(pcm.packets, 20);
+
+    for (const target of [13.85, 3.85]) {
+      const expected = await packetsToNextSecond(pcm, heardPcm, target);
+      expect(expected).toBeGreaterThan(2);
+      expect(Math.abs((await packetsToNextSecond(mp3, heardMp3, target)) - expected)).toBeLessThanOrEqual(1);
+    }
+    await Promise.all([mp3.close(), pcm.close()]);
   });
 
   it("plays on from the target when the input ends while a backward seek is pending", async () => {

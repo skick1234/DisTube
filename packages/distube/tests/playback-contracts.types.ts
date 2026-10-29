@@ -10,6 +10,7 @@ import type {
   FilterDefinitions,
   FilterEntry,
   JoinOptions,
+  PlaybackResource,
   Player,
   PlayerOptions,
   Plugin,
@@ -177,6 +178,10 @@ const reader: ReaderPlaybackResource = { kind: "reader", size: 1000, container: 
 const timed: TimedPlaybackResource = { kind: "timed", container: "mp4", open: () => audio };
 // @ts-expect-error reader containers are limited to webm and mp4
 const oggReader: ReaderPlaybackResource = { kind: "reader", size: 1, container: "ogg", read: () => audio };
+const probed: PlaybackResource[] = [
+  { kind: "reader", size: 1000, read: () => audio },
+  { kind: "timed", open: () => audio },
+];
 // @ts-expect-error Song cannot carry a playback resource
 new Song({ id: "leak", name: "Leak", url: "https://provider.example/leak", source: "source", resource });
 
@@ -254,5 +259,6 @@ void [
   reader,
   timed,
   oggReader,
+  probed,
   typedFromQueue,
 ];
