@@ -75,4 +75,4 @@ Declare the options on the slash command: an integer `percent` with a minimum of
 
 - [Voice and filters reference](../../reference/voice-and-filters/) for the full preset list and ranges.
 - [Voice settings](../voice-settings/) for deafen, mute and moving.
-- Example bot: [volume.ts](https://github.com/distubejs/example/blob/v6/src/commands/volume.ts), [filter.ts](https://github.com/distubejs/example/blob/v6/src/commands/filter.ts).
+- Example bot: [volume.ts](https://github.com/distubejs/example/blob/v6/discordjs/commands/volume.ts), [filter.ts](https://github.com/distubejs/example/blob/v6/discordjs/commands/filter.ts).

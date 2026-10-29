@@ -66,4 +66,4 @@ For files on disk, return `{ kind: "file", path }` with an absolute path instead
 
 - [Playback resources](../../extending/playback-resources/) for every resource kind.
 - [Queue controls](../queue-controls/) for `skip`.
-- Example bot: [sound.ts](https://github.com/distubejs/example/blob/v6/src/commands/sound.ts), [clips.ts](https://github.com/distubejs/example/blob/v6/src/clips.ts).
+- Example bot: [sound.ts](https://github.com/distubejs/example/blob/v6/discordjs/commands/sound.ts), [clips.ts](https://github.com/distubejs/example/blob/v6/discordjs/clips.ts).

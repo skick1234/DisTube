@@ -73,4 +73,4 @@ These calls finish once the voice player confirms the change, so the handlers de
 
 `seek` can reject, so let your router turn the error into a reply, as in [Play from a slash command](../play-command/). The [queue reference](../../reference/queue/) lists when. `queue.position` gives the elapsed seconds, which a `/seek` reply or a progress bar can use.
 
-See also: [queue reference](../../reference/queue/), [errors reference](../../reference/errors/) and the example's [pause.ts](https://github.com/distubejs/example/blob/v6/src/commands/pause.ts), [resume.ts](https://github.com/distubejs/example/blob/v6/src/commands/resume.ts) and [seek.ts](https://github.com/distubejs/example/blob/v6/src/commands/seek.ts).
+See also: [queue reference](../../reference/queue/), [errors reference](../../reference/errors/) and the example's [pause.ts](https://github.com/distubejs/example/blob/v6/discordjs/commands/pause.ts), [resume.ts](https://github.com/distubejs/example/blob/v6/discordjs/commands/resume.ts) and [seek.ts](https://github.com/distubejs/example/blob/v6/discordjs/commands/seek.ts).

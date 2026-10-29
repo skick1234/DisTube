@@ -114,4 +114,4 @@ that answers.
 
 A plugin instance that is not configured on this client rejects `INVALID_ARGUMENT`. Plugin errors propagate.
 
-See also: the example's [search.ts](https://github.com/distubejs/example/blob/v6/src/commands/search.ts).
+See also: the example's [search.ts](https://github.com/distubejs/example/blob/v6/discordjs/commands/search.ts).

@@ -72,4 +72,4 @@ await distube.play(channel, input, { metadata, allowAgeRestricted });
 
 `DisTubeError.is(error, code)` narrows `error` to a `DisTubeError` with that code. Rethrow anything else, and have your interaction router reply with a generic failure. Do not show `error.cause` to users, because a provider error can contain request details.
 
-See also: [queue reference](../../reference/queue/), [errors reference](../../reference/errors/) and the example's [play.ts](https://github.com/distubejs/example/blob/v6/src/commands/play.ts).
+See also: [queue reference](../../reference/queue/), [errors reference](../../reference/errors/) and the example's [play.ts](https://github.com/distubejs/example/blob/v6/discordjs/commands/play.ts).

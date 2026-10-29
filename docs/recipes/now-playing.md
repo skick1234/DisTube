@@ -41,4 +41,4 @@ Autoplay items reuse the metadata of the item they followed, so they post in the
 
 A failed item is skipped and the queue moves on. DisTube catches errors thrown by your listeners, so a failed `channel.send` does not change playback. Handle it anyway if you want a log line. Use `allowedMentions: { parse: [] }` so a song title cannot ping anyone.
 
-See also: [events reference](../../reference/events/), [errors reference](../../reference/errors/) and the example's [index.ts](https://github.com/distubejs/example/blob/v6/src/index.ts).
+See also: [events reference](../../reference/events/), [errors reference](../../reference/errors/) and the example's [bot.ts](https://github.com/distubejs/example/blob/v6/discordjs/bot.ts).

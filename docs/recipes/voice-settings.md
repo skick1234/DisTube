@@ -82,4 +82,4 @@ on by default when the bot joins. Pass `selfDeaf: false` to join undeafened.
 
 - [Voice and filters reference](../../reference/voice-and-filters/) for every voice setting.
 - [Leave voice](../leave-when-empty/) after the queue ends or the channel empties.
-- Example bot: [leave.ts](https://github.com/distubejs/example/blob/v6/src/commands/leave.ts), [deafen.ts](https://github.com/distubejs/example/blob/v6/src/commands/deafen.ts), [mute.ts](https://github.com/distubejs/example/blob/v6/src/commands/mute.ts).
+- Example bot: [leave.ts](https://github.com/distubejs/example/blob/v6/discordjs/commands/leave.ts), [deafen.ts](https://github.com/distubejs/example/blob/v6/discordjs/commands/deafen.ts), [mute.ts](https://github.com/distubejs/example/blob/v6/discordjs/commands/mute.ts).

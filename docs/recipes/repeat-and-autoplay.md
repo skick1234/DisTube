@@ -72,4 +72,4 @@ declare const distube: DisTube;
 distube.on("queue.autoplay.failed", ({ song, error }) => console.error("autoplay failed", song.name, error));
 ```
 
-See also: [queue reference](../../reference/queue/), [events reference](../../reference/events/) and the example's [repeat.ts](https://github.com/distubejs/example/blob/v6/src/commands/repeat.ts) and [autoplay.ts](https://github.com/distubejs/example/blob/v6/src/commands/autoplay.ts).
+See also: [queue reference](../../reference/queue/), [events reference](../../reference/events/) and the example's [repeat.ts](https://github.com/distubejs/example/blob/v6/discordjs/commands/repeat.ts) and [autoplay.ts](https://github.com/distubejs/example/blob/v6/discordjs/commands/autoplay.ts).

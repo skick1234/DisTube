@@ -51,4 +51,4 @@ Song names come from providers, so collapse whitespace and cut them to a length 
 
 Volume and filters belong to the voice, not the queue, so they are read from `queue.voice`. It can be `undefined` while the first `/play` is still joining, so check it (see the [queue reference](../../reference/queue/)).
 
-See also: [queue reference](../../reference/queue/), [voice and filters reference](../../reference/voice-and-filters/) and the example's [queue.ts](https://github.com/distubejs/example/blob/v6/src/commands/queue.ts).
+See also: [queue reference](../../reference/queue/), [voice and filters reference](../../reference/voice-and-filters/) and the example's [queue.ts](https://github.com/distubejs/example/blob/v6/discordjs/commands/queue.ts).

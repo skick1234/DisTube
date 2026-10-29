@@ -50,4 +50,4 @@ stops the bot.
 ## See also
 
 - [Events reference](../../reference/events/) for `queue.deleted` with reason `shutdown` and `voice.disconnected`.
-- Example bot: [index.ts](https://github.com/distubejs/example/blob/v6/src/index.ts).
+- Example bot: [bot.ts](https://github.com/distubejs/example/blob/v6/discordjs/bot.ts).
