@@ -1,6 +1,6 @@
 ---
-title: Size the thread pool
-description: Set UV_THREADPOOL_SIZE for a bot that plays live streams or starts many tracks at once on the built-in engine.
+title: Size the thread pool and CPU
+description: Set UV_THREADPOOL_SIZE and plan CPU for a bot that plays live streams or many tracks at once on the built-in engine.
 sidebar:
   order: 15
 ---
@@ -79,3 +79,27 @@ libuv reads `UV_THREADPOOL_SIZE` once, when the process first uses the pool, and
 DNS lookup or `crypto` call before that line, including one from an imported module, and the new value is ignored with
 no error. On Bun it never works. The engine reads the variable when it loads, so a value the pool ignored also makes the
 engine count threads the process does not have. DisTube has no option for it for the same reason.
+
+## Plan CPU for a large bot
+
+Decoding, filtering and encoding run on the engine's own worker threads, separate from the thread pool above. Each
+process starts at most `min(4, availableParallelism() - 1)` of them, and at least one. It gives each new track to the
+worker playing the fewest tracks. One process therefore uses at most 4 cores for audio however many the host has. A bot
+that needs more runs more processes, such as shard clusters.
+
+A track skips transcoding while its source is Opus at 48 kHz stereo in 20 ms packets, the volume is 100 and no filter is
+set. A volume change, a filter, or a source in another codec, such as MP3 or AAC, makes it decode and re-encode with
+libopus at `engine.opusComplexity`.
+
+The engine's cost per track, measured on an AMD Ryzen 9 7950X with Bun 1.4.4. Each run played 120 seconds of synthetic
+stereo audio, pink noise and two tones, at a 64 kbps target, and summed the CPU time of every thread in the process:
+
+| Track                            | Share of one core |
+| -------------------------------- | ----------------- |
+| Opus, skips transcoding          | 0.1%              |
+| MP3, complexity 10               | 0.8%              |
+| MP3, complexity 5                | 0.65%             |
+| Opus at volume 80, complexity 10 | 0.9%              |
+
+A 128 kbps target added up to 0.1 points. The figures cover reading, decoding and encoding, not encrypting
+and sending packets to Discord. Content and CPU change them, so measure on your own host before you size one.
