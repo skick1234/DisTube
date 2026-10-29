@@ -39,17 +39,20 @@ if (first) await distube.play(voiceChannel, first);
 
 ## Options and playback
 
-`SoundCloudPluginOptions` has two optional fields:
+`SoundCloudPluginOptions` has three optional fields:
 
 - `clientId`: a SoundCloud client ID, discovered from SoundCloud's scripts on first use when absent.
 - `oauthToken`: a token sent as `Authorization: OAuth <token>` on API requests.
+- `soundcloakUrls`: [Soundcloak](https://github.com/maid-zone/soundcloak) base URLs, empty by default. Playback asks
+  them in order once every SoundCloud API host is rate limited. They receive only the track's permalink path, which
+  holds the secret token of a private link, and their redirect must point at the SoundCloud CDN.
 
 Requests use a fixed host allowlist and timeout and follow at most 5 redirects, each checked against the allowlist.
 Cancellation and plugin disposal abort pending requests.
 Short `on.soundcloud.com` links expand to the URL they share, which then resolves as if pasted.
 
 Each preparation fetches a fresh link for the highest-bitrate AAC HLS transcoding and returns a timed mp4 resource
-with no URL. Tracks that offer only MP3 reject `SOURCE_FAILED`, as do segment hosts outside the allowlist
+with no URL. A track that came from this plugin's search, resolve, related or set answers needs no second lookup. Tracks that offer only MP3 reject `SOURCE_FAILED`, as do segment hosts outside the allowlist
 (`media-streaming.soundcloud.cloud`); blocked or non-streamable tracks reject `UNAVAILABLE`.
 Songs keep their public permalink and expose `plays`, `likes` and `uploader` through typed `pluginData`.
 `song.ageRestricted` holds the publisher's explicit flag for label releases and is absent for other uploads.
@@ -57,7 +60,10 @@ Search clamps `limit` to 50 and uses a zero-based `offset`.
 
 A Lavalink node loads a SoundCloud Song through its permalink, or plays the first search hit for its name and artist.
 Provider failures are core `DisTubeError` instances with codes such as `NOT_FOUND`, `UNAVAILABLE` and `RATE_LIMITED`,
-with `error.source` set to `"soundcloud"`. A failed track or stream lookup carries `error.media` `"song"`, and a
+with `error.source` set to `"soundcloud"`. A failure message names the host and path, and a `429` also names its
+`Retry-After` wait. After a `429` the plugin sends nothing to that host until the wait passes, or for 60 s without the
+header. While api-v2.soundcloud.com is limited, playback tries api-widget.soundcloud.com, then
+api-mobi.soundcloud.com, then `soundcloakUrls`; search, resolve and suggestions use api-v2 only. A failed track or stream lookup carries `error.media` `"song"`, and a
 failed set lookup `"playlist"`.
 See the [quick start](../../get-started/quick-start/), [queue](../../reference/queue/) and
 [errors](../../reference/errors/). For remote playback, see [Lavalink](../lavalink/).
