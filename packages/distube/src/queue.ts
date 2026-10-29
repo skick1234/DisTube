@@ -224,8 +224,8 @@ export class DisTubeQueue<Metadata = undefined, Target = VoiceChannelTarget> {
   }
 
   /**
-   * Seeks the current item within a known duration. Rejects `UNSUPPORTED` for a `url` or `stream` resource or an
-   * engine that cannot seek, and `INVALID_STATE` when the item ends before the seek lands.
+   * Seeks the current item within a known duration. Rejects `UNSUPPORTED` for a `stream` resource or a Player that
+   * cannot seek the item, and `INVALID_STATE` when the item ends before the seek lands.
    */
   async seek(seconds: number): Promise<void> {
     if (!Number.isFinite(seconds) || seconds < 0)

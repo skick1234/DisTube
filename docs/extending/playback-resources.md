@@ -9,17 +9,17 @@ sidebar:
 the plugin named by `song.source`. To play a clip, see [soundboard](../../recipes/soundboard/). To play audio links
 and attachments, see [direct links](../../recipes/direct-links/).
 
-| Kind      | Required data                                                    | Seekable                   |
-| --------- | ---------------------------------------------------------------- | -------------------------- |
-| `url`     | Public absolute HTTP(S) `url`, fetched without headers           | Never                      |
-| `file`    | Absolute `path`                                                  | Yes                        |
-| `stream`  | Node `Readable` in `stream`                                      | Never; one shot            |
-| `reader`  | `size`, `read(start, end, signal)`, optional `container`         | Yes                        |
-| `timed`   | `open(seconds, signal)`, optional `container`                    | Yes                        |
-| `encoded` | `format` and `encoded`, playable only by the engine that made it | Only with `seekable: true` |
+| Kind      | Required data                                                    | Seekable                           |
+| --------- | ---------------------------------------------------------------- | ---------------------------------- |
+| `url`     | Public absolute HTTP(S) `url`, fetched without headers           | When the server serves byte ranges |
+| `file`    | Absolute `path`                                                  | Yes                                |
+| `stream`  | Node `Readable` in `stream`                                      | Never; one shot                    |
+| `reader`  | `size`, `read(start, end, signal)`, optional `container`         | Yes                                |
+| `timed`   | `open(seconds, signal)`, optional `container`                    | Yes                                |
+| `encoded` | `format` and `encoded`, playable only by the engine that made it | Only with `seekable: true`         |
 
-Import the resource types from `distube/integrations`. Authenticated or seekable HTTP media is a `reader` or `timed`
-resource.
+Import the resource types from `distube/integrations`. Authenticated HTTP media, whose requests need headers, is a
+`reader` or `timed` resource.
 
 `container` (`"webm"` or `"mp4"`) makes the built-in engine open that container without looking at the bytes. Leave it
 out for anything else: the engine identifies the format from the first bytes and accepts Matroska or WebM, MP4, Ogg,

@@ -1,8 +1,8 @@
 import { type ClientRequest, request as httpRequest, type IncomingMessage } from "node:http";
 import { request as httpsRequest } from "node:https";
-import type { Readable } from "node:stream";
+import { Readable } from "node:stream";
 import type { EncodedPlaybackResource, PlaybackResource } from "distube/integrations";
-import { type InputSource, URL_READY_TIMEOUT_MS, WINDOW_BYTES, type WireError } from "./protocol";
+import { type Container, type InputSource, URL_READY_TIMEOUT_MS, WINDOW_BYTES, type WireError } from "./protocol";
 
 export type LocalPlaybackResource = Exclude<PlaybackResource, EncodedPlaybackResource>;
 
@@ -14,10 +14,6 @@ const HLS_CONTENT_TYPES = new Set([
   "audio/mpegurl",
   "audio/x-mpegurl",
 ]);
-
-export function isSeekable(resource: LocalPlaybackResource): boolean {
-  return resource.kind !== "stream" && resource.kind !== "url";
-}
 
 /** One answer to a worker read: a chunk, the end of the range or stream, or a failure. */
 export type ByteReply = Readonly<{ request: number; chunk?: ArrayBuffer; done?: boolean; failed?: boolean }>;
@@ -51,10 +47,11 @@ export async function serveInput(
       case "reader":
         return new RangedServer(resource.size, resource.container, resource.read, lifetime, redact, reply);
       case "url": {
-        const opened = await openUrl(resource.url, signal, redact);
-        return typeof opened === "string"
-          ? new DirectServer({ kind: "hls", url: opened }, lifetime)
-          : new OneShotServer(opened, undefined, lifetime, redact, reply);
+        const opened = await openUrl(resource.url, 0, signal, redact);
+        if (typeof opened === "string") return new DirectServer({ kind: "hls", url: opened }, lifetime);
+        if (opened.total === undefined) return new OneShotServer(opened.response, undefined, lifetime, redact, reply);
+        const ranges = new UrlRanges(resource.url, opened.response, opened.total, redact, lifetime.signal);
+        return new RangedServer(opened.total, undefined, ranges.open, lifetime, redact, reply);
       }
     }
   } catch (error: unknown) {
@@ -97,7 +94,7 @@ class OneShotServer implements ByteServer {
 
   constructor(
     readable: Readable,
-    container: "webm" | "mp4" | undefined,
+    container: Container | undefined,
     lifetime: AbortController,
     redact: (value: string) => string,
     reply: (message: ByteReply) => void,
@@ -202,7 +199,7 @@ class RangedServer implements ByteServer {
 
   constructor(
     size: number,
-    container: "webm" | "mp4" | undefined,
+    container: Container | undefined,
     open: RangeOpener,
     lifetime: AbortController,
     redact: (value: string) => string,
@@ -283,6 +280,91 @@ class RangedServer implements ByteServer {
   }
 }
 
+/** Serves a range-read URL's windows from one open response, opening `bytes=<start>-` where a window leaves it or the response ends early. */
+class UrlRanges {
+  readonly #url: string;
+  readonly #total: number;
+  readonly #redact: (value: string) => string;
+  #response?: IncomingMessage;
+  #chunks?: AsyncIterator<unknown>;
+  #rest?: Buffer;
+  #position = 0;
+  #openedAt = 0;
+
+  constructor(
+    url: string,
+    response: IncomingMessage,
+    total: number,
+    redact: (value: string) => string,
+    lifetime: AbortSignal,
+  ) {
+    this.#url = url;
+    this.#total = total;
+    this.#redact = redact;
+    this.#use(response);
+    listenForAbort(lifetime, () => this.#drop());
+  }
+
+  readonly open: RangeOpener = (start, end, signal) => Readable.from(this.#window(start, end - start + 1, signal));
+
+  async *#window(start: number, length: number, signal: AbortSignal): AsyncGenerator<Buffer> {
+    if (start !== this.#position) this.#drop();
+    this.#position = start;
+    const detach = listenForAbort(signal, () => this.#drop());
+    let left = length;
+    try {
+      while (left > 0) {
+        const chunk = await this.#next(signal);
+        if (!chunk || signal.aborted) return;
+        if (chunk.length > left) this.#rest = chunk.subarray(left);
+        const part = chunk.subarray(0, left);
+        left -= part.length;
+        this.#position += part.length;
+        yield part;
+      }
+    } finally {
+      detach();
+      if (left > 0 && !signal.aborted) this.#drop();
+    }
+  }
+
+  async #next(signal: AbortSignal): Promise<Buffer | undefined> {
+    const rest = this.#rest;
+    this.#rest = undefined;
+    if (rest) return rest;
+    if (!this.#chunks) {
+      const opened = await openUrl(this.#url, this.#position, signal, this.#redact);
+      if (typeof opened === "string" || opened.total !== this.#total) {
+        if (typeof opened !== "string") opened.response.destroy();
+        throw new Error("Playback URL ignored the byte range");
+      }
+      if (signal.aborted) {
+        opened.response.destroy();
+        return undefined;
+      }
+      this.#use(opened.response);
+    }
+    const next = await (this.#chunks as AsyncIterator<unknown>).next();
+    if (!next.done) return toBuffer(next.value);
+    const delivered = this.#position > this.#openedAt;
+    this.#drop();
+    return delivered && this.#position < this.#total && !signal.aborted ? this.#next(signal) : undefined;
+  }
+
+  #use(response: IncomingMessage): void {
+    this.#response = response;
+    this.#chunks = response[Symbol.asyncIterator]();
+    this.#openedAt = this.#position;
+  }
+
+  #drop(): void {
+    this.#response?.destroy();
+    this.#response = undefined;
+    this.#chunks = undefined;
+    this.#rest = undefined;
+  }
+}
+
 function stalledError(): Error {
   return new Error("Playback input stopped sending bytes");
 }
@@ -298,11 +380,15 @@ function toBuffer(chunk: unknown): Buffer {
   throw new TypeError("Playback input must yield bytes");
 }
 
+/** A URL answer: an HLS playlist URL, or a body whose `total` is set when it is the asked range of a file of that size. */
+type UrlAnswer = string | Readonly<{ response: IncomingMessage; total: number | undefined }>;
+
 async function openUrl(
   value: string,
+  start: number,
   signal: AbortSignal,
   redact: (value: string) => string,
-): Promise<IncomingMessage | string> {
+): Promise<UrlAnswer> {
   return await new Promise((resolve, reject) => {
     if (signal.aborted) {
       reject(abortError());
@@ -329,7 +415,7 @@ async function openUrl(
     const send = (target: URL): void => {
       try {
         const makeRequest = target.protocol === "https:" ? httpsRequest : httpRequest;
-        const sent = makeRequest(target, { method: "GET" }, response => {
+        const sent = makeRequest(target, { method: "GET", headers: { range: `bytes=${start}-` } }, response => {
           response.on("error", () => undefined);
           if (settled) {
             response.destroy();
@@ -375,7 +461,7 @@ async function openUrl(
           detachAbort();
           const detachCancel = listenForAbort(signal, () => response.destroy(abortError()));
           response.once("close", detachCancel);
-          resolve(response);
+          resolve({ response, total: rangeTotal(response, start) });
         });
         request = sent;
         sent.once("error", error => {
@@ -388,6 +474,12 @@ async function openUrl(
     };
     send(new URL(value));
   });
+}
+
+function rangeTotal(response: IncomingMessage, start: number): number | undefined {
+  if (response.statusCode !== 206) return undefined;
+  const range = /^bytes (\d+)-\d+\/(\d+)$/.exec(response.headers["content-range"] ?? "");
+  return range && Number(range[1]) === start ? Number(range[2]) : undefined;
 }
 
 function listenForAbort(signal: AbortSignal, abort: () => void): () => void {

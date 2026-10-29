@@ -78,7 +78,7 @@ async function failureOf(work: Promise<unknown>): Promise<Error> {
 }
 
 describe("controlled URL input", () => {
-  it("plays a URL from one request and refuses to seek it", async () => {
+  it("plays a URL whose server ignores the range from one request and refuses to seek it", async () => {
     const track = await open({ kind: "url", url: "https://example.test/live" });
     await take(track.packets, 10);
 
@@ -181,11 +181,11 @@ describe("controlled URL input", () => {
   });
 });
 
-type Route = (response: NodeHttp.ServerResponse) => void;
+type Route = (response: NodeHttp.ServerResponse, request: NodeHttp.IncomingMessage) => void;
 
 interface Origin {
   readonly url: string;
-  readonly requests: { readonly path: string; answered: boolean; closed: boolean }[];
+  readonly requests: { readonly path: string; readonly range?: string; answered: boolean; closed: boolean }[];
   paths(): string[];
   close(): Promise<void>;
 }
@@ -194,12 +194,12 @@ async function serve(routes: (url: string) => Record<string, Route>): Promise<Or
   const requests: Origin["requests"] = [];
   let table: Record<string, Route> = {};
   const server = NodeHttp.createServer((request, response) => {
-    const entry = { path: request.url ?? "", answered: false, closed: false };
+    const entry = { path: request.url ?? "", range: request.headers.range, answered: false, closed: false };
     requests.push(entry);
     response.on("finish", () => (entry.answered = true));
     response.on("close", () => (entry.closed = true));
     const route = table[entry.path];
-    if (route) route(response);
+    if (route) route(response, request);
     else response.writeHead(404).end();
   });
   await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
@@ -226,6 +226,132 @@ function playlist(segments: readonly string[]): Route {
 function bytes(content: Buffer | string): Route {
   return response => response.writeHead(200, { "content-type": "video/mp2t" }).end(content);
 }
+
+/** Answers `bytes=<start>-` with 206 and at most `cap` bytes while `serves(start)` holds, otherwise 200 and the whole body. */
+function ranged(content: Buffer, serves: (start: number) => boolean = () => true, cap = content.length): Route {
+  return (response, request) => {
+    const start = Number(/^bytes=(\d+)-$/.exec(request.headers.range ?? "")?.[1]);
+    if (!Number.isInteger(start) || !serves(start)) {
+      response.writeHead(200).end(content);
+      return;
+    }
+    if (start >= content.length) {
+      response.writeHead(416).end();
+      return;
+    }
+    const end = Math.min(content.length, start + cap) - 1;
+    response.writeHead(206, { "content-range": `bytes ${start}-${end}/${content.length}` });
+    response.end(content.subarray(start, end + 1));
+  };
+}
+
+describe("range-read URLs", () => {
+  let hour: Buffer;
+  let origin: Origin | undefined;
+
+  beforeAll(async () => {
+    hour = await readFile(media.hour);
+  });
+  beforeEach(async () => {
+    const actual = await vi.importActual<typeof NodeHttp>("node:http");
+    http.request.mockImplementation(actual.request);
+  });
+  afterEach(() => origin?.close());
+
+  it("plays a WAV to the end from one request", async () => {
+    origin = await serve(() => ({ "/a.wav": ranged(Buffer.from(silentWav())) }));
+
+    const track = await open({ kind: "url", url: `${origin.url}/a.wav` });
+    await take(track.packets, Number.POSITIVE_INFINITY);
+
+    expect(await track.outcome).toEqual({ type: "ended" });
+    expect(origin.requests).toMatchObject([{ path: "/a.wav", range: "bytes=0-" }]);
+    await track.close();
+  });
+
+  it("plays to the end through a server that caps each range answer", async () => {
+    const wav = Buffer.from(silentWav(10));
+    origin = await serve(() => ({ "/a.wav": ranged(wav, undefined, 32_768) }));
+
+    const track = await open({ kind: "url", url: `${origin.url}/a.wav` });
+    const packets = await take(track.packets, Number.POSITIVE_INFINITY);
+
+    expect(await track.outcome).toEqual({ type: "ended" });
+    expect(packets.length).toBeGreaterThanOrEqual(490);
+    expect(origin.requests.length).toBeGreaterThan(Math.ceil(wav.length / 32_768) - 1);
+    await track.close();
+  });
+
+  it("seeks a WebM and asks for a byte range on every request", async () => {
+    origin = await serve(() => ({ "/a.webm": ranged(hour) }));
+    const track = await open({ kind: "url", url: `${origin.url}/a.webm` });
+    await take(track.packets, 250);
+
+    await track.seek(37);
+
+    expect(track.position).toBeCloseTo(37, 0);
+    expect(origin.requests.length).toBeGreaterThan(1);
+    expect(origin.requests.every(request => /^bytes=\d+-$/.test(request.range ?? ""))).toBe(true);
+    await track.close();
+  });
+
+  it("starts a range request at the resource URL and follows its redirect", async () => {
+    origin = await serve(() => ({
+      "/start": response => response.writeHead(302, { location: "/a.webm" }).end(),
+      "/a.webm": ranged(hour),
+    }));
+    const track = await open({ kind: "url", url: `${origin.url}/start` });
+    await take(track.packets, 5);
+
+    await track.seek(30 * 60);
+
+    const ranges = (path: string): (string | undefined)[] =>
+      origin?.requests.filter(request => request.path === path).map(request => request.range) ?? [];
+    const jumps = ranges("/a.webm").filter(range => range !== "bytes=0-");
+    expect(jumps.length).toBeGreaterThan(0);
+    expect(ranges("/start")).toEqual(expect.arrayContaining(jumps));
+    await track.close();
+  });
+
+  it.each([
+    ["the seek's first request", () => false],
+    ["a range inside the file", (start: number) => start === 0],
+  ])("rejects the seek when the server ignores %s and plays on", async (_name, servesLater) => {
+    let switched = false;
+    origin = await serve(() => ({ "/a.webm": ranged(hour, start => !switched || servesLater(start)) }));
+    const track = await open({ kind: "url", url: `${origin.url}/a.webm` });
+    await take(track.packets, 1000);
+    switched = true;
+
+    const failure = await failureOf(track.seek(30 * 60));
+
+    expect(failure.message).toContain("Playback URL ignored the byte range");
+    expect(failure).not.toHaveProperty("code");
+    expect(track.position).toBeCloseTo(20, 0);
+    expect(await take(track.packets, 50)).toHaveLength(50);
+    await track.close();
+  });
+
+  it("closes the open response and a pending range request when the track stops", async () => {
+    const opening = ranged(hour);
+    origin = await serve(() => ({
+      "/a.webm": (response, request) => {
+        if (request.headers.range === "bytes=0-") opening(response, request);
+      },
+    }));
+    const track = await open({ kind: "url", url: `${origin.url}/a.webm` });
+    await take(track.packets, 5);
+    const seeking = failureOf(track.seek(30 * 60));
+    await vi.waitFor(() => expect(origin?.requests.some(request => request.range !== "bytes=0-")).toBe(true));
+
+    await track.close();
+
+    expect(await track.outcome).toEqual({ type: "closed" });
+    expect(await seeking).toBeInstanceOf(Error);
+    await vi.waitFor(() => expect(origin?.requests.every(request => request.closed)).toBe(true));
+    expect(origin.requests.find(request => request.range !== "bytes=0-")?.answered).toBe(false);
+  });
+});
 
 describe("HLS playlist URLs", () => {
   let ts: Buffer;

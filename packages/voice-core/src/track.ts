@@ -9,7 +9,6 @@ import {
   type ByteServer,
   decodeFailure,
   fromWire,
-  isSeekable,
   type LocalPlaybackResource,
   redactor,
   safeError,
@@ -63,6 +62,7 @@ export class Track {
   readonly #id = ++nextId;
   readonly #readAhead: number;
   readonly #resource: LocalPlaybackResource;
+  readonly #seekable: boolean;
   readonly #redact: (value: string) => string;
   readonly #lease: Lease;
   readonly #servers = new Map<number, ByteServer>();
@@ -85,9 +85,15 @@ export class Track {
   #settled = false;
   #closing?: Promise<void>;
 
-  private constructor(resource: LocalPlaybackResource, redact: (value: string) => string, readAhead: number) {
+  private constructor(
+    resource: LocalPlaybackResource,
+    first: ByteServer,
+    redact: (value: string) => string,
+    readAhead: number,
+  ) {
     this.#readAhead = readAhead;
     this.#resource = resource;
+    this.#seekable = resource.kind === "url" ? first.source.kind === "ranged" : resource.kind !== "stream";
     this.#redact = redact;
     this.outcome = new Promise(resolve => {
       this.#settle = resolve;
@@ -117,7 +123,7 @@ export class Track {
       server.close();
       throw abortError();
     }
-    track = new Track(resource, redact, settings.readAhead);
+    track = new Track(resource, server, redact, settings.readAhead);
     track.#servers.set(input, server);
     const opened = new Promise<void>((resolve, reject) => {
       if (track) track.#opened = { resolve, reject };
@@ -186,7 +192,7 @@ export class Track {
 
   /** Resolves once the new input holds audio at `seconds` and playback switched to it. */
   async seek(seconds: number): Promise<void> {
-    if (!isSeekable(this.#resource)) throw new DisTubeError("UNSUPPORTED", "This playback resource is not seekable");
+    if (!this.#seekable) throw new DisTubeError("UNSUPPORTED", "This playback resource is not seekable");
     if (this.#closing || this.#settled) throw new DisTubeError("INVALID_STATE", "Track has no running input");
     this.#seekController?.abort();
     const controller = new AbortController();
@@ -245,6 +251,10 @@ export class Track {
     if (this.#closing) {
       server.close();
       throw abortError();
+    }
+    if (server.source.kind !== "ranged" && this.#resource.kind === "url") {
+      server.close();
+      throw new Error("Playback URL ignored the byte range");
     }
     this.#servers.set(input, server);
     return input;

@@ -37,6 +37,15 @@ async function gated(harness: Harness) {
   return { result, queue, player, release: () => gate.resolve(player) };
 }
 
+/** A queue playing one item from a `url` resource. */
+async function playingUrl() {
+  const harness = playableSetup();
+  harness.source.stream.mockImplementationOnce(async () => ({ kind: "url", url: "https://cdn.example/a.webm" }));
+  const queue = await harness.distube.play(TARGET, "a");
+  await settle();
+  return { queue, player: harness.engine.player };
+}
+
 describe("pause and resume", () => {
   it("moves between playing and paused once each, treating a repeated request as a no-op", async () => {
     const { harness, queue, player } = await playing(["a"]);
@@ -219,7 +228,6 @@ describe("seek", () => {
 
   it.each<[string, () => PlaybackResource]>([
     ["stream", () => ({ kind: "stream", stream: Readable.from(["audio"]) })],
-    ["url", () => ({ kind: "url", url: "https://stream.example/live" })],
     ["encoded without seekable", () => ({ kind: "encoded", format: "fake", encoded: "track" })],
   ])("rejects seek UNSUPPORTED for a %s resource and keeps the item playing", async (_kind, resource) => {
     const harness = playableSetup();
@@ -230,6 +238,32 @@ describe("seek", () => {
 
     await expect(queue.seek(10)).rejects.toMatchObject({ code: "UNSUPPORTED" });
     expect(player.seek).not.toHaveBeenCalled();
+    expect(player.playing).toBeDefined();
+    expect(queue.current?.song.id).toBe("a");
+  });
+
+  it("forwards a url seek to the Player and resolves once it resolves", async () => {
+    const { queue, player } = await playingUrl();
+    const seeking = player.gate("seek");
+    let resolved = false;
+    const seek = queue.seek(30).then(() => (resolved = true));
+    await seeking.entered;
+    await settle();
+    const before = resolved;
+
+    seeking.resolve();
+    await seek;
+
+    expect(player.seek).toHaveBeenCalledWith(30);
+    expect(before).toBe(false);
+  });
+
+  it("passes the Player's UNSUPPORTED for a url through and keeps the item playing", async () => {
+    const { queue, player } = await playingUrl();
+    const failure = new DisTubeError("UNSUPPORTED", "This playback resource is not seekable");
+    player.seek.mockRejectedValueOnce(failure);
+
+    expect(await capture(queue.seek(30))).toBe(failure);
     expect(player.playing).toBeDefined();
     expect(queue.current?.song.id).toBe("a");
   });

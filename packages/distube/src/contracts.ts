@@ -20,7 +20,7 @@ export interface Diagnostic {
   readonly error?: unknown;
 }
 
-/** A public HTTP(S) URL fetched without headers; never seekable. Authenticated or seekable media is a `reader` or `timed` resource. */
+/** A public HTTP(S) URL fetched without headers; seekable when the engine reads it by byte range. Authenticated media is a `reader` or `timed` resource. */
 export interface UrlPlaybackResource {
   readonly kind: "url";
   readonly url: string;

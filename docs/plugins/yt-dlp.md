@@ -65,7 +65,7 @@ Playlists expose `extractor`.
 Playback asks yt-dlp for the best audio format that is not DASH and hands its URL to the engine as a `url` resource,
 as v5 did. It prefers audio-only formats, Opus first because the engine can play Opus without re-encoding, and otherwise the
 lowest video resolution that carries the best audio. HLS formats, including most live streams, play on the built-in engine. Media offered only as DASH rejects
-`UNSUPPORTED`, and sites whose media URLs need cookies or headers fail to play. These tracks cannot seek. With Lavalink, the node loads the Song's page URL
+`UNSUPPORTED`, and sites whose media URLs need cookies or headers fail to play. Plain-HTTP formats seek when their server serves byte ranges; HLS formats do not. With Lavalink, the node loads the Song's page URL
 itself and this step is skipped.
 
 Failures are core `DisTubeError` instances with `error.source` set to `"yt-dlp"`. The message is yt-dlp's last `ERROR:`

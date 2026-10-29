@@ -73,8 +73,8 @@ owns it, and only a link no provider claims reaches this plugin. The check that 
 Discord CDN path, so a plain `https://example.com/page` is declined. Discord serves a file uploaded through a
 slash command option from `/ephemeral-attachments/`, and the check accepts both paths.
 
-`stream` returns a `url` resource and the built-in engine fetches it. A `url` resource cannot seek, so
-`queue.seek` rejects with `UNSUPPORTED` for these tracks. An attachment URL is a signed link that expires, so
+`stream` returns a `url` resource and the built-in engine fetches it. `queue.seek` works when the link's server
+serves byte ranges and rejects with `UNSUPPORTED` otherwise. An attachment URL is a signed link that expires, so
 a queued attachment may fail to start if it waits a long time. The signed link stays in the plugin's
 `signedInputs` map, and `Song.url` holds the address without its query. Core keeps signed playback URLs out of
 songs, events and queue state, so keep them out of those fields too. The file's name becomes the track title, and

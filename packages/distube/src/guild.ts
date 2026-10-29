@@ -515,7 +515,7 @@ function interruption(track: Track, signal: AbortSignal): TrackEnd | undefined {
 
 function seekable(resource: PlaybackResource): boolean {
   if (resource.kind === "encoded") return resource.seekable === true;
-  return resource.kind !== "url" && resource.kind !== "stream";
+  return resource.kind !== "stream";
 }
 
 function assertOpen(connection: Connection): void {
