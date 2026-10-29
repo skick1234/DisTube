@@ -58,7 +58,9 @@ A channel URL resolves to the channel's uploads Playlist, cut at `maxPlaylistSon
 `/channel/UC...`, `/c/name` and `/user/name` on `youtube.com`, `www.youtube.com`, `m.youtube.com` and
 `music.youtube.com`. A video or playlist link takes precedence over a channel path.
 
-Songs expose `live`, `views` and `uploader` through typed `pluginData`. Search clamps `limit` to 20 and uses a
+Songs expose `live`, `views` and `uploader` through typed `pluginData`. `song.ageRestricted` is known only for a
+video looked up in full, by `resolve` or autoplay. Search results and playlist entries leave it absent; `play` without
+`allowAgeRestricted: true` looks a single unknown Song up first. Search clamps `limit` to 20 and uses a
 zero-based `offset`. Provider failures are core `DisTubeError` instances with codes such as `NOT_FOUND`,
 `UNAVAILABLE` and `RATE_LIMITED`, `error.source` set to `"youtube"` and the ytdl-core failure as `cause`. A video
 lookup or stream failure carries `error.media` `"song"`, a playlist lookup failure `"playlist"`.

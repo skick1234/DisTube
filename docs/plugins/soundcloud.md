@@ -52,6 +52,7 @@ Each preparation fetches a fresh link for the highest-bitrate AAC HLS transcodin
 with no URL. Tracks that offer only MP3 reject `SOURCE_FAILED`, as do segment hosts outside the allowlist
 (`media-streaming.soundcloud.cloud`); blocked or non-streamable tracks reject `UNAVAILABLE`.
 Songs keep their public permalink and expose `plays`, `likes` and `uploader` through typed `pluginData`.
+`song.ageRestricted` holds the publisher's explicit flag for label releases and is absent for other uploads.
 Search clamps `limit` to 50 and uses a zero-based `offset`.
 
 A Lavalink node loads a SoundCloud Song through its permalink, or plays the first search hit for its name and artist.

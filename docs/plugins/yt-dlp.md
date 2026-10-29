@@ -60,6 +60,7 @@ Only `http` and `https` URLs resolve. The generic extractor is off, so a page no
 file link, declines without a request and the next plugin gets it. A playlist is capped at `maxPlaylistSongs`, and a
 collection of collections, such as a YouTube channel's tabs, plays their entries in order.
 Songs expose `extractor`, `live`, and `views` and `likes` when the site reports them, through typed `pluginData`.
+`song.ageRestricted` is true when the site's `age_limit` is 18 or more and absent on flat playlist entries.
 Playlists expose `extractor`.
 
 Playback asks yt-dlp for the best audio format that is not DASH and hands its URL to the engine as a `url` resource,
