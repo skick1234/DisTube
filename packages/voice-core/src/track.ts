@@ -19,7 +19,9 @@ import {
 const HOLD_POLL_MS = 20;
 const IDLE_EXIT_MS = 30_000;
 const POOL_SIZE = Math.max(1, Math.min(4, availableParallelism() - 1));
-const PERMITS = Math.max(1, (Number(process.env.UV_THREADPOOL_SIZE) || 4) - 1);
+// Unset, libuv starts 4 threads while Bun sizes its N-API pool to the CPUs.
+const THREADPOOL_SIZE = Number(process.env.UV_THREADPOOL_SIZE) || (process.versions.bun ? availableParallelism() : 4);
+const PERMITS = Math.max(1, THREADPOOL_SIZE - 1);
 const ENTRY = new URL(`./worker.${import.meta.url.endsWith(".ts") ? "ts" : "mjs"}`, import.meta.url);
 
 /** How a Track ended: its input reached the end, its owner closed it, or it failed with a redacted cause. */

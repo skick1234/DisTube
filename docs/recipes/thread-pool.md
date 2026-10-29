@@ -5,35 +5,41 @@ sidebar:
   order: 15
 ---
 
-The built-in engine decodes on its own worker threads, but opening an input and reading its bytes run on the libuv
-thread pool. Node.js shares that pool across the whole process, including DNS lookups, async `fs`, `crypto` and `zlib`,
-and gives it 4 threads unless `UV_THREADPOOL_SIZE` says otherwise. This page applies to Node.js. Lavalink plays on its
-own node and uses none of these threads.
+The built-in engine decodes on its own worker threads, but opening an input and reading its bytes run on the runtime's
+native thread pool. Node.js and Bun both take its size from `UV_THREADPOOL_SIZE` when it is set. When it is unset,
+Node.js starts 4 threads and Bun starts one per CPU the process may run on, the count `os.availableParallelism()`
+reports. On Node.js the pool is libuv's, shared across the whole process, including DNS lookups, async `fs`, `crypto` and
+`zlib`. Lavalink plays on its own node and uses none of these threads.
 
 ## What holds a thread
 
-- Opening an input holds one thread briefly. The engine opens at most `UV_THREADPOOL_SIZE - 1` inputs at once, and at
-  least one, so a thread stays free for the rest of the process. Further opens wait for a free slot.
+- Opening an input holds one thread briefly. The engine opens at most one input fewer than the pool has threads, and at
+  least one, so a thread stays free for the rest of the process. It counts the pool the way the running runtime sizes
+  it: `UV_THREADPOOL_SIZE` when set, otherwise 4 on Node.js and the CPU count on Bun. Further opens wait for a free
+  slot.
 - Reading a track's bytes holds a thread while the read waits for data. A download that is ahead of playback answers at
   once. A live track, such as an internet radio URL or a live `stream` resource, reads at the live edge, so it holds one
   thread for most of its playback. A live HLS track holds its thread while it waits for the next segment to be
   published, which can take several seconds.
 
-When live tracks hold every thread, everything else that uses the pool waits behind them: the next track's open,
-DNS lookups for the gateway and for plugins, and file reads.
+When live tracks hold every thread, the next track's open waits behind them. On Node.js so do DNS lookups for the
+gateway and for plugins, and file reads.
 
 ## Recommended size
 
-| Bot                                         | `UV_THREADPOOL_SIZE` |
-| ------------------------------------------- | -------------------- |
-| No live tracks, a few guilds                | leave the default, 4 |
-| No live tracks, many guilds starting tracks | 8                    |
-| Live tracks in up to N guilds at once       | N + 4                |
+| Bot                                         | `UV_THREADPOOL_SIZE`                    |
+| ------------------------------------------- | --------------------------------------- |
+| No live tracks, a few guilds                | leave the default                       |
+| No live tracks, many guilds starting tracks | 8, or the default when it is larger     |
+| Live tracks in up to N guilds at once       | N + 4, or the default when it is larger |
 
-libuv accepts up to 1024 and creates every thread at once on first use. An idle thread costs little: 1024 threads took
-19 ms to start and added 8 MiB of resident memory, with 8 MiB of reserved stack each. If the host cannot create them all,
-because of a container `pids.max`, a systemd `TasksMax` or a per-user process limit, Node.js aborts at that first use.
-Keep the size under the host's thread limit.
+A value below Bun's default shrinks its pool, so on a host with many CPUs Bun may need no setting at all. Bun ignores
+`UV_THREADPOOL_SIZE=1` and keeps its default.
+
+On Node.js, libuv accepts up to 1024 and creates every thread at once on first use. An idle thread costs little: 1024
+threads took 19 ms to start and added 8 MiB of resident memory, with 8 MiB of reserved stack each. If the host cannot
+create them all, because of a container `pids.max`, a systemd `TasksMax` or a per-user process limit, Node.js aborts at
+that first use. Keep the size under the host's thread limit.
 
 ## Set it before the process starts
 
@@ -41,6 +47,7 @@ Set the variable in the environment that launches the bot:
 
 ```sh title="Shell"
 UV_THREADPOOL_SIZE=16 node index.js
+UV_THREADPOOL_SIZE=16 bun index.ts
 ```
 
 ```dockerfile title="Dockerfile"
@@ -52,7 +59,7 @@ ENV UV_THREADPOOL_SIZE=16
 Environment=UV_THREADPOOL_SIZE=16
 ```
 
-When the host does not let you set the environment, preload a module that sets it:
+On Node.js, when the host does not let you set the environment, preload a module that sets it:
 
 ```js title="threadpool.mjs"
 process.env.UV_THREADPOOL_SIZE = "16";
@@ -62,9 +69,13 @@ process.env.UV_THREADPOOL_SIZE = "16";
 node --import ./threadpool.mjs index.js
 ```
 
+Bun sizes its pool from the environment it was launched with. A preload or any other assignment to
+`process.env.UV_THREADPOOL_SIZE` leaves its pool unchanged.
+
 ## Why not set it in the bot's code
 
 libuv reads `UV_THREADPOOL_SIZE` once, when the process first uses the pool, and never resizes it. Setting
 `process.env.UV_THREADPOOL_SIZE` in your entry file works only if nothing has used the pool yet. One async file read,
 DNS lookup or `crypto` call before that line, including one from an imported module, and the new value is ignored with
-no error. DisTube has no option for it for the same reason.
+no error. On Bun it never works. The engine reads the variable when it loads, so a value the pool ignored also makes the
+engine count threads the process does not have. DisTube has no option for it for the same reason.

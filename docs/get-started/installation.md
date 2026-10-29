@@ -86,8 +86,8 @@ as an optional dependency, so a package manager that skips optional packages or 
 bot. It needs glibc 2.28 or newer, so musl hosts such as Alpine are unsupported. A host that cannot load `node-av`
 fails the first playback with `VOICE_FAILED`.
 
-A bot that plays live streams or starts tracks in many guilds at once needs a larger libuv thread pool. See
-[size the thread pool](../../recipes/thread-pool/).
+A bot that plays live streams or starts tracks in many guilds at once may need a larger thread pool, especially on
+Node.js, whose default is 4 threads. See [size the thread pool](../../recipes/thread-pool/).
 
 Lavalink replaces the built-in engine, so a bot that uses it needs no local decoding and no `node-av`. It requires Lavalink v4.2 or
 newer within major 4.

@@ -13,6 +13,7 @@ interface FakeWorker {
 }
 
 const workers = vi.hoisted((): FakeWorker[] => []);
+const cpus = vi.hoisted(() => ({ count: 2 }));
 
 vi.mock("node:worker_threads", async () => {
   const { EventEmitter: Emitter } = await import("node:events");
@@ -40,7 +41,7 @@ vi.mock("node:worker_threads", async () => {
 });
 vi.mock("node:os", async importOriginal => ({
   ...(await importOriginal<typeof Os>()),
-  availableParallelism: () => 2,
+  availableParallelism: () => cpus.count,
 }));
 
 const cleanups: (() => Promise<unknown>)[] = [];
@@ -52,6 +53,7 @@ beforeEach(resetNative);
 afterEach(async () => {
   for (const cleanup of cleanups.splice(0).toReversed()) await cleanup().catch(() => undefined);
   for (const worker of workers.splice(0)) worker.emit("exit", 0);
+  answered.clear();
 });
 
 async function createPlayer(): Promise<Player> {
@@ -152,5 +154,30 @@ describe("playback worker pool", () => {
     worker.emit("error", new Error("native crash"));
 
     await expect(applying).rejects.toMatchObject({ code: "INVALID_STATE" });
+  });
+});
+
+describe("open permits with UV_THREADPOOL_SIZE unset", () => {
+  const versions = process.versions;
+  beforeEach(() => {
+    vi.stubEnv("UV_THREADPOOL_SIZE", undefined);
+    vi.resetModules();
+    cpus.count = 8;
+  });
+  afterEach(() => {
+    Object.defineProperty(process, "versions", { value: versions });
+    cpus.count = 2;
+  });
+
+  it.each([
+    { runtime: "Node", bun: undefined, permits: 3 },
+    { runtime: "Bun", bun: "1.4.4", permits: 7 },
+  ])("grants $permits opens at once on $runtime with 8 CPUs", async ({ bun, permits }) => {
+    if (bun) Object.defineProperty(process, "versions", { value: { ...versions, bun } });
+    const { worker } = await playing(await createPlayer());
+
+    for (let permit = 1; permit <= permits + 1; permit++) worker.send({ type: "acquire", permit });
+
+    expect(granted(worker)).toEqual(Array.from({ length: permits }, (_, index) => index + 1));
   });
 });

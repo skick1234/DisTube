@@ -28,6 +28,9 @@ import {
   take,
 } from "./support/media";
 
+vi.hoisted(() => vi.stubEnv("UV_THREADPOOL_SIZE", "4"));
+const PERMITS = 3;
+
 const NIGHTCORE = "asetrate=48000*1.25,aresample=48000,bass=g=5";
 
 let media: MediaFixtures;
@@ -40,6 +43,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await Promise.all(servers.map(server => new Promise(resolve => server.close(resolve))));
   await media.cleanup();
+  vi.unstubAllEnvs();
 });
 
 function causes(error: unknown): Error[] {
@@ -707,8 +711,7 @@ describe("Track input idle limits", () => {
   it("fails one-shot opens whose sources never write without holding up an open behind them", async () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     try {
-      const permits = Math.max(1, (Number(process.env.UV_THREADPOOL_SIZE) || 4) - 1);
-      const stalls = Array.from({ length: permits }, () => new PassThrough());
+      const stalls = Array.from({ length: PERMITS }, () => new PassThrough());
       const reads = stalls.map(stall => vi.spyOn(stall, "read"));
       const failures = stalls.map(stall =>
         open({ kind: "timed", container: "webm", open: () => stall }).then(
