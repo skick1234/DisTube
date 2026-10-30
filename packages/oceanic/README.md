@@ -5,11 +5,11 @@ The Oceanic adapter for DisTube, with a built-in playback engine.
 ## Install
 
 ```sh title="npm"
-npm install distube @distube/oceanic @distube/youtube @distube/ytdl-core oceanic.js @discordjs/voice
+npm install distube @distube/oceanic @distube/youtube oceanic.js @discordjs/voice
 ```
 
 ```sh title="Bun"
-bun add distube @distube/oceanic @distube/youtube @distube/ytdl-core oceanic.js @discordjs/voice
+bun add distube @distube/oceanic @distube/youtube oceanic.js @discordjs/voice
 ```
 
 ## Requirements
@@ -53,5 +53,5 @@ hold separate connections. Code that fetches the connection with `getVoiceConnec
 
 See [installation requirements](https://distube.js.org/distube/get-started/installation/),
 [quick start](https://distube.js.org/distube/get-started/quick-start/),
-[queue controls](https://distube.js.org/distube/recipes/queue-controls/) and
+[queue controls](https://distube.js.org/distube/guides/queue-controls/) and
 [adapter authoring](https://distube.js.org/distube/extending/adapter-authoring/).
