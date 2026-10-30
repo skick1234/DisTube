@@ -94,6 +94,31 @@ describe("voice presence", () => {
     expect(replacement.playing).toBe("b");
   });
 
+  it("creates the replacement Player behind a volume change that was queued before the old Player closed", async () => {
+    const harness = playableSetup();
+    const queue = await harness.distube.play(TARGET, "a");
+    await queue.add("b");
+    await settle();
+    const voice = required(harness.distube.voices.get(GUILD));
+    const closed = harness.engine.player;
+    const held = closed.gate("volume");
+    const first = capture(voice.setVolume(50));
+    await held.entered;
+    const second = capture(voice.setVolume(70));
+
+    closed.close(new Error("connection destroyed"));
+    await settle();
+    held.resolve();
+    await settle();
+
+    expect(await first).toBeUndefined();
+    expect(await second).toMatchObject({ code: "VOICE_FAILED" });
+    const replacement = harness.engine.player;
+    expect(replacement).not.toBe(closed);
+    expect(replacement.volumes).toEqual([50]);
+    expect(replacement.playing).toBe("b");
+  });
+
   it("moves an existing DisTubeVoice on join and stays put when it already occupies the channel", async () => {
     const harness = playableSetup();
     await harness.distube.play(TARGET, "a");

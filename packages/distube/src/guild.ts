@@ -418,8 +418,9 @@ export class Guild<Target> {
       return;
     }
     connection.channelId = event.channelId;
+    const pending = connection.player;
     this.#serial(connection, async () => {
-      const player = await connection.player?.catch(() => undefined);
+      const player = await pending?.catch(() => undefined);
       await call("Player failed to refresh the voice gateway", async () => player?.updateVoiceGateway?.(event.gateway));
     }).catch((error: unknown) => this.#report("voice.gateway", error));
   }
@@ -482,8 +483,9 @@ export class Guild<Target> {
     } catch (error: unknown) {
       return Promise.reject(error);
     }
+    const pending = connection.player;
     return this.#serial(connection, async () => {
-      const player = await connection.player?.catch(() => undefined);
+      const player = await pending?.catch(() => undefined);
       await call(message, () => apply(player));
     });
   }
