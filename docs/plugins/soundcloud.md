@@ -62,15 +62,6 @@ Construction throws `INVALID_ARGUMENT` if only one credential is set, or if `tok
 
 The plugin sends `oauthTokenV2` as `Authorization: OAuth <token>` to api-v2.
 
-`soundcloakUrls` lists [Soundcloak](https://github.com/maid-zone/soundcloak) instances by base URL, and is empty by
-default. Playback asks them in order once every SoundCloud API host is rate limited. Their redirect must point at the
-SoundCloud CDN.
-
-:::caution
-A Soundcloak instance receives only the track's permalink path, never your client ID or OAuth token. For a private
-link, that path holds the link's secret token, so only list instances you trust.
-:::
-
 ## Songs and search results
 
 Songs keep their public permalink as `url`. `song.id` is always the numeric track ID, whichever API answered. They
@@ -104,12 +95,11 @@ After a `429` the plugin sends nothing to that host until its `Retry-After` wait
 header is missing or invalid. This also applies to the official API; a paused official API falls back to api-v2.
 
 During playback preparation, a rate-limited track lookup or stream link on `api-v2.soundcloud.com` falls back to
-`api-widget.soundcloud.com`, then `api-mobi.soundcloud.com`, at most once each, skipping paused hosts. When all three
-are rate limited, playback moves on to `soundcloakUrls`. Other web API operations use only api-v2.
+`api-widget.soundcloud.com`, then `api-mobi.soundcloud.com`, at most once each, skipping paused hosts. Other web API
+operations use only api-v2.
 
 If the plugin fails to read a client ID from soundcloud.com, it disables api-v2 for 10 minutes. With app credentials,
-operations use only the official API during that time. Without them, playback preparation tries `soundcloakUrls` and
-other operations reject `SOURCE_FAILED`. `suggest`
+operations use only the official API during that time. Without them, operations reject `SOURCE_FAILED`. `suggest`
 also rejects `SOURCE_FAILED`, even with app credentials. After 10 minutes, the next api-v2 operation tries the read
 again.
 
