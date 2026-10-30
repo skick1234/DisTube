@@ -17,9 +17,8 @@
 <!-- Please ensure you've completed the following steps before submitting your PR: -->
 
 - [ ] **Tests**: I have added/updated tests to cover my changes.
-- [ ] **Linting**: I have run `bun run lint` and `bun run lint:fix` to ensure code style compliance.
-- [ ] **Types**: I have run `bun run type` to verify TypeScript compilation.
-- [ ] **Documentation**: I have updated relevant documentation (Wiki, JSDoc, README).
+- [ ] **Verify**: I have run `bun run verify` (`bun run check:write` fixes lint and formatting).
+- [ ] **Documentation**: I have updated relevant documentation (`docs/`, JSDoc, README).
 - [ ] **Conventional Commits**: My commit messages follow the [Conventional Commits](https://www.conventionalcommits.org/) specification.
 
 ## Related Issues

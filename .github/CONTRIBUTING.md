@@ -12,7 +12,7 @@ We use GitHub Issues to track bugs and feature requests.
 - **Feature Requests**: Please use the [Feature Request](https://github.com/skick1234/DisTube/issues/new?template=feature_request.yml) form.
 - **Questions**: For questions or general support, please join our [Discord Support Server](https://discord.gg/feaDd9h) or check the [FAQ](https://distube.js.org/distube/guides/faq/).
 
-**Please do not report security vulnerabilities in public issues.** See [SECURITY.md](SECURITY.md) for more details.
+**Please do not report security vulnerabilities in public issues.** See [SECURITY.md](../SECURITY.md) for more details.
 
 ## 🛠️ Pull Requests
 
@@ -62,7 +62,8 @@ The codebase is organized by durable ownership:
 - `packages/distube/`: public client, queue/player/plugin contracts, runtime behavior, and package-local tests.
 - `packages/discordjs/`: direct discord.js Adapter and Player with package-local tests.
 - `packages/oceanic/`: direct Oceanic Adapter and Player with package-local tests.
-- `scripts/`: adapter build sanitizer and documentation generator.
+- `packages/voice-core/`: private built-in engine bundled into both adapters, never published alone.
+- `docs/`: guides published to distube.js.org.
 
 ### Scripts
 
@@ -70,9 +71,8 @@ The codebase is organized by durable ownership:
 - `bun run type`: `tsrs --noEmit` in every package
 - `bun run test`: Run the fast coverage-disabled unit tests
 - `bun run test:release`: Run the coverage-enabled test pass
-- `bun run build`: Build all three packages
-- `bun run docs`: Build, run API Extractor and build the VitePress documentation site
-- `bun run verify`: Run the whole gate above in order (no `docs`); CI runs exactly this
+- `bun run build`: Build all four packages
+- `bun run verify`: Run `check`, `type`, `build` and `test:release` in order; CI runs exactly this
 
 ## Dependencies
 

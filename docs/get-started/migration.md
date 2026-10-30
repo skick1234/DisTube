@@ -159,7 +159,7 @@ Every v5 code and where it went:
 
 ## Official plugins
 
-Install `@distube/ytdl-core` `^5.0.2` next to `@distube/youtube`; it is a peer dependency.
+Install `@distube/ytdl-core` `^5.2.0` next to `@distube/youtube`; it is a peer dependency.
 
 | v5                                                                                                 | v6                                                                                    |
 | -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
