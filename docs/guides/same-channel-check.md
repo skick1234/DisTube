@@ -98,6 +98,20 @@ if (distube.voices.has(interaction.guildId) && !(await inBotChannel(interaction,
 
 `voices.has` is `true` while the bot is connected, so the check only runs then.
 
+`/search` from [Search and autocomplete](../search-and-autocomplete/) ends in `play` too, so it can move the bot the
+same way. By the time the member picks a result, the command has already replied, so `inBotChannel` cannot answer
+for it. In `commands/search.ts`, add this right before `distube.play`:
+
+```ts
+const botChannelId = distube.voices.get(interaction.guildId)?.channelId;
+if (botChannelId && botChannelId !== channel.id) {
+  await interaction.editReply({ content: "Join my voice channel first.", components: [] });
+  return;
+}
+```
+
+It runs after the pick, not before the menu, because the member can switch channels while the menu is open.
+
 ## Next
 
 [Leave voice](../leave-when-empty/) disconnects the bot when the queue ends or the channel empties.
