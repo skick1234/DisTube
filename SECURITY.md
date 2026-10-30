@@ -18,6 +18,8 @@ so the node's own source configuration decides which hosts it fetches.
 ## Errors
 
 The built-in engine replaces the resource's URL or file path with `<redacted>` in the messages, stacks and causes of
-the errors it reports. It redacts nothing else. Core passes a plugin's error on unchanged as the `cause` of
-`SOURCE_FAILED`, which `queue.item.failed` and rejected commands carry. A plugin must keep cookies, tokens and signed
-URLs out of its errors, and an application should not publish a raw `cause`.
+the errors it reports. It redacts nothing else. Core passes a plugin's error on unchanged, which `queue.item.failed`
+and rejected commands carry. A `DisTubeError` with any code but `INVALID_ARGUMENT`, `INVALID_STATE` or `ABORTED`
+arrives as the error itself, message included. Any other error arrives as the `cause` of `SOURCE_FAILED`. A plugin
+must keep cookies, tokens and signed URLs out of its errors and their messages, and an application should not publish
+a raw `cause`.
