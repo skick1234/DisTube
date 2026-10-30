@@ -1,0 +1,5 @@
+{
+  "extends": "./tsconfig.json",
+  "include": ["packages/discordjs/src/**/*.ts", "packages/oceanic/src/**/*.ts", "packages/voice-core/src/**/*.ts"],
+  "compilerOptions": { "rootDir": ".", "declarationMap": false, "inlineSources": false, "sourceMap": false }
+}

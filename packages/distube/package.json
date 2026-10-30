@@ -1,0 +1,55 @@
+{
+  "name": "distube",
+  "version": "5.2.3",
+  "description": "Minimal queue and playback orchestration for Discord audio",
+  "homepage": "https://distube.js.org/",
+  "bugs": {
+    "url": "https://github.com/skick1234/DisTube/issues"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/skick1234/DisTube.git",
+    "directory": "packages/distube"
+  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md"
+  ],
+  "type": "module",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
+  "typesVersions": {
+    "*": {
+      "integrations": [
+        "./dist/integrations.d.mts"
+      ]
+    }
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.mts",
+      "default": "./dist/index.mjs"
+    },
+    "./integrations": {
+      "types": "./dist/integrations.d.mts",
+      "default": "./dist/integrations.mjs"
+    }
+  },
+  "scripts": {
+    "check": "oxlint --deny-warnings && oxfmt --check",
+    "type": "tsrs --noEmit",
+    "test": "tsdown && vitest run --coverage=false",
+    "test:release": "tsdown && vitest run --coverage",
+    "build": "tsdown",
+    "prepack": "bun run build"
+  },
+  "engines": {
+    "node": "^22.22.2 || ^24.15.0 || >=26.0.0"
+  },
+  "sourceEntries": {
+    ".": "./src/index.ts",
+    "./integrations": "./src/integrations.ts"
+  }
+}

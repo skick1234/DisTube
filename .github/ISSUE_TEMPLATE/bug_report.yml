@@ -1,0 +1,97 @@
+name: Bug Report
+description: Create a report to help us improve
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to fill out this bug report!
+        Please check the [FAQ](https://distube.js.org/distube/guides/faq/) and existing issues first.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Describe the bug
+      description: A clear and concise description of what the bug is.
+      placeholder: I cannot play music from...
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: To Reproduce
+      description: Steps to reproduce the behavior.
+      placeholder: |
+        1. Go to '...'
+        2. Click on '...'
+        3. Scroll down to '...'
+        4. See error
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: A clear and concise description of what you expected to happen.
+    validations:
+      required: true
+
+  - type: textarea
+    id: code
+    attributes:
+      label: Code Sample
+      description: Please provide a minimal code sample that reproduces the issue. Use standard code blocks.
+      render: typescript
+      placeholder: |
+        ```ts
+        const distube = new DisTube(client, { ... });
+        distube.play(channel, "url");
+        ```
+
+  - type: input
+    id: distube-version
+    attributes:
+      label: DisTube version
+      description: Which version of DisTube are you using?
+      placeholder: 6.0.0
+    validations:
+      required: true
+
+  - type: input
+    id: djs-version
+    attributes:
+      label: discord.js version
+      description: Which version of discord.js are you using?
+      placeholder: 14.x
+    validations:
+      required: true
+
+  - type: input
+    id: node-version
+    attributes:
+      label: Node.js version
+      description: Which version of Node.js are you using?
+      placeholder: 24.x
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating System
+      options:
+        - Windows
+        - Linux
+        - macOS
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional context
+      description: Add any other context about the problem here (screenshots, logs, etc.).

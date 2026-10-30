@@ -1,0 +1,1 @@
+export { DiscordJSAdapter } from "./adapter";

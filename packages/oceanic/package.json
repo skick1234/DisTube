@@ -1,0 +1,56 @@
+{
+  "name": "@distube/oceanic",
+  "version": "0.0.0",
+  "description": "Oceanic adapter for DisTube",
+  "homepage": "https://distube.js.org/",
+  "bugs": {
+    "url": "https://github.com/skick1234/DisTube/issues"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/skick1234/DisTube.git",
+    "directory": "packages/oceanic"
+  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md"
+  ],
+  "type": "module",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.mts",
+      "default": "./dist/index.mjs"
+    }
+  },
+  "scripts": {
+    "check": "oxlint --deny-warnings && oxfmt --check",
+    "type": "tsrs --noEmit",
+    "test": "tsdown && vitest run --coverage=false",
+    "test:release": "tsdown && vitest run --coverage",
+    "build": "tsdown",
+    "prepack": "bun run build"
+  },
+  "dependencies": {
+    "@noble/ciphers": "^2.1.1"
+  },
+  "devDependencies": {
+    "@discordjs/voice": "^0.19.2",
+    "distube": "workspace:*",
+    "oceanic.js": "^1.14.0"
+  },
+  "peerDependencies": {
+    "@discordjs/voice": "^0.19.1",
+    "distube": "^6.0.0",
+    "oceanic.js": "^1.14.0"
+  },
+  "optionalDependencies": {
+    "node-av": "6.2.0-beta.35"
+  },
+  "engines": {
+    "node": "^22.22.2 || ^24.15.0 || >=26.0.0"
+  }
+}

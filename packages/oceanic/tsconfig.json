@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.json",
+  "include": ["src/**/*.ts", "tests/**/*.ts", "../voice-core/src/**/*.ts"],
+  "exclude": ["dist", "coverage", "node_modules"],
+  "compilerOptions": {
+    "rootDir": "../..",
+    "outDir": "dist",
+    "allowImportingTsExtensions": true,
+    "paths": {
+      "distube": ["../distube/src/index.ts"],
+      "distube/integrations": ["../distube/src/integrations.ts"]
+    }
+  }
+}

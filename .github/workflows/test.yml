@@ -1,38 +1,70 @@
 name: Test
 on:
   push:
-    branches:
-      - "main"
+    branches: [main]
   pull_request:
-    branches:
-      - "main"
+    branches: [main]
 jobs:
   test:
-    name: Test on Bun (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest]
+    name: Verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
-      - name: Install Bun
+      - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version-file: package.json
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Linting
-        run: bun run lint
+      - name: Verify
+        run: bun run verify
 
-      - name: Run type check
-        run: bun run type
+      - name: Summarize coverage
+        if: github.event_name == 'pull_request'
+        run: |
+          bun -e '
+            const rows = [];
+            for await (const path of new Bun.Glob("packages/*/coverage/coverage-summary.json").scan()) {
+              const { total } = await Bun.file(path).json();
+              const cells = ["statements", "branches", "functions", "lines"].map(key => `${total[key].pct}%`);
+              rows.push(`| ${path.split("/")[1]} | ${cells.join(" | ")} |`);
+            }
+            console.log(["## Coverage", "", "| Package | Statements | Branches | Functions | Lines |",
+              "| --- | ---: | ---: | ---: | ---: |", ...rows.sort()].join("\n"));
+          ' > coverage.md
 
-      - name: Run tests
-        run: bun run test
+      - name: Upload coverage summary
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage.md
 
-      - name: Upload Coverage
-        uses: codecov/codecov-action@v3
+  # A fork's pull request gets a read-only token, so only same-repository pull requests get the comment.
+  comment:
+    name: Comment coverage
+    needs: test
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Download coverage summary
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage
+
+      - name: Comment on the pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+        run: gh pr comment "$PR" --edit-last --create-if-none --body-file coverage.md
