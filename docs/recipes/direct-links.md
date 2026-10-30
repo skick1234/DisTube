@@ -7,6 +7,13 @@ sidebar:
 
 A plugin that lets `/play` accept a link to an audio file, or a file the member uploads with the command.
 
+:::caution[Use at your own risk]
+This recipe makes the bot fetch any HTTPS URL a member types that ends in an audio extension, and the built-in
+engine follows redirects to any HTTP or HTTPS host. A member can link a public `.mp3` that redirects to
+`http://127.0.0.1:8080/` or another address on the bot's network, and the bot sends that request. Run it only
+where members are trusted, or check `url.hostname` against hosts you allow before `resolve` returns a Song.
+:::
+
 ```ts
 import type { ChatInputCommandInteraction } from "discord.js";
 import { DisTube, Song } from "distube";
