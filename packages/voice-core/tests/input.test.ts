@@ -1,14 +1,14 @@
 import { EventEmitter } from "node:events";
 import { readFile } from "node:fs/promises";
 import * as NodeHttp from "node:http";
-import type { AddressInfo } from "node:net";
+import type { AddressInfo, Socket } from "node:net";
 import { basename } from "node:path";
 import { PassThrough, Readable } from "node:stream";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { URL_READY_TIMEOUT_MS } from "../src/protocol";
 import type { LocalPlaybackResource } from "../src/sources";
 import { Track } from "../src/track";
-import { createMedia, type MediaFixtures, PLAIN, take } from "./support/media";
+import { createMedia, type MediaFixtures, PLAIN, recorder, sourcePackets, take } from "./support/media";
 import { silentWav } from "./support/real";
 
 const http = vi.hoisted(() => ({ request: vi.fn() }));
@@ -58,8 +58,12 @@ beforeEach(() => {
 });
 afterEach(() => vi.useRealTimers());
 
-function open(resource: LocalPlaybackResource, signal = new AbortController().signal): Promise<Track> {
-  return Track.open(resource, PLAIN, signal);
+function open(
+  resource: LocalPlaybackResource,
+  signal = new AbortController().signal,
+  reporter = recorder(),
+): Promise<Track> {
+  return Track.open(resource, PLAIN, signal, reporter);
 }
 
 function causes(error: Error): Error[] {
@@ -269,16 +273,65 @@ describe("range-read URLs", () => {
     await track.close();
   });
 
-  it("plays to the end through a server that caps each range answer", async () => {
+  it("plays to the end through a server that caps each range answer, reporting each reopen with a counted attempt", async () => {
     const wav = Buffer.from(silentWav(10));
     origin = await serve(() => ({ "/a.wav": ranged(wav, undefined, 32_768) }));
+    const reporter = recorder();
 
-    const track = await open({ kind: "url", url: `${origin.url}/a.wav` });
+    const track = await open({ kind: "url", url: `${origin.url}/a.wav` }, undefined, reporter);
     const packets = await take(track.packets, Number.POSITIVE_INFINITY);
 
     expect(await track.outcome).toEqual({ type: "ended" });
     expect(packets.length).toBeGreaterThanOrEqual(490);
     expect(origin.requests.length).toBeGreaterThan(Math.ceil(wav.length / 32_768) - 1);
+    const retried = reporter.reports.filter(diagnostic => diagnostic.stage === "engine.input.retried");
+    const starts = origin.requests.map(request => Number(/^bytes=(\d+)-$/u.exec(request.range ?? "")?.[1]));
+    const reopenedAt = starts.filter((start, index) => index > 0 && start === (starts[index - 1] ?? 0) + 32_768);
+    expect(reopenedAt.length).toBeGreaterThan(1);
+    expect(retried.map(diagnostic => diagnostic.data?.offset)).toEqual(reopenedAt);
+    expect(retried.map(diagnostic => diagnostic.data?.attempt)).toEqual(reopenedAt.map((_, index) => index + 1));
+    expect(retried.every(diagnostic => diagnostic.severity === "warning" && diagnostic.guildId === "guild")).toBe(true);
+    await track.close();
+  });
+
+  it("resumes a range answer whose socket resets mid-body at the byte where it stopped and plays every packet", async () => {
+    const opus = await readFile(media.opus);
+    const whole = ranged(opus);
+    const first = Promise.withResolvers<Socket>();
+    origin = await serve(() => ({
+      "/a.webm": (response, request) => {
+        if (origin?.requests.length !== 1) return whole(response, request);
+        response.writeHead(206, { "content-range": `bytes 0-${opus.length - 1}/${opus.length}` });
+        response.write(opus.subarray(0, 100_000));
+        first.resolve(request.socket);
+      },
+    }));
+    const actual = await vi.importActual<typeof NodeHttp>("node:http");
+    let answers = 0;
+    http.request.mockImplementation(
+      (url: URL, options: NodeHttp.RequestOptions, callback: (response: NodeHttp.IncomingMessage) => void) =>
+        actual.request(url, options, response => {
+          answers += 1;
+          if (answers === 1) {
+            const read = response.read.bind(response);
+            response.read = (size?: number): unknown => {
+              const chunk: unknown = read(size);
+              if (chunk !== null) void first.promise.then(socket => socket.resetAndDestroy());
+              return chunk;
+            };
+          }
+          callback(response);
+        }),
+    );
+
+    const track = await open({ kind: "url", url: `${origin.url}/a.webm` });
+    const packets = await take(track.packets, Number.POSITIVE_INFINITY);
+
+    expect(await track.outcome).toEqual({ type: "ended" });
+    expect(packets).toEqual(await sourcePackets(media.opus));
+    const resumed = Number(/^bytes=(\d+)-$/.exec(origin.requests[1]?.range ?? "")?.[1]);
+    expect(resumed).toBeGreaterThan(0);
+    expect(resumed).toBeLessThanOrEqual(100_000);
     await track.close();
   });
 
@@ -318,7 +371,13 @@ describe("range-read URLs", () => {
     ["a range inside the file", (start: number) => start === 0],
   ])("rejects the seek when the server ignores %s and plays on", async (_name, servesLater) => {
     let switched = false;
-    origin = await serve(() => ({ "/a.webm": ranged(hour, start => !switched || servesLater(start)) }));
+    let ignored = 0;
+    const serves = (start: number): boolean => {
+      if (!switched || servesLater(start)) return true;
+      ignored += 1;
+      return false;
+    };
+    origin = await serve(() => ({ "/a.webm": ranged(hour, serves) }));
     const track = await open({ kind: "url", url: `${origin.url}/a.webm` });
     await take(track.packets, 1000);
     switched = true;
@@ -327,6 +386,7 @@ describe("range-read URLs", () => {
 
     expect(failure.message).toContain("Playback URL ignored the byte range");
     expect(failure).not.toHaveProperty("code");
+    expect(ignored).toBe(1);
     expect(track.position).toBeCloseTo(20, 0);
     expect(await take(track.packets, 50)).toHaveLength(50);
     await track.close();

@@ -107,7 +107,8 @@ export class DisTube<Metadata = undefined, Target = VoiceChannelTarget> {
       throw new DisTubeError(ErrorCode.INVALID_ARGUMENT, "engine.bufferMs must be a multiple of 20");
 
     this.#plugins = [...options.plugins];
-    this.#events = new DisTubeEvents(options.onDiagnostic ?? (() => undefined));
+    const events = new DisTubeEvents<Target>(options.onDiagnostic ?? (() => undefined));
+    this.#events = events;
     this.#guilds = new Guilds({
       adapter: options.adapter,
       engine:
@@ -116,9 +117,10 @@ export class DisTube<Metadata = undefined, Target = VoiceChannelTarget> {
           ...(options.filters ? { filters: options.filters } : {}),
           opusComplexity,
           bufferMs,
+          report: diagnostic => queueMicrotask(() => events.report(Object.freeze({ ...diagnostic }))),
         }),
       plugins: this.#plugins,
-      events: this.#events,
+      events,
       historySize,
       maxPlaylistSongs,
       connectionTimeoutMs,

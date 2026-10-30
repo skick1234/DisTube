@@ -10,11 +10,12 @@ import {
 } from "node:http";
 import type { AddressInfo, Socket } from "node:net";
 import { join } from "node:path";
+import type * as WorkerThreads from "node:worker_threads";
 import { PassThrough, Readable } from "node:stream";
-import type { ReaderPlaybackResource } from "distube/integrations";
+import type { Diagnostic, ReaderPlaybackResource } from "distube/integrations";
 import { AVERROR_DECODER_NOT_FOUND, AVERROR_INVALIDDATA } from "node-av";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { URL_READY_TIMEOUT_MS } from "../src/protocol";
+import { type FromWorker, URL_READY_TIMEOUT_MS } from "../src/protocol";
 import type { LocalPlaybackResource } from "../src/sources";
 import { Track } from "../src/track";
 import {
@@ -25,11 +26,23 @@ import {
   PLAIN,
   peak,
   peaks,
+  recorder,
   sourcePackets,
   take,
 } from "./support/media";
 
 vi.hoisted(() => vi.stubEnv("UV_THREADPOOL_SIZE", "4"));
+const fromWorkers = vi.hoisted((): FromWorker[] => []);
+vi.mock("node:worker_threads", async importOriginal => {
+  const actual = await importOriginal<typeof WorkerThreads>();
+  class ObservedWorker extends actual.Worker {
+    constructor(...args: ConstructorParameters<typeof actual.Worker>) {
+      super(...args);
+      this.on("message", (message: FromWorker) => fromWorkers.push(message));
+    }
+  }
+  return { ...actual, Worker: ObservedWorker };
+});
 const PERMITS = 3;
 
 const NIGHTCORE = "asetrate=48000*1.25,aresample=48000,bass=g=5";
@@ -57,8 +70,9 @@ function open(
   resource: LocalPlaybackResource,
   settings = PLAIN,
   signal = new AbortController().signal,
+  reporter = recorder(),
 ): Promise<Track> {
-  return Track.open(resource, settings, signal);
+  return Track.open(resource, settings, signal, reporter);
 }
 
 async function listen(handler: RequestListener): Promise<string> {
@@ -244,6 +258,50 @@ describe("Track position", () => {
     expect(track.position - thirtieth).toBeCloseTo(1, 2);
     await track.close();
   });
+});
+
+describe("Track starvation", () => {
+  it.each([
+    [500, 1],
+    [40, 0],
+  ])(
+    "reports a %i ms input stall the platform waited through as %i engine.track.starved, none per packet, and still ends the track",
+    async (stallMs, expected) => {
+      const bytes = await readFile(media.opus);
+      const stream = new PassThrough();
+      stream.write(bytes.subarray(0, 16_000));
+      const reporter = recorder();
+      const track = await open({ kind: "stream", stream }, PLAIN, undefined, reporter);
+      let read = 0;
+      let starved = false;
+      let reports: Diagnostic[] = [];
+      const platform = setInterval(() => {
+        if (track.packets.read() !== null) read += 1;
+        else if (read > 0) starved = true;
+      }, 20);
+      try {
+        await vi.waitFor(() => expect(starved).toBe(true), { timeout: 5_000 });
+        await new Promise(resolve => setTimeout(resolve, stallMs));
+        const before = read;
+        stream.end(bytes.subarray(16_000));
+        await vi.waitFor(() => expect(read).toBeGreaterThan(before + 5), { timeout: 5_000 });
+        clearInterval(platform);
+        reports = reporter.reports.filter(diagnostic => diagnostic.stage === "engine.track.starved");
+        await take(track.packets, Number.POSITIVE_INFINITY);
+        expect(await track.outcome).toEqual({ type: "ended" });
+      } finally {
+        clearInterval(platform);
+        await track.close();
+      }
+
+      expect(reports).toHaveLength(expected);
+      for (const report of reports) {
+        expect(report).toMatchObject({ severity: "warning", guildId: "guild" });
+        expect(report.data?.durationMs).toBeGreaterThanOrEqual(stallMs);
+        expect(report.position).toBeGreaterThan(0);
+      }
+    },
+  );
 });
 
 describe("Track threads", () => {
@@ -531,6 +589,7 @@ describe("Track seek", () => {
     let gated = false;
     const reader = await fileReader(media.opus, () => {
       if (!gated) return undefined;
+      if (gates.length > 0) return failingRange();
       const stream = new PassThrough();
       gates.push(stream);
       return stream;
@@ -665,7 +724,7 @@ describe("Track seek", () => {
     await track.close();
   });
 
-  it("rejects a seek INVALID_STATE, not ABORTED, when the track fails before the seek lands", async () => {
+  it("lets a pending seek replace an input that fails before the seek lands", async () => {
     let trapped = false;
     let next = 0;
     const gates: { stream: PassThrough; start: number; end: number }[] = [];
@@ -681,15 +740,52 @@ describe("Track seek", () => {
     });
     const track = await open(reader.resource);
     await take(track.packets, 5);
+    fromWorkers.length = 0;
     trapped = true;
     const seeking = track.seek(30 * 60).then(
       () => undefined,
       (error: unknown) => error,
     );
     await vi.waitFor(() => expect(gates).toHaveLength(1));
+    const draining = take(track.packets, Number.POSITIVE_INFINITY);
+    await vi.waitFor(() => expect(fromWorkers.filter(message => message.type === "lost")).toHaveLength(1), {
+      timeout: 3000,
+    });
+    trapped = false;
+    for (const gate of gates) createReadStream(media.hour, { start: gate.start, end: gate.end }).pipe(gate.stream);
+
+    expect(await seeking).toBeUndefined();
+    await vi.waitFor(() => expect(track.position).toBeGreaterThan(30 * 60 + 1));
+    expect(track.settled).toBe(false);
+    await track.close();
+    await draining;
+  });
+
+  it("rejects a seek INVALID_STATE, not ABORTED, when the track fails before the seek lands", async () => {
+    const gates: { stream: PassThrough; start: number; end: number }[] = [];
+    let gated = false;
+    let next = 0;
+    const reader = await fileReader(media.hour, (start, end) => {
+      if (!gated || start === next) {
+        next = end + 1;
+        return undefined;
+      }
+      const stream = new PassThrough();
+      gates.push({ stream, start, end });
+      return stream;
+    });
+    const track = await open(reader.resource, { ...PLAIN, volume: 50 });
+    await take(track.packets, 5);
+    gated = true;
+    const seeking = track.seek(30 * 60).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+    await vi.waitFor(() => expect(gates).toHaveLength(1));
+    track.setBitrate(100);
     void take(track.packets, Number.POSITIVE_INFINITY).catch(() => undefined);
     await expect(track.outcome).resolves.toMatchObject({ type: "failed" });
-    trapped = false;
+    gated = false;
     for (const gate of gates) createReadStream(media.hour, { start: gate.start, end: gate.end }).pipe(gate.stream);
 
     expect(await seeking).toMatchObject({ code: "INVALID_STATE" });
@@ -845,14 +941,31 @@ describe("Track input contract", () => {
     }
   });
 
-  it("fails a reader whose range ends early with a safe cause", async () => {
-    const reader = await fileReader(media.hour, start => {
-      if (start > 0) return undefined;
+  it.each([
+    ["fails", (short: PassThrough) => short.destroy(new Error("socket reset"))],
+    ["ends", (short: PassThrough) => short.end()],
+  ])("resumes a reader range that %s mid-body at the byte where it stopped", async (_case, cut) => {
+    const bytes = await readFile(media.opus);
+    let cuts = 0;
+    const reader = await fileReader(media.opus, () => {
+      if (cuts++ > 0) return undefined;
       const short = new PassThrough();
-      short.write(Buffer.alloc(100_000));
-      setTimeout(() => short.end(), 50);
+      short.write(bytes.subarray(0, 100_000));
+      setTimeout(() => cut(short), 50);
       return short;
     });
+
+    const track = await open(reader.resource);
+    const packets = await drain(track);
+
+    expect(await track.outcome).toEqual({ type: "ended" });
+    expect(packets).toEqual(opusPackets);
+    expect(reader.ranges.slice(0, 2).map(([start]) => start)).toEqual([0, 100_000]);
+    await track.close();
+  });
+
+  it("fails a reader whose range ends three times in a row without a byte, with a safe cause", async () => {
+    const reader = await fileReader(media.hour, () => Readable.from([]));
 
     const failure = await open(reader.resource).then(
       () => undefined,
@@ -861,6 +974,55 @@ describe("Track input contract", () => {
 
     expect(failure?.message).toContain("Decode failed during open");
     expect(failure?.message).toContain("ended before its byte range");
+    expect(reader.ranges.map(([start]) => start)).toEqual([0, 0, 0]);
+  });
+
+  it("reopens a timed track whose input fails mid-track at the packet after the last one sent", async () => {
+    const first = new PassThrough();
+    first.write((await readFile(media.opus)).subarray(0, 100_000));
+    const opened: number[] = [];
+    const track = await open({
+      kind: "timed",
+      container: "webm",
+      open: seconds => {
+        opened.push(seconds);
+        return opened.length > 1 ? createReadStream(media.opus) : first;
+      },
+    });
+    const sent = await take(track.packets, 10);
+    first.destroy(new Error("socket reset"));
+    const packets = [...sent, ...(await drain(track))];
+
+    expect(await track.outcome).toEqual({ type: "ended" });
+    expect(packets).toEqual(opusPackets);
+    expect(opened).toHaveLength(2);
+    expect(opened[1]).toBeGreaterThan(1);
+    await track.close();
+  });
+
+  it("fails a timed track with its input's safe cause after three reopens in a row that play nothing", async () => {
+    const first = new PassThrough();
+    first.write((await readFile(media.opus)).subarray(0, 100_000));
+    const opened: number[] = [];
+    const track = await open({
+      kind: "timed",
+      container: "webm",
+      open: seconds => {
+        opened.push(seconds);
+        return opened.length > 1 ? failingRange() : first;
+      },
+    });
+    await take(track.packets, 10);
+    first.destroy(new Error("socket reset"));
+    await drain(track);
+    const outcome = await track.outcome;
+
+    expect(outcome).toMatchObject({ type: "failed" });
+    expect(causes(outcome.type === "failed" ? outcome.error : undefined).map(error => error.message)).toContainEqual(
+      expect.stringContaining("socket reset"),
+    );
+    expect(opened).toHaveLength(4);
+    await track.close();
   });
 });
 

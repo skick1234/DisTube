@@ -3,7 +3,7 @@ import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pipeline, type Readable, Transform } from "node:stream";
-import type { ReaderPlaybackResource } from "distube/integrations";
+import type { Diagnostic, ReaderPlaybackResource } from "distube/integrations";
 import {
   AV_CH_LAYOUT_STEREO,
   AV_CHANNEL_ORDER_NATIVE,
@@ -21,7 +21,7 @@ import {
   Muxer,
   Packet,
 } from "node-av";
-import type { TrackSettings } from "../../src/track";
+import type { TrackReporter, TrackSettings } from "../../src/track";
 
 const RATE = 48_000;
 
@@ -33,6 +33,11 @@ export const PLAIN: TrackSettings = {
   opusComplexity: 10,
   readAhead: 25,
 };
+
+export function recorder(): TrackReporter & { readonly reports: Diagnostic[] } {
+  const reports: Diagnostic[] = [];
+  return { guildId: "guild", report: diagnostic => void reports.push(diagnostic), reports };
+}
 
 /** Media files generated with node-av's own encoders and muxers, deleted by `cleanup`. */
 export interface MediaFixtures {
@@ -61,6 +66,8 @@ export interface MediaFixtures {
   readonly pulses: string;
   /** The same signal as `pulses` in PCM Matroska, which seeks exactly. */
   readonly pulsesPcm: string;
+  /** Ten seconds of WebM Opus, a 0.5-scale tone of `stepHz(s)` in second `s`, the same in both channels. */
+  readonly steps: string;
   cleanup(): Promise<void>;
 }
 
@@ -78,6 +85,7 @@ export async function createMedia(): Promise<MediaFixtures> {
   const toneThenSilence = join(dir, "tone.mkv");
   const pulses = join(dir, "pulses.mp3");
   const pulsesPcm = join(dir, "pulses.mkv");
+  const steps = join(dir, "steps.webm");
   await encode(opus, "webm", opusEncoder(256_000), 6);
   await encode(opus60, "webm", opusEncoder(96_000, 60), 2);
   await encode(aac, "mp4", Encoder.createSync(FF_ENCODER_AAC, { bitrate: 160_000, autoResample: true }), 5);
@@ -98,6 +106,7 @@ export async function createMedia(): Promise<MediaFixtures> {
     evenSeconds,
   );
   await encode(pulsesPcm, "matroska", Encoder.createSync(FF_ENCODER_PCM_S16LE), 20, 960, evenSeconds);
+  await encode(steps, "webm", opusEncoder(128_000), 10, 960, stepTones);
   return {
     dir,
     opus,
@@ -112,6 +121,7 @@ export async function createMedia(): Promise<MediaFixtures> {
     toneThenSilence,
     pulses,
     pulsesPcm,
+    steps,
     cleanup: () => rm(dir, { recursive: true, force: true }),
   };
 }
@@ -171,6 +181,22 @@ function evenSeconds(start: number, count: number): Buffer {
     const sample = start + index;
     if (Math.floor(sample / RATE) % 2 === 1) continue;
     const value = Math.round(Math.sin((2 * Math.PI * 440 * sample) / RATE) * 20_000);
+    buffer.writeInt16LE(value, index * 4);
+    buffer.writeInt16LE(value, index * 4 + 2);
+  }
+  return buffer;
+}
+
+/** The tone frequency of second `second` in the `steps` fixture. */
+export function stepHz(second: number): number {
+  return 400 + 200 * second;
+}
+
+function stepTones(start: number, count: number): Buffer {
+  const buffer = Buffer.alloc(count * 4);
+  for (let index = 0; index < count; index += 1) {
+    const sample = start + index;
+    const value = Math.round(Math.sin((2 * Math.PI * stepHz(Math.floor(sample / RATE)) * sample) / RATE) * 16_384);
     buffer.writeInt16LE(value, index * 4);
     buffer.writeInt16LE(value, index * 4 + 2);
   }
@@ -281,30 +307,56 @@ export async function peak(packets: readonly Buffer[], template: string): Promis
 
 /** The loudest sample of each packet, decoded in order by one decoder as a listener would hear the stream. */
 export async function peaks(packets: readonly Buffer[], template: string): Promise<number[]> {
+  return (await decode(packets, template)).map(planes => {
+    let level = 0;
+    for (const plane of planes) for (const sample of plane) level = Math.max(level, Math.abs(sample));
+    return level;
+  });
+}
+
+/**
+ * The tone frequency of each packet's first channel in Hz, from the spacing of its rising zero crossings,
+ * or 0 when the packet holds fewer than two cycles.
+ */
+export async function pitches(packets: readonly Buffer[], template: string): Promise<number[]> {
+  return (await decode(packets, template)).map(([plane = new Float32Array()]) => {
+    const rises: number[] = [];
+    for (let index = 1; index < plane.length; index += 1) {
+      const [before, after] = [plane[index - 1] as number, plane[index] as number];
+      if (before < 0 && after >= 0) rises.push(index - 1 + before / (before - after));
+    }
+    const [first, last] = [rises[0], rises.at(-1)];
+    return first === undefined || last === undefined || rises.length < 3
+      ? 0
+      : ((rises.length - 1) * RATE) / (last - first);
+  });
+}
+
+/** Each packet's samples per channel, decoded in order by one decoder as a listener would hear the stream. */
+async function decode(packets: readonly Buffer[], template: string): Promise<Float32Array[][]> {
   const demuxer = await Demuxer.open(template);
   const stream = demuxer.audio();
   if (!stream) throw new Error(`${template} has no audio stream`);
   const decoder = Decoder.createSync(stream);
   const packet = new Packet();
   packet.alloc();
-  const loudest: number[] = [];
+  const decoded: Float32Array[][] = [];
   try {
     for (const bytes of packets) {
       packet.data = bytes;
-      let level = 0;
-      for (const decoded of decoder.decodeAllSync(packet)) {
-        if (decoded.format !== AV_SAMPLE_FMT_FLTP) throw new Error("Expected planar float samples");
-        for (const plane of decoded.data ?? []) {
-          for (let offset = 0; offset + 4 <= decoded.nbSamples * 4; offset += 4) {
-            level = Math.max(level, Math.abs(plane.readFloatLE(offset)));
-          }
+      const planes: number[][] = [];
+      for (const output of decoder.decodeAllSync(packet)) {
+        if (output.format !== AV_SAMPLE_FMT_FLTP) throw new Error("Expected planar float samples");
+        for (const [channel, plane] of (output.data ?? []).entries()) {
+          const values = (planes[channel] ??= []);
+          for (let offset = 0; offset + 4 <= output.nbSamples * 4; offset += 4) values.push(plane.readFloatLE(offset));
         }
-        decoded.free();
+        output.free();
       }
-      loudest.push(level);
+      decoded.push(planes.map(values => Float32Array.from(values)));
       packet.unref();
     }
-    return loudest;
+    return decoded;
   } finally {
     packet.free();
     decoder.close();

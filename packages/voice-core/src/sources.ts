@@ -1,12 +1,15 @@
 import { type ClientRequest, request as httpRequest, type IncomingMessage } from "node:http";
 import { request as httpsRequest } from "node:https";
 import { Readable } from "node:stream";
+import { setTimeout as delay } from "node:timers/promises";
 import type { EncodedPlaybackResource, PlaybackResource } from "distube/integrations";
 import { type Container, type InputSource, URL_READY_TIMEOUT_MS, WINDOW_BYTES, type WireError } from "./protocol";
 
 export type LocalPlaybackResource = Exclude<PlaybackResource, EncodedPlaybackResource>;
 
 const MAX_REDIRECTS = 5;
+const MAX_MISSES = 3;
+const RESUME_DELAY_MS = 500;
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 const HLS_CONTENT_TYPES = new Set([
   "application/vnd.apple.mpegurl",
@@ -27,13 +30,17 @@ export interface ByteServer {
   close(): void;
 }
 
-/** Opens `resource` at `seconds` on the main thread, where plugin callbacks, Readables and HTTP live. */
+/**
+ * Opens `resource` at `seconds` on the main thread, where plugin callbacks, Readables and HTTP live. `retried` hears
+ * the byte offset of each range request reopened after its answer ended early.
+ */
 export async function serveInput(
   resource: LocalPlaybackResource,
   seconds: number,
   signal: AbortSignal,
   redact: (value: string) => string,
   reply: (message: ByteReply) => void,
+  retried: (offset: number) => void,
 ): Promise<ByteServer> {
   const lifetime = new AbortController();
   try {
@@ -45,13 +52,13 @@ export async function serveInput(
       case "timed":
         return new OneShotServer(resource.open(seconds, lifetime.signal), resource.container, lifetime, redact, reply);
       case "reader":
-        return new RangedServer(resource.size, resource.container, resource.read, lifetime, redact, reply);
+        return new RangedServer(resource.size, resource.container, resource.read, lifetime, redact, reply, retried);
       case "url": {
         const opened = await openUrl(resource.url, 0, signal, redact);
         if (typeof opened === "string") return new DirectServer({ kind: "hls", url: opened }, lifetime);
         if (opened.total === undefined) return new OneShotServer(opened.response, undefined, lifetime, redact, reply);
         const ranges = new UrlRanges(resource.url, opened.response, opened.total, redact, lifetime.signal);
-        return new RangedServer(opened.total, undefined, ranges.open, lifetime, redact, reply);
+        return new RangedServer(opened.total, undefined, ranges.open, lifetime, redact, reply, retried);
       }
     }
   } catch (error: unknown) {
@@ -186,6 +193,8 @@ class OneShotServer implements ByteServer {
   }
 }
 
+class Refusal extends Error {}
+
 type RangeOpener = (start: number, end: number, signal: AbortSignal) => Readable | Promise<Readable>;
 
 class RangedServer implements ByteServer {
@@ -195,6 +204,7 @@ class RangedServer implements ByteServer {
   readonly #lifetime: AbortController;
   readonly #redact: (value: string) => string;
   readonly #reply: (message: ByteReply) => void;
+  readonly #retried: (offset: number) => void;
   readonly #requests = new Map<number, AbortController>();
 
   constructor(
@@ -204,12 +214,14 @@ class RangedServer implements ByteServer {
     lifetime: AbortController,
     redact: (value: string) => string,
     reply: (message: ByteReply) => void,
+    retried: (offset: number) => void,
   ) {
     this.source = container ? { kind: "ranged", size, container } : { kind: "ranged", size };
     this.#open = open;
     this.#lifetime = lifetime;
     this.#redact = redact;
     this.#reply = reply;
+    this.#retried = retried;
   }
 
   read(request: number, { start = 0, end = 0 }: Readonly<{ start?: number; end?: number }>): void {
@@ -236,31 +248,49 @@ class RangedServer implements ByteServer {
       clearTimeout(stalled);
       stalled = setTimeout(() => stall.abort(stalledError()), URL_READY_TIMEOUT_MS);
     };
-    let readable: Readable | undefined;
+    const length = end - start + 1;
+    let received = 0;
+    let misses = 0;
+    let attempts = 0;
+    let lost: unknown;
     arm();
     try {
-      const opened = await this.#open(start, end, active);
-      readable = opened;
-      active.throwIfAborted();
-      active.addEventListener("abort", () => opened.destroy(active.reason), { once: true });
-      const length = end - start + 1;
-      let received = 0;
-      for await (const chunk of opened) {
-        arm();
-        if (signal.aborted) return;
-        const bytes = toBuffer(chunk);
-        received += bytes.length;
-        if (received > length) {
-          return this.#fail(request, opened, "Playback input returned more bytes than its range");
+      while (received < length) {
+        if (misses === MAX_MISSES) throw lost ?? new Error("Playback input ended before its byte range");
+        if (misses > 0) await delay(RESUME_DELAY_MS, undefined, { signal: active });
+        if (attempts > 0) this.#retried(start + received);
+        attempts += 1;
+        const before = received;
+        let readable: Readable | undefined;
+        const destroy = (): void => void readable?.destroy(active.reason);
+        active.addEventListener("abort", destroy, { once: true });
+        try {
+          readable = await this.#open(start + received, end, active);
+          active.throwIfAborted();
+          lost = undefined;
+          for await (const chunk of readable) {
+            arm();
+            if (signal.aborted) return;
+            const bytes = toBuffer(chunk);
+            received += bytes.length;
+            if (received > length) {
+              return this.#fail(request, readable, "Playback input returned more bytes than its range");
+            }
+            this.#reply({ request, chunk: transferable(bytes) });
+            if (received === length) break;
+          }
+        } catch (error: unknown) {
+          if (active.aborted || error instanceof Refusal) throw error;
+          lost = error;
+        } finally {
+          active.removeEventListener("abort", destroy);
+          readable?.destroy();
         }
-        this.#reply({ request, chunk: transferable(bytes) });
-        if (received === length) break;
+        if (signal.aborted) return;
+        misses = received > before ? 0 : misses + 1;
       }
-      if (signal.aborted) return;
-      if (received < length) return this.#fail(request, opened, "Playback input ended before its byte range");
       this.#reply({ request, done: true });
     } catch (error: unknown) {
-      readable?.destroy();
       if (signal.aborted) return;
       this.failure ??= safeInputError(
         "Playback input failed",
@@ -280,7 +310,7 @@ class RangedServer implements ByteServer {
   }
 }
 
-/** Serves a range-read URL's windows from one open response, opening `bytes=<start>-` where a window leaves it or the response ends early. */
+/** Serves a range-read URL's windows from one open response, opening `bytes=<start>-` where a window leaves it or after the response ended. */
 class UrlRanges {
   readonly #url: string;
   readonly #total: number;
@@ -289,7 +319,6 @@ class UrlRanges {
   #chunks?: AsyncIterator<unknown>;
   #rest?: Buffer;
   #position = 0;
-  #openedAt = 0;
 
   constructor(
     url: string,
@@ -336,7 +365,7 @@ class UrlRanges {
       const opened = await openUrl(this.#url, this.#position, signal, this.#redact);
       if (typeof opened === "string" || opened.total !== this.#total) {
         if (typeof opened !== "string") opened.response.destroy();
-        throw new Error("Playback URL ignored the byte range");
+        throw new Refusal("Playback URL ignored the byte range");
       }
       if (signal.aborted) {
         opened.response.destroy();
@@ -346,15 +375,13 @@ class UrlRanges {
     }
     const next = await (this.#chunks as AsyncIterator<unknown>).next();
     if (!next.done) return toBuffer(next.value);
-    const delivered = this.#position > this.#openedAt;
     this.#drop();
-    return delivered && this.#position < this.#total && !signal.aborted ? this.#next(signal) : undefined;
+    return undefined;
   }
 
   #use(response: IncomingMessage): void {
     this.#response = response;
     this.#chunks = response[Symbol.asyncIterator]();
-    this.#openedAt = this.#position;
   }
 
   #drop(): void {
@@ -425,11 +452,11 @@ async function openUrl(
           const location = REDIRECT_STATUSES.has(status) ? response.headers.location : undefined;
           if (location !== undefined) {
             if (redirects === MAX_REDIRECTS) {
-              return finish(new Error("Playback URL redirected too many times"), response);
+              return finish(new Refusal("Playback URL redirected too many times"), response);
             }
             const next = URL.parse(location, target.href);
             if (next?.protocol !== "http:" && next?.protocol !== "https:") {
-              return finish(new Error("Playback URL redirected to a non-HTTP location"), response);
+              return finish(new Refusal("Playback URL redirected to a non-HTTP location"), response);
             }
             response.destroy();
             sent.destroy();
@@ -438,12 +465,12 @@ async function openUrl(
             return;
           }
           if (status < 200 || status >= 300) {
-            finish(new Error("Playback URL returned a non-success status"), response);
+            finish(new Refusal("Playback URL returned a non-success status"), response);
             return;
           }
           const contentType = response.headers["content-type"]?.split(";", 1)[0]?.trim().toLowerCase();
           if (contentType === "application/dash+xml") {
-            finish(new Error("Playback URL returned a DASH manifest"), response);
+            finish(new Refusal("Playback URL returned a DASH manifest"), response);
             return;
           }
           if (contentType && HLS_CONTENT_TYPES.has(contentType)) {
@@ -516,11 +543,14 @@ function safeInputError(label: string, value: unknown, redact: (value: string) =
   return new Error(`${label}: ${cause.message}`, { cause });
 }
 
-export function safeError(value: unknown, redact: (value: string) => string, withCause = true): Error {
+export function safeError(value: unknown, redact: (value: string) => string, seen = new Set<unknown>()): Error {
   if (!(value instanceof Error)) return new Error("Non-error cause");
-  const cause = withCause && value.cause !== undefined ? { cause: safeError(value.cause, redact, false) } : undefined;
+  seen.add(value);
+  const cause =
+    value.cause !== undefined && !seen.has(value.cause) ? { cause: safeError(value.cause, redact, seen) } : undefined;
   const safe = new Error(redact(value.message), cause);
   safe.name = value.name;
+  if (value.stack !== undefined) safe.stack = redact(value.stack);
   const code: unknown = (value as { code?: unknown }).code;
   return typeof code === "string" || typeof code === "number" ? Object.assign(safe, { code }) : safe;
 }

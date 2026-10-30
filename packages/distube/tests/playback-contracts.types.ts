@@ -144,6 +144,7 @@ const adapter: Adapter = {
   createEngine(settings: EngineSettings): Engine {
     const tuning: [number, number] = [settings.opusComplexity, settings.bufferMs];
     void tuning;
+    settings.report({ severity: "warning", stage: "engine.test", message: "m", guildId: "g", data: { attempt: 1 } });
     return engine;
   },
 };

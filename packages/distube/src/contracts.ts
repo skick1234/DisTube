@@ -17,6 +17,11 @@ export interface Diagnostic {
   readonly stage: string;
   readonly message: string;
   readonly plugin?: string;
+  readonly guildId?: string;
+  /** Source seconds of that guild's current track. */
+  readonly position?: number;
+  /** Flat facts the stage defines. Never holds resources, playable URLs, headers, paths or tokens. */
+  readonly data?: Readonly<Record<string, string | number | boolean>>;
   readonly error?: unknown;
 }
 
@@ -311,6 +316,11 @@ export interface EngineSettings {
   readonly opusComplexity: number;
   /** Read-ahead in milliseconds, a multiple of 20. */
   readonly bufferMs: number;
+  /**
+   * Delivers a diagnostic to `onDiagnostic` in a later microtask under its isolation rule. Returns without calling
+   * the consumer and never throws, so the engine may call it from its audio path.
+   */
+  readonly report: (diagnostic: Diagnostic) => void;
 }
 
 /** The guild and voice channel a voice occupies, in platform-neutral IDs. */

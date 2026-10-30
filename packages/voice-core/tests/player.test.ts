@@ -1,9 +1,10 @@
-import { readFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
+import { join } from "node:path";
 import { PassThrough, Readable } from "node:stream";
 import { AudioPlayerStatus, StreamType } from "@discordjs/voice";
-import type { EngineSettings, PlaybackResource, Player, TrackEnd } from "distube/integrations";
+import type { Diagnostic, EngineSettings, PlaybackResource, Player, TrackEnd } from "distube/integrations";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { DiscordVoiceEngine } from "../src/engine";
 import { DiscordVoiceSession } from "../src/session";
@@ -14,17 +15,32 @@ vi.mock("@discordjs/voice", async () => (await import("./support/native")).voice
 
 const servers: ReturnType<typeof createServer>[] = [];
 const cleanups: (() => Promise<void>)[] = [];
+let reports: Diagnostic[] = [];
 let media: MediaFixtures;
 
 beforeAll(async () => {
   media = await createMedia();
 }, 30_000);
 afterAll(() => media.cleanup());
-beforeEach(resetNative);
+beforeEach(() => {
+  resetNative();
+  reports = [];
+});
 afterEach(async () => {
   for (const cleanup of cleanups.splice(0)) await cleanup();
   await Promise.all(servers.splice(0).map(server => new Promise<void>(resolve => server.close(() => resolve()))));
 });
+
+function failures(): Diagnostic[] {
+  return reports.filter(diagnostic => diagnostic.stage === "engine.track.failed");
+}
+
+function failuresAtRejection(ended: Promise<TrackEnd>): Promise<number | undefined> {
+  return ended.then(
+    () => undefined,
+    () => failures().length,
+  );
+}
 
 function file(path = media.opus): PlaybackResource {
   return { kind: "file", path };
@@ -61,7 +77,12 @@ async function createPlayer(
     channelBitrate,
     preflight: () => undefined,
   });
-  const engine = new DiscordVoiceEngine({ opusComplexity: 10, bufferMs: 500, ...settings });
+  const engine = new DiscordVoiceEngine({
+    opusComplexity: 10,
+    bufferMs: 500,
+    ...settings,
+    report: diagnostic => void reports.push(diagnostic),
+  });
   const player = await engine.createPlayer(session, { onClosed: () => undefined });
   cleanups.push(
     () => player.release(),
@@ -165,7 +186,7 @@ describe("local Player", () => {
     expect(latest.player.state.status).toBe(AudioPlayerStatus.Playing);
   });
 
-  it("aborts a second play's predecessor while it is still opening", async () => {
+  it("aborts a second play's predecessor while it is still opening, without a failure report", async () => {
     const { promise: arrived, resolve: requested } = Promise.withResolvers<void>();
     const server = createServer(() => requested());
     servers.push(server);
@@ -181,12 +202,13 @@ describe("local Player", () => {
     await second.started;
     expect(opening.onStart).not.toHaveBeenCalled();
     expect(native.resources).toHaveLength(1);
+    expect(failures()).toEqual([]);
   });
 
   it.each([
     ["before it started", false],
     ["while it plays", true],
-  ])("ends a track whose signal aborts %s as stopped", async (_stage, afterStart) => {
+  ])("ends a track whose signal aborts %s as stopped, without a failure report", async (_stage, afterStart) => {
     const { player } = await createPlayer();
     const track = play(player, file(media.hour));
     if (afterStart) await track.started;
@@ -196,6 +218,7 @@ describe("local Player", () => {
     await expect(track.ended).resolves.toEqual({ reason: "stopped" });
     expect(track.onStart).toHaveBeenCalledTimes(afterStart ? 1 : 0);
     expect(native.resources.every(resource => resource.input.destroyed)).toBe(true);
+    expect(failures()).toEqual([]);
   });
 
   it.each([
@@ -244,16 +267,21 @@ describe("local Player", () => {
     }
   });
 
-  it("rejects play when Discord stops consuming and goes Idle before the track ends, then plays another", async () => {
+  it("rejects play when Discord stops consuming and goes Idle before the track ends, reporting it starved, then plays another", async () => {
     const { player } = await createPlayer();
     const first = play(player, file(media.hour));
     await first.started;
     await take(latest.resource.input, 5);
+    const reported = failuresAtRejection(first.ended);
 
     latest.player.transition({ status: AudioPlayerStatus.Idle });
     latest.player.transition({ status: AudioPlayerStatus.Idle });
 
     await expect(first.ended).rejects.toThrow("stopped before the track ended");
+    expect(await reported).toBe(1);
+    expect(failures()).toEqual([
+      expect.objectContaining({ severity: "error", guildId: "guild", data: { step: "starved" } }),
+    ]);
     const second = play(player, file());
     await second.started;
     expect(latest.player.play).toHaveBeenCalledTimes(2);
@@ -302,6 +330,7 @@ describe("local Player", () => {
       (error: unknown) => error as Error,
     );
     expect(failure?.message).toBe("native decode failed");
+    expect(failure?.stack).toBe(nativeError.stack);
     expect(failure).not.toBe(nativeError);
     expect(Reflect.get(failure as Error, "resource")).toBeUndefined();
   });
@@ -334,13 +363,14 @@ describe("local Player", () => {
     await expect(player.setVolume(50)).rejects.toMatchObject({ code: "INVALID_STATE" });
   });
 
-  it("rejects play with a copied cause when the stream input fails after start", async () => {
+  it("rejects play with a copied cause when the stream input fails after start, reported once before it rejects", async () => {
     const { player } = await createPlayer();
     const stream = new PassThrough();
     stream.write((await readFile(media.hour)).subarray(0, 400_000));
     const track = play(player, { kind: "stream", stream });
     await track.started;
     await take(latest.resource.input, 5);
+    const reported = failuresAtRejection(track.ended);
 
     const reset = Object.assign(new Error("socket reset"), { code: "ECONNRESET" });
     stream.destroy(reset);
@@ -355,6 +385,32 @@ describe("local Player", () => {
     expect(failure?.message).toContain("Decode failed during read");
     expect(chain).not.toContain(reset);
     expect(chain.at(-1)).toMatchObject({ message: "socket reset", code: "ECONNRESET" });
+    expect(await reported).toBe(1);
+    expect(failures()).toEqual([
+      expect.objectContaining({ severity: "error", guildId: "guild", data: { step: "read" }, error: failure }),
+    ]);
+    expect(failures()[0]?.position).toBeGreaterThan(0);
+  });
+
+  it("rejects play on a file that stops being valid MP3 12 seconds in, reported once with step decode near second 12", async () => {
+    const source = await readFile(media.pulses);
+    const cut = Math.floor((source.length * 12) / 20);
+    const path = join(media.dir, "corrupt.mp3");
+    await writeFile(path, Buffer.concat([source.subarray(0, cut), Buffer.alloc(source.length - cut, 0xff)]));
+    const { player } = await createPlayer();
+    const track = play(player, file(path));
+    await track.started;
+    const reported = failuresAtRejection(track.ended);
+
+    await take(latest.resource.input, Number.POSITIVE_INFINITY);
+
+    await expect(track.ended).rejects.toThrow("Invalid data");
+    expect(await reported).toBe(1);
+    expect(failures()).toEqual([
+      expect.objectContaining({ severity: "error", guildId: "guild", data: { step: "decode" } }),
+    ]);
+    expect(failures()[0]?.position).toBeGreaterThan(11);
+    expect(failures()[0]?.position).toBeLessThanOrEqual(12);
   });
 
   it("keeps pause, volume, filters and the native resource across a seek", async () => {

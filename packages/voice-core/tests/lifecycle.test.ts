@@ -38,7 +38,11 @@ async function playing(): Promise<{
     channelBitrate: () => 64_000,
     preflight: () => undefined,
   });
-  const player = await new DiscordVoiceEngine({ opusComplexity: 10, bufferMs: 500 }).createPlayer(session, {
+  const player = await new DiscordVoiceEngine({
+    opusComplexity: 10,
+    bufferMs: 500,
+    report: () => undefined,
+  }).createPlayer(session, {
     onClosed: () => undefined,
   });
   const input = new PassThrough();

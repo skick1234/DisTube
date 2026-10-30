@@ -73,6 +73,7 @@ describe("real @discordjs/voice", () => {
       opusComplexity: 10,
       readAhead: 25,
       releaseTransport: () => undefined,
+      report: () => undefined,
       onClosed: () => undefined,
     });
     try {

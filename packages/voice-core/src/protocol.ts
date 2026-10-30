@@ -63,6 +63,7 @@ export type FromWorker =
     }>
   | Readonly<{ type: "ended"; track: number }>
   | Readonly<{ type: "failed"; track: number; stage: string; input?: number; error: WireError }>
+  | Readonly<{ type: "lost"; track: number; input: number; position: number; error: WireError }>
   | Readonly<{ type: "closed"; track: number }>
   | Readonly<{
       type: "read";

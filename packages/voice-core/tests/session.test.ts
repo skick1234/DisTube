@@ -144,7 +144,7 @@ describe("gateway session", () => {
   it("replaces a released local Player without leaving the gateway session", async () => {
     const gateway = gatewayAdapter();
     const session = await DiscordVoiceSession.connect(options(gateway.creator));
-    const engine = new DiscordVoiceEngine({ opusComplexity: 10, bufferMs: 500 });
+    const engine = new DiscordVoiceEngine({ opusComplexity: 10, bufferMs: 500, report: () => undefined });
     const first = await engine.createPlayer(session, { onClosed: () => undefined });
     const firstConnection = latest.connection;
     const sent = gateway.sendPayload.mock.calls.length;

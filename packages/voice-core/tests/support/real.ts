@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { createHash } from "node:crypto";
+import { createDecipheriv, createHash } from "node:crypto";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { createServer } from "node:http";
 import { createServer as createSecureServer } from "node:https";
@@ -110,11 +110,21 @@ export async function serveAudio(): Promise<AudioOrigin> {
   };
 }
 
+/** One audio packet as the voice server received it. */
+export interface HeardPacket {
+  /** `performance.now()` when the datagram arrived. */
+  readonly at: number;
+  /** The decrypted Opus payload. */
+  readonly opus: Buffer;
+}
+
 export interface VoiceGatewayServer {
   /** The `host:port` a voice server update names, as Discord sends it. */
   readonly endpoint: string;
   /** Voice WebSocket connections the library has opened so far. */
   readonly connections: number;
+  /** Every audio packet received over UDP so far, in arrival order. */
+  readonly heard: readonly HeardPacket[];
   /** Whether a new voice socket is answered up to Ready; a silent one never gets past Identify. */
   answers: boolean;
   /** Closes every open voice socket with `code`, as Discord does when it ends a voice session. */
@@ -125,17 +135,28 @@ export interface VoiceGatewayServer {
 
 const WEBSOCKET_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 const SSRC = 1;
+const SECRET_KEY = Buffer.alloc(32, 1);
+const RTP_HEADER_BYTES = 12;
+const RTP_OPUS_PAYLOAD_TYPE = 0x78;
+const AUTH_TAG_BYTES = 16;
+const NONCE_SUFFIX_BYTES = 4;
 
 let certificate: { readonly key: Buffer; readonly cert: Buffer } | undefined;
 
 /**
  * A local Discord voice server over TLS and UDP. It completes the voice handshake far enough for the real
- * library to reach Ready: Hello, Ready, IP discovery and a session description without DAVE.
+ * library to reach Ready: Hello, Ready, IP discovery and a session description without DAVE. It decrypts
+ * and records every audio packet; it does not cover DAVE or Discord's real network.
  */
 export async function serveVoiceGateway(): Promise<VoiceGatewayServer> {
   const { key, cert } = trustedCertificate();
   const udp = createSocket("udp4");
+  const heard: HeardPacket[] = [];
   udp.on("message", (message, remote) => {
+    if (message[0] === 0x80 && message[1] === RTP_OPUS_PAYLOAD_TYPE) {
+      heard.push({ at: performance.now(), opus: decryptRtpSize(message) });
+      return;
+    }
     if (message.length !== 74 || message.readUInt16BE(0) !== 1) return;
     const reply = Buffer.alloc(74);
     reply.writeUInt16BE(2, 0);
@@ -155,6 +176,7 @@ export async function serveVoiceGateway(): Promise<VoiceGatewayServer> {
       return connections;
     },
     answers: true,
+    heard,
     close: code => {
       for (const socket of sockets) socket.end(Buffer.from([0x88, 2, code >> 8, code & 0xff]));
     },
@@ -185,7 +207,7 @@ export async function serveVoiceGateway(): Promise<VoiceGatewayServer> {
         const { port } = udp.address();
         send({ op: 2, d: { ssrc: SSRC, ip: "127.0.0.1", port, modes: ["aead_aes256_gcm_rtpsize"] } });
       } else if (packet.op === 1) {
-        send({ op: 4, d: { mode: packet.d.data?.mode, secret_key: Array(32).fill(1), dave_protocol_version: 0 } });
+        send({ op: 4, d: { mode: packet.d.data?.mode, secret_key: [...SECRET_KEY], dave_protocol_version: 0 } });
       } else if (packet.op === 3) {
         send({ op: 6, d: { t: packet.d.t } });
       }
@@ -195,6 +217,18 @@ export async function serveVoiceGateway(): Promise<VoiceGatewayServer> {
   const address = server.address();
   if (typeof address === "string" || address === null) throw new Error("Expected a TCP address");
   return Object.assign(gateway, { endpoint: `127.0.0.1:${address.port}` });
+}
+
+/** Opens one `aead_aes256_gcm_rtpsize` packet: RTP header as AAD, then ciphertext, tag and a 4-byte nonce suffix. */
+function decryptRtpSize(packet: Buffer): Buffer {
+  const header = packet.subarray(0, RTP_HEADER_BYTES);
+  const tagStart = packet.length - NONCE_SUFFIX_BYTES - AUTH_TAG_BYTES;
+  const nonce = Buffer.alloc(12);
+  packet.copy(nonce, 0, packet.length - NONCE_SUFFIX_BYTES);
+  const decipher = createDecipheriv("aes-256-gcm", SECRET_KEY, nonce);
+  decipher.setAAD(header);
+  decipher.setAuthTag(packet.subarray(tagStart, tagStart + AUTH_TAG_BYTES));
+  return Buffer.concat([decipher.update(packet.subarray(RTP_HEADER_BYTES, tagStart)), decipher.final()]);
 }
 
 function textFrame(text: string): Buffer {

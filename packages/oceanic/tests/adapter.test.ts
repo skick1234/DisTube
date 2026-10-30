@@ -169,6 +169,7 @@ describe("OceanicAdapter", () => {
       filters: { house: { render: () => "volume=2", label: "House" } },
       opusComplexity: 10,
       bufferMs: 500,
+      report: () => undefined,
     });
     expect(engine.filters.get("house")?.label).toBe("House");
   });

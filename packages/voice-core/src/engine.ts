@@ -47,6 +47,7 @@ export class DiscordVoiceEngine implements Engine {
       opusComplexity: this.#settings.opusComplexity,
       readAhead: this.#settings.bufferMs / 20,
       releaseTransport: () => DiscordVoiceSession.detachConnection(session, connection),
+      report: this.#settings.report,
       onClosed,
     });
   }

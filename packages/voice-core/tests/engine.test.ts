@@ -17,7 +17,7 @@ const OPTIONS = {
   channelBitrate: () => 64_000,
   preflight: () => undefined,
 };
-const SETTINGS = { opusComplexity: 10, bufferMs: 500 };
+const SETTINGS = { opusComplexity: 10, bufferMs: 500, report: () => undefined };
 const PLAYER_OPTIONS = { onClosed: () => undefined };
 
 beforeEach(resetNative);

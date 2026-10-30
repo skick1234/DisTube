@@ -9,6 +9,7 @@ import {
 } from "@discordjs/voice";
 import { DisTubeError } from "distube";
 import type {
+  Diagnostic,
   FilterEntry,
   PlaybackResource,
   Player,
@@ -19,7 +20,7 @@ import type {
 } from "distube/integrations";
 import type { FilterRegistry } from "./engine";
 import type { LocalPlaybackResource } from "./sources";
-import { probeFilters, Track, type TrackSettings } from "./track";
+import { openFailureStep, probeFilters, Track, type TrackReporter, type TrackSettings } from "./track";
 
 const MAX_MISSED_FRAMES = 15_000 / 20;
 
@@ -40,6 +41,7 @@ export interface DiscordVoicePlayerOptions {
   readonly opusComplexity: number;
   readonly readAhead: number;
   readonly releaseTransport: () => void;
+  readonly report: (diagnostic: Diagnostic) => void;
   readonly onClosed: (error: Error) => void;
 }
 
@@ -97,6 +99,7 @@ export class DiscordVoicePlayer implements Player {
   readonly #opusComplexity: number;
   readonly #readAhead: number;
   readonly #releaseTransport: () => void;
+  readonly #reporter: TrackReporter;
   readonly #onClosed: (error: Error) => void;
   readonly #player: AudioPlayer;
   readonly #subscription?: Readonly<{ unsubscribe(): void }>;
@@ -116,6 +119,7 @@ export class DiscordVoicePlayer implements Player {
     this.#opusComplexity = options.opusComplexity;
     this.#readAhead = options.readAhead;
     this.#releaseTransport = options.releaseTransport;
+    this.#reporter = { guildId: options.session.guildId, report: options.report };
     this.#onClosed = options.onClosed;
     this.#player = createAudioPlayer({
       behaviors: { noSubscriber: NoSubscriberBehavior.Pause, maxMissedFrames: MAX_MISSED_FRAMES },
@@ -196,6 +200,11 @@ export class DiscordVoicePlayer implements Player {
     if (track && !track.settled) await track.setFilters(chain);
     else if (chain !== undefined) await probeFilters(chain);
     this.#chain = chain;
+    const playback = this.#current;
+    const opened = playback?.track;
+    if (playback && opened && opened !== track) {
+      await opened.setFilters(chain).catch((error: unknown) => this.#fail(playback, "decode", error));
+    }
   }
 
   release(): Promise<void> {
@@ -214,20 +223,24 @@ export class DiscordVoicePlayer implements Player {
     else signal.addEventListener("abort", stop, { once: true });
     try {
       const settings = this.#settings();
-      const track = await Track.open(resource, settings, playback.controller.signal);
-      playback.track = track;
-      void track.outcome.then(outcome => {
-        if (outcome.type === "failed") playback.fail(outcome.error);
-        else if (outcome.type === "ended") {
-          playback.inputEnded = true;
-          this.#reconcile(playback);
-        }
-      });
-      await previous?.closed;
-      await this.#catchUp(track, settings);
-      if (!playback.settled) this.#handOff(playback, track);
+      const track = await Track.open(resource, settings, playback.controller.signal, this.#reporter).catch(
+        (error: unknown) => this.#fail(playback, openFailureStep(error), error),
+      );
+      if (track) {
+        void track.outcome.then(outcome => {
+          if (outcome.type === "failed") this.#fail(playback, outcome.step, outcome.error);
+          else if (outcome.type === "ended") {
+            playback.inputEnded = true;
+            this.#reconcile(playback);
+          }
+        });
+        await previous?.closed;
+        playback.track = track;
+        await this.#catchUp(track, settings);
+        if (!playback.settled) this.#handOff(playback, track);
+      }
     } catch (error: unknown) {
-      playback.fail(error);
+      this.#fail(playback, "decode", error);
     }
     try {
       return await playback.ended;
@@ -237,6 +250,20 @@ export class DiscordVoicePlayer implements Player {
       if (playback.audio && stateResource(this.#player.state) === playback.audio) this.#player.stop(true);
       await playback.track?.close();
     }
+  }
+
+  #fail(playback: Playback, step: string, error: unknown): void {
+    if (playback.settled) return;
+    this.#reporter.report({
+      severity: "error",
+      stage: "engine.track.failed",
+      message: `Track failed during ${step}`,
+      guildId: this.#reporter.guildId,
+      position: playback.track?.position ?? 0,
+      data: { step },
+      error,
+    });
+    playback.fail(error);
   }
 
   #settings(): TrackSettings {
@@ -288,7 +315,7 @@ export class DiscordVoicePlayer implements Player {
     }
     if (next.status !== AudioPlayerStatus.Idle || stateResource(previous) !== audio) return;
     if (!playback.track?.settled) {
-      playback.fail(new Error("Discord audio player stopped before the track ended"));
+      this.#fail(playback, "starved", new Error("Discord audio player stopped before the track ended"));
       return;
     }
     this.#start(playback);
@@ -298,7 +325,7 @@ export class DiscordVoicePlayer implements Player {
 
   readonly #onPlayerError = (error: AudioPlayerError): void => {
     const playback = this.#current;
-    if (playback?.audio && playback.audio === error.resource) playback.fail(audioPlayerFailure(error));
+    if (playback?.audio && playback.audio === error.resource) this.#fail(playback, "read", audioPlayerFailure(error));
   };
 
   readonly #onSessionEvent = (event: VoiceSessionEvent): void => {
@@ -352,5 +379,6 @@ function stateResource(state: AudioPlayer["state"]): AudioResource | undefined {
 function audioPlayerFailure(error: AudioPlayerError): Error {
   const failure = new Error(error.message);
   failure.name = error.name;
+  failure.stack = error.stack;
   return failure;
 }

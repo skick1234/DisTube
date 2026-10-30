@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { DisTube, DisTubeError, ErrorCode, Playlist, Song } from "../src";
+import { type Diagnostic, DisTube, DisTubeError, ErrorCode, Playlist, Song } from "../src";
 import type { Plugin } from "../src/integrations";
 import {
   capture,
@@ -7,6 +7,7 @@ import {
   FakeAdapter,
   FakeEngine,
   FakeSource,
+  flushMicrotasks,
   GUILD,
   media,
   mediaUrl,
@@ -99,7 +100,12 @@ describe("client construction", () => {
     const source = new FakeSource("source");
     const distube = new DisTube({ adapter, plugins: [source], filters, engine: { opusComplexity: 5, bufferMs: 200 } });
     expect(distube.queues.size).toBe(0);
-    expect(adapter.createEngine).toHaveBeenCalledWith({ filters, opusComplexity: 5, bufferMs: 200 });
+    expect(adapter.createEngine).toHaveBeenCalledWith({
+      filters,
+      opusComplexity: 5,
+      bufferMs: 200,
+      report: expect.any(Function),
+    });
     expect(adapter.createVoiceSession).not.toHaveBeenCalled();
     expect(source.search).not.toHaveBeenCalled();
   });
@@ -673,6 +679,80 @@ describe("events and diagnostics", () => {
     await required(harness.distube.getQueue(GUILD)).stop();
     await settle();
     expect(log).toEqual(["queue.deleted"]);
+    await harness.distube.dispose();
+  });
+
+  it("delivers an engine report to onDiagnostic in a later microtask with its fields", async () => {
+    const harness = playableSetup();
+    const report = required(harness.adapter.settings[0]).report;
+    const diagnostic = {
+      severity: "warning",
+      stage: "engine.test",
+      message: "m",
+      guildId: "g",
+      position: 12,
+      data: { attempt: 2 },
+    } as const;
+
+    report(diagnostic);
+    const calledDuringReport = harness.diagnostics.mock.calls.length;
+    await flushMicrotasks();
+
+    expect(calledDuringReport).toBe(0);
+    expect(harness.diagnostics.mock.calls).toEqual([[diagnostic]]);
+  });
+
+  it("isolates a throwing consumer of an engine report and keeps the track playing", async () => {
+    const received: string[] = [];
+    const onDiagnostic = vi.fn((diagnostic: Diagnostic) => {
+      received.push(`${diagnostic.stage}:${diagnostic.guildId}`);
+      throw new Error("consumer down");
+    });
+    const harness = playableSetup("source", { onDiagnostic });
+    await harness.distube.play(TARGET, "a");
+    await settle();
+
+    required(harness.adapter.settings[0]).report({
+      severity: "warning",
+      stage: "engine.track.starved",
+      message: "starved",
+      guildId: GUILD,
+    });
+    await settle();
+
+    expect(received).toEqual([`engine.track.starved:${GUILD}`]);
+    expect(harness.engine.player.playing).toBe("a");
+    expect(harness.distube.getQueue(GUILD)?.current?.song.id).toBe("a");
+    await harness.distube.dispose();
+  });
+
+  it("runs a consumer that skips from inside an engine report after the report returned", async () => {
+    let reporting = false;
+    const seen: boolean[] = [];
+    const harness = playableSetup("source", {
+      onDiagnostic: diagnostic => {
+        if (diagnostic.stage !== "engine.track.starved") return;
+        seen.push(reporting);
+        void harness.distube.getQueue(GUILD)?.skip();
+      },
+    });
+    await harness.distube.play(TARGET, "a");
+    await required(harness.distube.getQueue(GUILD)).add("b");
+    await settle();
+
+    reporting = true;
+    required(harness.adapter.settings[0]).report({
+      severity: "warning",
+      stage: "engine.track.starved",
+      message: "starved",
+      guildId: GUILD,
+    });
+    reporting = false;
+    await settle();
+
+    expect(seen).toEqual([false]);
+    expect(harness.engine.player.played).toEqual(["a", "b"]);
+    expect(harness.distube.getQueue(GUILD)?.current?.song.id).toBe("b");
     await harness.distube.dispose();
   });
 

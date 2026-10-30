@@ -317,6 +317,7 @@ class Pipeline {
   #target: number;
   readonly #complexity: number;
   #position = 0;
+  #resumeAt = 0;
   #credit = 0;
   #batch: ArrayBuffer[] = [];
   #batchPts: number[] = [];
@@ -325,6 +326,7 @@ class Pipeline {
   #pumping?: Promise<void>;
   #drained = false;
   #ended = false;
+  #lost = false;
   #failed = false;
   #closed = false;
 
@@ -501,6 +503,8 @@ class Pipeline {
     this.#input = input;
     this.#drained = false;
     this.#ended = false;
+    this.#lost = false;
+    this.#resumeAt = input.start;
     this.#held?.free();
     this.#held = first;
     this.#position = first ? Math.max(input.start, this.#seconds(first.pts, input)) : input.start;
@@ -519,7 +523,13 @@ class Pipeline {
 
   #running(): boolean {
     return (
-      this.#input !== undefined && this.#credit > 0 && !this.#drained && !this.#ended && !this.#failed && !this.#closed
+      this.#input !== undefined &&
+      this.#credit > 0 &&
+      !this.#drained &&
+      !this.#ended &&
+      !this.#lost &&
+      !this.#failed &&
+      !this.#closed
     );
   }
 
@@ -551,7 +561,8 @@ class Pipeline {
             continue;
           }
           if (result < 0) {
-            this.fail("read", input.failure ?? new FFmpegError(result), input.id);
+            if (input.failure) this.#lose(input, input.failure);
+            else this.fail("read", new FFmpegError(result), input.id);
             continue;
           }
           packet = this.#packet;
@@ -566,6 +577,7 @@ class Pipeline {
   #process(packet: Packet, input: Input): void {
     try {
       if (packet.streamIndex !== input.stream.index) return;
+      this.#resumeAt = Math.max(input.start, this.#endSeconds(packet, input));
       const data = packet.data;
       if (data && input.opus && this.#volume === 100 && this.#chain === undefined && twentyMsOpus(data)) {
         this.#toPassthrough();
@@ -718,6 +730,12 @@ class Pipeline {
   #frameSeconds(frame: Frame): number {
     const { num, den } = frame.timeBase;
     return frame.pts === AV_NOPTS_VALUE || den === 0 ? this.#position : (Number(frame.pts) * num) / den;
+  }
+
+  #lose(input: Input, error: Error): void {
+    this.#lost = true;
+    this.#flush();
+    post({ type: "lost", track: this.id, input: input.id, position: this.#resumeAt, error: wire(error) });
   }
 
   fail(stage: string, error: unknown, input?: number): void {
