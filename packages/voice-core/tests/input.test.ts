@@ -192,19 +192,19 @@ interface Origin {
 
 async function serve(routes: (url: string) => Record<string, Route>): Promise<Origin> {
   const requests: Origin["requests"] = [];
-  let table: Record<string, Route> = {};
+  let table = new Map<string, Route>();
   const server = NodeHttp.createServer((request, response) => {
     const entry = { path: request.url ?? "", range: request.headers.range, answered: false, closed: false };
     requests.push(entry);
     response.on("finish", () => (entry.answered = true));
     response.on("close", () => (entry.closed = true));
-    const route = table[entry.path];
+    const route = table.get(entry.path);
     if (route) route(response, request);
     else response.writeHead(404).end();
   });
   await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
   const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
-  table = routes(url);
+  table = new Map(Object.entries(routes(url)));
   return {
     url,
     requests,
