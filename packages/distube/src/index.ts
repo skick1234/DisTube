@@ -10,7 +10,14 @@ export type {
   ResolvableInput as PlayInput,
   VoiceChannelTarget,
 } from "./contracts";
-export { DisTube, type DisTubeOptions, type PlayOptions, type SearchRequest, type SuggestRequest } from "./client";
+export {
+  DisTube,
+  type DisTubeOptions,
+  type PlayOptions,
+  type PlayResult,
+  type SearchRequest,
+  type SuggestRequest,
+} from "./client";
 export { DisTubeError, type DisTubeErrorOptions, ErrorCode, type ErrorMedia } from "./errors";
 export type {
   BaseQueueEvent,

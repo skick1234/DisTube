@@ -150,7 +150,10 @@ export type PluginDataOf<Source> = Source extends Plugin<infer Data> ? Data : un
  * other rejection as `VOICE_FAILED`.
  */
 export interface Player {
-  /** Elapsed seconds of the active track, or `0`. */
+  /**
+   * Source time, in seconds, of the audio the platform last played, or `0` without a track. A tempo preset changes how
+   * fast it advances, not what it measures.
+   */
   readonly position: number;
   /**
    * Plays `resource` unpaused, whatever the previous track's pause, replacing the current track, which settles
@@ -257,8 +260,13 @@ export interface FilterDefinition<Payload = unknown> {
   readonly default?: number;
   readonly min?: number;
   readonly max?: number;
-  /** Display text for `voice.filters.entries`; the preset name when absent. */
-  readonly label?: string | ((value?: number) => string);
+  /** Display name without the value, for `voice.filters.entries` and `distube.filters`; the preset name when absent. */
+  readonly label?: string;
+  /**
+   * Source seconds this preset plays per wall second, or a function of the clamped value returning it, for an engine
+   * that cannot read the rate from its payload. Finite and above 0.
+   */
+  readonly tempo?: number | ((value?: number) => number);
 }
 
 /** Preset name to definition, merged over an engine's built-in defaults. */
@@ -271,7 +279,8 @@ export interface FilterDefinitionInfo {
   readonly max?: number;
   /** Whether `voice.filters.set(name, value)` accepts a value for this preset. */
   readonly acceptsValue: boolean;
-  label(value?: number): string;
+  /** Display name without the value. */
+  readonly label: string;
 }
 
 /** One entry of a voice's ordered filter set. */
@@ -285,6 +294,12 @@ export interface FilterEntry {
 export interface Engine {
   readonly filters: ReadonlyMap<string, FilterDefinitionInfo>;
   createPlayer(session: VoiceSession, options: PlayerOptions): Promise<Player>;
+  /**
+   * Source seconds the ordered selection plays per wall second, as this engine composes it; finite and above 0.
+   * Core calls it with the next selection before each filter change's Player command. Without it every selection
+   * plays at 1.
+   */
+  playbackRate?(entries: readonly FilterEntry[]): number;
   /** When present, prepares every Song; core then calls no plugin's `stream` and runs no search fallback. */
   prepare?(song: Song, options: { readonly signal: AbortSignal }): Promise<PlaybackResource>;
 }

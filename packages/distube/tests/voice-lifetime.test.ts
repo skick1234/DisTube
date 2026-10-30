@@ -15,6 +15,7 @@ import {
   required,
   settle,
   setup,
+  updates,
   VOICE_CHANNEL,
 } from "./support/harness";
 
@@ -37,7 +38,7 @@ async function advance(ms: number): Promise<void> {
 describe("voice presence", () => {
   it("outlives the queue it played for and lends the same session and Player to the next one", async () => {
     const harness = playableSetup();
-    const queue = await harness.distube.play(TARGET, "a");
+    const { queue } = await harness.distube.play(TARGET, "a");
     await settle();
     const voice = harness.distube.voices.get(GUILD);
     const player = harness.engine.players[0] as FakePlayer;
@@ -50,7 +51,7 @@ describe("voice presence", () => {
     expect(harness.distube.voices.get(GUILD)).toBe(voice);
     expect(harness.adapter.sessions[0]?.release).not.toHaveBeenCalled();
 
-    const second = await harness.distube.play(TARGET, "b");
+    const { queue: second } = await harness.distube.play(TARGET, "b");
     await settle();
     expect(second).not.toBe(queue);
     expect(second.voice).toBe(voice);
@@ -75,7 +76,7 @@ describe("voice presence", () => {
     const harness = playableSetup();
     const voice = await harness.distube.voices.join(TARGET);
     await voice.setVolume(60);
-    const queue = await harness.distube.play(TARGET, "a");
+    const { queue } = await harness.distube.play(TARGET, "a");
     await queue.add("b");
     await settle();
     const closed = harness.engine.player;
@@ -96,7 +97,7 @@ describe("voice presence", () => {
 
   it("creates the replacement Player behind a volume change that was queued before the old Player closed", async () => {
     const harness = playableSetup();
-    const queue = await harness.distube.play(TARGET, "a");
+    const { queue } = await harness.distube.play(TARGET, "a");
     await queue.add("b");
     await settle();
     const voice = required(harness.distube.voices.get(GUILD));
@@ -247,7 +248,7 @@ describe("deferred DisTubeVoice lifetime", () => {
 
     release.resolve();
     await leaving;
-    const fresh = await play;
+    const { queue: fresh } = await play;
     expect(harness.adapter.createVoiceSession).toHaveBeenCalledTimes(2);
     expect(harness.distube.getQueue(GUILD)).toBe(fresh);
     expect(fresh.voice).toBe(harness.distube.voices.get(GUILD));
@@ -347,7 +348,7 @@ describe("deferred DisTubeVoice lifetime", () => {
   it("releases a Player created after leave before releasing its session", async () => {
     const harness = playableSetup();
     const creation = harness.engine.gateCreate();
-    const play = await harness.distube.play(TARGET, "first");
+    const { queue: play } = await harness.distube.play(TARGET, "first");
     await flushMicrotasks(32);
     const session = harness.adapter.sessions[0] as FakeVoiceSession;
 
@@ -367,7 +368,7 @@ describe("deferred DisTubeVoice lifetime", () => {
 
   it("leave deletes the queue, hides the guild, releases the Player before the session and announces once", async () => {
     const harness = playableSetup();
-    const queue = await harness.distube.play(TARGET, "first");
+    const { queue } = await harness.distube.play(TARGET, "first");
     await settle();
     const voice = required(queue.voice);
     const player = harness.engine.player;
@@ -469,7 +470,7 @@ describe("deferred DisTubeVoice lifetime", () => {
     });
     const started = deferred<void>();
     once(harness.distube, "queue.item.started", () => started.resolve());
-    const queue = await harness.distube.play(TARGET, "first");
+    const { queue } = await harness.distube.play(TARGET, "first");
     await started.promise;
     const pauseGate = player.gate("pause");
 
@@ -523,11 +524,11 @@ describe("deferred DisTubeVoice lifetime", () => {
 
   it("keeps a replacement queue's track playing after the old queue's stop", async () => {
     const harness = playableSetup();
-    const first = await harness.distube.play(TARGET, "first");
+    const { queue: first } = await harness.distube.play(TARGET, "first");
     await settle();
 
     const stopping = first.stop();
-    const second = await harness.distube.play(TARGET, "second");
+    const { queue: second } = await harness.distube.play(TARGET, "second");
     await stopping;
     await settle();
 
@@ -541,7 +542,7 @@ describe("deferred DisTubeVoice lifetime", () => {
     const harness = playableSetup();
     const started = deferred<void>();
     once(harness.distube, "queue.item.started", () => started.resolve());
-    const queue = await harness.distube.play(TARGET, "playing");
+    const { queue } = await harness.distube.play(TARGET, "playing");
     const items = [...(queue.current ? [queue.current] : []), ...queue.upcoming];
     await started.promise;
     const player = harness.engine.players[0] as FakePlayer;
@@ -561,6 +562,28 @@ describe("deferred DisTubeVoice lifetime", () => {
     expect(player.stopTrack).not.toHaveBeenCalled();
     expect(player.updateVoiceGateway).toHaveBeenCalledWith(expect.objectContaining({ channelId: "dragged" }));
     expect(outcomes).toEqual([]);
+  });
+});
+
+describe("voice settings and queue.updated", () => {
+  it("publishes an acknowledged volume change of a queue's voice once, and nothing for a voice without a queue", async () => {
+    const harness = playableSetup();
+    const published = updates(harness.distube);
+    const voice = await harness.distube.voices.join(TARGET);
+    await voice.filters.set("bassboost");
+    await voice.setVolume(80);
+    await settle();
+    expect(published).toEqual([]);
+
+    await harness.distube.play(TARGET, "a");
+    await settle();
+    const queue = required(harness.distube.getQueue(GUILD));
+    published.splice(0);
+    await required(queue.voice).setVolume(50);
+    await settle();
+
+    expect(published.map(event => [event.queue === queue, event.queue.voice?.volume])).toEqual([[true, 50]]);
+    await harness.distube.dispose();
   });
 });
 
@@ -760,7 +783,7 @@ describe("channel ordering", () => {
 
   it("ends in the replacement queue's channel when a stopped queue's play was still moving", async () => {
     const harness = playableSetup();
-    const queue = await harness.distube.play(TARGET, "a");
+    const { queue } = await harness.distube.play(TARGET, "a");
     await settle();
     const session = harness.adapter.session;
     const ack = session.gateJoin();
@@ -774,7 +797,7 @@ describe("channel ordering", () => {
     ack.resolve();
 
     expect(await moving).toMatchObject({ code: "INVALID_STATE" });
-    expect(await replacement).toBe(harness.distube.getQueue(GUILD));
+    expect((await replacement).queue).toBe(harness.distube.getQueue(GUILD));
     expect(session.join.mock.calls).toEqual([["second"], ["voice"]]);
     expect(harness.distube.voices.get(GUILD)?.channelId).toBe(VOICE_CHANNEL);
   });

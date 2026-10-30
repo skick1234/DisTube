@@ -4,8 +4,11 @@ import type { QueueItem } from "./media";
 /** How a naturally finished QueueItem is reconsidered before progression. */
 export type RepeatMode = "off" | "song" | "queue";
 
-/** Committed playback status of a DisTubeQueue. */
-export type QueueStatus = "idle" | "playing" | "paused";
+/**
+ * Committed playback status of a DisTubeQueue. `preparing` holds while an item waits or an autoplay lookup runs, and
+ * from the hand-off of the current item until it is audible; `playing` starts with `queue.item.started`.
+ */
+export type QueueStatus = "idle" | "preparing" | "playing" | "paused";
 
 /**
  * The committed schedule of one DisTubeQueue: an immutable value replaced on every commit.
@@ -56,12 +59,23 @@ export function startFirst(current: QueueState): { readonly item: QueueItem; rea
   if (!item || current.current) return undefined;
   return Object.freeze({
     item,
-    state: patch(current, { upcoming: current.upcoming.slice(1), current: item, status: "playing" }),
+    state: patch(current, { upcoming: current.upcoming.slice(1), current: item, status: "preparing" }),
   });
+}
+
+export function markPlaying(current: QueueState): QueueState {
+  return current.current && current.status !== "playing" ? patch(current, { status: "playing" }) : current;
+}
+
+export function settleStatus(current: QueueState, lookup: boolean): QueueState {
+  if (current.current) return current;
+  const status = current.upcoming.length > 0 || lookup ? "preparing" : "idle";
+  return status === current.status ? current : patch(current, { status });
 }
 
 /** Drops a waiting occurrence that could not be prepared or started. */
 export function failFirst(current: QueueState, itemId: string): QueueState {
+  if (!current.upcoming.some(item => item.id === itemId)) return current;
   return patch(current, { upcoming: current.upcoming.filter(item => item.id !== itemId) });
 }
 
@@ -101,7 +115,8 @@ export function moveBefore(current: QueueState, itemId: string, beforeItemId?: s
   if (!item || (beforeItemId !== undefined && !current.upcoming.some(entry => entry.id === beforeItemId))) {
     throw new DisTubeError("INVALID_STATE", "Occurrence is not upcoming in this queue");
   }
-  if (itemId === beforeItemId) return current;
+  const following = current.upcoming[current.upcoming.indexOf(item) + 1];
+  if (itemId === beforeItemId || following?.id === beforeItemId) return current;
   const rest = current.upcoming.filter(entry => entry !== item);
   const index = beforeItemId === undefined ? rest.length : rest.findIndex(entry => entry.id === beforeItemId);
   return patch(current, { upcoming: rest.toSpliced(index, 0, item) });
@@ -121,6 +136,7 @@ export function jumpTo(
   if (index < 0 || index >= current.upcoming.length)
     throw new DisTubeError("INVALID_STATE", "Jump target is not upcoming in this queue");
   const skipped = [...(current.current ? [current.current] : []), ...current.upcoming.slice(0, index)];
+  if (skipped.length === 0) return Object.freeze({ state: current, skipped: NO_ITEMS });
   const upcoming = [...current.upcoming.slice(index), ...(requeue ? skipped : [])];
   return Object.freeze({
     state: patch(current, { current: undefined, status: "idle", upcoming }),
@@ -136,11 +152,13 @@ export function shuffle(current: QueueState, random: () => number = Math.random)
     const other = Math.floor(random() * (index + 1));
     [upcoming[index], upcoming[other]] = [upcoming[other] as QueueItem, upcoming[index] as QueueItem];
   }
+  if (upcoming.every((item, index) => item === current.upcoming[index])) return current;
   return patch(current, { upcoming });
 }
 
 /** Empties the waiting list without touching the current item. */
 export function clearUpcoming(current: QueueState): Removal {
+  if (current.upcoming.length === 0) return Object.freeze({ items: NO_ITEMS, state: current });
   return Object.freeze({ items: current.upcoming, state: patch(current, { upcoming: NO_ITEMS }) });
 }
 

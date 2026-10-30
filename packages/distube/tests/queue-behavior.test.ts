@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { type DisTubeError, type DisTubeEventMap, type DisTubeQueue, Playlist, type Song } from "../src";
-import type { Plugin } from "../src/integrations";
+import type { PlaybackResource, Plugin } from "../src/integrations";
 import {
   deferred,
   deletions,
@@ -14,6 +14,7 @@ import {
   settle,
   setup,
   thrown,
+  updates,
   VOICE_CHANNEL,
 } from "./support/harness";
 
@@ -22,7 +23,7 @@ const TARGET = { guildId: GUILD, id: VOICE_CHANNEL };
 /** A playing queue holding `ids` in order: the first is current, the rest are waiting. */
 async function playing(ids: readonly string[]) {
   const harness = playableSetup();
-  const queue = await harness.distube.play(TARGET, ids[0] as string);
+  const { queue } = await harness.distube.play(TARGET, ids[0] as string);
   for (const id of ids.slice(1)) await queue.add(id);
   await settle();
   const voice = harness.distube.voices.get(GUILD);
@@ -122,7 +123,7 @@ describe("autoplay", () => {
     harness.source.related.mockResolvedValueOnce(media("source", "related"));
     const added: { autoplay: boolean; metadata: unknown }[] = [];
     harness.distube.on("queue.item.added", ({ item }) => void added.push(item));
-    const queue = await harness.distube.play(TARGET, "a", { metadata: requester });
+    const { queue } = await harness.distube.play(TARGET, "a", { metadata: requester });
     queue.setAutoplay(true);
     queue.setRepeat("song");
     await settle();
@@ -378,7 +379,7 @@ describe("autoplay", () => {
     const failedSongs: Song[] = [];
     harness.distube.on("queue.autoplay.failed", event => void failedSongs.push(event.song));
     const song = media("spotify", "track");
-    const queue = await harness.distube.play(TARGET, song);
+    const { queue } = await harness.distube.play(TARGET, song);
     queue.setAutoplay(true);
     await settle();
     const added = log.length;
@@ -408,6 +409,102 @@ describe("autoplay", () => {
     await settle();
 
     expect(events).toEqual(["queue.deleted"]);
+  });
+});
+
+describe("playlist on items", () => {
+  it("names the committed Playlist on its items through repeat and previous replays, and none on Song or autoplay items", async () => {
+    const harness = playableSetup();
+    const playlist = new Playlist({
+      id: "list",
+      name: "List",
+      url: "https://source.example/list",
+      source: "source",
+      songs: [media("source", "x"), media("source", "y")],
+    });
+    harness.source.related.mockResolvedValue(media("source", "related"));
+    const committed: Playlist[] = [];
+    harness.distube.on("queue.playlist.added", event => void committed.push(event.playlist));
+    await harness.distube.play(TARGET, "s");
+    const queue = required(harness.distube.getQueue(GUILD));
+    harness.source.resolve.mockResolvedValueOnce(playlist);
+    await queue.add(playlist.url);
+    await settle();
+    const list = required(committed[0]);
+    const player = harness.engine.player;
+
+    expect([queue.current, ...queue.upcoming].map(item => item?.playlist === list)).toEqual([false, true, true]);
+    expect("playlist" in required(queue.current)).toBe(false);
+    expect(list.songs.map(song => song.id)).toEqual(["x", "y"]);
+
+    player.finish();
+    await settle();
+    const x = required(queue.current);
+    queue.setRepeat("song");
+    player.finish();
+    await settle();
+    expect([queue.current?.song.id, queue.current?.id === x.id, queue.current?.playlist]).toEqual(["x", false, list]);
+
+    queue.setRepeat("off");
+    player.finish();
+    await settle();
+    await queue.previous();
+    await settle();
+    expect([queue.current?.song.id, queue.current?.playlist]).toEqual(["x", list]);
+
+    queue.setAutoplay(true);
+    player.finish();
+    await settle();
+    player.finish();
+    await settle();
+    expect([queue.current?.song.id, queue.current?.autoplay]).toEqual(["related", true]);
+    expect("playlist" in required(queue.current)).toBe(false);
+    await harness.distube.dispose();
+  });
+});
+
+describe("status", () => {
+  it("reads idle before the first insertion commits and preparing after it", async () => {
+    const harness = playableSetup();
+    const held = deferred<readonly Song[]>();
+    harness.source.search.mockReturnValueOnce(held.promise);
+    const preparation = deferred<PlaybackResource>();
+    harness.source.stream.mockReturnValueOnce(preparation.promise);
+    const started = harness.distube.play(TARGET, "a");
+    const queue = required(harness.distube.getQueue(GUILD));
+    expect(queue.status).toBe("idle");
+
+    held.resolve([media("source", "a")]);
+    await started;
+    await settle();
+
+    expect([queue.status, queue.current, queue.upcoming.map(item => item.song.id)]).toEqual([
+      "preparing",
+      undefined,
+      ["a"],
+    ]);
+    preparation.resolve(harness.source.resource("a"));
+    await harness.distube.dispose();
+  });
+
+  it("reads preparing during an autoplay lookup, and idle in the same commit that turns autoplay off", async () => {
+    const { harness, queue, player } = await playing(["a"]);
+    harness.source.related.mockReturnValueOnce(new Promise<never>(() => undefined));
+    queue.setAutoplay(true);
+    await settle();
+    const published = updates(harness.distube);
+
+    player.finish();
+    await settle();
+    expect([queue.status, queue.current, queue.upcoming]).toEqual(["preparing", undefined, []]);
+
+    queue.setAutoplay(false);
+    expect(queue.status).toBe("idle");
+    await settle();
+    expect(published.map(event => [event.state.status, event.state.autoplay])).toEqual([
+      ["preparing", true],
+      ["idle", false],
+    ]);
   });
 });
 
@@ -518,10 +615,10 @@ describe("queue occurrence edits and lifetime", () => {
     // Queue deletion is not a filter reset: the committed set and its rendering stay.
     expect(player.renders.length).toBe(rendered);
     expect(voice.volume).toBe(40);
-    expect(voice.filters.entries).toEqual([{ name: "bassboost", value: 15, label: "Bass +15dB" }]);
+    expect(voice.filters.entries).toEqual([{ name: "bassboost", value: 15, label: "Bass boost" }]);
     expect([queue.repeat, queue.autoplay, queue.history]).toEqual(["off", false, []]);
 
-    const replacement = await harness.distube.play(TARGET, "b");
+    const { queue: replacement } = await harness.distube.play(TARGET, "b");
     expect(replacement).not.toBe(queue);
     expect([replacement.repeat, replacement.autoplay]).toEqual(["off", false]);
     await expect(queue.add("c")).rejects.toMatchObject({ code: "INVALID_STATE" });

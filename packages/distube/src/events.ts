@@ -39,6 +39,13 @@ export interface DisTubeEventMap<Metadata = undefined, Target = VoiceChannelTarg
   /** Playback ran out of successors; `queue.deleted` follows. */
   "queue.finished": Readonly<BaseQueueEvent<Metadata, Target>>;
   "queue.autoplay.failed": Readonly<BaseQueueEvent<Metadata, Target> & { song: Song; error: DisTubeError }>;
+  /**
+   * Published once per committed change to the queue's state, its pause, its position by seek, or the volume or
+   * filters of its voice, after that commit's own event and with the same `state` and `timestamp`. A call that
+   * changes nothing publishes none. `position` and `playbackRate` are read at the commit, so while `state.status` is
+   * `playing` the position is about `position + (Date.now() - timestamp) / 1000 * playbackRate`.
+   */
+  "queue.updated": Readonly<BaseQueueEvent<Metadata, Target> & { position: number; playbackRate: number }>;
   "queue.deleted": Readonly<BaseQueueEvent<Metadata, Target> & { reason: QueueDeleteReason }>;
   /**
    * Published once per DisTubeVoice, after that guild's `queue.deleted`. `removed` means the platform removed the bot,
@@ -62,6 +69,7 @@ const EVENT_NAMES: ReadonlySet<string> = new Set(
     "queue.item.failed": 0,
     "queue.finished": 0,
     "queue.autoplay.failed": 0,
+    "queue.updated": 0,
     "queue.deleted": 0,
     "voice.disconnected": 0,
   } satisfies Record<DisTubeEventName, 0>),

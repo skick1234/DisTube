@@ -239,7 +239,7 @@ describe("transactional play", () => {
     await flush();
     expect(harness.source.resolve).toHaveBeenCalledTimes(2);
     secondResolution.resolve(media("source", "second"));
-    const committed = await second;
+    const { queue: committed } = await second;
     await flush();
 
     expect(harness.distube.getQueue(GUILD)).toBe(committed);
@@ -255,7 +255,7 @@ describe("transactional play", () => {
     const harness = playableSetup();
     const started = deferred<void>();
     harness.distube.on("queue.item.started", () => started.resolve());
-    const queue = await harness.distube.play(TARGET, "active");
+    const { queue } = await harness.distube.play(TARGET, "active");
     await started.promise;
     const firstMove = deferred<void>();
     const moves: string[] = [];
@@ -310,7 +310,7 @@ describe("transactional play", () => {
     expect(created?.state).toMatchObject({ current: undefined, upcoming: [], status: "idle" });
     expect(order).not.toContain("queue.item.added");
     resolution.resolve(media("source", "ordered"));
-    expect(await playing).toBe(registered);
+    expect((await playing).queue).toBe(registered);
     await flush();
     expect(order.indexOf("queue.created")).toBeLessThan(order.indexOf("queue.item.added"));
   });
@@ -355,11 +355,11 @@ describe("transactional play", () => {
     const harness = playableSetup();
     const started = deferred<void>();
     harness.distube.on("queue.item.started", () => started.resolve());
-    const first = await harness.distube.play(TARGET, "active");
+    const { queue: first } = await harness.distube.play(TARGET, "active");
     await started.promise;
     const outcomes = record(harness.distube, ["queue.item.finished", "queue.item.failed"]);
 
-    const moved = await harness.distube.play(MOVED_TARGET, "waiting");
+    const { queue: moved } = await harness.distube.play(MOVED_TARGET, "waiting");
     await flush();
 
     expect(moved).toBe(first);
@@ -375,7 +375,7 @@ describe("transactional play", () => {
     const harness = playableSetup();
     const started = deferred<void>();
     harness.distube.on("queue.item.started", () => started.resolve());
-    const queue = await harness.distube.play(TARGET, "active");
+    const { queue } = await harness.distube.play(TARGET, "active");
     await started.promise;
     const playlist = new Playlist({
       id: "rejected-playlist",
@@ -411,7 +411,7 @@ describe("transactional play", () => {
 
   it("keeps a move committed when the caller aborts the insertion after the join", async () => {
     const harness = playableSetup();
-    const queue = await harness.distube.play(TARGET, "a");
+    const { queue } = await harness.distube.play(TARGET, "a");
     await settle();
     const controller = new AbortController();
     const session = harness.adapter.session;
@@ -437,7 +437,7 @@ describe("transactional play", () => {
     const harness = playableSetup();
     const started = deferred<void>();
     harness.distube.on("queue.item.started", () => started.resolve());
-    const queue = await harness.distube.play(TARGET, "active");
+    const { queue } = await harness.distube.play(TARGET, "active");
     await started.promise;
     harness.adapter.sessions[0]?.join.mockRejectedValueOnce(new Error("cannot move"));
 
@@ -472,7 +472,7 @@ describe("insertion steps", () => {
 
   it("commits mixed queue.add, play and queue.add from one tick in call order when they resolve in reverse", async () => {
     const harness = playableSetup();
-    const queue = await harness.distube.play(TARGET, "a");
+    const { queue } = await harness.distube.play(TARGET, "a");
     await settle();
     const held = new Map(["b", "c", "d"].map(id => [id, deferred<readonly Song[]>()]));
     harness.source.search.mockImplementation(query => required(held.get(query)).promise);
@@ -484,9 +484,38 @@ describe("insertion steps", () => {
     expect(queue.upcoming.map(item => item.song.id)).toEqual(["b", "c", "d"]);
   });
 
+  it("resolves play with its queue and the item it inserted while the current item keeps playing", async () => {
+    const harness = playableSetup();
+    await harness.distube.play(TARGET, "a");
+    await settle();
+    const queue = required(harness.distube.getQueue(GUILD));
+
+    const result = await harness.distube.play(TARGET, "b");
+
+    expect(result.queue).toBe(queue);
+    expect(result.items.map(item => item.song.id)).toEqual(["b"]);
+    expect(result.items[0]?.id).toBe(queue.upcoming[0]?.id);
+    expect(harness.engine.player.playing).toBe("a");
+  });
+
+  it("resolves concurrent plays with only the items each committed", async () => {
+    const harness = playableSetup<string>();
+    const held = new Map(["b", "c"].map(id => [id, deferred<readonly Song[]>()]));
+    harness.source.search.mockImplementation(query => required(held.get(query)).promise);
+    const first = harness.distube.play(TARGET, "b", { metadata: "M1" });
+    const second = harness.distube.play(TARGET, "c", { metadata: "M2" });
+    for (const id of ["c", "b"]) required(held.get(id)).resolve([media("source", id)]);
+
+    const [one, two] = await Promise.all([first, second]);
+
+    expect(one.items.map(item => [item.song.id, item.metadata])).toEqual([["b", "M1"]]);
+    expect(two.items.map(item => [item.song.id, item.metadata])).toEqual([["c", "M2"]]);
+    expect(one.queue).toBe(two.queue);
+  });
+
   it("drops a provider error that settles after the queue was deleted", async () => {
     const harness = playableSetup();
-    const queue = await harness.distube.play(TARGET, "a");
+    const { queue } = await harness.distube.play(TARGET, "a");
     await settle();
     const held = deferred<readonly Song[]>();
     harness.source.search.mockImplementationOnce(() => held.promise);
@@ -502,7 +531,7 @@ describe("insertion steps", () => {
 
   it("keeps a move failure as the cause when the queue was deleted during the move", async () => {
     const harness = playableSetup();
-    const queue = await harness.distube.play(TARGET, "a");
+    const { queue } = await harness.distube.play(TARGET, "a");
     await settle();
     const move = deferred<void>();
     harness.adapter.session.join.mockImplementationOnce(() => move.promise);
@@ -520,7 +549,7 @@ describe("insertion steps", () => {
 
   it("dispose waits for an in-flight insertion step before disposing plugins", async () => {
     const harness = playableSetup();
-    const queue = await harness.distube.play(TARGET, "a");
+    const { queue } = await harness.distube.play(TARGET, "a");
     await settle();
     const held = deferred<readonly Song[]>();
     harness.source.search.mockImplementationOnce(() => held.promise);

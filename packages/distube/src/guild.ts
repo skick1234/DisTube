@@ -33,6 +33,7 @@ export interface Connection {
   channelId: string;
   volume: number;
   entries: readonly FilterEntry[];
+  rate: number;
   player?: Promise<Player>;
   settings: Promise<unknown>;
   channel: Promise<unknown>;
@@ -140,6 +141,10 @@ export class Guild<Target> {
     return this.#track?.player?.position ?? 0;
   }
 
+  get playbackRate(): number {
+    return this.#live?.connection.rate ?? 1;
+  }
+
   createQueue(): DisTubeQueue<unknown, Target> {
     const queue = new DisTubeQueue<unknown, Target>(this);
     this.queue = queue;
@@ -216,9 +221,19 @@ export class Guild<Target> {
       paused: false,
     };
     let reading: Promise<unknown> = Promise.resolve();
+    const inherited = connection.player;
+    const creation = this.#ensurePlayer(connection);
     this.#track = track;
     try {
-      const player = await this.#ensurePlayer(connection);
+      const player = await raceSignal(
+        inherited
+          ? creation.catch((error: unknown) => {
+              if (track.stop.aborted) throw error;
+              return this.#ensurePlayer(connection);
+            })
+          : creation,
+        track.stop,
+      );
       await previous?.disposed.promise;
       const early = interruption(track, signal);
       if (early) return early;
@@ -240,16 +255,17 @@ export class Guild<Target> {
     }
   }
 
-  async setPaused(paused: boolean): Promise<void> {
+  async setPaused(paused: boolean): Promise<boolean> {
     const { track, player } = this.#startedTrack();
-    await this.#serial(track.connection, async () => {
+    return this.#serial(track.connection, async () => {
       if (this.#ended(track))
         throw new DisTubeError(ErrorCode.INVALID_STATE, "The item ended before the pause applied");
-      if (track.paused === paused) return;
+      if (track.paused === paused) return false;
       await call(paused ? "Player failed to pause" : "Player failed to resume", () =>
         paused ? player.pause() : player.resume(),
       );
       track.paused = paused;
+      return true;
     });
   }
 
@@ -268,7 +284,9 @@ export class Guild<Target> {
   setVolume(connection: Connection, percent: number): Promise<void> {
     return this.#setting(connection, "Player failed to set volume", async player => {
       await player?.setVolume(percent);
+      const changed = connection.volume !== percent;
       connection.volume = percent;
+      if (changed) this.#settingsChanged(connection);
     });
   }
 
@@ -278,8 +296,12 @@ export class Guild<Target> {
   ): Promise<void> {
     return this.#setting(connection, "Player failed to render filters", async player => {
       const entries = change(connection.entries);
+      const rate = playbackRate(this.config.engine, entries);
       await player?.setFilters(entries);
+      const changed = !sameFilters(connection.entries, entries);
       connection.entries = entries;
+      connection.rate = rate;
+      if (changed) this.#settingsChanged(connection);
     });
   }
 
@@ -337,6 +359,7 @@ export class Guild<Target> {
       channelId: session.channelId,
       volume: DEFAULT_VOLUME,
       entries: NO_FILTERS,
+      rate: 1,
       settings: Promise.resolve(),
       channel: Promise.resolve(),
       unsubscribe: () => undefined,
@@ -502,6 +525,10 @@ export class Guild<Target> {
     return run;
   }
 
+  #settingsChanged(connection: Connection): void {
+    if (this.#live?.connection === connection) this.queue?.voiceSettingsChanged();
+  }
+
   #forgetIfIdle(): void {
     if (!this.queue && !this.#live && !this.#join && !this.#leaving) this.guilds.forget(this);
   }
@@ -513,6 +540,29 @@ export class Guild<Target> {
 
 function interruption(track: Track, signal: AbortSignal): TrackEnd | undefined {
   return track.controller.signal.aborted || signal.aborted ? STOPPED : undefined;
+}
+
+function playbackRate(engine: Engine, entries: readonly FilterEntry[]): number {
+  if (!engine.playbackRate) return 1;
+  let rate: unknown;
+  try {
+    rate = engine.playbackRate(entries);
+  } catch (error: unknown) {
+    if (DisTubeError.is(error)) throw error;
+    throw new DisTubeError(ErrorCode.INVALID_ARGUMENT, "Engine refused the playback rate of the filters", {
+      cause: error,
+    });
+  }
+  if (typeof rate !== "number" || !Number.isFinite(rate) || rate <= 0)
+    throw new DisTubeError(ErrorCode.INVALID_ARGUMENT, `Engine reported the invalid playback rate ${String(rate)}`);
+  return rate;
+}
+
+function sameFilters(current: readonly FilterEntry[], next: readonly FilterEntry[]): boolean {
+  return (
+    current.length === next.length &&
+    current.every((entry, index) => entry.name === next[index]?.name && entry.value === next[index]?.value)
+  );
 }
 
 function seekable(resource: PlaybackResource): boolean {

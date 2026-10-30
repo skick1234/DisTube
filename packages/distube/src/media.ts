@@ -195,10 +195,27 @@ export interface QueueItem<Metadata = unknown> {
   readonly metadata: Metadata;
   /** Whether autoplay added this occurrence rather than a caller. Repeat and `previous` replays keep it. */
   readonly autoplay: boolean;
+  /**
+   * The Playlist this occurrence was inserted from, as the queue committed it after `maxPlaylistSongs` and age
+   * filtering. Absent for a Song insertion and for autoplay items. Repeat and `previous` replays keep it.
+   */
+  readonly playlist?: Playlist;
   /** Creation time in epoch milliseconds. */
   readonly addedAt: number;
 }
 
-export function queueItem<Metadata>(song: Song, metadata: Metadata, autoplay = false): QueueItem<Metadata> {
-  return Object.freeze({ id: randomUUID(), song, metadata, autoplay, addedAt: Date.now() });
+export function queueItem<Metadata>(
+  song: Song,
+  metadata: Metadata,
+  autoplay = false,
+  playlist?: Playlist,
+): QueueItem<Metadata> {
+  return Object.freeze({
+    id: randomUUID(),
+    song,
+    metadata,
+    autoplay,
+    ...(playlist === undefined ? {} : { playlist }),
+    addedAt: Date.now(),
+  });
 }

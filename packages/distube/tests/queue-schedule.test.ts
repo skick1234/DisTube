@@ -19,7 +19,7 @@ const TARGET = { guildId: GUILD, id: VOICE_CHANNEL };
 /** A playing queue holding `ids` in order: the first is current, the rest are waiting. */
 async function playing(ids: readonly string[], metadata?: unknown) {
   const harness = playableSetup<unknown>();
-  const queue = await harness.distube.play(TARGET, ids[0] as string, { metadata });
+  const { queue } = await harness.distube.play(TARGET, ids[0] as string, { metadata });
   for (const id of ids.slice(1)) await queue.add(id, { metadata });
   await settle();
   return { harness, queue, player: harness.engine.players[0] as FakePlayer };
@@ -161,7 +161,7 @@ describe("jump", () => {
     expect(queue.upcoming.map(item => item.song.id)).toEqual(rest);
   });
 
-  it("jump to a later item aborts the head's preparation, and jump to the head keeps it", async () => {
+  it("jump to a later item aborts the head's preparation without recording it, and jump to the head keeps it", async () => {
     const { harness, queue, player } = await playing(["a", "b", "c"]);
     const held = deferred<PlaybackResource>();
     harness.source.stream.mockImplementationOnce(() => held.promise);
@@ -193,6 +193,26 @@ describe("jump", () => {
     await settle();
     expect(harness.source.disposed).toContain("c");
     expect(player.playing).toBe("d");
+    expect(remembered(queue)).toEqual(["a", "b"]);
+  });
+
+  it("records an item whose aborted preparation was moved behind the head when a jump passes it", async () => {
+    const { harness, queue } = await playing(["a", "b", "c", "d"]);
+    const held = deferred<PlaybackResource>();
+    harness.source.stream.mockImplementationOnce(() => held.promise);
+    await queue.skip();
+    await settle();
+    const [b, , d] = queue.upcoming.map(item => item.id);
+
+    queue.move(required(b), d);
+    const jumping = queue.jump(3);
+    held.resolve(harness.source.resource("b"));
+    await jumping;
+    await settle();
+
+    expect(queue.current?.song.id).toBe("d");
+    expect(remembered(queue)).toEqual(["a", "c", "b"]);
+    await harness.distube.dispose();
   });
 });
 

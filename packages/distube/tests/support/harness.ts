@@ -3,6 +3,7 @@ import {
   type Diagnostic,
   DisTube,
   type DisTubeEventListener,
+  type DisTubeEventMap,
   type DisTubeEventName,
   type DisTubeOptions,
   type Playlist,
@@ -79,6 +80,13 @@ export function record<Metadata>(distube: DisTube<Metadata>, names: readonly Dis
   const log: string[] = [];
   for (const name of names) distube.on(name, () => log.push(name));
   return log;
+}
+
+/** Records every `queue.updated` payload, in publication order. */
+export function updates<Metadata>(distube: DisTube<Metadata>): DisTubeEventMap<Metadata>["queue.updated"][] {
+  const published: DisTubeEventMap<Metadata>["queue.updated"][] = [];
+  distube.on("queue.updated", event => void published.push(event));
+  return published;
 }
 
 export function media(source: string, id = `${source}-song`): Song {
@@ -361,13 +369,7 @@ export const FAKE_FILTERS: FilterDefinitions<string> = Object.freeze({
   ...Object.fromEntries(
     FILTER_NAMES.map(name => [name, { render: () => name, label: name } satisfies FilterDefinitions<string>[string]]),
   ),
-  bassboost: {
-    render: (value = 10) => `bass=g=${value}`,
-    default: 10,
-    min: 0,
-    max: 20,
-    label: (value = 10) => `Bass +${value}dB`,
-  },
+  bassboost: { render: (value = 10) => `bass=g=${value}`, default: 10, min: 0, max: 20, label: "Bass boost" },
   nightcore: { render: () => "nightcore", label: "Nightcore" },
   vaporwave: { render: (value = 0.8) => `rate=${value}`, default: 0.8, min: 0.5, max: 1 },
 });
@@ -381,8 +383,7 @@ export function filterInfo(definitions: FilterDefinitions<string>): ReadonlyMap<
         ...(definition.min === undefined ? {} : { min: definition.min }),
         ...(definition.max === undefined ? {} : { max: definition.max }),
         acceptsValue: definition.default !== undefined || definition.min !== undefined || definition.max !== undefined,
-        label: (value?: number): string =>
-          typeof definition.label === "function" ? definition.label(value) : (definition.label ?? name),
+        label: definition.label ?? name,
       },
     ]),
   );

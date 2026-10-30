@@ -1,5 +1,14 @@
 import { expectTypeOf } from "vitest";
-import type { DisTube, DisTubeQueue, DisTubeVoice, QueueItem, QueueState, VoiceManager } from "../src";
+import type {
+  DisTube,
+  DisTubeQueue,
+  DisTubeVoice,
+  Playlist,
+  PlayResult,
+  QueueItem,
+  QueueState,
+  VoiceManager,
+} from "../src";
 import { Song } from "../src";
 import type {
   Adapter,
@@ -97,9 +106,14 @@ const session: VoiceSession = {
 // @ts-expect-error a VoiceSession reports its channel bitrate
 const bitrateless: VoiceSession = { ...session, bitrate: undefined };
 
-const info: FilterDefinitionInfo = { default: 10, min: 0, max: 20, acceptsValue: true, label: () => "Bass" };
+const info: FilterDefinitionInfo = { default: 10, min: 0, max: 20, acceptsValue: true, label: "Bass boost" };
+// @ts-expect-error a preset label is a plain string without the value
+const valueLabel: FilterDefinitionInfo = { acceptsValue: true, label: (value?: number) => `Bass +${value}dB` };
 const engine: Engine = {
   filters: new Map([["bassboost", info]]),
+  playbackRate(entries: readonly FilterEntry[]): number {
+    return entries.some(entry => entry.name === "nightcore") ? 1.25 : 1;
+  },
   async createPlayer(_session: VoiceSession, options: PlayerOptions): Promise<Player> {
     expectTypeOf(options.onClosed).toEqualTypeOf<(error: Error) => void>();
     return player;
@@ -151,6 +165,9 @@ const controls: [Promise<void>, Promise<void>, Promise<void>, boolean] = [
   queue.paused,
 ];
 const addedAt: number | undefined = queue.current?.addedAt;
+const fromPlaylist: Playlist | undefined = queue.current?.playlist;
+const rate: number = queue.playbackRate;
+const skipped: Promise<QueueItem | undefined> = queue.skip();
 
 // @ts-expect-error playback lives on the queue
 voice.play(resource);
@@ -172,7 +189,16 @@ queue.state;
 voice.release();
 
 const definitions: FilterDefinitions<string> = {
-  bassboost: { render: (value = 10) => `bass=g=${value}`, default: 10, min: 0, max: 20, label: v => `Bass +${v}dB` },
+  bassboost: { render: (value = 10) => `bass=g=${value}`, default: 10, min: 0, max: 20, label: "Bass boost" },
+  nightcore: {
+    render: (value = 1.25) => `asetrate=${value}`,
+    default: 1.25,
+    min: 1,
+    max: 2,
+    tempo: value => value ?? 1.25,
+  },
+  // @ts-expect-error a definition label is a plain string without the value
+  pulse: { render: () => "pulse", label: () => "Pulse" },
 };
 const reader: ReaderPlaybackResource = { kind: "reader", size: 1000, container: "webm", read: () => audio };
 const timed: TimedPlaybackResource = { kind: "timed", container: "mp4", open: () => audio };
@@ -191,13 +217,20 @@ interface Requester {
 declare const typed: DisTube<Requester>;
 declare const untyped: DisTube;
 
+expectTypeOf<Awaited<ReturnType<DisTube<Requester>["play"]>>>().toEqualTypeOf<PlayResult<Requester>>();
+expectTypeOf<Awaited<ReturnType<DisTube<Requester>["play"]>>["items"][number]["metadata"]>().toEqualTypeOf<Requester>();
 expectTypeOf<
-  NonNullable<Awaited<ReturnType<DisTube<Requester>["play"]>>["current"]>["metadata"]
+  NonNullable<Awaited<ReturnType<DisTube<Requester>["play"]>>["queue"]["current"]>["metadata"]
 >().toEqualTypeOf<Requester>();
-expectTypeOf<NonNullable<Awaited<ReturnType<DisTube["play"]>>["current"]>["metadata"]>().toEqualTypeOf<undefined>();
 expectTypeOf<
-  NonNullable<Awaited<ReturnType<DisTube<Requester | undefined>["play"]>>["current"]>["metadata"]
+  NonNullable<Awaited<ReturnType<DisTube["play"]>>["queue"]["current"]>["metadata"]
+>().toEqualTypeOf<undefined>();
+expectTypeOf<
+  NonNullable<Awaited<ReturnType<DisTube<Requester | undefined>["play"]>>["queue"]["current"]>["metadata"]
 >().toEqualTypeOf<Requester | undefined>();
+// @ts-expect-error the filter catalog lives on the client, not the voice
+voice.filters.definitions;
+const catalog: ReadonlyMap<string, FilterDefinitionInfo> = typed.filters;
 const typedFromQueue: string | undefined = typed.getQueue("guild")?.current?.metadata.requestedBy;
 typed.on("queue.item.finished", event => {
   const captured: QueueState<Requester> = event.state;
@@ -255,6 +288,11 @@ void [
   attachedVoice,
   controls,
   addedAt,
+  fromPlaylist,
+  rate,
+  skipped,
+  valueLabel,
+  catalog,
   definitions,
   reader,
   timed,

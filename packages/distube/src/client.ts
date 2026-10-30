@@ -1,6 +1,7 @@
 import type {
   Adapter,
   Diagnostic,
+  FilterDefinitionInfo,
   FilterDefinitions,
   Plugin,
   PluginDataOf,
@@ -10,7 +11,7 @@ import type {
 import { DisTubeError, ErrorCode, requireBoolean, requireInteger, requireQuery, throwIfAborted } from "./errors";
 import { DisTubeEvents, type DisTubeEventListener, type DisTubeEventName } from "./events";
 import { Guilds } from "./guild";
-import type { Playlist, Song } from "./media";
+import type { Playlist, QueueItem, Song } from "./media";
 import { type AddArguments, type AddOptions, type DisTubeQueue, validateAdd } from "./queue";
 import { resolveInput, searchSongs, suggestQueries, validateInput } from "./sources";
 import { normalizeTarget, VoiceManager } from "./voice";
@@ -48,6 +49,12 @@ export interface DisTubeOptions<Target = VoiceChannelTarget> {
 }
 
 export type PlayOptions<Metadata = undefined> = AddOptions<Metadata>;
+
+/** What `distube.play` resolves: the guild's queue and the occurrences the call committed, in order. */
+export type PlayResult<Metadata = undefined, Target = VoiceChannelTarget> = Readonly<{
+  queue: DisTubeQueue<Metadata, Target>;
+  items: readonly QueueItem<Metadata>[];
+}>;
 
 /** Options for `distube.search`. `source` narrows the result type to that plugin's data. */
 export interface SearchRequest<Source extends Plugin = Plugin> {
@@ -128,15 +135,16 @@ export class DisTube<Metadata = undefined, Target = VoiceChannelTarget> {
     return this.queues.get(guildId);
   }
 
+  /** Every preset the active engine renders, keyed by name; every voice of this client accepts exactly these names. */
+  get filters(): ReadonlyMap<string, FilterDefinitionInfo> {
+    return this.#guilds.config.engine.filters;
+  }
+
   /**
    * Resolves `input`, joins `target` and adds the result to the guild queue, creating it synchronously.
-   * Calls for one guild commit in invocation order.
+   * Calls for one guild commit in invocation order. Resolves the queue and the items this call committed.
    */
-  play(
-    target: Target,
-    input: ResolvableInput,
-    ...args: AddArguments<Metadata>
-  ): Promise<DisTubeQueue<Metadata, Target>> {
+  play(target: Target, input: ResolvableInput, ...args: AddArguments<Metadata>): Promise<PlayResult<Metadata, Target>> {
     const options: AddOptions<unknown> = args[0] ?? {};
     try {
       const { guildId } = normalizeTarget(this.#guilds.config.adapter, target);
@@ -146,7 +154,12 @@ export class DisTube<Metadata = undefined, Target = VoiceChannelTarget> {
       const queue = guild.queue ?? guild.createQueue();
       return queue
         .admit(input, options, () => this.voices.join(target))
-        .then(() => queue as DisTubeQueue<Metadata, Target>);
+        .then(items =>
+          Object.freeze({
+            queue: queue as DisTubeQueue<Metadata, Target>,
+            items: items as readonly QueueItem<Metadata>[],
+          }),
+        );
     } catch (error: unknown) {
       return Promise.reject(error);
     }

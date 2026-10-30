@@ -3,6 +3,7 @@ import {
   abortError,
   DisTubeError,
   ErrorCode,
+  fromIntegration,
   requireBoolean,
   requireInteger,
   throwIfAborted,
@@ -18,6 +19,7 @@ import {
   IDLE_QUEUE_STATE,
   insertAt,
   jumpTo,
+  markPlaying,
   moveBefore,
   popHistory,
   pushHistory,
@@ -26,6 +28,7 @@ import {
   removeItem,
   removeRange,
   type RepeatMode,
+  settleStatus,
   shuffle,
   startFirst,
 } from "./queue-state";
@@ -79,6 +82,12 @@ interface Attempt {
 }
 
 type QueueEventName = Exclude<keyof DisTubeEventMap, "queue.created" | "voice.disconnected">;
+
+type EventDetail<Name extends QueueEventName> = Omit<DisTubeEventMap<unknown>[Name], keyof BaseQueueEvent>;
+
+type CommittedEventName = Exclude<QueueEventName, "queue.updated" | "queue.finished" | "queue.deleted">;
+
+type CommitEvent = { [Name in CommittedEventName]: readonly [Name, EventDetail<Name>] }[CommittedEventName];
 
 const REPEAT_MODES: readonly unknown[] = ["off", "song", "queue"] satisfies readonly RepeatMode[];
 
@@ -147,9 +156,14 @@ export class DisTubeQueue<Metadata = undefined, Target = VoiceChannelTarget> {
     return this.#state.autoplay;
   }
 
-  /** Elapsed seconds of the current item; `0` without a started one. */
+  /** Elapsed source seconds of the current item; `0` without a started one. */
   get position(): number {
     return this.#started() ? this.#guild.position : 0;
+  }
+
+  /** Source seconds the voice's filter selection plays per wall second, as the engine reports it; `1` without a voice. */
+  get playbackRate(): number {
+    return this.voice ? this.#guild.playbackRate : 1;
   }
 
   /** Resolves `input` and commits it in call order. Rejects `INVALID_STATE` if the guild has no voice by then. */
@@ -175,7 +189,7 @@ export class DisTubeQueue<Metadata = undefined, Target = VoiceChannelTarget> {
           ? removeRange(this.#state, target - 1, target - 1)
           : removeRange(this.#state, target.from - 1, target.to - 1);
     this.#assertAlive();
-    this.#edit(removal.state);
+    this.#commit(removal.state);
     return removal.items as readonly QueueItem<Metadata>[];
   }
 
@@ -183,19 +197,19 @@ export class DisTubeQueue<Metadata = undefined, Target = VoiceChannelTarget> {
   move(itemId: string, beforeItemId?: string): void {
     const moved = moveBefore(this.#state, itemId, beforeItemId);
     this.#assertAlive();
-    this.#edit(moved);
+    this.#commit(moved);
   }
 
   shuffle(): void {
     this.#assertAlive();
-    this.#edit(shuffle(this.#state));
+    this.#commit(shuffle(this.#state));
   }
 
   /** Removes every waiting item without ending the current one and returns them in order. */
   clear(): readonly QueueItem<Metadata>[] {
     this.#assertAlive();
     const removal = clearUpcoming(this.#state);
-    this.#edit(removal.state);
+    this.#commit(removal.state);
     return removal.items as readonly QueueItem<Metadata>[];
   }
 
@@ -203,13 +217,13 @@ export class DisTubeQueue<Metadata = undefined, Target = VoiceChannelTarget> {
     if (!REPEAT_MODES.includes(mode))
       throw new DisTubeError(ErrorCode.INVALID_ARGUMENT, `Unknown repeat mode: ${String(mode)}`);
     this.#assertAlive();
-    if (this.#state.repeat !== mode) this.#state = Object.freeze({ ...this.#state, repeat: mode });
+    if (this.#state.repeat !== mode) this.#commit(Object.freeze({ ...this.#state, repeat: mode }));
   }
 
   setAutoplay(enabled: boolean): void {
     requireBoolean(enabled, "autoplay");
     this.#assertAlive();
-    if (this.#state.autoplay !== enabled) this.#state = Object.freeze({ ...this.#state, autoplay: enabled });
+    if (this.#state.autoplay !== enabled) this.#commit(Object.freeze({ ...this.#state, autoplay: enabled }));
     if (!enabled) this.#lookup?.abort();
   }
 
@@ -235,16 +249,31 @@ export class DisTubeQueue<Metadata = undefined, Target = VoiceChannelTarget> {
       throw new DisTubeError(ErrorCode.INVALID_ARGUMENT, "Seek seconds exceed the track duration");
     this.#assertStarted();
     await this.#guild.seek(seconds);
+    if (!this.#lifetime.signal.aborted) this.#publish();
   }
 
-  /** Ends the current item, or drops the one being prepared, and plays the next. */
-  async skip(): Promise<void> {
+  /**
+   * Ends the current item, or drops the waiting head while nothing is current, and plays the next. Resolves, once the
+   * ended item has stopped, the item that was first in `upcoming` when the skip committed, or `undefined` when none
+   * waited. Rejects `INVALID_STATE` while an earlier skip, jump or previous is still ending its item.
+   */
+  async skip(): Promise<QueueItem<Metadata> | undefined> {
     this.#assertAlive();
     const attempt = this.#attempt;
-    if (!attempt || attempt.ended) throw new DisTubeError(ErrorCode.INVALID_STATE, "Queue has nothing playing");
-    if (attempt.playing) this.#end(attempt, false);
-    else this.#state = failFirst(this.#state, attempt.item.id);
-    await this.#interrupt(attempt);
+    const head = this.#state.current ? undefined : this.#state.upcoming[0];
+    const playing = this.#playing();
+    const interrupted = attempt?.ended === true && attempt.controller.signal.aborted;
+    let ending: Attempt | undefined;
+    if (playing) {
+      ending = playing;
+      this.#end(playing, false);
+    } else if (head && !interrupted) {
+      ending = attempt && !attempt.ended && attempt.item === head ? attempt : undefined;
+      this.#commit(failFirst(this.#state, head.id));
+    } else throw new DisTubeError(ErrorCode.INVALID_STATE, "Queue has nothing playing");
+    const next = this.#state.upcoming[0] as QueueItem<Metadata> | undefined;
+    if (ending) await this.#interrupt(ending);
+    return next;
   }
 
   /** Ends the current item and starts the waiting occurrence named by ID or one-based position. */
@@ -257,8 +286,9 @@ export class DisTubeQueue<Metadata = undefined, Target = VoiceChannelTarget> {
     const attempt = this.#attempt;
     const playing = this.#playing();
     if (playing) this.#lastPlayed = playing;
-    this.#state = jumped.state;
-    if (!options.requeue) for (const item of jumped.skipped) this.#remember(item);
+    const preparing = attempt && !attempt.playing && !attempt.controller.signal.aborted ? attempt.item : undefined;
+    const remembered = options.requeue ? [] : jumped.skipped.filter(item => item !== preparing);
+    this.#commit(remembered.reduce((state, item) => this.#remember(state, item), jumped.state));
     if (attempt && (attempt.playing || this.#state.upcoming[0] !== attempt.item)) await this.#interrupt(attempt);
   }
 
@@ -268,10 +298,10 @@ export class DisTubeQueue<Metadata = undefined, Target = VoiceChannelTarget> {
     const popped = popHistory(this.#state);
     if (!popped) throw new DisTubeError(ErrorCode.INVALID_STATE, "Queue has no history to return to");
     const attempt = this.#attempt;
-    const replay = queueItem(popped.item.song, popped.item.metadata, popped.item.autoplay);
+    const replay = replayOf(popped.item);
     const playing = this.#playing();
     const current = playing ? [playing.item] : [];
-    this.#state = insertAt(finishCurrent(popped.state), [replay, ...current], 0);
+    this.#commit(insertAt(finishCurrent(popped.state), [replay, ...current], 0));
     if (attempt) await this.#interrupt(attempt);
     else {
       this.#lookup?.abort();
@@ -326,7 +356,7 @@ export class DisTubeQueue<Metadata = undefined, Target = VoiceChannelTarget> {
       if (join) await this.#recheck(join(), options.signal);
       else if (!this.#guild.voice)
         throw new DisTubeError(ErrorCode.INVALID_STATE, "The guild has no voice to add to; use distube.play");
-      return this.#commit(media, options);
+      return this.#insert(media, options);
     });
     this.#tail = step.catch(() => undefined);
     this.#guild.guilds.track(this.#tail);
@@ -356,14 +386,18 @@ export class DisTubeQueue<Metadata = undefined, Target = VoiceChannelTarget> {
     else void this.delete("failed");
   }
 
-  #commit(media: Song | Playlist, options: AddOptions<unknown>): readonly QueueItem[] {
-    const items = songsOf(media).map(song => queueItem(song, options.metadata));
-    this.#edit(insertAt(this.#state, items, options.next ? 0 : options.at));
+  #insert(media: Song | Playlist, options: AddOptions<unknown>): readonly QueueItem[] {
+    const playlist = media instanceof Playlist ? media : undefined;
+    const items = songsOf(media).map(song => queueItem(song, options.metadata, false, playlist));
     this.#inserted = true;
     this.#autoplayFailed = false;
+    this.#commit(
+      insertAt(this.#state, items, options.next ? 0 : options.at),
+      playlist
+        ? [["queue.playlist.added", { playlist, items }]]
+        : items.map(item => ["queue.item.added", { item }] as const),
+    );
     this.#lookup?.abort();
-    if (media instanceof Playlist) this.#emit("queue.playlist.added", { playlist: media, items });
-    else for (const item of items) this.#emit("queue.item.added", { item });
     this.#kick();
     return items;
   }
@@ -406,12 +440,13 @@ export class DisTubeQueue<Metadata = undefined, Target = VoiceChannelTarget> {
         prepared = await prepareSong(plugins, engine, item.song, signal);
       } catch (error: unknown) {
         if (signal.aborted) return;
-        this.#state = failFirst(this.#state, item.id);
         this.#autoplayFailed ||= item.id === this.#autoplayItem;
-        this.#emit("queue.item.failed", {
-          item,
-          error: toDisTubeError(ErrorCode.SOURCE_FAILED, "Failed to prepare the QueueItem", error),
-        });
+        this.#commit(failFirst(this.#state, item.id), [
+          [
+            "queue.item.failed",
+            { item, error: toDisTubeError(ErrorCode.SOURCE_FAILED, "Failed to prepare the QueueItem", error) },
+          ],
+        ]);
         return;
       }
       const started = startFirst(this.#state);
@@ -423,23 +458,24 @@ export class DisTubeQueue<Metadata = undefined, Target = VoiceChannelTarget> {
         if (voiceLost) void this.delete("voice-loss");
         return;
       }
-      this.#state = started.state;
       attempt.playing = true;
       const { resource, fallback } = prepared;
       attempt.fallback = fallback;
+      this.#commit(started.state);
       let end: TrackEnd;
       try {
         end = await this.#guild.playTrack(resource, signal, () =>
-          this.#emit("queue.item.started", fallback ? { item, fallback } : { item }),
+          this.#commit(markPlaying(this.#state), [["queue.item.started", fallback ? { item, fallback } : { item }]]),
         );
       } catch (error: unknown) {
         if (signal.aborted) return;
-        this.#state = finishCurrent(this.#state);
         this.#autoplayFailed ||= item.id === this.#autoplayItem;
-        this.#emit("queue.item.failed", {
-          item,
-          error: toDisTubeError(ErrorCode.VOICE_FAILED, "Failed to play the QueueItem", error),
-        });
+        this.#commit(finishCurrent(this.#state), [
+          [
+            "queue.item.failed",
+            { item, error: fromIntegration(ErrorCode.VOICE_FAILED, "Failed to play the QueueItem", error) },
+          ],
+        ]);
         return;
       }
       if (!signal.aborted) this.#end(attempt, end.reason === "finished");
@@ -453,18 +489,18 @@ export class DisTubeQueue<Metadata = undefined, Target = VoiceChannelTarget> {
     const { item } = attempt;
     attempt.ended = true;
     this.#lastPlayed = attempt;
-    this.#state = finishCurrent(this.#state);
-    if (finished && this.#state.repeat !== "off") {
-      const replay = queueItem(item.song, item.metadata, item.autoplay);
-      this.#state = insertAt(this.#state, [replay], this.#state.repeat === "song" ? 0 : undefined);
-    }
-    if (finished) this.#emit("queue.item.finished", { item });
-    this.#remember(item);
+    const ended = finishCurrent(this.#state);
+    const repeated =
+      finished && ended.repeat !== "off"
+        ? insertAt(ended, [replayOf(item)], ended.repeat === "song" ? 0 : undefined)
+        : ended;
+    this.#commit(this.#remember(repeated, item), finished ? [["queue.item.finished", { item }]] : []);
   }
 
   async #autoplay(): Promise<boolean> {
     const seed = this.#lastPlayed;
     if (!this.#state.autoplay || !seed || this.#autoplayFailed) return false;
+    this.#commit(this.#state);
     const lookup = new AbortController();
     this.#lookup = lookup;
     let song: Song | undefined;
@@ -487,19 +523,18 @@ export class DisTubeQueue<Metadata = undefined, Target = VoiceChannelTarget> {
         failure === undefined
           ? new DisTubeError(ErrorCode.SOURCE_FAILED, "Autoplay found no related Song")
           : toDisTubeError(ErrorCode.SOURCE_FAILED, "Autoplay failed", failure);
-      this.#emit("queue.autoplay.failed", { song: seed.item.song, error });
+      this.#commit(this.#state, [["queue.autoplay.failed", { song: seed.item.song, error }]], false);
       return false;
     }
     const item = queueItem(song, seed.item.metadata, true);
     this.#autoplayItem = item.id;
-    this.#state = insertAt(this.#state, [item]);
-    this.#emit("queue.item.added", { item });
+    this.#commit(insertAt(this.#state, [item]), [["queue.item.added", { item }]]);
     return true;
   }
 
-  #setPaused(paused: boolean): Promise<void> {
+  async #setPaused(paused: boolean): Promise<void> {
     this.#assertStarted();
-    return this.#guild.setPaused(paused);
+    if ((await this.#guild.setPaused(paused)) && !this.#lifetime.signal.aborted) this.#publish();
   }
 
   #started(): boolean {
@@ -517,19 +552,41 @@ export class DisTubeQueue<Metadata = undefined, Target = VoiceChannelTarget> {
     return attempt.done;
   }
 
-  #edit(state: QueueState): void {
-    this.#state = state;
+  /** @internal */
+  voiceSettingsChanged(): void {
+    if (this.voice) this.#publish();
+  }
+
+  #commit(next: QueueState, events: readonly CommitEvent[] = [], lookup = this.#looksUp(next)): void {
+    if (this.#lifetime.signal.aborted) return;
+    const settled = settleStatus(next, lookup);
+    if (settled === this.#state && events.length === 0) return;
+    this.#state = settled;
     const attempt = this.#attempt;
-    if (attempt && !attempt.playing && state.upcoming[0] !== attempt.item) attempt.controller.abort();
+    if (attempt && !attempt.playing && settled.upcoming[0] !== attempt.item) attempt.controller.abort();
+    this.#publish(events);
+  }
+
+  #publish(events: readonly CommitEvent[] = []): void {
+    const base = this.#event();
+    const { events: dispatcher } = this.#guild.config;
+    for (const [name, detail] of events)
+      dispatcher.emit(name, { ...base, ...detail } as DisTubeEventMap<unknown, Target>[typeof name]);
+    dispatcher.emit("queue.updated", { ...base, position: this.position, playbackRate: this.playbackRate });
+  }
+
+  #looksUp(state: QueueState): boolean {
+    return state.autoplay && this.#lastPlayed !== undefined && !this.#autoplayFailed && this.#pending === 0;
   }
 
   #snapshot(): QueueState {
     const state = this.#state;
-    return state.status === "playing" && this.paused ? Object.freeze({ ...state, status: "paused" }) : state;
+    const started = state.status === "playing" || (state.status === "preparing" && state.current !== undefined);
+    return started && this.paused ? Object.freeze({ ...state, status: "paused" }) : state;
   }
 
-  #remember(item: QueueItem): void {
-    this.#state = pushHistory(this.#state, item, this.#guild.config.historySize);
+  #remember(state: QueueState, item: QueueItem): QueueState {
+    return pushHistory(state, item, this.#guild.config.historySize);
   }
 
   #assertAlive(): void {
@@ -577,6 +634,10 @@ export class DisTubeQueue<Metadata = undefined, Target = VoiceChannelTarget> {
       error,
     });
   }
+}
+
+function replayOf(item: QueueItem): QueueItem {
+  return queueItem(item.song, item.metadata, item.autoplay, item.playlist);
 }
 
 function untilAborted<Value>(promise: Promise<Value>, signal: AbortSignal): Promise<Value> {

@@ -29,6 +29,10 @@ export class DiscordVoiceEngine implements Engine {
     this.#settings = settings;
   }
 
+  playbackRate(entries: readonly FilterEntry[]): number {
+    return this.#registry.playbackRate(entries);
+  }
+
   async createPlayer(session: VoiceSession, { onClosed }: PlayerOptions): Promise<Player> {
     if (!(session instanceof DiscordVoiceSession)) {
       throw new TypeError("This engine only plays through its own package's VoiceSession");
@@ -69,15 +73,24 @@ export type FfmpegFilterDefinition = FilterDefinition<string>;
 export type FfmpegFilterDefinitions = FilterDefinitions<string>;
 
 /**
- * Speed presets multiply the 48 kHz sample rate. Below 0.5x or above 2x the pitch shift stops sounding
- * like the preset and resampling cost climbs, so the ranges stop there.
+ * Speed presets multiply the 48 kHz sample rate, so their tempo is their value. Below 0.5x or above 2x the
+ * pitch shift stops sounding like the preset and resampling cost climbs, so the ranges stop there.
  */
-const rate = (value: number): string => `asetrate=48000*${value},aresample=48000,bass=g=5`;
+function speed(label: string, fallback: number, min: number, max: number): FfmpegFilterDefinition {
+  return {
+    render: (value = fallback) => `asetrate=48000*${value},aresample=48000,bass=g=5`,
+    tempo: (value = fallback) => value,
+    default: fallback,
+    min,
+    max,
+    label,
+  };
+}
 
 /** Built-in definition for every conventional filter name. */
 const DEFAULT_FILTERS: FfmpegFilterDefinitions = Object.freeze({
   "3d": fixed("apulsator=hz=0.125"),
-  bassboost: { render: (value = 10) => `bass=g=${value}`, default: 10, min: 0, max: 20, label: v => `Bass +${v}dB` },
+  bassboost: { render: (value = 10) => `bass=g=${value}`, default: 10, min: 0, max: 20, label: "Bass boost" },
   earwax: fixed("earwax"),
   echo: fixed("aecho=0.8:0.9:1000:0.3"),
   flanger: fixed("flanger"),
@@ -85,11 +98,11 @@ const DEFAULT_FILTERS: FfmpegFilterDefinitions = Object.freeze({
   haas: fixed("haas"),
   karaoke: fixed("stereotools=mlev=0.03"),
   mcompand: fixed("mcompand"),
-  nightcore: { render: (value = 1.25) => rate(value), default: 1.25, min: 1, max: 2, label: v => `Nightcore x${v}` },
+  nightcore: speed("Nightcore", 1.25, 1, 2),
   phaser: fixed("aphaser"),
   surround: fixed("surround"),
   tremolo: fixed("tremolo"),
-  vaporwave: { render: (value = 0.8) => rate(value), default: 0.8, min: 0.5, max: 1, label: v => `Vaporwave x${v}` },
+  vaporwave: speed("Vaporwave", 0.8, 0.5, 1),
 });
 
 function fixed(fragment: string): FfmpegFilterDefinition {
@@ -120,11 +133,29 @@ export class FilterRegistry {
     return fragments.length > 0 ? fragments.join(",") : undefined;
   }
 
-  #fragment(entry: FilterEntry): string {
+  playbackRate(entries: readonly FilterEntry[]): number {
+    let rate = 1;
+    for (const entry of entries) {
+      const { tempo = 1 } = this.#definition(entry);
+      const value = typeof tempo === "function" ? tempo(entry.value) : tempo;
+      if (!positive(value)) {
+        throw new DisTubeError("INVALID_ARGUMENT", `Filter ${entry.name} tempo must be a finite number above 0`);
+      }
+      rate *= value;
+    }
+    return rate;
+  }
+
+  #definition(entry: FilterEntry): FfmpegFilterDefinition {
     const definition = this.#definitions.get(entry.name);
     if (definition === undefined) {
       throw new DisTubeError("UNSUPPORTED", `Filter ${entry.name} is not defined by this engine`);
     }
+    return definition;
+  }
+
+  #fragment(entry: FilterEntry): string {
+    const definition = this.#definition(entry);
     const fragment = definition.render(entry.value);
     if (typeof fragment !== "string") {
       throw new DisTubeError("INVALID_ARGUMENT", `Filter ${entry.name} must render a libavfilter fragment`);
@@ -138,14 +169,17 @@ function acceptsValue(definition: FfmpegFilterDefinition): boolean {
 }
 
 function info(name: string, definition: FfmpegFilterDefinition): FilterDefinitionInfo {
-  const { label } = definition;
   return Object.freeze({
     default: definition.default,
     min: definition.min,
     max: definition.max,
     acceptsValue: acceptsValue(definition),
-    label: (value?: number) => (typeof label === "function" ? label(value ?? definition.default) : (label ?? name)),
+    label: definition.label ?? name,
   });
+}
+
+function positive(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value > 0;
 }
 
 /** Construction-time mistakes are programming errors, so they throw TypeError rather than a DisTubeError. */
@@ -165,12 +199,12 @@ function validated(name: string, definition: FfmpegFilterDefinition): FfmpegFilt
   if (definition.default !== undefined && (definition.default < min || definition.default > max)) {
     throw new TypeError(`Filter ${name} default must lie within its range`);
   }
-  if (
-    definition.label !== undefined &&
-    typeof definition.label !== "string" &&
-    typeof definition.label !== "function"
-  ) {
-    throw new TypeError(`Filter ${name} label must be a string or a function`);
+  if (definition.label !== undefined && typeof definition.label !== "string") {
+    throw new TypeError(`Filter ${name} label must be a string`);
+  }
+  const { tempo } = definition;
+  if (tempo !== undefined && typeof tempo !== "function" && !positive(tempo)) {
+    throw new TypeError(`Filter ${name} tempo must be a function or a finite number above 0`);
   }
   return definition;
 }

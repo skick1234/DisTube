@@ -1,14 +1,8 @@
 import type { Engine, PlaybackResource, Plugin, ResolvableInput } from "./contracts";
-import { abortError, DisTubeError, ErrorCode, requireQuery, throwIfAborted } from "./errors";
+import { abortError, DisTubeError, ErrorCode, fromIntegration, requireQuery, throwIfAborted } from "./errors";
 import { Playlist, Song } from "./media";
 
 const SUGGESTION_LIMIT = 25;
-
-const REWRAPPED: ReadonlySet<ErrorCode> = new Set([
-  ErrorCode.INVALID_ARGUMENT,
-  ErrorCode.INVALID_STATE,
-  ErrorCode.ABORTED,
-]);
 
 export interface SearchQuery {
   readonly source?: Plugin;
@@ -23,8 +17,7 @@ async function call<Value>(plugin: Plugin, signal: AbortSignal, operation: () =>
     return await operation();
   } catch (error: unknown) {
     if (signal.aborted) throw abortError(signal);
-    if (DisTubeError.is(error) && !REWRAPPED.has(error.code)) throw error;
-    throw new DisTubeError(ErrorCode.SOURCE_FAILED, `${plugin.name} failed`, { cause: error, source: plugin.name });
+    throw fromIntegration(ErrorCode.SOURCE_FAILED, `${plugin.name} failed`, error, plugin.name);
   }
 }
 
@@ -161,9 +154,18 @@ async function firstFound<Value>(
       failures.push(error);
     }
   }
-  throw failures.length === 0
-    ? new DisTubeError(ErrorCode.NO_RESULT, message, { query })
-    : new DisTubeError(ErrorCode.SOURCE_FAILED, message, { cause: new AggregateError(failures, message), query });
+  if (failures.length === 0) throw new DisTubeError(ErrorCode.NO_RESULT, message, { query });
+  const source = shared(failures.map(failure => (DisTubeError.is(failure) ? failure.source : undefined)));
+  throw new DisTubeError(
+    shared(failures.map(failure => (DisTubeError.is(failure) ? failure.code : undefined))) ?? ErrorCode.SOURCE_FAILED,
+    message,
+    { cause: new AggregateError(failures, message), query, ...(source === undefined ? {} : { source }) },
+  );
+}
+
+function shared<Value>(values: readonly Value[]): Value | undefined {
+  const [first] = values;
+  return values.every(value => value === first) ? first : undefined;
 }
 
 export async function searchSongs(

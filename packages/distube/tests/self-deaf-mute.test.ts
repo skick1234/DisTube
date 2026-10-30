@@ -97,7 +97,7 @@ describe("self-deaf and self-mute", () => {
   it("survives queue.stop and a later play on the same voice", async () => {
     const harness = playableSetup();
     const voice = await harness.distube.voices.join(channel, { selfDeaf: false, selfMute: true });
-    const queue = await harness.distube.play(channel, "a");
+    const { queue } = await harness.distube.play(channel, "a");
     await settle();
 
     await queue.stop();

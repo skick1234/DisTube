@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { DisTubeQueue, QueueItem, Song } from "../src";
-import type { PlaybackResource } from "../src/integrations";
+import type { PlaybackResource, TrackEnd } from "../src/integrations";
 import {
   capture,
   deferred,
@@ -33,7 +33,7 @@ const QUEUE_EVENTS = [
 
 async function playing(ids: readonly string[]) {
   const harness = playableSetup();
-  const queue = await harness.distube.play(TARGET, ids[0] as string);
+  const { queue } = await harness.distube.play(TARGET, ids[0] as string);
   for (const id of ids.slice(1)) await queue.add(id);
   await settle();
   return { harness, queue, player: harness.engine.player };
@@ -42,7 +42,10 @@ async function playing(ids: readonly string[]) {
 describe("commit races", () => {
   it("registers one queue and one voice join for racing play calls", async () => {
     const harness = playableSetup();
-    const [first, second] = await Promise.all([harness.distube.play(TARGET, "a"), harness.distube.play(TARGET, "b")]);
+    const [{ queue: first }, { queue: second }] = await Promise.all([
+      harness.distube.play(TARGET, "a"),
+      harness.distube.play(TARGET, "b"),
+    ]);
     await settle();
 
     expect(second).toBe(first);
@@ -88,7 +91,7 @@ describe("edits during preparation", () => {
         signal = options.signal;
         return preparation.promise;
       });
-      const queue = await harness.distube.play(TARGET, "a");
+      const { queue } = await harness.distube.play(TARGET, "a");
       await queue.add("b");
       await queue.add("c");
       await settle();
@@ -114,7 +117,7 @@ describe("edits during preparation", () => {
       signal = options.signal;
       return preparation.promise;
     });
-    const queue = await harness.distube.play(TARGET, "a");
+    const { queue } = await harness.distube.play(TARGET, "a");
     await queue.add("b");
     await queue.add("c");
     await settle();
@@ -184,7 +187,7 @@ describe("stop overlaps", () => {
       "queue.item.failed",
       "queue.deleted",
     ]);
-    const queue = await harness.distube.play(TARGET, "a");
+    const { queue } = await harness.distube.play(TARGET, "a");
     await preparationStarted.promise;
     const song = required(queue.upcoming[0]).song;
 
@@ -207,7 +210,7 @@ describe("stop overlaps", () => {
     harness.engine.gateCreate().resolve(player);
     const volume = player.gate("volume");
     const events = record(harness.distube, ["queue.item.started", "queue.deleted"]);
-    const queue = await harness.distube.play(TARGET, "a");
+    const { queue } = await harness.distube.play(TARGET, "a");
     await volume.entered;
 
     const stopping = queue.stop();
@@ -237,7 +240,7 @@ describe("stop overlaps", () => {
           harness.source.disposed.push(song.id);
         },
       }));
-      const queue = await harness.distube.play(TARGET, "a");
+      const { queue } = await harness.distube.play(TARGET, "a");
       await queue.add("b");
       await queue.add("c");
       await settle();
@@ -249,8 +252,11 @@ describe("stop overlaps", () => {
       const current = required(queue.current).song.id;
       const log = record(harness.distube, QUEUE_EVENTS);
       hold = true;
+      const next = mode === "skip" ? queue.upcoming[0] : undefined;
 
-      const advance = capture(mode === "jump" ? queue.jump(1) : mode === "skip" ? queue.skip() : queue.previous());
+      const advance = capture<unknown>(
+        mode === "jump" ? queue.jump(1) : mode === "skip" ? queue.skip() : queue.previous(),
+      );
       let stopped = false;
       const stopping = queue.stop().then(() => {
         stopped = true;
@@ -262,7 +268,7 @@ describe("stop overlaps", () => {
       await settle();
 
       expect(stoppedBeforeDisposal).toBe(false);
-      expect(await advance).toBeUndefined();
+      expect(await advance).toBe(next);
       expect(harness.source.disposed.filter(id => id === current)).toEqual([current]);
       expect(log.at(-1)).toBe("queue.deleted");
       expect(log).not.toContain("queue.item.started");
@@ -325,6 +331,29 @@ describe("stop overlaps", () => {
     await settle();
     expect(events).toEqual(["queue.deleted"]);
   });
+
+  it("publishes nothing when the Player reports a start after the queue was deleted", async () => {
+    const harness = playableSetup();
+    const player = new FakePlayer();
+    const start = deferred<() => void>();
+    player.play.mockImplementationOnce((_resource, options) => {
+      start.resolve(options.onStart);
+      return new Promise<TrackEnd>(resolve =>
+        options.signal.addEventListener("abort", () => resolve({ reason: "stopped" }), { once: true }),
+      );
+    });
+    harness.engine.gateCreate().resolve(player);
+    const { queue } = await harness.distube.play(TARGET, "a");
+    const onStart = await start.promise;
+    await queue.stop();
+    const events = record(harness.distube, [...QUEUE_EVENTS, "queue.updated"]);
+
+    onStart();
+    await settle();
+
+    expect(events).toEqual([]);
+    expect(queue.current).toBeUndefined();
+  });
 });
 
 describe("voice terminal overlaps", () => {
@@ -361,7 +390,7 @@ describe("voice terminal overlaps", () => {
     const failures: unknown[] = [];
     harness.distube.on("queue.item.failed", event => void failures.push(event.error));
 
-    const queue = await harness.distube.play(TARGET, "a");
+    const { queue } = await harness.distube.play(TARGET, "a");
     await queue.add("b");
     await settle();
 
@@ -384,7 +413,7 @@ describe("voice terminal overlaps", () => {
   it("joins an in-flight stop and disposes plugins only after every queue and voice settles", async () => {
     const harness = playableSetup();
     const other = { guildId: "other", id: VOICE_CHANNEL };
-    const queue = await harness.distube.play(TARGET, "a");
+    const { queue } = await harness.distube.play(TARGET, "a");
     await harness.distube.play(other, "b");
     await settle();
     const order: string[] = [];
@@ -452,14 +481,14 @@ describe("pending work", () => {
   it("keeps a queue's steps independent of a deleted queue's step for the same guild", async () => {
     const harness = playableSetup();
     const held = deferred<readonly Song[]>();
-    const first = await harness.distube.play(TARGET, "a");
+    const { queue: first } = await harness.distube.play(TARGET, "a");
     await settle();
     harness.source.search.mockImplementationOnce(() => held.promise);
     const stale = capture(first.add("b"));
     await settle();
     await first.stop();
 
-    const replacement = await harness.distube.play(TARGET, "c");
+    const { queue: replacement } = await harness.distube.play(TARGET, "c");
     await settle();
     expect(harness.engine.player.playing).toBe("c");
     held.resolve([media("source", "b")]);

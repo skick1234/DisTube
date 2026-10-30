@@ -1,5 +1,19 @@
-import { describe, expect, it } from "vitest";
-import { type FakePlayer, GUILD, playableSetup, required, settle, VOICE_CHANNEL } from "./support/harness";
+import { describe, expect, it, vi } from "vitest";
+import { DisTubeError, type Song } from "../src";
+import type { FilterEntry } from "../src/integrations";
+import {
+  capture,
+  deferred,
+  FakeEngine,
+  type FakePlayer,
+  GUILD,
+  media,
+  playableSetup,
+  required,
+  settle,
+  updates,
+  VOICE_CHANNEL,
+} from "./support/harness";
 
 const channel = { guildId: GUILD, id: VOICE_CHANNEL };
 
@@ -19,7 +33,7 @@ describe("voice filter manager", () => {
 
     await voice.filters.set("bassboost", 15);
 
-    expect(voice.filters.entries).toEqual([{ name: "bassboost", value: 15, label: "Bass +15dB" }]);
+    expect(voice.filters.entries).toEqual([{ name: "bassboost", value: 15, label: "Bass boost" }]);
     expect(player.renders).toEqual([[{ name: "bassboost", value: 15 }]]);
     expect(voice.filters.has("bassboost")).toBe(true);
     expect(voice.filters.names).toEqual(["bassboost"]);
@@ -33,7 +47,7 @@ describe("voice filter manager", () => {
     await voice.filters.set("bassboost", -3);
     expect(voice.filters.entries[0]?.value).toBe(0);
     await voice.filters.set("bassboost");
-    expect(voice.filters.entries).toEqual([{ name: "bassboost", value: 10, label: "Bass +10dB" }]);
+    expect(voice.filters.entries).toEqual([{ name: "bassboost", value: 10, label: "Bass boost" }]);
     expect(player.renders.map(render => render[0]?.value)).toEqual([20, 0, 10]);
   });
 
@@ -66,7 +80,7 @@ describe("voice filter manager", () => {
     await voice.filters.set("bassboost", 5);
 
     expect(voice.filters.entries).toEqual([
-      { name: "bassboost", value: 5, label: "Bass +5dB" },
+      { name: "bassboost", value: 5, label: "Bass boost" },
       { name: "nightcore", label: "Nightcore" },
     ]);
     expect(player.renders.at(-1)).toEqual([{ name: "bassboost", value: 5 }, { name: "nightcore" }]);
@@ -76,7 +90,7 @@ describe("voice filter manager", () => {
     const { voice, player } = await playingVoice();
 
     await voice.filters.toggle("bassboost", 3);
-    expect(voice.filters.entries).toEqual([{ name: "bassboost", value: 3, label: "Bass +3dB" }]);
+    expect(voice.filters.entries).toEqual([{ name: "bassboost", value: 3, label: "Bass boost" }]);
     await voice.filters.toggle("bassboost");
     expect(voice.filters.names).toEqual([]);
 
@@ -104,21 +118,6 @@ describe("voice filter manager", () => {
     expect(player.renders).toEqual([[{ name: "bassboost", value: 10 }]]);
   });
 
-  it("exposes preset definitions for command option building", async () => {
-    const { voice } = await playingVoice();
-
-    const bassboost = required(voice.filters.definitions.get("bassboost"));
-    const nightcore = required(voice.filters.definitions.get("nightcore"));
-
-    expect(bassboost).toMatchObject({ acceptsValue: true, default: 10, min: 0, max: 20 });
-    expect(bassboost.label(7)).toBe("Bass +7dB");
-    expect(nightcore).toMatchObject({ acceptsValue: false });
-    expect(nightcore.default).toBeUndefined();
-    expect(nightcore.label()).toBe("Nightcore");
-    expect(required(voice.filters.definitions.get("echo")).label()).toBe("echo");
-    expect(voice.filters.definitions.has("reverb")).toBe(false);
-  });
-
   it("pushes filters and volume committed before any Player onto the first Player once, before its first play", async () => {
     const harness = playableSetup();
     const voice = await harness.distube.voices.join(channel);
@@ -126,9 +125,9 @@ describe("voice filter manager", () => {
     await voice.filters.set("bassboost", 12);
     await voice.setVolume(20);
     expect(harness.engine.createPlayer).not.toHaveBeenCalled();
-    expect(voice.filters.entries).toEqual([{ name: "bassboost", value: 12, label: "Bass +12dB" }]);
+    expect(voice.filters.entries).toEqual([{ name: "bassboost", value: 12, label: "Bass boost" }]);
 
-    const queue = await harness.distube.play(channel, "a");
+    const { queue } = await harness.distube.play(channel, "a");
     await queue.add("b");
     await settle();
     harness.engine.player.finish();
@@ -143,7 +142,7 @@ describe("voice filter manager", () => {
 
   it("persists across queue deletion without a clearing render and disappears with the voice", async () => {
     const harness = playableSetup();
-    const queue = await harness.distube.play(channel, "a");
+    const { queue } = await harness.distube.play(channel, "a");
     await settle();
     const voice = required(harness.distube.voices.get(GUILD));
     const player = required(harness.engine.players[0]) as FakePlayer;
@@ -151,11 +150,11 @@ describe("voice filter manager", () => {
 
     await queue.stop();
     expect(player.renders).toEqual([[{ name: "bassboost", value: 15 }]]);
-    const next = await harness.distube.play(channel, "b");
+    const { queue: next } = await harness.distube.play(channel, "b");
     await settle();
     expect(next).not.toBe(queue);
     expect(harness.distube.voices.get(GUILD)).toBe(voice);
-    expect(voice.filters.entries).toEqual([{ name: "bassboost", value: 15, label: "Bass +15dB" }]);
+    expect(voice.filters.entries).toEqual([{ name: "bassboost", value: 15, label: "Bass boost" }]);
 
     await harness.distube.voices.leave(GUILD);
     await expect(voice.filters.set("nightcore")).rejects.toMatchObject({ code: "INVALID_STATE" });
@@ -164,4 +163,125 @@ describe("voice filter manager", () => {
     expect(fresh.filters.names).toEqual([]);
     expect(fresh.volume).toBe(100);
   });
+});
+
+describe("client filter catalog", () => {
+  it("describes every engine preset with a plain label before any voice exists", () => {
+    const { distube } = playableSetup();
+
+    expect(distube.voices.size).toBe(0);
+    expect(distube.filters.get("bassboost")).toEqual({
+      default: 10,
+      min: 0,
+      max: 20,
+      acceptsValue: true,
+      label: "Bass boost",
+    });
+    expect(distube.filters.get("karaoke")).toEqual({ acceptsValue: false, label: "karaoke" });
+    expect(distube.filters.has("reverb")).toBe(false);
+  });
+});
+
+const RATED_FILTERS = {
+  fast: { render: () => "fast" },
+  slow: { render: () => "slow" },
+  stall: { render: () => "stall" },
+};
+
+class RatedEngine extends FakeEngine {
+  readonly playbackRate = vi.fn((_entries: readonly FilterEntry[]): number => 1);
+
+  constructor() {
+    super(RATED_FILTERS);
+  }
+}
+
+async function ratedQueue() {
+  const engine = new RatedEngine();
+  const harness = playableSetup("source", { engine });
+  await harness.distube.play(channel, "a");
+  await settle();
+  return {
+    harness,
+    engine,
+    queue: required(harness.distube.getQueue(GUILD)),
+    voice: required(harness.distube.voices.get(GUILD)),
+    player: engine.player,
+  };
+}
+
+describe("playback rate", () => {
+  it("stores the rate the engine reports for the next selection, asked before the Player command, and publishes it", async () => {
+    const { harness, engine, queue, voice, player } = await ratedQueue();
+    const rates: Record<string, number> = { fast: 1.5, "fast slow": 0.8 };
+    engine.playbackRate.mockImplementation(entries => rates[entries.map(entry => entry.name).join(" ")] ?? 1);
+    const published = updates(harness.distube);
+
+    await voice.filters.set("fast");
+    await voice.filters.set("slow");
+    await settle();
+
+    expect(engine.playbackRate.mock.calls).toEqual([[[{ name: "fast" }]], [[{ name: "fast" }, { name: "slow" }]]]);
+    expect(engine.playbackRate.mock.invocationCallOrder[0]).toBeLessThan(
+      required(player.setFilters.mock.invocationCallOrder[0]),
+    );
+    expect(queue.playbackRate).toBe(0.8);
+    expect(published.map(event => event.playbackRate)).toEqual([1.5, 0.8]);
+    await harness.distube.dispose();
+  });
+
+  it("reads 1 for a queue without a voice and for an engine without a rate", async () => {
+    const harness = playableSetup();
+    const held = deferred<readonly Song[]>();
+    harness.source.search.mockReturnValueOnce(held.promise);
+    const started = harness.distube.play(channel, "a");
+    const queue = required(harness.distube.getQueue(GUILD));
+    expect(queue.playbackRate).toBe(1);
+
+    held.resolve([media("source", "a")]);
+    await started;
+    await settle();
+    await required(harness.distube.voices.get(GUILD)).filters.set("nightcore");
+
+    expect(queue.playbackRate).toBe(1);
+    await harness.distube.dispose();
+  });
+
+  const refusal = new Error("tempo out of range");
+  it.each([
+    ["returns 0", (): number => 0, "INVALID_ARGUMENT", undefined],
+    ["returns NaN", (): number => Number.NaN, "INVALID_ARGUMENT", undefined],
+    [
+      "throws a plain Error",
+      (): number => {
+        throw refusal;
+      },
+      "INVALID_ARGUMENT",
+      refusal,
+    ],
+    [
+      "throws a DisTubeError",
+      (): number => {
+        throw new DisTubeError("UNSUPPORTED", "no such tempo");
+      },
+      "UNSUPPORTED",
+      undefined,
+    ],
+  ] as const)(
+    "rejects a filter change whose rate the engine %s, without a Player command",
+    async (_case, rate, code, cause) => {
+      const { harness, engine, queue, voice, player } = await ratedQueue();
+      engine.playbackRate.mockImplementation(entries => (entries.some(entry => entry.name === "fast") ? 1.5 : 1));
+      await voice.filters.set("fast");
+      engine.playbackRate.mockImplementationOnce(rate);
+
+      const failure = (await capture(voice.filters.set("stall"))) as DisTubeError;
+
+      expect([failure.code, failure.cause]).toEqual([code, cause]);
+      expect(player.renders).toEqual([[{ name: "fast" }]]);
+      expect(voice.filters.names).toEqual(["fast"]);
+      expect(queue.playbackRate).toBe(1.5);
+      await harness.distube.dispose();
+    },
+  );
 });

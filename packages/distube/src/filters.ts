@@ -1,4 +1,4 @@
-import type { Engine, FilterDefinitionInfo, FilterEntry } from "./contracts";
+import type { Engine, FilterEntry } from "./contracts";
 import { DisTubeError, ErrorCode } from "./errors";
 import type { Connection, Guild } from "./guild";
 
@@ -24,11 +24,6 @@ export class FilterManager {
     this.#connection = connection;
   }
 
-  /** Every preset the engine renders. */
-  get definitions(): ReadonlyMap<string, FilterDefinitionInfo> {
-    return this.#engine.filters;
-  }
-
   get names(): readonly string[] {
     return this.#connection.entries.map(entry => entry.name);
   }
@@ -36,7 +31,7 @@ export class FilterManager {
   get entries(): readonly FilterSelection[] {
     return this.#connection.entries.map(entry => ({
       ...entry,
-      label: this.#engine.filters.get(entry.name)?.label(entry.value) ?? entry.name,
+      label: this.#engine.filters.get(entry.name)?.label ?? entry.name,
     }));
   }
 

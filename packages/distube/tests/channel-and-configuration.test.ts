@@ -48,7 +48,7 @@ describe("adapter target normalization", () => {
       { guildId: GUILD, channelId: VOICE_CHANNEL },
       { selfDeaf: true, selfMute: false, timeoutMs: 15_000, signal: expect.any(AbortSignal) },
     );
-    const queue = await harness.distube.play(native, "a");
+    const { queue } = await harness.distube.play(native, "a");
     expect(queue.guildId).toBe(GUILD);
     expect(harness.distube.voices.get(GUILD)).toBe(voice);
     await expect(voice.move({ id: "another", guild: { id: "other-guild" } })).rejects.toMatchObject({

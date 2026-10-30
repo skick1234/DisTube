@@ -89,7 +89,7 @@ const distube = new DisTube<RequestMetadata, NativeChannel>({
 const remoteDistube = new DisTube({ adapter, plugins: [clips, remote] });
 
 async function musicCommand(channel: NativeChannel): Promise<void> {
-  const queue = await distube.play(channel, "https://example.audio/clip/1", {
+  const { queue } = await distube.play(channel, "https://example.audio/clip/1", {
     metadata: { requestedBy: "user-id" },
   });
   const voice = queue.voice;
@@ -118,7 +118,7 @@ async function musicCommand(channel: NativeChannel): Promise<void> {
 
 async function soundCommand(channel: NativeChannel): Promise<void> {
   const airhorn = new Song({ source: "sounds", id: "airhorn", name: "Airhorn", url: "https://example.audio/airhorn" });
-  const queue = await distube.play(channel, airhorn, { next: true, metadata: { requestedBy: "user-id" } });
+  const { queue } = await distube.play(channel, airhorn, { next: true, metadata: { requestedBy: "user-id" } });
   await queue.stop();
 }
 

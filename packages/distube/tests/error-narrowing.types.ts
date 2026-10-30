@@ -32,6 +32,8 @@ function describe(caught: DisTubeError): string {
     case ErrorCode.NOT_FOUND:
     case ErrorCode.UNAVAILABLE:
     case ErrorCode.RATE_LIMITED:
+    case ErrorCode.BOT_CHECK:
+    case ErrorCode.NOT_STARTED:
     case ErrorCode.SOURCE_FAILED:
       return `provider ${caught.source ?? "core"}`;
     case ErrorCode.VOICE_FAILED:

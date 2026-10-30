@@ -9,7 +9,7 @@ async function playing(ids: readonly string[], historySize?: number) {
   const source = new FakeSource("source");
   source.search.mockImplementation(async query => [media("source", query)]);
   const harness = { ...setup([source], { historySize }), source };
-  const queue = await harness.distube.play(TARGET, ids[0] as string);
+  const { queue } = await harness.distube.play(TARGET, ids[0] as string);
   for (const id of ids.slice(1)) await queue.add(id);
   await settle();
   return { harness, queue, player: harness.engine.players[0] as FakePlayer };
@@ -83,7 +83,7 @@ describe("bounded history", () => {
     expect(remembered(queue)).toEqual(["a"]);
     await queue.stop();
     expect(queue.history).toEqual([]);
-    const replacement = await harness.distube.play(TARGET, "c");
+    const { queue: replacement } = await harness.distube.play(TARGET, "c");
     expect(replacement.history).toEqual([]);
     expect(harness.distube.voices.get(GUILD)).toBeDefined();
     await harness.distube.dispose();

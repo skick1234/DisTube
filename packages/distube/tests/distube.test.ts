@@ -13,12 +13,15 @@ import {
   playableSetup,
   PreparingEngine,
   record,
+  required,
   settle,
   setup,
   VOICE_CHANNEL,
 } from "./support/harness";
 
 const TARGET = { guildId: GUILD, id: VOICE_CHANNEL };
+
+const rateLimited = (source: string) => new DisTubeError("RATE_LIMITED", "slow down", { source });
 
 function sources(): readonly [FakeSource, FakeSource, FakeSource] {
   return [new FakeSource("first"), new FakeSource("second"), new FakeSource("third")];
@@ -253,6 +256,26 @@ describe("string routing", () => {
     expect((failure.cause as AggregateError).errors).toMatchObject([{ cause: down }, { cause: refused }]);
   });
 
+  it("rejects an exhausted query with the code every failure shares, and its source only when one service refused", async () => {
+    const [soundcloud, youtube] = [new FakeSource("soundcloud"), new FakeSource("youtube")];
+    const harness = setup([soundcloud, youtube]);
+    const outcome = async () => {
+      const failure = (await capture(harness.distube.resolve("zzzz"))) as DisTubeError;
+      const causes = (failure.cause as AggregateError).errors as DisTubeError[];
+      return [failure.code, failure.source, failure.query, causes.map(cause => cause.source)];
+    };
+
+    soundcloud.search.mockRejectedValue(rateLimited("soundcloud"));
+    youtube.search.mockRejectedValue(rateLimited("youtube"));
+    expect(await outcome()).toEqual(["RATE_LIMITED", undefined, "zzzz", ["soundcloud", "youtube"]]);
+
+    youtube.search.mockResolvedValue([]);
+    expect(await outcome()).toEqual(["RATE_LIMITED", "soundcloud", "zzzz", ["soundcloud"]]);
+
+    youtube.search.mockRejectedValue(new TypeError("bad response"));
+    expect(await outcome()).toEqual(["SOURCE_FAILED", undefined, "zzzz", ["soundcloud", "youtube"]]);
+  });
+
   it("rejects media a plugin returns for another source", async () => {
     const harness = playableSetup();
     harness.source.resolve.mockResolvedValueOnce(media("spotify", "foreign"));
@@ -272,7 +295,7 @@ describe("string routing", () => {
     });
     expect(harness.distube.queues.size).toBe(0);
     await expect(harness.distube.resolve(media("elsewhere"))).rejects.toMatchObject({ code: "INVALID_ARGUMENT" });
-    const queue = await harness.distube.play(TARGET, song, { allowAgeRestricted: true });
+    const { queue } = await harness.distube.play(TARGET, song, { allowAgeRestricted: true });
     await expect(queue.add(media("elsewhere"))).rejects.toMatchObject({ code: "INVALID_ARGUMENT" });
     expect(queue.upcoming).toEqual([]);
     expect(harness.source.resolve).not.toHaveBeenCalled();
@@ -388,7 +411,7 @@ describe("playlist cap", () => {
 
   it("commits every Song of a Playlist passed in directly", async () => {
     const harness = playableSetup("source", { maxPlaylistSongs: 10 });
-    const queue = await harness.distube.play(TARGET, playlistOf(20));
+    const { queue } = await harness.distube.play(TARGET, playlistOf(20));
     expect([queue.current, ...queue.upcoming].filter(item => item !== undefined)).toHaveLength(20);
   });
 });
@@ -412,7 +435,7 @@ describe("age restriction", () => {
     expect(harness.distube.getQueue(GUILD)).toBeUndefined();
     expect(harness.source.resolve).not.toHaveBeenCalled();
 
-    const queue = await harness.distube.play(TARGET, adult, { allowAgeRestricted: true });
+    const { queue } = await harness.distube.play(TARGET, adult, { allowAgeRestricted: true });
     expect(queue.current?.song ?? queue.upcoming[0]?.song).toBe(adult);
   });
 
@@ -441,7 +464,7 @@ describe("age restriction", () => {
     await expect(harness.distube.play(TARGET, "adult")).rejects.toEqual(restricted);
     expect(harness.source.resolve).toHaveBeenCalledWith(mediaUrl("adult", "source"), expect.anything());
 
-    const queue = await harness.distube.play(TARGET, "clean");
+    const { queue } = await harness.distube.play(TARGET, "clean");
     const [item] = [queue.current, ...queue.upcoming];
     expect(item?.song).toBe(await harness.source.resolve.mock.results.at(-1)?.value);
     expect(item?.song.ageRestricted).toBe(false);
@@ -583,7 +606,7 @@ describe("events and diagnostics", () => {
     const harness = playableSetup();
     const listener = vi.fn();
     const unsubscribe = harness.distube.on("queue.item.added", listener);
-    const queue = await harness.distube.play(TARGET, "a");
+    const { queue } = await harness.distube.play(TARGET, "a");
     await settle();
     expect(listener).toHaveBeenCalledTimes(1);
     unsubscribe();
@@ -606,7 +629,7 @@ describe("events and diagnostics", () => {
       throw new Error("listener failed");
     });
     harness.distube.on("queue.item.started", later);
-    const queue = await harness.distube.play(TARGET, "a");
+    const { queue } = await harness.distube.play(TARGET, "a");
     await settle();
     expect(queue.current?.song.id).toBe("a");
     expect(later).toHaveBeenCalledTimes(1);
@@ -618,6 +641,38 @@ describe("events and diagnostics", () => {
         message: expect.stringContaining("started"),
       }),
     );
+    await harness.distube.dispose();
+  });
+
+  it("dispatches queue.updated between an item's finish and the queue's end, and nothing after stop but queue.deleted", async () => {
+    const harness = playableSetup();
+    const names = [
+      "queue.created",
+      "queue.item.added",
+      "queue.playlist.added",
+      "queue.item.started",
+      "queue.item.finished",
+      "queue.item.failed",
+      "queue.autoplay.failed",
+      "queue.updated",
+      "queue.finished",
+      "queue.deleted",
+      "voice.disconnected",
+    ] as const;
+    await harness.distube.play(TARGET, "a");
+    await settle();
+    const log = record(harness.distube, names);
+
+    harness.engine.player.finish();
+    await settle();
+    expect(log.splice(0)).toEqual(["queue.item.finished", "queue.updated", "queue.finished", "queue.deleted"]);
+
+    await harness.distube.play(TARGET, "b");
+    await settle();
+    log.splice(0);
+    await required(harness.distube.getQueue(GUILD)).stop();
+    await settle();
+    expect(log).toEqual(["queue.deleted"]);
     await harness.distube.dispose();
   });
 
@@ -733,7 +788,7 @@ it("publishes queue.created then queue.deleted for a failed only play", async ()
   const harness = playableSetup();
   harness.source.search.mockRejectedValueOnce(new DisTubeError("UNAVAILABLE", "region locked"));
   const events = record(harness.distube, ["queue.created", "queue.deleted"]);
-  await expect(harness.distube.play(TARGET, "a")).rejects.toMatchObject({ code: "SOURCE_FAILED" });
+  await expect(harness.distube.play(TARGET, "a")).rejects.toMatchObject({ code: "UNAVAILABLE" });
   await settle();
   expect(events).toEqual(["queue.created", "queue.deleted"]);
   expect(harness.distube.getQueue(GUILD)).toBeUndefined();

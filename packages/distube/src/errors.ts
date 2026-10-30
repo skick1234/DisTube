@@ -7,6 +7,10 @@ export const ErrorCode = {
   NOT_FOUND: "NOT_FOUND",
   UNAVAILABLE: "UNAVAILABLE",
   RATE_LIMITED: "RATE_LIMITED",
+  /** The provider refuses the client until it proves it is not a bot, such as a sign-in confirmation or a captcha. */
+  BOT_CHECK: "BOT_CHECK",
+  /** Scheduled media, such as a premiere or a scheduled live, that has not started yet. */
+  NOT_STARTED: "NOT_STARTED",
   SOURCE_FAILED: "SOURCE_FAILED",
   VOICE_FAILED: "VOICE_FAILED",
   /** An established voice connection dropped beyond the Adapter's recovery. */
@@ -63,6 +67,17 @@ export class DisTubeError<Code extends ErrorCode = ErrorCode> extends Error {
 
 export function toDisTubeError(code: ErrorCode, message: string, error: unknown, source?: string): DisTubeError {
   if (DisTubeError.is(error)) return error;
+  return new DisTubeError(code, message, { cause: error, ...(source === undefined ? {} : { source }) });
+}
+
+const CALLER_CODES: ReadonlySet<ErrorCode> = new Set([
+  ErrorCode.INVALID_ARGUMENT,
+  ErrorCode.INVALID_STATE,
+  ErrorCode.ABORTED,
+]);
+
+export function fromIntegration(code: ErrorCode, message: string, error: unknown, source?: string): DisTubeError {
+  if (DisTubeError.is(error) && !CALLER_CODES.has(error.code)) return error;
   return new DisTubeError(code, message, { cause: error, ...(source === undefined ? {} : { source }) });
 }
 

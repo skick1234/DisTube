@@ -52,7 +52,7 @@ describe("insertion and start", () => {
     expect(started?.item).toBe(a);
     expect(started?.state.current).toBe(a);
     expect(ids(started?.state.upcoming ?? [])).toEqual(ids([b]));
-    expect(started?.state.status).toBe("playing");
+    expect(started?.state.status).toBe("preparing");
     expect(startFirst(started?.state ?? IDLE_QUEUE_STATE)).toBeUndefined();
     expect(startFirst(IDLE_QUEUE_STATE)).toBeUndefined();
   });
@@ -136,7 +136,7 @@ describe("edits", () => {
     const cleared = clearUpcoming(playing([a, b, c]));
     expect(ids(cleared.items)).toEqual(ids([b, c]));
     expect(cleared.state.current).toBe(a);
-    expect(cleared.state).toMatchObject({ upcoming: [], status: "playing" });
+    expect(cleared.state).toMatchObject({ upcoming: [], status: "preparing" });
   });
 });
 

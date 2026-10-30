@@ -158,6 +158,6 @@ describe("DiscordJSAdapter", () => {
       opusComplexity: 10,
       bufferMs: 500,
     });
-    expect(engine.filters.get("house")?.label()).toBe("House");
+    expect(engine.filters.get("house")?.label).toBe("House");
   });
 });

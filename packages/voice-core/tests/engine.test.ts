@@ -70,8 +70,34 @@ describe("engine", () => {
     });
 
     expect(engine.filters.get("bassboost")).toMatchObject({ default: 10, min: 0, max: 20, acceptsValue: true });
-    expect(engine.filters.get("house")?.label()).toBe("House");
+    expect(engine.filters.get("house")?.label).toBe("House");
     expect(engine.filters.has("unknown")).toBe(false);
+  });
+
+  it.each([
+    [[{ name: "nightcore", value: 1.5 }], 1.5],
+    [
+      [
+        { name: "nightcore", value: 1.25 },
+        { name: "vaporwave", value: 0.8 },
+      ],
+      1,
+    ],
+    [[{ name: "bassboost", value: 15 }], 1],
+    [[], 1],
+  ])("plays the selection %j at the product of its presets' tempos, %d", (entries, rate) => {
+    expect(new DiscordVoiceEngine(SETTINGS).playbackRate(entries)).toBe(rate);
+  });
+
+  it("rejects a selection whose tempo function returns 0 with INVALID_ARGUMENT", () => {
+    const engine = new DiscordVoiceEngine({
+      ...SETTINGS,
+      filters: { stall: { render: () => "volume=1", default: 1, min: 0, max: 2, tempo: value => value ?? 1 } },
+    });
+
+    expect(() => engine.playbackRate([{ name: "stall", value: 0 }])).toThrowError(
+      expect.objectContaining({ code: "INVALID_ARGUMENT", message: expect.stringContaining("stall") }),
+    );
   });
 });
 
@@ -101,27 +127,20 @@ describe("filter registry", () => {
     expect(registry.render([{ name: "echo" }, { name: "house", value: 3 }])).toBe("aecho=1,volume=3");
   });
 
-  it("describes every preset for command option building", () => {
-    const registry = new FilterRegistry({
-      house: { render: () => "volume=2", label: "House" },
-      pulse: { render: v => `apulsator=hz=${v}`, min: 0, max: 5, label: v => `Pulse ${v}` },
-    });
+  it("describes every preset with a label that carries no value, or its name without one", () => {
+    const registry = new FilterRegistry({ house: { render: () => "volume=2", label: "House" } });
 
     expect(registry.definitions.get("bassboost")).toEqual({
       default: 10,
       min: 0,
       max: 20,
       acceptsValue: true,
-      label: expect.any(Function),
+      label: "Bass boost",
     });
-    expect(registry.definitions.get("bassboost")?.label(15)).toBe("Bass +15dB");
-    expect(registry.definitions.get("bassboost")?.label()).toBe("Bass +10dB");
-    expect(registry.definitions.get("nightcore")?.label(1.5)).toBe("Nightcore x1.5");
-    // A fixed preset without a label is named after itself; a ranged one without a default labels the value given.
-    expect(registry.definitions.get("echo")).toMatchObject({ acceptsValue: false });
-    expect(registry.definitions.get("echo")?.label()).toBe("echo");
-    expect(registry.definitions.get("house")?.label(4)).toBe("House");
-    expect(registry.definitions.get("pulse")?.label(2)).toBe("Pulse 2");
+    expect(registry.definitions.get("nightcore")).toMatchObject({ default: 1.25, label: "Nightcore" });
+    expect(registry.definitions.get("vaporwave")).toMatchObject({ default: 0.8, label: "Vaporwave" });
+    expect(registry.definitions.get("echo")).toMatchObject({ acceptsValue: false, label: "echo" });
+    expect(registry.definitions.get("house")?.label).toBe("House");
   });
 
   it("rejects a name it cannot render and a definition it cannot use", () => {
@@ -133,7 +152,11 @@ describe("filter registry", () => {
       [{ render: () => "x", min: Number.NaN }, "min must be a finite number"],
       [{ render: () => "x", min: 5, max: 1 }, "min must not exceed max"],
       [{ render: () => "x", default: 9, max: 5 }, "default must lie within its range"],
-      [{ render: () => "x", label: 7 }, "label must be a string or a function"],
+      [{ render: () => "x", label: 7 }, "label must be a string"],
+      [{ render: () => "x", label: () => "House" }, "label must be a string"],
+      [{ render: () => "x", tempo: 0 }, "tempo must be a function or a finite number above 0"],
+      [{ render: () => "x", tempo: Number.POSITIVE_INFINITY }, "tempo must be a function or a finite number above 0"],
+      [{ render: () => "x", tempo: "fast" }, "tempo must be a function or a finite number above 0"],
     ];
     for (const [definition, message] of broken) {
       expect(() => new FilterRegistry({ broken: definition as never })).toThrow(

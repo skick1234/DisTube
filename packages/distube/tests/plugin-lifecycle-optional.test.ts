@@ -17,7 +17,7 @@ function minimal(name: string, hits: readonly string[] = []): Plugin {
 describe("optional plugin members", () => {
   it("constructs, plays through and disposes a plugin with only the members it needs", async () => {
     const harness = setup([minimal("bare", ["a"])]);
-    const queue = await harness.distube.play(TARGET, "a");
+    const { queue } = await harness.distube.play(TARGET, "a");
     await settle();
     expect(queue.current?.song.id).toBe("a");
     expect(harness.engine.player.playing).toBe("a");

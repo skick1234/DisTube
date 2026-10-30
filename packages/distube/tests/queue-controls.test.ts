@@ -13,6 +13,7 @@ import {
   record,
   required,
   settle,
+  updates,
 } from "./support/harness";
 
 const TARGET = { guildId: GUILD, id: "voice" };
@@ -20,7 +21,7 @@ const TARGET = { guildId: GUILD, id: "voice" };
 /** A playing queue holding `ids` in order: the first is current, the rest are waiting. */
 async function playing(ids: readonly string[]) {
   const harness = playableSetup();
-  const queue = await harness.distube.play(TARGET, ids[0] as string);
+  const { queue } = await harness.distube.play(TARGET, ids[0] as string);
   for (const id of ids.slice(1)) await queue.add(id);
   await settle();
   const voice = harness.distube.voices.get(GUILD);
@@ -33,7 +34,7 @@ async function gated(harness: Harness) {
   const player = new FakePlayer();
   harness.engine.createPlayer.mockReturnValueOnce(gate.promise);
   const result = harness.distube.play(TARGET, "a");
-  const queue = await result;
+  const { queue } = await result;
   return { result, queue, player, release: () => gate.resolve(player) };
 }
 
@@ -41,7 +42,7 @@ async function gated(harness: Harness) {
 async function playingUrl() {
   const harness = playableSetup();
   harness.source.stream.mockImplementationOnce(async () => ({ kind: "url", url: "https://cdn.example/a.webm" }));
-  const queue = await harness.distube.play(TARGET, "a");
+  const { queue } = await harness.distube.play(TARGET, "a");
   await settle();
   return { queue, player: harness.engine.player };
 }
@@ -144,7 +145,7 @@ describe("pause and resume", () => {
       await held.promise;
       return end;
     });
-    const queue = await harness.distube.play(TARGET, "a");
+    const { queue } = await harness.distube.play(TARGET, "a");
     await queue.add("b");
     await settle();
     const voice = required(harness.distube.voices.get(GUILD));
@@ -232,7 +233,7 @@ describe("seek", () => {
   ])("rejects seek UNSUPPORTED for a %s resource and keeps the item playing", async (_kind, resource) => {
     const harness = playableSetup();
     harness.source.stream.mockImplementationOnce(async () => resource());
-    const queue = await harness.distube.play(TARGET, "a");
+    const { queue } = await harness.distube.play(TARGET, "a");
     await settle();
     const player = harness.engine.player;
 
@@ -299,7 +300,7 @@ describe("seek", () => {
 
   it("allows seek for seekable media with unknown duration", async () => {
     const harness = playableSetup();
-    const queue = await harness.distube.play(
+    const { queue } = await harness.distube.play(
       TARGET,
       new Song({ source: "source", id: "live", name: "Live", url: "https://source.example/live" }),
     );
@@ -315,11 +316,12 @@ const songs = (items: readonly { song: Song }[]): string[] => items.map(item => 
 describe("commands issued while an item is ending", () => {
   it("rejects a second skip in the same tick INVALID_STATE and records the skipped item once", async () => {
     const { harness, queue, player } = await playing(["a", "b", "c"]);
+    const b = queue.upcoming[0];
     const skipping = capture(queue.skip());
     const second = capture(queue.skip());
 
     expect(await second).toMatchObject({ code: "INVALID_STATE" });
-    expect(await skipping).toBeUndefined();
+    expect(await skipping).toBe(b);
     await settle();
     expect(songs(queue.history)).toEqual(["a"]);
     expect(queue.current?.song.id).toBe("b");
@@ -335,9 +337,10 @@ describe("commands issued while an item is ending", () => {
     player.finish();
     await settle();
     const c = required(queue.current);
+    const d = required(queue.upcoming[0]);
 
-    const commands = [capture(queue.skip()), capture(queue.previous())];
-    expect(await Promise.all(commands)).toEqual([undefined, undefined]);
+    const commands = [capture<unknown>(queue.skip()), capture<unknown>(queue.previous())];
+    expect(await Promise.all(commands)).toEqual([d, undefined]);
     await settle();
 
     expect(songs(queue.history)).toEqual(["a", "b"]);
@@ -387,6 +390,193 @@ describe("commands issued while an item is ending", () => {
   });
 });
 
+describe("skip result", () => {
+  it("resolves the item that was next, then undefined for the last item while autoplay looks one up", async () => {
+    const { harness, queue } = await playing(["a", "b"]);
+    harness.source.related.mockResolvedValue(media("source", "related"));
+    const b = required(queue.upcoming[0]);
+    queue.setAutoplay(true);
+
+    const next = await queue.skip();
+    await settle();
+    expect(next?.id).toBe(b.id);
+    expect(queue.current?.id).toBe(b.id);
+
+    expect(await queue.skip()).toBeUndefined();
+    await settle();
+    expect(harness.source.related).toHaveBeenCalledTimes(1);
+    expect(queue.current?.song.id).toBe("related");
+    await harness.distube.dispose();
+  });
+
+  it("resolves the item behind a preparing item it cancels", async () => {
+    const harness = playableSetup();
+    const preparation = deferred<PlaybackResource>();
+    harness.source.stream.mockImplementationOnce(() => preparation.promise);
+    await harness.distube.play(TARGET, "a");
+    const queue = required(harness.distube.getQueue(GUILD));
+    await queue.add("b");
+    await settle();
+    const [a, b] = queue.upcoming;
+
+    const skipping = queue.skip();
+    preparation.resolve(harness.source.resource("a"));
+    const next = await skipping;
+    await settle();
+
+    expect(next?.id).toBe(b?.id);
+    expect([...queue.upcoming, ...queue.history].some(item => item.id === a?.id)).toBe(false);
+    expect(harness.source.stream.mock.calls.map(([song]) => song.id)).toEqual(["a", "b"]);
+    expect(harness.engine.player.playing).toBe("b");
+    await harness.distube.dispose();
+  });
+
+  it("cancels the head and keeps an item whose preparation was moved behind it", async () => {
+    const { harness, queue, player } = await playing(["a", "b", "c"]);
+    const held = deferred<PlaybackResource>();
+    harness.source.stream.mockImplementationOnce(() => held.promise);
+    const [b, c] = queue.upcoming.map(item => item.id) as [string, string];
+    player.finish();
+    await settle();
+    queue.move(b);
+
+    const skipping = queue.skip();
+    held.resolve(harness.source.resource("b"));
+    const next = await skipping;
+    await settle();
+
+    expect(next?.id).toBe(b);
+    expect([...queue.upcoming, ...queue.history].some(item => item.id === c)).toBe(false);
+    expect(songs(queue.history)).toEqual(["a"]);
+    expect(queue.current?.id).toBe(b);
+    expect(player.played).toEqual(["a", "b"]);
+    await harness.distube.dispose();
+  });
+
+  it("cancels the waiting head when a listener skips from the commit that finished the current item", async () => {
+    const { harness, queue, player } = await playing(["a", "b", "c"]);
+    const [b, c] = queue.upcoming.map(item => item.id) as [string, string];
+    const skipped: Promise<unknown>[] = [];
+    harness.distube.on("queue.item.finished", event => void skipped.push(capture(event.queue.skip())));
+
+    player.finish();
+    await settle();
+
+    expect(skipped).toHaveLength(1);
+    expect(((await skipped[0]) as { id?: string } | undefined)?.id).toBe(c);
+    expect([...queue.upcoming, ...queue.history].some(item => item.id === b)).toBe(false);
+    expect(queue.current?.id).toBe(c);
+    expect(player.played).toEqual(["a", "c"]);
+    await harness.distube.dispose();
+  });
+});
+
+describe("queue.updated from commands", () => {
+  it("publishes nothing for a jump to the item already being prepared", async () => {
+    const harness = playableSetup();
+    const preparation = deferred<PlaybackResource>();
+    harness.source.stream.mockImplementationOnce(() => preparation.promise);
+    const { queue } = await harness.distube.play(TARGET, "a");
+    await queue.add("b");
+    await settle();
+    const ids = queue.upcoming.map(item => item.id);
+    const published = updates(harness.distube);
+
+    await queue.jump(1);
+    await queue.jump(ids[0] as string, { requeue: true });
+    expect(published).toEqual([]);
+    expect([queue.status, queue.upcoming.map(item => item.id)]).toEqual(["preparing", ids]);
+
+    preparation.resolve(harness.source.resource("a"));
+    await settle();
+    expect(harness.engine.player.playing).toBe("a");
+    await harness.distube.dispose();
+  });
+
+  it("publishes one update for each acknowledged pause, resume and seek", async () => {
+    const { harness, queue, player } = await playing(["a"]);
+    const published = updates(harness.distube);
+    player.position = 30;
+    player.seek.mockImplementationOnce(async seconds => {
+      player.position = seconds;
+    });
+
+    await queue.pause();
+    await settle();
+    expect(published.map(event => [event.state.status, event.position])).toEqual([["paused", 30]]);
+    await queue.resume();
+    await queue.seek(42);
+    await settle();
+
+    expect(published.map(event => [event.state.status, event.position])).toEqual([
+      ["paused", 30],
+      ["playing", 30],
+      ["playing", 42],
+    ]);
+    await harness.distube.dispose();
+  });
+
+  it("publishes nothing for calls that leave the committed value equal, and one update per real edit", async () => {
+    const { harness, queue, voice } = await playing(["a", "b", "c"]);
+    const [b, c] = queue.upcoming.map(item => item.id) as [string, string];
+    await queue.pause();
+    await voice.filters.set("bassboost", 5);
+    await settle();
+    const published = updates(harness.distube);
+
+    queue.setRepeat("off");
+    queue.move(b, c);
+    queue.move(c);
+    await voice.setVolume(100);
+    await voice.filters.set("bassboost", 5);
+    await queue.pause();
+    await settle();
+    expect(published).toEqual([]);
+
+    queue.move(c, b);
+    queue.clear();
+    queue.clear();
+    await settle();
+    expect(published.map(event => event.state.upcoming.map(item => item.song.id))).toEqual([["c", "b"], []]);
+    await harness.distube.dispose();
+  });
+
+  it("publishes nothing for a pause the Player rejects", async () => {
+    const { harness, queue, player } = await playing(["a"]);
+    const published = updates(harness.distube);
+    player.pause.mockRejectedValueOnce(new Error("mixer offline"));
+
+    await expect(queue.pause()).rejects.toMatchObject({ code: "VOICE_FAILED" });
+    await settle();
+    expect(published).toEqual([]);
+
+    await queue.pause();
+    await settle();
+    expect(published.map(event => event.state.status)).toEqual(["paused"]);
+    await harness.distube.dispose();
+  });
+
+  it("publishes one update for a jump over several items, holding every skipped item in history", async () => {
+    const { harness, queue } = await playing(["a", "b", "c", "d"]);
+    const published = updates(harness.distube);
+
+    await queue.jump(3);
+    await settle();
+
+    expect(published.map(event => [event.state.current?.song.id, event.state.status])).toEqual([
+      [undefined, "preparing"],
+      ["d", "preparing"],
+      ["d", "playing"],
+    ]);
+    expect(published.map(event => songs(event.state.history))).toEqual([
+      ["a", "b", "c"],
+      ["a", "b", "c"],
+      ["a", "b", "c"],
+    ]);
+    await harness.distube.dispose();
+  });
+});
+
 describe("voice volume", () => {
   it("applies volumes up to 1000 and rejects 1001 without a Player command", async () => {
     const { harness, voice, player } = await playing(["a"]);
@@ -410,27 +600,39 @@ describe("voice volume", () => {
 });
 
 describe("playback failure paths", () => {
-  it("fails the item whose start the Player rejected, then plays the next one on the same Player", async () => {
-    const harness = playableSetup();
-    const player = new FakePlayer();
-    player.play.mockRejectedValueOnce(new Error("cannot start"));
-    harness.engine.createPlayer.mockResolvedValueOnce(player);
-    const events = record(harness.distube, ["queue.item.failed", "queue.item.started"]);
-    const failures: DisTubeError[] = [];
-    harness.distube.on("queue.item.failed", event => failures.push(event.error));
+  it.each([
+    ["a plain Error", new Error("cannot start"), "wrapped"],
+    ["DisTubeError INVALID_STATE", new DisTubeError("INVALID_STATE", "Player is busy"), "wrapped"],
+    ["DisTubeError ABORTED", new DisTubeError("ABORTED", "start cancelled"), "wrapped"],
+    ["DisTubeError UNSUPPORTED", new DisTubeError("UNSUPPORTED", "codec unsupported"), "unchanged"],
+  ] as const)(
+    "fails the item whose start the Player rejected with %s, then plays the next one on the same Player",
+    async (_kind, rejection, published) => {
+      const harness = playableSetup();
+      const player = new FakePlayer();
+      player.play.mockRejectedValueOnce(rejection);
+      harness.engine.createPlayer.mockResolvedValueOnce(player);
+      const events = record(harness.distube, ["queue.item.failed", "queue.item.started"]);
+      const failures: DisTubeError[] = [];
+      harness.distube.on("queue.item.failed", event => failures.push(event.error));
 
-    const queue = await harness.distube.play(TARGET, "a");
-    await queue.add("b");
-    await settle();
+      const { queue } = await harness.distube.play(TARGET, "a");
+      await queue.add("b");
+      await settle();
 
-    expect(events).toEqual(["queue.item.failed", "queue.item.started"]);
-    expect(failures).toMatchObject([{ code: "VOICE_FAILED" }]);
-    expect(harness.source.disposed).toEqual(["a"]);
-    expect(harness.engine.createPlayer).toHaveBeenCalledTimes(1);
-    expect(queue.current?.song.id).toBe("b");
-    expect(queue.history).toEqual([]);
-    await harness.distube.dispose();
-  });
+      expect(events).toEqual(["queue.item.failed", "queue.item.started"]);
+      if (published === "unchanged") expect(failures[0]).toBe(rejection);
+      else {
+        expect(failures[0]?.code).toBe("VOICE_FAILED");
+        expect(failures[0]?.cause).toBe(rejection);
+      }
+      expect(harness.source.disposed).toEqual(["a"]);
+      expect(harness.engine.createPlayer).toHaveBeenCalledTimes(1);
+      expect(queue.current?.song.id).toBe("b");
+      expect(queue.history).toEqual([]);
+      await harness.distube.dispose();
+    },
+  );
 
   it("fails the item when the voice cannot create a Player, then exhausts the queue", async () => {
     const harness = playableSetup();
