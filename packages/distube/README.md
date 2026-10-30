@@ -1,6 +1,6 @@
 <div align="center">
   <p>
-    <a href="https://www.npmjs.com/package/distube" target="_blank"><img src="https://nodei.co/npm/distube.png?downloads=true&downloadRank=true&stars=true"/></a>
+    <a href="https://www.npmjs.com/package/distube" target="_blank"><img alt="distube on npm" src="https://nodei.co/npm/distube.png?downloads=true&downloadRank=true&stars=true"/></a>
   </p>
   <p>
     <a href="https://www.npmjs.com/package/distube" target="_blank"><img alt="npm" src="https://img.shields.io/npm/dt/distube?logo=npm&style=flat-square"/></a>
