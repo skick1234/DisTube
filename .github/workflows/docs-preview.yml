@@ -1,0 +1,71 @@
+name: Docs preview
+# Pushes the v6 branch's docs to the site as distube v6 so the PR can be checked on distube.js.org.
+on:
+  push:
+    branches: [v6]
+concurrency: docs-preview
+jobs:
+  docs:
+    name: Push the distube v6 snapshot
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build
+        run: bun run build
+
+      # The branch still carries the v5 version; the snapshot directory comes from the major.
+      - name: Mark the package as 6.0.0
+        working-directory: packages/distube
+        run: bun pm pkg set version=6.0.0
+
+      - name: Checkout documentation site
+        uses: actions/checkout@v4
+        with:
+          repository: distubejs/distubejs.github.io
+          persist-credentials: false
+          path: site
+
+      - name: Install site dependencies
+        working-directory: site
+        run: bun install --frozen-lockfile
+
+      - name: Snapshot
+        run: bun site/scripts/snapshot.ts packages/distube site/snapshots --docs docs
+
+      - name: Commit and push
+        working-directory: site
+        env:
+          SHA: ${{ github.sha }}
+          DEPLOY_KEY: ${{ secrets.DOCS_DEPLOY_KEY }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git add snapshots
+          if git diff --cached --quiet; then exit 0; fi
+          ssh_dir="$(mktemp -d)"
+          trap 'rm -rf "$ssh_dir"' EXIT
+          printf '%s\n' "$DEPLOY_KEY" > "$ssh_dir/key"
+          chmod 600 "$ssh_dir/key"
+          gh api meta --jq '.ssh_keys[] | "github.com " + .' > "$ssh_dir/known_hosts"
+          export GIT_SSH_COMMAND="ssh -i $ssh_dir/key -o IdentitiesOnly=yes -o UserKnownHostsFile=$ssh_dir/known_hosts"
+          git remote set-url origin git@github.com:distubejs/distubejs.github.io.git
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git commit -m "distube v6 preview from skick1234/DisTube@${SHA::7}"
+          for attempt in 1 2 3; do
+            if git push; then exit 0; fi
+            git fetch origin main
+            git rebase origin/main
+          done
+          git push
