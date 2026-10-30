@@ -9,6 +9,7 @@ export default defineConfig({
     execArgv: ["--expose-gc"],
     coverage: {
       provider: "v8",
+      reporter: ["text", "json-summary"],
       include: ["src/**/*.ts"],
       // V8 coverage does not follow worker threads, so the worker's own lines would always read as unrun.
       exclude: ["src/worker.ts", "src/worker-input.ts"],
