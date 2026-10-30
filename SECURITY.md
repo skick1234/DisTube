@@ -10,7 +10,14 @@ in-process with node-av. It follows up to five redirects to any HTTP or HTTPS ho
 address of any hop. An HLS playlist loads its segments from whatever HTTP or HTTPS hosts it names. A plugin that
 returns a URL a user typed therefore lets that user make the bot send requests to any address it can reach, including
 loopback and private networks. Return URLs only from hosts you trust, or check the host in `resolve` and accept the
-redirect risk. Public errors and diagnostics redact complete URLs, query strings, credentials, and tokens.
+redirect risk.
 
 The Lavalink plugin plays only encoded tracks its nodes resolved. A node loads whatever identifier the plugin sends,
 so the node's own source configuration decides which hosts it fetches.
+
+## Errors
+
+The built-in engine replaces the resource's URL or file path with `<redacted>` in the messages, stacks and causes of
+the errors it reports. It redacts nothing else. Core passes a plugin's error on unchanged as the `cause` of
+`SOURCE_FAILED`, which `queue.item.failed` and rejected commands carry. A plugin must keep cookies, tokens and signed
+URLs out of its errors, and an application should not publish a raw `cause`.
