@@ -10,10 +10,11 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      pull-requests: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -26,12 +27,8 @@ jobs:
       - name: Verify
         run: bun run verify
 
-      # A fork's pull request gets a read-only token, so only same-repository pull requests get the comment.
-      - name: Comment coverage on the pull request
-        if: github.event.pull_request.head.repo.full_name == github.repository
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PR: ${{ github.event.pull_request.number }}
+      - name: Summarize coverage
+        if: github.event_name == 'pull_request'
         run: |
           bun -e '
             const rows = [];
@@ -42,5 +39,32 @@ jobs:
             }
             console.log(["## Coverage", "", "| Package | Statements | Branches | Functions | Lines |",
               "| --- | ---: | ---: | ---: | ---: |", ...rows.sort()].join("\n"));
-          ' > "$RUNNER_TEMP/coverage.md"
-          gh pr comment "$PR" --edit-last --create-if-none --body-file "$RUNNER_TEMP/coverage.md"
+          ' > coverage.md
+
+      - name: Upload coverage summary
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage.md
+
+  # A fork's pull request gets a read-only token, so only same-repository pull requests get the comment.
+  comment:
+    name: Comment coverage
+    needs: test
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Download coverage summary
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage
+
+      - name: Comment on the pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+        run: gh pr comment "$PR" --edit-last --create-if-none --body-file coverage.md
