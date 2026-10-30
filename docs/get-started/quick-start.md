@@ -180,12 +180,15 @@ failures apart from bugs in your own code, so the member gets a useful message f
 ```ts title="index.ts"
 distube.on("queue.item.started", async ({ item }) => {
   const channel = client.channels.cache.get(item.metadata.textChannelId);
-  if (channel?.isSendable()) await channel.send(`Now playing: ${item.song.name}`);
+  if (channel?.isSendable()) {
+    await channel.send({ content: `Now playing: ${item.song.name}`, allowedMentions: { parse: [] } });
+  }
 });
 ```
 
 `queue.item.started` fires when the track becomes audible. The listener reads the text channel ID back from the
-item's metadata.
+item's metadata. `allowedMentions: { parse: [] }` stops a title such as `@everyone` from pinging the server,
+because song titles come from the provider, not from you.
 
 ## Shut down cleanly
 
@@ -310,7 +313,9 @@ client.on(Events.InteractionCreate, async interaction => {
 
 distube.on("queue.item.started", async ({ item }) => {
   const channel = client.channels.cache.get(item.metadata.textChannelId);
-  if (channel?.isSendable()) await channel.send(`Now playing: ${item.song.name}`);
+  if (channel?.isSendable()) {
+    await channel.send({ content: `Now playing: ${item.song.name}`, allowedMentions: { parse: [] } });
+  }
 });
 
 process.once("SIGINT", async () => {

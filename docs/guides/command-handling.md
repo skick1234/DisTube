@@ -173,7 +173,9 @@ client.on(Events.InteractionCreate, interaction => {
 
 distube.on("queue.item.started", async ({ item }) => {
   const channel = client.channels.cache.get(item.metadata.channelId);
-  if (channel?.isSendable()) await channel.send(`Now playing: ${item.song.name}`);
+  if (channel?.isSendable()) {
+    await channel.send({ content: `Now playing: ${item.song.name}`, allowedMentions: { parse: [] } });
+  }
 });
 
 process.once("SIGINT", async () => {
