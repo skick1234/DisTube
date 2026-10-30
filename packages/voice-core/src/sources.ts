@@ -162,12 +162,17 @@ class OneShotServer implements ByteServer {
     }
     const parts: Buffer[] = [];
     let size = 0;
-    while (size < pending.want) {
-      const chunk: unknown = this.#readable.read();
-      if (chunk === null) break;
-      const bytes = toBuffer(chunk);
-      parts.push(bytes);
-      size += bytes.length;
+    try {
+      while (size < pending.want) {
+        const chunk: unknown = this.#readable.read();
+        if (chunk === null) break;
+        const bytes = toBuffer(chunk);
+        parts.push(bytes);
+        size += bytes.length;
+      }
+    } catch (error: unknown) {
+      this.#settle(safeInputError("Playback input failed", error, this.#redact));
+      return;
     }
     if (size > 0) this.#answer({ request: pending.request, chunk: transferable(Buffer.concat(parts, size)) });
     else if (this.#ended) this.#answer({ request: pending.request, done: true });

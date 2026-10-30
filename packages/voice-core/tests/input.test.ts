@@ -524,6 +524,12 @@ describe("local input containers", () => {
     }
   });
 
+  it("rejects a stream that yields objects instead of throwing from the input", async () => {
+    const failure = await failureOf(open({ kind: "stream", stream: Readable.from([{ frame: 1 }]) }));
+
+    expect(failure.message).toContain("Playback input must yield bytes");
+  });
+
   it("plays a WAV stream", async () => {
     const track = await open({ kind: "stream", stream: Readable.from([Buffer.from(silentWav())]) });
 
