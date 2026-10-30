@@ -266,7 +266,13 @@ export class Track {
         if (controller.signal.aborted) throw superseded(controller.signal);
         throw decodeFailure("seek", error, this.#redact);
       }
-      const source = (this.#servers.get(input) as ByteServer).source;
+      const server = this.#servers.get(input) as ByteServer;
+      if (controller.signal.aborted) {
+        this.#servers.delete(input);
+        server.close();
+        throw superseded(controller.signal);
+      }
+      const { source } = server;
       const settled = await this.#call(request => ({ type: "seek", track: this.#id, request, input, source, seconds }));
       if (settled.superseded)
         throw controller.signal.aborted
