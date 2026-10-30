@@ -108,7 +108,8 @@ During playback preparation, a rate-limited track lookup or stream link on `api-
 are rate limited, playback moves on to `soundcloakUrls`. Other web API operations use only api-v2.
 
 If the plugin fails to read a client ID from soundcloud.com, it disables api-v2 for 10 minutes. With app credentials,
-operations use only the official API during that time. Without them, operations reject `SOURCE_FAILED`. `suggest`
+operations use only the official API during that time. Without them, playback preparation tries `soundcloakUrls` and
+other operations reject `SOURCE_FAILED`. `suggest`
 also rejects `SOURCE_FAILED`, even with app credentials. After 10 minutes, the next api-v2 operation tries the read
 again.
 
