@@ -160,6 +160,20 @@ describe("autoplay", () => {
     expect(waiting(queue)).toEqual([]);
   });
 
+  it("plays a previous replay without waiting for a pending related lookup", async () => {
+    const { harness, queue, player } = await playing(["a"]);
+    harness.source.related.mockReturnValueOnce(new Promise<never>(() => undefined));
+    queue.setAutoplay(true);
+
+    player.finish();
+    await settle();
+    await queue.previous();
+    await settle();
+
+    expect(player.played).toEqual(["a", "a"]);
+    expect(queue.current?.song.id).toBe("a");
+  });
+
   it("reports a failed lookup against its seed, then exhausts the queue", async () => {
     const { harness, queue, player } = await playing(["a"]);
     harness.source.related.mockResolvedValue(undefined);

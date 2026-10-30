@@ -273,7 +273,10 @@ export class DisTubeQueue<Metadata = undefined, Target = VoiceChannelTarget> {
     const current = playing ? [playing.item] : [];
     this.#state = insertAt(finishCurrent(popped.state), [replay, ...current], 0);
     if (attempt) await this.#interrupt(attempt);
-    else this.#kick();
+    else {
+      this.#lookup?.abort();
+      this.#kick();
+    }
   }
 
   /**
