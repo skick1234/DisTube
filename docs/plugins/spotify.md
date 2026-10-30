@@ -1,13 +1,13 @@
 ---
 title: Spotify
-description: Resolve Spotify metadata and play it through another source with @distube/spotify.
+description: Play Spotify links and search Spotify with @distube/spotify, through another source.
 sidebar:
   order: 4
 ---
 
-`@distube/spotify` lets members paste Spotify links and search Spotify. It reads tracks, albums, playlists and an
-artist's top tracks. Spotify does not hand out audio, though, so the plugin only supplies names and artists. DisTube
-finds each track on another plugin, such as YouTube, and plays it from there.
+`@distube/spotify` lets members paste Spotify track, album, playlist and artist links and search Spotify. Spotify does
+not hand out audio, so DisTube finds each track on one of your other plugins, such as YouTube, and plays it from
+there. The plugin needs no account or API key.
 
 ## Install
 
@@ -47,67 +47,43 @@ const first = results[0];
 if (first) await distube.play(voiceChannel, first);
 ```
 
-If no other plugin has both `search` and `stream`, and no engine plugin such as Lavalink is listed, `new DisTube`
-throws `INVALID_ARGUMENT`, because nothing could play Spotify's Songs.
+`new DisTube` throws `INVALID_ARGUMENT` when no other plugin can play Spotify's tracks. `SpotifyPlugin` takes no
+options. Short `spotify.link` links work like the full ones.
 
-`SpotifyPlugin` takes no options and no credentials. Short `spotify.link` and `spotify.app.link` links expand to the
-URL they share, which then plays as if the member pasted it.
+## Which plugin plays a track
 
-## How a Spotify Song plays
+When a Spotify track is about to play, DisTube searches its name and artists on your other plugins in `plugins` order
+and plays the first match. To match against YouTube Music songs instead of videos, list
+[`YouTubeMusicPlugin`](../youtube/#search-youtube-music) before `YouTubePlugin`.
 
-When a Spotify Song is about to play, DisTube searches for its name and artists on every other plugin that has both
-`search` and `stream`, in the order of `plugins`, taking one result from each. It plays the first result that
-prepares. List `YouTubeMusicPlugin` before `YouTubePlugin` to match against YouTube Music songs instead of videos.
+The queue item stays a Spotify one. `queue.item.started` carries the match as `fallback`, so a now-playing message can
+show what actually played:
 
-The queue item and its Song stay Spotify's. `queue.item.started` carries the matched Song as `fallback`, so your
-now-playing message can show which video actually played.
+```ts
+import type { DisTube } from "distube";
 
-If no plugin finds anything, the item fails `NO_RESULT`. If some of them failed, the item fails with the code every
-failure shares, such as `RATE_LIMITED`, or `SOURCE_FAILED` when they differ. The error's `cause` is an `AggregateError`
-of the failures, each keeping the code and source of the plugin that failed, so none of them is a Spotify error. When
-every failure came from one plugin, `error.source` names it. Either way, `error.query` holds the text DisTube searched
-for.
+declare const distube: DisTube<unknown>;
 
-An engine plugin such as [Lavalink](../lavalink/) prepares every Song itself, so this search never runs.
+distube.on("queue.item.started", ({ item, fallback }) => {
+  console.log(fallback ? `${item.song.name}, played from ${fallback.url}` : item.song.name);
+});
+```
+
+When no plugin finds the track, the item fails with `NO_RESULT`.
 
 ## Autoplay
 
-Spotify has no related tracks. After a Spotify Song, autoplay asks the plugin that played its `fallback` instead,
-seeded with that fallback Song. With YouTube, that adds a related video. The added item is a YouTube Song, not a
-Spotify one.
-
-When the Spotify Song played with no fallback, as it does through Lavalink, autoplay publishes
-`queue.autoplay.failed`. An item that failed is never used as the autoplay seed.
-
-## Where the data comes from
-
-Links resolve from Spotify's public `open.spotify.com/embed` page, which lists up to 100 tracks of a playlist or album
-and an artist's top tracks. Search and the full track list of a playlist, album or artist go through the web player's
-pathfinder API, with the anonymous token the embed page carries.
+Spotify has no related tracks. After a Spotify track, autoplay asks the plugin that played its `fallback`, so with
+YouTube it adds a related YouTube video. With [Lavalink](../lavalink/) there is no `fallback`, so autoplay after a
+Spotify track fails and publishes `queue.autoplay.failed`.
 
 :::caution
-That token is unofficial, and Spotify can rate limit it or close it at any time. When the pathfinder API fails while
-listing a playlist, album or artist, the plugin falls back to the tracks the embed page lists.
+The plugin reads Spotify's public web pages without an account. Spotify can rate limit or change them at any time,
+and links or search then fail with `RATE_LIMITED` or `SOURCE_FAILED` until the plugin is updated.
 :::
-
-## Songs, playlists and search results
-
-Songs carry Spotify's explicit flag as `song.ageRestricted`, and the album name as `album` in typed `pluginData` when
-Spotify reports it. A Playlist's `pluginData.kind` says which page it came from: `"album"`, `"playlist"` or
-`"artist"`.
-
-Playlists and albums keep their first `maxPlaylistSongs` tracks. They skip local files, podcast episodes and tracks
-Spotify marks unplayable.
-
-Search returns at most 50 results per call, and `offset` counts from zero. Spotify stops at the 1000th result, so an
-offset of 1000 or more returns nothing.
 
 ## Errors
 
-A Spotify lookup failure reaches your bot as a `DisTubeError` with `error.source` set to `"spotify"` and a code such as
-`NOT_FOUND`, `UNAVAILABLE` or `RATE_LIMITED`. A failed track lookup sets `error.media` to `"song"`, and a failed
-playlist, album or artist lookup sets it to `"playlist"`. A refused token sets no `media`.
-
-Failures while playing come from the plugin that played the track, as [above](#how-a-spotify-song-plays). The
-[error reference](../../reference/errors/) lists every code. New to DisTube? Start with the
-[quick start](../../get-started/quick-start/).
+A failed Spotify lookup reaches your bot as a `DisTubeError` with `error.source` set to `"spotify"` and a code such as
+`NOT_FOUND`, `UNAVAILABLE` or `RATE_LIMITED`. A failure while a track plays comes from the plugin that played it. The
+[error reference](../../reference/errors/) lists every code.

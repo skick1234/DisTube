@@ -42,79 +42,57 @@ const first = results[0];
 if (first) await distube.play(voiceChannel, first);
 ```
 
-Short `on.soundcloud.com` links expand to the URL they share, which then plays as if the member pasted it.
+Short `on.soundcloud.com` links work like the full ones. A set stops at the `maxPlaylistSongs` option of `DisTube`.
 
 ## Options
 
-`new SoundCloudPlugin()` takes optional fields. Most bots need none of them and use api-v2, SoundCloud's web API.
+Most bots need no options. Add app credentials when SoundCloud rate limits your bot often.
 
-`clientId` and `clientSecret` are a registered SoundCloud app's credentials. Pass both or neither. Registering an app
-needs an Artist Pro account.
+`clientId` and `clientSecret` are the credentials of an app you registered with SoundCloud, which needs an Artist Pro
+account. With them, the plugin asks SoundCloud's official API first. Pass both or neither, or construction throws
+`INVALID_ARGUMENT`.
 
-`token` is a saved app token with `{ accessToken, refreshToken?, expiresAt }`, where `expiresAt` is epoch milliseconds.
-`onToken(token)` receives each new app token. Save it and pass it as `token` after a restart to reuse it. SoundCloud
-allows only 50 client-credential tokens per 12 hours per app, and 30 per hour per IP. Both options need `clientId` and
-`clientSecret`.
+SoundCloud hands out only 50 app tokens per 12 hours per app, so keep the token across restarts. `onToken` receives
+each new one, and `token` passes a saved one back:
 
-Construction throws `INVALID_ARGUMENT` if only one credential is set, or if `token` or `onToken` is set without them.
+```ts
+import { readFileSync, writeFileSync } from "node:fs";
+import { SoundCloudPlugin, type SoundCloudPluginOptions } from "@distube/soundcloud";
 
-`clientIdV2` is the web app's client ID. Without it, the plugin reads one from soundcloud.com on first use.
+function savedToken(): SoundCloudPluginOptions["token"] {
+  try {
+    return JSON.parse(readFileSync("soundcloud-token.json", "utf8")) as SoundCloudPluginOptions["token"];
+  } catch {
+    return undefined;
+  }
+}
 
-The plugin sends `oauthTokenV2` as `Authorization: OAuth <token>` to api-v2.
+export const soundcloud = new SoundCloudPlugin({
+  clientId: process.env.SOUNDCLOUD_CLIENT_ID,
+  clientSecret: process.env.SOUNDCLOUD_CLIENT_SECRET,
+  token: savedToken(),
+  onToken: token => writeFileSync("soundcloud-token.json", JSON.stringify(token)),
+});
+```
 
-## Songs and search results
+`clientIdV2` sets the client ID for SoundCloud's web API. Without it, the plugin reads one from soundcloud.com.
 
-Songs keep their public permalink as `url`. `song.id` is always the numeric track ID, whichever API answered. They
-expose `plays`, `likes` and `uploader` through typed `pluginData`. `song.ageRestricted` holds the publisher's explicit
-flag on label releases and is unset on other uploads.
+`oauthTokenV2` sends a SoundCloud user's OAuth token with web API requests.
 
-Search returns at most 50 results per call, and `offset` counts from zero.
-
-Preview-only tracks, such as Go+ snippets, reject `UNAVAILABLE` when resolved or prepared. Search, related tracks and
-playlists leave them out.
-
-## How playback works
-
-With `clientId` and `clientSecret`, resolve, search, related and stream lookups ask the official API first. Any failure
-except a caller abort falls back to api-v2. Without credentials, the plugin uses api-v2 only. `suggest` always uses
-api-v2.
-
-Each time a track is about to play, the plugin fetches a fresh link to its highest-bitrate AAC HLS stream and plays it
-as a `timed` MP4 resource with no URL. On api-v2, a track that came from this plugin's search, link, related or set
-answers needs no second lookup.
-
-The plugin only talks to an allowlist of SoundCloud hosts, with a timeout, and follows at most 5 redirects, checking
-each one against the list. Cancelling a call, or disposing the plugin, aborts its pending requests.
-
-With [Lavalink](../lavalink/), the node loads a SoundCloud Song through its permalink, or plays the first search hit for
-its name and artist.
-
-## Rate limits
-
-After a `429` the plugin sends nothing to that host until its `Retry-After` wait passes, or for 60 seconds when the
-header is missing or invalid. This also applies to the official API; a paused official API falls back to api-v2.
-
-During playback preparation, a rate-limited track lookup or stream link on `api-v2.soundcloud.com` falls back to
-`api-widget.soundcloud.com`, then `api-mobi.soundcloud.com`, at most once each, skipping paused hosts. Other web API
-operations use only api-v2.
-
-If the plugin fails to read a client ID from soundcloud.com, it disables api-v2 for 10 minutes. With app credentials,
-operations use only the official API during that time. Without them, operations reject `SOURCE_FAILED`. `suggest`
-also rejects `SOURCE_FAILED`, even with app credentials. After 10 minutes, the next api-v2 operation tries the read
-again.
+:::caution
+Keep the client secret, the saved token and `oauthTokenV2` out of your repository. Anyone who has them can act as your
+app or account.
+:::
 
 ## Errors
 
-A SoundCloud failure reaches your bot as a `DisTubeError` with `error.source` set to `"soundcloud"`. Its message names
-the host and path, and a `429` also names its `Retry-After` wait. A failed track or stream lookup sets `error.media` to
-`"song"`, and a failed set lookup sets it to `"playlist"`.
+A SoundCloud failure reaches your bot as a `DisTubeError` with `error.source` set to `"soundcloud"`.
 
-| Code            | What happened                                                                            |
-| --------------- | ---------------------------------------------------------------------------------------- |
-| `NOT_FOUND`     | The track or set does not exist                                                          |
-| `UNAVAILABLE`   | The track is blocked, preview-only or not streamable                                     |
-| `RATE_LIMITED`  | SoundCloud is throttling your bot                                                        |
-| `SOURCE_FAILED` | The track offers only MP3, or its stream segments come from a host outside the allowlist |
+| Code            | What happened                                                  | What to do                                 |
+| --------------- | -------------------------------------------------------------- | ------------------------------------------ |
+| `NOT_FOUND`     | The track or set does not exist                                | Check the link                             |
+| `UNAVAILABLE`   | The track is blocked, a preview-only snippet or not streamable | Pick another track                         |
+| `RATE_LIMITED`  | SoundCloud is throttling your bot                              | Wait, or set `clientId` and `clientSecret` |
+| `SOURCE_FAILED` | The track offers only MP3, or SoundCloud could not be read     | Pick another track, or try again later     |
 
-The [error reference](../../reference/errors/) lists every code, and the [queue reference](../../reference/queue/)
-covers adding Songs to a queue. New to DisTube? Start with the [quick start](../../get-started/quick-start/).
+The [error reference](../../reference/errors/) lists every code.
