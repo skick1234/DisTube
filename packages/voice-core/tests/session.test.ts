@@ -186,6 +186,29 @@ describe("gateway session", () => {
     await session.release();
   });
 
+  it("settles a move whose server update arrives before its state update", async () => {
+    const gateway = gatewayAdapter();
+    const session = await DiscordVoiceSession.connect(options(gateway.creator));
+    gateway.sendPayload.mockImplementationOnce(() => {
+      queueMicrotask(() => {
+        gateway.server("rotated", "new.example");
+        gateway.state("other");
+      });
+      return true;
+    });
+
+    await session.join("other");
+
+    expect(session.gateway).toEqual({
+      channelId: "other",
+      sessionId: GATEWAY.sessionId,
+      token: "rotated",
+      endpoint: "new.example",
+    });
+    expect(session.channelId).toBe("other");
+    await session.release();
+  });
+
   it("reads the bitrate of the channel it settled in, including after a move", async () => {
     const gateway = gatewayAdapter();
     const session = await DiscordVoiceSession.connect(options(gateway.creator));

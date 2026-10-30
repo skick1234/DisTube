@@ -65,6 +65,8 @@ export class DiscordVoiceSession implements VoiceSession {
   #connection?: VoiceConnection;
   #state?: Parameters<DiscordGatewayAdapterLibraryMethods["onVoiceStateUpdate"]>[0];
   #server?: Parameters<DiscordGatewayAdapterLibraryMethods["onVoiceServerUpdate"]>[0];
+  #pairedServer?: Parameters<DiscordGatewayAdapterLibraryMethods["onVoiceServerUpdate"]>[0];
+  #moveTarget?: string;
   #channelId: string;
   #gateway?: VoiceGatewayData;
   #selfDeaf: boolean;
@@ -165,7 +167,7 @@ export class DiscordVoiceSession implements VoiceSession {
           (this.#state.channel_id !== state.channel_id || this.#state.session_id !== state.session_id)
         ) {
           this.#gateway = undefined;
-          this.#server = undefined;
+          if (this.#server === this.#pairedServer) this.#server = undefined;
         }
         this.#state = { ...state };
         this.#selfDeaf = state.self_deaf;
@@ -258,10 +260,15 @@ export class DiscordVoiceSession implements VoiceSession {
   async #join(channelId: string, { selfDeaf = this.#selfDeaf, selfMute = this.#selfMute }: JoinOptions): Promise<void> {
     if (this.#released) throw sessionReleased();
     if (this.#gateway?.channelId === channelId && selfDeaf === this.#selfDeaf && selfMute === this.#selfMute) return;
-    await this.#request(
-      { channel_id: channelId, self_deaf: selfDeaf, self_mute: selfMute },
-      () => this.#gateway?.channelId === channelId && this.#selfDeaf === selfDeaf && this.#selfMute === selfMute,
-    );
+    this.#moveTarget = channelId;
+    try {
+      await this.#request(
+        { channel_id: channelId, self_deaf: selfDeaf, self_mute: selfMute },
+        () => this.#gateway?.channelId === channelId && this.#selfDeaf === selfDeaf && this.#selfMute === selfMute,
+      );
+    } finally {
+      this.#moveTarget = undefined;
+    }
   }
 
   /** Rejoins the held channel and waits for the credentials the platform sends for it, so `connected` follows. */
@@ -432,6 +439,8 @@ export class DiscordVoiceSession implements VoiceSession {
     const state = this.#state;
     const server = this.#server;
     if (!state?.channel_id || !state.session_id || !server?.endpoint || !server.token) return;
+    if (this.#moveTarget !== undefined && state.channel_id !== this.#moveTarget) return;
+    this.#pairedServer = server;
     const gateway = Object.freeze({
       channelId: state.channel_id,
       sessionId: state.session_id,
