@@ -134,8 +134,9 @@ A Player cannot dispose the resource it plays. Core does that after the Player s
 native audio object, listener and timer it creates. An operation the backend cannot perform rejects with
 `DisTubeError(ErrorCode.UNSUPPORTED, message)`. Core reports any other rejection as `VOICE_FAILED`.
 
-This engine plays only `url` resources and renders three presets. Nightcore changes speed, so `playbackRate` reports
-it:
+This sketch shows the shape of an engine that plays only `url` resources and lists three presets. `nativePlay` stands
+for your backend, and every other control is a stub. Replace each stub with a call into the backend, including
+`setFilters`, which must render the presets. Nightcore changes speed, so `playbackRate` reports it:
 
 ```ts
 import { DisTubeError, ErrorCode } from "distube";
