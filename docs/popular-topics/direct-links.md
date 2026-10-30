@@ -46,7 +46,7 @@ export const directLinks: Plugin = {
     const isAttachment = url.hostname === "cdn.discordapp.com" && /^\/(?:ephemeral-)?attachments\//u.test(url.pathname);
     if (url.protocol !== "https:" || !(isAttachment || audioExtension.test(url.pathname))) return undefined;
     const id = url.origin + url.pathname;
-    const song = new Song({ source: "direct-links", id, name: fileName(url), url: id });
+    const song = new Song({ source: "direct-links", id, name: fileName(url), url: id, ageRestricted: false });
     signedInputs.set(song, input);
     return song;
   },
@@ -62,7 +62,8 @@ file on Discord's CDN. Anything else returns `undefined`, and core asks the next
 option from `/ephemeral-attachments/`, so the check accepts both attachment paths.
 
 The file's name becomes the track title. The Song has no duration, because the plugin does not download the file to
-find out.
+find out. `ageRestricted: false` tells core the answer is already known, so a Song passed to `play` again, such as one
+from `queue.history`, plays as it is instead of going back through `resolve` with its unsigned `url`.
 
 ### Why the signed link stays in a map
 
