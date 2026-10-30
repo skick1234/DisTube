@@ -5,6 +5,7 @@ import {
   capture,
   deferred,
   FakeAdapter,
+  FakeEngine,
   FakeSource,
   GUILD,
   media,
@@ -72,12 +73,13 @@ describe("client construction", () => {
     expect(construct([{ name: "clips", stream: async () => ({ kind: "file", path: "/clips/a.ogg" }) }])).not.toThrow();
   });
 
-  it("accepts a plugin without stream only beside an engine plugin or another plugin with search and stream", () => {
+  it("accepts a plugin without stream only beside a preparing engine plugin or another plugin with search and stream", () => {
     const spotify: Plugin = { name: "spotify", resolve: async () => undefined, search: async () => [] };
     const streamOnly: Plugin = { name: "clips", stream: async () => ({ kind: "file", path: "/clips/a.ogg" }) };
     const searchOnly: Plugin = { name: "index", search: async () => [] };
     expect(construct([spotify])).toThrowError(invalidArgument);
     expect(construct([spotify, streamOnly, searchOnly])).toThrowError(invalidArgument);
+    expect(construct([spotify, { name: "remote", engine: new FakeEngine() }])).toThrowError(invalidArgument);
     expect(construct([spotify, new FakeSource("youtube")])).not.toThrow();
     expect(construct([spotify, { name: "remote", engine: new PreparingEngine() }])).not.toThrow();
   });

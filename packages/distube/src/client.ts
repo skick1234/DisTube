@@ -269,7 +269,8 @@ function validatePlugins(plugins: readonly Plugin[]): Plugin | undefined {
   const names = new Set<string>();
   const engines = plugins.filter(plugin => plugin.engine);
   if (engines.length > 1) throw new DisTubeError(ErrorCode.INVALID_ARGUMENT, "At most one plugin may carry an engine");
-  const playsAnySong = engines.length > 0 || plugins.some(plugin => plugin.search && plugin.stream);
+  const playsAnySong =
+    engines.some(plugin => plugin.engine?.prepare) || plugins.some(plugin => plugin.search && plugin.stream);
   for (const plugin of plugins) {
     if (typeof plugin.name !== "string" || plugin.name.trim() !== plugin.name || plugin.name.length === 0)
       throw new DisTubeError(ErrorCode.INVALID_ARGUMENT, "Plugin names must be trimmed non-empty strings");
