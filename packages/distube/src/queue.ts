@@ -58,7 +58,7 @@ interface InsertOptions {
   /**
    * Unless `true`, refuses an age-restricted Song with `AGE_RESTRICTED` and drops a Playlist's age-restricted Songs. A
    * Song whose `ageRestricted` is unknown is first looked up by its `url` through its plugin, and the queue holds that
-   * lookup's Song. Playlist Songs are not looked up. Autoplay ignores it.
+   * lookup's Song. Playlist Songs are not looked up. Autoplay follows `queue.allowAgeRestricted` instead.
    * @defaultValue `false`
    */
   readonly allowAgeRestricted?: boolean;
@@ -113,6 +113,7 @@ export class DisTubeQueue<Metadata = undefined, Target = VoiceChannelTarget> {
   #lastPlayed?: Attempt;
   #autoplayItem?: string;
   #autoplayFailed = false;
+  #allowAgeRestricted = false;
 
   /** @internal */
   constructor(guild: Guild<Target>) {
@@ -154,6 +155,11 @@ export class DisTubeQueue<Metadata = undefined, Target = VoiceChannelTarget> {
 
   get autoplay(): boolean {
     return this.#state.autoplay;
+  }
+
+  /** Whether autoplay may add age-restricted Songs; `false` on a new queue. */
+  get allowAgeRestricted(): boolean {
+    return this.#allowAgeRestricted;
   }
 
   /** Elapsed source seconds of the current item; `0` without a started one. */
@@ -225,6 +231,16 @@ export class DisTubeQueue<Metadata = undefined, Target = VoiceChannelTarget> {
     this.#assertAlive();
     if (this.#state.autoplay !== enabled) this.#commit(Object.freeze({ ...this.#state, autoplay: enabled }));
     if (!enabled) this.#lookup?.abort();
+  }
+
+  /**
+   * Lets autoplay add age-restricted Songs, or refuses them: `related` is asked to skip such candidates, and a Song it
+   * still returns marked `ageRestricted: true` counts as no result. Insertions take their own `allowAgeRestricted`.
+   */
+  setAllowAgeRestricted(enabled: boolean): void {
+    requireBoolean(enabled, "allowAgeRestricted");
+    this.#assertAlive();
+    this.#allowAgeRestricted = enabled;
   }
 
   /** Commits once the Player acknowledges; idempotent. */
@@ -508,7 +524,14 @@ export class DisTubeQueue<Metadata = undefined, Target = VoiceChannelTarget> {
     try {
       const signal = AbortSignal.any([this.#lifetime.signal, lookup.signal]);
       const exclude = this.#state.history.map(entry => entry.song);
-      const related = relatedSong(this.#guild.config.plugins, seed.item.song, exclude, signal, seed.fallback);
+      const related = relatedSong(
+        this.#guild.config.plugins,
+        seed.item.song,
+        exclude,
+        this.#allowAgeRestricted,
+        signal,
+        seed.fallback,
+      );
       song = await untilAborted(related, signal);
     } catch (error: unknown) {
       failure = error;

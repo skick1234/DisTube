@@ -11,19 +11,20 @@ explains how a queue relates to the voice and when `play` creates one.
 
 ## State
 
-| Property       | What it holds                                                                                                                  |
-| -------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `guildId`      | The guild this queue belongs to                                                                                                |
-| `current`      | The `QueueItem` handed to the player, audible once `status` is `playing`. `undefined` when there is none.                      |
-| `upcoming`     | The items waiting to play, in order                                                                                            |
-| `history`      | Items that finished or were skipped, newest last, up to `historySize`                                                          |
-| `status`       | `idle`, `preparing`, `playing` or `paused`. See [Status](#status).                                                             |
-| `repeat`       | `off`, `song` or `queue`                                                                                                       |
-| `autoplay`     | `true` when autoplay is on                                                                                                     |
-| `paused`       | `true` while the current item is paused                                                                                        |
-| `position`     | Seconds played of the current item, `0` before it starts                                                                       |
-| `playbackRate` | Source seconds that play per second of wall time. `1` without a voice or without filters that change speed.                    |
-| `voice`        | The guild's [`DisTubeVoice`](../voice-and-filters/). `undefined` until the first item is added and after the queue is deleted. |
+| Property             | What it holds                                                                                                                  |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `guildId`            | The guild this queue belongs to                                                                                                |
+| `current`            | The `QueueItem` handed to the player, audible once `status` is `playing`. `undefined` when there is none.                      |
+| `upcoming`           | The items waiting to play, in order                                                                                            |
+| `history`            | Items that finished or were skipped, newest last, up to `historySize`                                                          |
+| `status`             | `idle`, `preparing`, `playing` or `paused`. See [Status](#status).                                                             |
+| `repeat`             | `off`, `song` or `queue`                                                                                                       |
+| `autoplay`           | `true` when autoplay is on                                                                                                     |
+| `allowAgeRestricted` | `true` when autoplay may add age-restricted Songs                                                                              |
+| `paused`             | `true` while the current item is paused                                                                                        |
+| `position`           | Seconds played of the current item, `0` before it starts                                                                       |
+| `playbackRate`       | Source seconds that play per second of wall time. `1` without a voice or without filters that change speed.                    |
+| `voice`              | The guild's [`DisTubeVoice`](../voice-and-filters/). `undefined` until the first item is added and after the queue is deleted. |
 
 ## Status
 
@@ -93,20 +94,21 @@ Both take the same options:
 
 ## Controls
 
-| Method                        | What it does                                                                                           | Returns                           |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------ | --------------------------------- |
-| `pause()`, `resume()`         | Pause or resume the current item, once the player confirms. Calling either twice is harmless.          | `Promise<void>`                   |
-| `seek(seconds)`               | Move to a point in the current item.                                                                   | `Promise<void>`                   |
-| `skip()`                      | End the current item, or drop the one still preparing, and move on. Ignores song repeat.               | `Promise<QueueItem \| undefined>` |
-| `jump(target, { requeue? })`  | Skip to a waiting item. `target` is its ID or its one-based position.                                  | `Promise<void>`                   |
-| `previous()`                  | Replay the newest history Song as a fresh item. The current item goes back to the front of `upcoming`. | `Promise<void>`                   |
-| `stop()`                      | Delete the queue now. The voice stays, with its settings.                                              | `Promise<void>`                   |
-| `shuffle()`                   | Reorder `upcoming`. The current item keeps playing.                                                    | `void`                            |
-| `clear()`                     | Empty `upcoming`. The current item keeps playing.                                                      | the removed items                 |
-| `remove(target)`              | Remove waiting items. `target` is an ID, a one-based position or an inclusive range `{ from, to }`.    | the removed items                 |
-| `move(itemId, beforeItemId?)` | Move a waiting item before another one, or to the end when you give no second ID.                      | `void`                            |
-| `setRepeat(mode)`             | Set repeat to `"off"`, `"song"` or `"queue"`.                                                          | `void`                            |
-| `setAutoplay(enabled)`        | Turn autoplay on or off. See [Repeat and autoplay](#repeat-and-autoplay).                              | `void`                            |
+| Method                           | What it does                                                                                           | Returns                           |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------ | --------------------------------- |
+| `pause()`, `resume()`            | Pause or resume the current item, once the player confirms. Calling either twice is harmless.          | `Promise<void>`                   |
+| `seek(seconds)`                  | Move to a point in the current item.                                                                   | `Promise<void>`                   |
+| `skip()`                         | End the current item, or drop the one still preparing, and move on. Ignores song repeat.               | `Promise<QueueItem \| undefined>` |
+| `jump(target, { requeue? })`     | Skip to a waiting item. `target` is its ID or its one-based position.                                  | `Promise<void>`                   |
+| `previous()`                     | Replay the newest history Song as a fresh item. The current item goes back to the front of `upcoming`. | `Promise<void>`                   |
+| `stop()`                         | Delete the queue now. The voice stays, with its settings.                                              | `Promise<void>`                   |
+| `shuffle()`                      | Reorder `upcoming`. The current item keeps playing.                                                    | `void`                            |
+| `clear()`                        | Empty `upcoming`. The current item keeps playing.                                                      | the removed items                 |
+| `remove(target)`                 | Remove waiting items. `target` is an ID, a one-based position or an inclusive range `{ from, to }`.    | the removed items                 |
+| `move(itemId, beforeItemId?)`    | Move a waiting item before another one, or to the end when you give no second ID.                      | `void`                            |
+| `setRepeat(mode)`                | Set repeat to `"off"`, `"song"` or `"queue"`.                                                          | `void`                            |
+| `setAutoplay(enabled)`           | Turn autoplay on or off. See [Repeat and autoplay](#repeat-and-autoplay).                              | `void`                            |
+| `setAllowAgeRestricted(enabled)` | Let autoplay add age-restricted Songs, or refuse them. Off on a new queue.                             | `void`                            |
 
 The methods that do not return a promise finish their change before they return.
 

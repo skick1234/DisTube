@@ -111,6 +111,10 @@ await distube.play(voiceChannel, url, { allowAgeRestricted: true });
 YouTube itself also serves those videos only to a signed-in, age-verified account, so you need a
 [cookie](#sign-in-with-a-cookie) as well.
 
+Without `allowAgeRestricted: true`, `distube.search` uses YouTube's restricted mode. Autoplay follows
+`queue.setAllowAgeRestricted` and skips age-restricted related videos while it is off. See
+[Repeat and autoplay](../../guides/repeat-and-autoplay/#keep-autoplay-out-of-age-restricted-tracks).
+
 ## Sign in with a cookie
 
 A cookie fixes two failures:

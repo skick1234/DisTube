@@ -102,12 +102,23 @@ export interface SearchOptions {
   readonly limit: number;
   /** Zero-based index of the first result. */
   readonly offset: number;
+  /**
+   * `false` when the caller refuses age-restricted Songs: leave them out where the provider can, such as with a
+   * provider's safe search. DisTube still drops results marked `ageRestricted: true`. Absent when DisTube checks the
+   * picked Song itself, as `play` with a query and the search fallback do.
+   */
+  readonly allowAgeRestricted?: boolean;
 }
 
 export interface RelatedOptions {
   readonly signal: AbortSignal;
   /** Recently played Songs the provider should avoid repeating. */
   readonly exclude: readonly Song[];
+  /**
+   * `false` when the queue refuses age-restricted Songs: skip candidates the provider marks so and return the next
+   * one. DisTube treats a returned Song marked `ageRestricted: true` as no result.
+   */
+  readonly allowAgeRestricted?: boolean;
 }
 
 export interface ResolveOptions {

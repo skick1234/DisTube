@@ -495,8 +495,10 @@ describe("age restriction", () => {
     const harness = setup([first, second]);
 
     expect((await harness.distube.search("q")).map(song => song.id)).toEqual(["clean", "unknown"]);
+    expect(first.search).toHaveBeenLastCalledWith("q", expect.objectContaining({ allowAgeRestricted: false }));
     const unfiltered = await harness.distube.search("q", { allowAgeRestricted: true });
     expect(unfiltered.map(song => song.id)).toEqual(["adult"]);
+    expect(first.search).toHaveBeenLastCalledWith("q", expect.objectContaining({ allowAgeRestricted: true }));
   });
 
   it("rejects a non-boolean allowAgeRestricted INVALID_ARGUMENT before any plugin call", async () => {

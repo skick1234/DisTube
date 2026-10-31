@@ -65,8 +65,8 @@ export interface SearchRequest<Source extends Plugin = Plugin> {
   readonly offset?: number;
   readonly signal?: AbortSignal;
   /**
-   * Unless `true`, leaves out results whose `ageRestricted` is true. Results whose answer is unknown stay; `play` checks
-   * them.
+   * Unless `true`, asks each plugin to leave age-restricted results out, as YouTube's restricted mode does, and leaves
+   * out results whose `ageRestricted` is true. Results whose answer is unknown stay; `play` checks them.
    * @defaultValue `false`
    */
   readonly allowAgeRestricted?: boolean;

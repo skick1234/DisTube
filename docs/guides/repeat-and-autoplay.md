@@ -116,6 +116,26 @@ The plugin it asks is the one that owns the last Song. A Spotify Song is the exc
 An autoplay item has `item.autoplay === true`. It copies the metadata of the track it follows, so it is announced in
 the same channel.
 
+## Keep autoplay out of age-restricted tracks
+
+Autoplay refuses age-restricted Songs by default. The `allowAgeRestricted` option of `play` covers only what a member
+adds, so the queue has its own setting. Set it when the queue is created, and again when the guild's rule changes:
+
+```ts
+import type { DisTube } from "distube";
+
+declare const distube: DisTube;
+declare function guildAllowsAdultContent(guildId: string): boolean;
+
+distube.on("queue.created", ({ queue }) => {
+  queue.setAllowAgeRestricted(guildAllowsAdultContent(queue.guildId));
+});
+```
+
+While it is off, YouTube skips age-restricted related videos and tries the next one. If the plugin still returns an
+age-restricted Song, autoplay treats it as no result and emits `queue.autoplay.failed`. `queue.allowAgeRestricted`
+reads the setting. Like repeat and autoplay, it resets with the queue, and it publishes no `queue.updated`.
+
 ## Watch the queue while autoplay looks
 
 Each change to repeat or autoplay publishes one `queue.updated` event. Setting the value the queue already has

@@ -151,8 +151,10 @@ messy track name never breaks the menu.
 - `source` is one of your configured plugin instances. DisTube searches only that plugin and types the results'
   `pluginData` by it. Without `source`, DisTube asks the plugins in order and returns the first non-empty result.
 - `signal` cancels the search.
-- `allowAgeRestricted` keeps results marked age-restricted. By default `search` leaves them out. Results whose age
-  restriction is unknown stay in, and `play` checks them later.
+- `allowAgeRestricted` keeps age-restricted results. By default `search` asks each plugin to leave them out, and
+  YouTube then searches in restricted mode, which also hides some mature videos that are not age-gated. DisTube
+  drops any result still marked age-restricted. Results whose age restriction is unknown stay in, and `play` checks
+  them later.
 
 `distube.suggest(query, options)` returns up to 25 completions. It takes `source` and `signal` the same way, and
 without `source` it uses the first plugin that answers with any suggestions.

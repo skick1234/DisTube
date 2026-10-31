@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { type DisTubeError, type DisTubeEventMap, type DisTubeQueue, Playlist, type Song } from "../src";
+import { type DisTubeError, type DisTubeEventMap, type DisTubeQueue, Playlist, Song } from "../src";
 import type { PlaybackResource, Plugin } from "../src/integrations";
 import {
   deferred,
@@ -221,6 +221,46 @@ describe("autoplay", () => {
 
     expect(failures[0]?.code).toBe("SOURCE_FAILED");
     expect(failures[0]?.cause).toBeUndefined();
+  });
+
+  it("refuses an age-restricted related Song until the queue allows age-restricted Songs", async () => {
+    const { harness, queue, player } = await playing(["a"]);
+    const { id, name, url, source } = media("source", "adult");
+    harness.source.related.mockResolvedValue(new Song({ id, name, url, source, ageRestricted: true }));
+    const failures: DisTubeError[] = [];
+    harness.distube.on("queue.autoplay.failed", event => failures.push(event.error));
+    queue.setAutoplay(true);
+
+    player.finish();
+    await settle();
+
+    expect(queue.allowAgeRestricted).toBe(false);
+    expect(harness.source.related).toHaveBeenLastCalledWith(
+      expect.objectContaining({ id: "a" }),
+      expect.objectContaining({ allowAgeRestricted: false }),
+    );
+    expect(failures.map(failure => failure.code)).toEqual(["SOURCE_FAILED"]);
+    expect(harness.distube.getQueue(GUILD)).toBeUndefined();
+
+    const allowing = await playing(["a"]);
+    allowing.harness.source.related.mockResolvedValue(new Song({ id, name, url, source, ageRestricted: true }));
+    allowing.queue.setAutoplay(true);
+    allowing.queue.setAllowAgeRestricted(true);
+
+    allowing.player.finish();
+    await settle();
+
+    expect(allowing.harness.source.related).toHaveBeenLastCalledWith(
+      expect.objectContaining({ id: "a" }),
+      expect.objectContaining({ allowAgeRestricted: true }),
+    );
+    expect(allowing.queue.current?.song.id).toBe("adult");
+  });
+
+  it("rejects a non-boolean allowAgeRestricted on the queue INVALID_ARGUMENT", async () => {
+    const { queue } = await playing(["a"]);
+    expect(thrown(() => queue.setAllowAgeRestricted("yes" as never))).toMatchObject({ code: "INVALID_ARGUMENT" });
+    expect(queue.allowAgeRestricted).toBe(false);
   });
 
   it("retires a pending lookup when autoplay is disabled on the queue", async () => {

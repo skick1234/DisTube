@@ -180,7 +180,12 @@ export async function searchSongs(
     const search = plugin.search?.bind(plugin);
     if (!search) continue;
     const songs = await call(plugin, signal, () =>
-      search(query, { signal, limit: options.limit, offset: options.offset }),
+      search(query, {
+        signal,
+        limit: options.limit,
+        offset: options.offset,
+        allowAgeRestricted: options.allowAgeRestricted ?? false,
+      }),
     );
     const kept = options.allowAgeRestricted ? songs : songs.filter(allowed);
     if (kept.length > 0) return kept.map(song => owned(plugin, song));
@@ -207,6 +212,7 @@ export async function relatedSong(
   plugins: readonly Plugin[],
   song: Song,
   exclude: readonly Song[],
+  allowAgeRestricted: boolean,
   signal: AbortSignal,
   fallback?: Song,
 ): Promise<Song | undefined> {
@@ -216,8 +222,10 @@ export async function relatedSong(
   const owner = useFallback ? ownerOf(plugins, fallback) : seedOwner;
   const related = owner?.related?.bind(owner);
   if (!owner || !related) return undefined;
-  const next = await call(owner, signal, () => related(seed, { signal, exclude }));
-  return next && owned(owner, next);
+  const next = await call(owner, signal, () => related(seed, { signal, exclude, allowAgeRestricted }));
+  if (!next) return undefined;
+  const found = owned(owner, next);
+  return allowAgeRestricted || allowed(found) ? found : undefined;
 }
 
 export interface PreparedSong {

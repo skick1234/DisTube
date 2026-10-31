@@ -239,6 +239,10 @@ Set `ageRestricted` to `true` when the provider marks the media for adults and `
 it unset when the provider does not say. Core refuses a Song marked `true` unless the call passes
 `allowAgeRestricted: true`, and looks up a single Song with an unknown answer through your `resolve` first.
 
+`search` and `related` options carry `allowAgeRestricted: false` when the caller or the queue refuses age-restricted
+Songs. Leave them out where your provider can, such as with its safe search, or skip to the next related candidate.
+Core still drops a Song you return marked `true`.
+
 A Playlist has `source`, `id`, `name`, a canonical `url`, optional `thumbnails`, a non-empty ordered `songs` array and
 `pluginData`. Its `duration` and `formattedDuration` add up the Songs.
 
