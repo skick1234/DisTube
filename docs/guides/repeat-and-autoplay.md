@@ -156,6 +156,11 @@ distube.on("queue.autoplay.failed", ({ song, error }) => {
 });
 ```
 
+`error.code` is `NO_RESULT` when the plugin had nothing to add, with `error.source` naming the plugin and the message
+saying why: it returned no Song, it has no related lookup, or the Song it returned was age-restricted. A plugin can
+throw its own `NO_RESULT` with a more specific message. A lookup that failed carries the plugin's code, such as
+`RATE_LIMITED`, or `SOURCE_FAILED` with the original error as `cause`.
+
 `song` is the track autoplay tried to follow. If an autoplay item fails to play, `queue.item.failed` reports it.
 Autoplay does not look again after that, so the queue ends unless a member adds something.
 

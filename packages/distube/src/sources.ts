@@ -208,6 +208,8 @@ export async function suggestQueries(
   return [];
 }
 
+const noRelated = (source: string, message: string) => new DisTubeError(ErrorCode.NO_RESULT, message, { source });
+
 export async function relatedSong(
   plugins: readonly Plugin[],
   song: Song,
@@ -215,17 +217,19 @@ export async function relatedSong(
   allowAgeRestricted: boolean,
   signal: AbortSignal,
   fallback?: Song,
-): Promise<Song | undefined> {
+): Promise<Song> {
   const seedOwner = ownerOf(plugins, song);
   const useFallback = fallback !== undefined && !seedOwner?.related;
   const seed = useFallback ? fallback : song;
   const owner = useFallback ? ownerOf(plugins, fallback) : seedOwner;
   const related = owner?.related?.bind(owner);
-  if (!owner || !related) return undefined;
+  if (!owner || !related) throw noRelated(seed.source, `${seed.source} has no related lookup`);
   const next = await call(owner, signal, () => related(seed, { signal, exclude, allowAgeRestricted }));
-  if (!next) return undefined;
+  if (!next) throw noRelated(owner.name, `${owner.name} returned no related Song`);
   const found = owned(owner, next);
-  return allowAgeRestricted || allowed(found) ? found : undefined;
+  if (!allowAgeRestricted && !allowed(found))
+    throw noRelated(owner.name, `${owner.name} returned an age-restricted related Song`);
+  return found;
 }
 
 export interface PreparedSong {

@@ -149,7 +149,10 @@ export interface Plugin<Data = unknown, ListData = unknown> {
    * that has `search` and `stream` for the Song's name and artist and plays the first candidate that prepares.
    */
   stream?(song: Song<Data>, options: { readonly signal: AbortSignal }): Promise<PlaybackResource>;
-  /** Autoplay continuation, or `undefined` to decline. */
+  /**
+   * Autoplay continuation, or `undefined` to decline. Rejecting with a `NO_RESULT` DisTubeError also declines and says
+   * why; it reaches `queue.autoplay.failed` unchanged.
+   */
   related?(song: Song<Data>, options: RelatedOptions): Promise<Song<Data> | undefined>;
   /** Completions for a partial query, at most 25 used. */
   suggest?(query: string, options: { readonly signal: AbortSignal }): Promise<readonly string[]>;

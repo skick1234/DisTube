@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { type DisTubeError, type DisTubeEventMap, type DisTubeQueue, Playlist, Song } from "../src";
+import { DisTubeError, type DisTubeEventMap, type DisTubeQueue, ErrorCode, Playlist, Song } from "../src";
 import type { PlaybackResource, Plugin } from "../src/integrations";
 import {
   deferred,
@@ -175,23 +175,36 @@ describe("autoplay", () => {
     expect(queue.current?.song.id).toBe("a");
   });
 
-  it("reports a failed lookup against its seed, then exhausts the queue", async () => {
-    const { harness, queue, player } = await playing(["a"]);
-    harness.source.related.mockResolvedValue(undefined);
-    const events = record(harness.distube, ["queue.autoplay.failed", "queue.finished", "queue.deleted"]);
-    const failures: { song: Song; error: DisTubeError }[] = [];
-    harness.distube.on("queue.autoplay.failed", event => failures.push({ song: event.song, error: event.error }));
-    queue.setAutoplay(true);
+  it.each([
+    [
+      "returns undefined",
+      (source: FakeSource) => source.related.mockResolvedValue(undefined),
+      "source returned no related Song",
+    ],
+    [
+      "has no related member",
+      (source: FakeSource) => Reflect.deleteProperty(source, "related"),
+      "source has no related lookup",
+    ],
+  ])(
+    "reports NO_RESULT against its seed when the plugin %s, then exhausts the queue",
+    async (_case, decline, message) => {
+      const { harness, queue, player } = await playing(["a"]);
+      decline(harness.source);
+      const events = record(harness.distube, ["queue.autoplay.failed", "queue.finished", "queue.deleted"]);
+      const failures: { song: Song; error: DisTubeError }[] = [];
+      harness.distube.on("queue.autoplay.failed", event => failures.push({ song: event.song, error: event.error }));
+      queue.setAutoplay(true);
 
-    player.finish();
-    await settle();
+      player.finish();
+      await settle();
 
-    expect(events).toEqual(["queue.autoplay.failed", "queue.finished", "queue.deleted"]);
-    expect(failures).toMatchObject([{ song: { id: "a" }, error: { code: "SOURCE_FAILED" } }]);
-    // Nothing threw, so there is nothing to blame: no placeholder Error stands in for a cause.
-    expect(failures[0]?.error.cause).toBeUndefined();
-    expect(harness.distube.getQueue(GUILD)).toBeUndefined();
-  });
+      expect(events).toEqual(["queue.autoplay.failed", "queue.finished", "queue.deleted"]);
+      expect(failures).toMatchObject([{ song: { id: "a" }, error: { code: "NO_RESULT", source: "source", message } }]);
+      expect(failures[0]?.error.cause).toBeUndefined();
+      expect(harness.distube.getQueue(GUILD)).toBeUndefined();
+    },
+  );
 
   it("publishes the provider's own Error as the cause when the lookup rejects", async () => {
     const { harness, queue, player } = await playing(["a"]);
@@ -204,14 +217,16 @@ describe("autoplay", () => {
     player.finish();
     await settle();
 
-    expect(failures[0]?.code).toBe("SOURCE_FAILED");
+    expect(failures[0]).toMatchObject({ code: "SOURCE_FAILED", source: "source" });
     expect(failures[0]?.cause).toBe(provider);
   });
 
-  it("publishes no cause when the owning source has no related member", async () => {
+  it("publishes a DisTubeError the plugin throws unchanged", async () => {
     const { harness, queue, player } = await playing(["a"]);
-    // A Plugin that never implements autoplay, rather than one that declines.
-    Reflect.deleteProperty(harness.source, "related");
+    const declined = new DisTubeError(ErrorCode.NO_RESULT, "radio returned 49 entries, 49 already played", {
+      source: "source",
+    });
+    harness.source.related.mockRejectedValue(declined);
     const failures: DisTubeError[] = [];
     harness.distube.on("queue.autoplay.failed", event => failures.push(event.error));
     queue.setAutoplay(true);
@@ -219,8 +234,8 @@ describe("autoplay", () => {
     player.finish();
     await settle();
 
-    expect(failures[0]?.code).toBe("SOURCE_FAILED");
-    expect(failures[0]?.cause).toBeUndefined();
+    expect(failures).toHaveLength(1);
+    expect(failures[0]).toBe(declined);
   });
 
   it("refuses an age-restricted related Song until the queue allows age-restricted Songs", async () => {
@@ -239,7 +254,10 @@ describe("autoplay", () => {
       expect.objectContaining({ id: "a" }),
       expect.objectContaining({ allowAgeRestricted: false }),
     );
-    expect(failures.map(failure => failure.code)).toEqual(["SOURCE_FAILED"]);
+    expect(failures).toMatchObject([
+      { code: "NO_RESULT", source: "source", message: "source returned an age-restricted related Song" },
+    ]);
+    expect(failures[0]?.cause).toBeUndefined();
     expect(harness.distube.getQueue(GUILD)).toBeUndefined();
 
     const allowing = await playing(["a"]);

@@ -542,10 +542,7 @@ export class DisTubeQueue<Metadata = undefined, Target = VoiceChannelTarget> {
     if (this.#state.upcoming.length > 0) return true;
     if (lookup.signal.aborted) return false;
     if (!song) {
-      const error =
-        failure === undefined
-          ? new DisTubeError(ErrorCode.SOURCE_FAILED, "Autoplay found no related Song")
-          : toDisTubeError(ErrorCode.SOURCE_FAILED, "Autoplay failed", failure);
+      const error = toDisTubeError(ErrorCode.SOURCE_FAILED, "Autoplay failed", failure);
       this.#commit(this.#state, [["queue.autoplay.failed", { song: seed.item.song, error }]], false);
       return false;
     }
