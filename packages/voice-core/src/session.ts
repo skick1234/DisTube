@@ -158,8 +158,10 @@ export class DiscordVoiceSession implements VoiceSession {
       onVoiceStateUpdate: state => {
         if (this.#released || state.user_id !== this.clientUserId || state.guild_id !== this.guildId) return;
         if (state.channel_id === null) {
-          if (this.#leaving) this.#state = undefined;
-          else this.#disconnect({ type: "disconnected", reason: "removed" });
+          const acknowledged = this.#state !== undefined;
+          this.#state = undefined;
+          // Discord echoes the leave of the session this one replaced through the same per-guild adapter.
+          if (acknowledged && !this.#leaving) this.#disconnect({ type: "disconnected", reason: "removed" });
           return;
         }
         if (

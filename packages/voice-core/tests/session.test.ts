@@ -399,6 +399,26 @@ describe("gateway session", () => {
     expect(session.gateway).toBeUndefined();
   });
 
+  it("connects a replacement session that receives the leave echo of the session it replaces", async () => {
+    const gateway = gatewayAdapter();
+    const previous = await DiscordVoiceSession.connect(options(gateway.creator));
+    await previous.release();
+    gateway.sendPayload.mockImplementationOnce(() => {
+      queueMicrotask(() => {
+        gateway.state(null);
+        gateway.state(CHANNEL);
+        gateway.server();
+      });
+      return true;
+    });
+
+    const session = await DiscordVoiceSession.connect(options(gateway.creator));
+
+    expect(session.gateway).toEqual(GATEWAY);
+    expect(leaves(gateway)).toHaveLength(1);
+    await session.release();
+  });
+
   it("releases a pending join and rejects ABORTED with the reason as soon as its signal aborts", async () => {
     const gateway = gatewayAdapter();
     gateway.sendPayload.mockImplementationOnce(() => true);
