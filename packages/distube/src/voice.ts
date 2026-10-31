@@ -69,6 +69,16 @@ export class DisTubeVoice<Target = VoiceChannelTarget> {
     return this.#connection.session.selfMute;
   }
 
+  /** The voice server's `host:port` as the platform names it, or `undefined` before the first connection. */
+  get endpoint(): string | undefined {
+    return this.#connection.session.gateway?.endpoint;
+  }
+
+  /** Milliseconds of the latest voice heartbeat round trip, or `undefined` when the engine cannot tell or has not measured one yet. */
+  get ping(): number | undefined {
+    return this.#connection.active?.ping;
+  }
+
   /** Percentage from 0 to 1000; committed once the Player applies it. The built-in engine clips above 100. */
   async setVolume(percent: number): Promise<void> {
     if (!Number.isFinite(percent) || percent < 0 || percent > MAX_VOLUME)

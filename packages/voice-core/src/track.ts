@@ -106,6 +106,8 @@ export class Track {
   #reopenedAt = 0;
   #retries = 0;
   #starvedSince?: number;
+  #gaps = 0;
+  #silentFrames = 0;
   #inputEnded = false;
   #hold?: NodeJS.Timeout;
   #settle!: (outcome: TrackOutcome) => void;
@@ -439,10 +441,13 @@ export class Track {
     return decodeFailure(stage, local ?? fromWire(error), this.#redact);
   }
 
+  /** The platform sends one 20 ms silence frame for each read that finds no packet. */
   #starve(): void {
-    if (this.#emitted > 0 && !this.#inputEnded && !this.#settled && !this.#closing) {
-      this.#starvedSince ??= performance.now();
-    }
+    if (this.#emitted === 0 || this.#inputEnded || this.#settled || this.#closing) return;
+    this.#silentFrames += 1;
+    if (this.#starvedSince !== undefined) return;
+    this.#starvedSince = performance.now();
+    this.#gaps += 1;
   }
 
   #fed(): void {
@@ -515,6 +520,13 @@ export class Track {
   #resolve(outcome: TrackOutcome): void {
     if (this.#settled) return;
     this.#settled = true;
+    if (this.#gaps > 0) {
+      const silentMs = this.#silentFrames * 20;
+      this.#report("info", "engine.track.gaps", `Playback had ${this.#gaps} gaps, ${silentMs} ms in total`, {
+        gaps: this.#gaps,
+        silentMs,
+      });
+    }
     this.#settle(outcome);
   }
 }

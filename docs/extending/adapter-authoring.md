@@ -122,6 +122,8 @@ per-guild owner creates and releases it. A Player implements:
 - `pause`, `resume`, `seek`, `setVolume(percent)` and `stopTrack`.
 - `setFilters(entries)`, which renders the ordered `{ name, value? }` entries as one change. An empty list clears them.
 - An optional `updateVoiceGateway(gateway)`.
+- An optional `ping`, the milliseconds of the latest voice heartbeat round trip, or `undefined` before the first one
+  or while reconnecting. `voice.ping` reads it.
 - `release`, the single teardown. Concurrent, repeated and post-close calls settle from it, and a later `play` or
   control rejects.
 
@@ -201,8 +203,8 @@ Add `guildId`, `position` in source seconds and a flat `data` record of strings,
 Never put a resource, a playable URL, a header, a path or a token in `data`. Applications log diagnostics.
 :::
 
-The built-in engine reports `engine.track.failed`, `engine.input.retried`, `engine.track.starved` and
-`engine.worker.load`. The [options reference](../../reference/options/#diagnostics) lists their fields.
+The built-in engine reports `engine.track.failed`, `engine.input.retried`, `engine.track.starved`,
+`engine.track.gaps`, `engine.voice.reconnected` and `engine.worker.load`. The [options reference](../../reference/options/#diagnostics) lists their fields.
 
 ## Engine plugins
 

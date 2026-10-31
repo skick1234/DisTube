@@ -68,9 +68,12 @@ export function gatewayAdapter(
   return { creator, sendPayload, destroy, state, server };
 }
 
-/** A Ready native state carrying `connectionOptions`, the only shape the session reads credentials from. */
+/** A Ready native state whose networking emits like the library's and carries `connectionOptions`, where the session reads credentials. */
 export function readyState(gateway: Partial<typeof GATEWAY> = {}, channelId = CHANNEL): Record<string, unknown> {
-  return { status: "ready", networking: { state: { connectionOptions: { ...GATEWAY, ...gateway, channelId } } } };
+  const networking = Object.assign(new EventEmitter(), {
+    state: { connectionOptions: { ...GATEWAY, ...gateway, channelId } },
+  });
+  return { status: "ready", networking };
 }
 
 /** A native voice connection: state transitions are driven by the test, never by a real gateway. */

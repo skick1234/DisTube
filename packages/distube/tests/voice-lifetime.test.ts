@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { type DisTube, DisTubeError, type DisTubeEventMap } from "../src";
+import type { VoiceGatewayData } from "../src/integrations";
 import {
   capture,
   deferred,
@@ -562,6 +563,44 @@ describe("deferred DisTubeVoice lifetime", () => {
     expect(player.stopTrack).not.toHaveBeenCalled();
     expect(player.updateVoiceGateway).toHaveBeenCalledWith(expect.objectContaining({ channelId: "dragged" }));
     expect(outcomes).toEqual([]);
+  });
+});
+
+function gateway(endpoint: string, token = "token"): VoiceGatewayData {
+  return { channelId: VOICE_CHANNEL, sessionId: "session", token, endpoint };
+}
+
+describe("voice connection quality", () => {
+  it("reads the Player's ping and the session's endpoint, and reports only a changed endpoint, without the token", async () => {
+    const harness = playableSetup();
+    const voice = await harness.distube.voices.join(TARGET);
+    const session = harness.adapter.sessions[0] as FakeVoiceSession;
+    expect(voice.endpoint).toBeUndefined();
+    expect(voice.ping).toBeUndefined();
+
+    await harness.distube.play(TARGET, "a");
+    await settle();
+    const player = harness.engine.players[0] as FakePlayer;
+    player.ping = 42;
+    session.connect(gateway("sin1.discord.media:443"));
+    session.connect(gateway("sin1.discord.media:443", "fresh-token"));
+    session.connect(gateway("hkg2.discord.media:443", "fresh-token"));
+    await settle();
+
+    expect(voice.ping).toBe(42);
+    expect(voice.endpoint).toBe("hkg2.discord.media:443");
+    const changes = harness.diagnostics.mock.calls
+      .map(([diagnostic]) => diagnostic)
+      .filter(diagnostic => diagnostic.stage === "voice.endpoint.changed");
+    expect(changes).toEqual([
+      expect.objectContaining({ severity: "info", guildId: GUILD, data: { endpoint: "sin1.discord.media:443" } }),
+      expect.objectContaining({
+        severity: "info",
+        guildId: GUILD,
+        data: { endpoint: "hkg2.discord.media:443", previous: "sin1.discord.media:443" },
+      }),
+    ]);
+    expect(JSON.stringify(changes)).not.toContain("token");
   });
 });
 

@@ -22,6 +22,15 @@ queue is deleted.
 Read the live settings from `voice.channelId`, `voice.volume`, `voice.selfDeaf`, `voice.selfMute` and
 `voice.filters`. The speed of the selected filters is on the queue, as `queue.playbackRate`.
 
+Two reads tell you about the connection itself:
+
+- `voice.endpoint` is the Discord voice server, as `host:port`, or `undefined` before the first connection. Discord can
+  move a voice to another server at any time, and DisTube then reports
+  [`voice.endpoint.changed`](../options/#diagnostics).
+- `voice.ping` is the round trip of the latest voice heartbeat in milliseconds. It is `undefined` before the first
+  track, before the first heartbeat, while the voice reconnects, and with an engine that does not measure it. The
+  built-in engine measures it about every 14 seconds.
+
 ## Controls
 
 | Method                                         | What it does                                                                                                          |

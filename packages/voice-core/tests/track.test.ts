@@ -302,6 +302,44 @@ describe("Track starvation", () => {
       }
     },
   );
+
+  it("sums every gap the platform read through, 40 ms ones included, into one engine.track.gaps at track end", async () => {
+    const bytes = await readFile(media.opus);
+    const stream = new PassThrough();
+    stream.write(bytes.subarray(0, 16_000));
+    const reporter = recorder();
+    const track = await open({ kind: "stream", stream }, PLAIN, undefined, reporter);
+    let read = 0;
+    let silent = 0;
+    let gaps = 0;
+    let previousEmpty = false;
+    const platform = setInterval(() => {
+      const empty = track.packets.read() === null;
+      if (!empty) read += 1;
+      else if (read > 0) {
+        silent += 1;
+        if (!previousEmpty) gaps += 1;
+      }
+      previousEmpty = empty && read > 0;
+    }, 20);
+    try {
+      await vi.waitFor(() => expect(gaps).toBe(1), { timeout: 5_000 });
+      await new Promise(resolve => setTimeout(resolve, 40));
+      const before = read;
+      stream.end(bytes.subarray(16_000));
+      await vi.waitFor(() => expect(read).toBeGreaterThan(before + 5), { timeout: 5_000 });
+    } finally {
+      clearInterval(platform);
+      await track.close();
+    }
+
+    const summaries = reporter.reports.filter(diagnostic => diagnostic.stage === "engine.track.gaps");
+    expect(reporter.reports.filter(diagnostic => diagnostic.stage === "engine.track.starved")).toEqual([]);
+    expect(summaries).toEqual([
+      expect.objectContaining({ severity: "info", guildId: "guild", data: { gaps, silentMs: silent * 20 } }),
+    ]);
+    expect(silent).toBeGreaterThanOrEqual(2);
+  });
 });
 
 describe("Track threads", () => {

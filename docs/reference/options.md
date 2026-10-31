@@ -140,20 +140,32 @@ from inside it. A function that throws or rejects changes nothing about playback
 The built-in engine reports through `onDiagnostic` with no option of its own. An engine plugin such as Lavalink sends
 its reports to its own `onDiagnostic` option instead. See [Lavalink options](../../plugins/lavalink/#options).
 
-| Stage                  | Severity                       | When                                                                        | Fields                                               |
-| ---------------------- | ------------------------------ | --------------------------------------------------------------------------- | ---------------------------------------------------- |
-| `engine.track.failed`  | `error`                        | Once per failed track, before `queue.item.failed`                           | `guildId`, `position`, `data.step`, `error`          |
-| `engine.input.retried` | `warning`                      | Each time a ranged URL read reopens because an answer ended early           | `guildId`, `position`, `data.offset`, `data.attempt` |
-| `engine.track.starved` | `warning`                      | Each recovered stall of at least 100 ms in which no audio was ready to send | `guildId`, `position`, `data.durationMs`             |
-| `engine.worker.load`   | `debug`, or `warning` from 0.9 | At most every 30 seconds per decoding worker that hosts a track             | `data.threadId`, `data.tracks`, `data.utilization`   |
-| `event.listener`       | `error`                        | An event listener threw or rejected                                         | `error`                                              |
-| `queue.*`, `voice.*`   | `error`                        | A core step that runs in the background failed, such as a voice release     | `error`                                              |
+| Stage                      | Severity                       | When                                                                        | Fields                                                     |
+| -------------------------- | ------------------------------ | --------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| `engine.track.failed`      | `error`                        | Once per failed track, before `queue.item.failed`                           | `guildId`, `position`, `data.step`, `error`                |
+| `engine.input.retried`     | `warning`                      | Each time a ranged URL read reopens because an answer ended early           | `guildId`, `position`, `data.offset`, `data.attempt`       |
+| `engine.track.starved`     | `warning`                      | Each recovered stall of at least 100 ms in which no audio was ready to send | `guildId`, `position`, `data.durationMs`                   |
+| `engine.track.gaps`        | `info`                         | Once when a track that had any stall ends, however short the stalls         | `guildId`, `position`, `data.gaps`, `data.silentMs`        |
+| `engine.voice.reconnected` | `warning`                      | Each time the voice connection is ready again after a reconnect             | `guildId`, `position`, `data.durationMs`, `data.closeCode` |
+| `engine.worker.load`       | `debug`, or `warning` from 0.9 | At most every 30 seconds per decoding worker that hosts a track             | `data.threadId`, `data.tracks`, `data.utilization`         |
+| `voice.endpoint.changed`   | `info`                         | Discord moved the voice to another voice server                             | `guildId`, `data.endpoint`, `data.previous`                |
+| `event.listener`           | `error`                        | An event listener threw or rejected                                         | `error`                                                    |
+| other `queue.*`, `voice.*` | `error`                        | A core step that runs in the background failed, such as a voice release     | `error`                                                    |
 
 - `data.step` names the step that failed: `open`, `read`, `decode`, `seek` or `worker`, or `starved` when the
   platform gave up after 15 seconds without audio. Read it instead of the message. A stopped, skipped or released
   track reports nothing.
 - `data.offset` is the byte the read reopened at, and `data.attempt` counts that track's reopens from `1`.
-- A stall that ends in the 15-second failure appears only as `engine.track.failed`. Nothing reports per packet.
+- A stall that ends in the 15-second failure appears as `engine.track.failed` and in that track's `engine.track.gaps`,
+  never as `engine.track.starved`. Nothing reports per packet.
+- `data.gaps` counts a track's stalls and `data.silentMs` adds up the silence Discord received for them, in 20 ms
+  steps. The built-in engine sends a 20 ms silence frame for each packet that is not ready. Stalls under 100 ms appear
+  only here. A track with no stall reports nothing.
+- `data.durationMs` of `engine.voice.reconnected` is how long the connection was not ready. No audio reaches the
+  channel for that long. `data.closeCode` is the Discord voice close code that started it, when the voice socket
+  closed. A reconnect that never gets ready again ends the voice with `voice.disconnected` instead.
+- `data.endpoint` is the new voice server as `host:port`, and `data.previous` the old one. `data.previous` is absent
+  when the voice had no server before. `voice.endpoint` reads the current one.
 - `data.utilization` is the worker's event-loop utilization over the interval, from `0` to `1`. The severity turns
   `warning` at `0.9`. The stage has no `guildId`, because one worker hosts tracks of several guilds, and it reaches
   every client with a track on that worker. Runtimes that cannot read the utilization, such as Bun, report no load.

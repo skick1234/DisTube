@@ -35,6 +35,9 @@ export interface Connection {
   entries: readonly FilterEntry[];
   rate: number;
   player?: Promise<Player>;
+  /** The Player `player` resolved to, for synchronous reads. */
+  active?: Player;
+  endpoint: string | undefined;
   settings: Promise<unknown>;
   channel: Promise<unknown>;
   unsubscribe: () => void;
@@ -360,6 +363,7 @@ export class Guild<Target> {
       volume: DEFAULT_VOLUME,
       entries: NO_FILTERS,
       rate: 1,
+      endpoint: session.gateway?.endpoint,
       settings: Promise.resolve(),
       channel: Promise.resolve(),
       unsubscribe: () => undefined,
@@ -413,6 +417,7 @@ export class Guild<Target> {
   #close(connection: Connection): Promise<void> {
     if (connection.closing) return connection.closing;
     connection.closed = true;
+    connection.active = undefined;
     connection.unsubscribe();
     const track = this.#track?.connection === connection ? this.#track : undefined;
     track?.controller.abort(STOPPED);
@@ -441,6 +446,17 @@ export class Guild<Target> {
       return;
     }
     connection.channelId = event.channelId;
+    const previous = connection.endpoint;
+    connection.endpoint = event.gateway.endpoint;
+    if (previous !== connection.endpoint) {
+      this.config.events.report({
+        severity: "info",
+        stage: "voice.endpoint.changed",
+        message: `Guild ${this.id}: voice server changed to ${connection.endpoint}`,
+        guildId: this.id,
+        data: previous === undefined ? { endpoint: connection.endpoint } : { endpoint: connection.endpoint, previous },
+      });
+    }
     const pending = connection.player;
     this.#serial(connection, async () => {
       const player = await pending?.catch(() => undefined);
@@ -475,7 +491,9 @@ export class Guild<Target> {
       const player = await call("Engine failed to create a Player", () =>
         this.config.engine.createPlayer(connection.session, {
           onClosed: () => {
-            if (connection.player === creation) connection.player = undefined;
+            if (connection.player !== creation) return;
+            connection.player = undefined;
+            connection.active = undefined;
           },
         }),
       );
@@ -483,6 +501,7 @@ export class Guild<Target> {
         assertOpen(connection);
         await player.setVolume(connection.volume);
         if (connection.entries.length > 0) await player.setFilters(connection.entries);
+        if (connection.player === creation) connection.active = player;
         return player;
       } catch (error: unknown) {
         await player.release().catch((cleanup: unknown) => this.#report("voice.player.release", cleanup));

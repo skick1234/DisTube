@@ -171,6 +171,8 @@ export interface Player {
    * fast it advances, not what it measures.
    */
   readonly position: number;
+  /** Milliseconds of the latest voice WebSocket heartbeat round trip, or `undefined` before the first or while reconnecting. */
+  readonly ping?: number | undefined;
   /**
    * Plays `resource` unpaused, whatever the previous track's pause, replacing the current track, which settles
    * `replaced` first. Settles when the track ends.

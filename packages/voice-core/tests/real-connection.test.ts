@@ -1,7 +1,7 @@
 import { getVoiceConnection, type VoiceConnection } from "@discordjs/voice";
 import { readFile } from "node:fs/promises";
 import { PassThrough } from "node:stream";
-import type { PlaybackResource, Player, TrackEnd, VoiceSessionEvent } from "distube/integrations";
+import type { Diagnostic, PlaybackResource, Player, TrackEnd, VoiceSessionEvent } from "distube/integrations";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { DiscordVoiceEngine } from "../src/engine";
 import { DiscordVoiceSession } from "../src/session";
@@ -213,20 +213,30 @@ beforeAll(async () => {
 afterAll(() => media.cleanup());
 
 /** A built-in Player on a session whose real voice connection sends to a local voice server, with its first track started. */
-async function playing(resource: PlaybackResource): Promise<{
+async function playing(
+  resource: PlaybackResource,
+  heartbeatMs?: number,
+): Promise<{
   server: VoiceGatewayServer;
   player: Player;
   ended: Promise<TrackEnd>;
+  reports: Diagnostic[];
 }> {
   const { server, session } = await joined();
-  const engine = new DiscordVoiceEngine({ opusComplexity: 10, bufferMs: BUFFER_MS, report: () => undefined });
+  if (heartbeatMs !== undefined) server.heartbeatMs = heartbeatMs;
+  const reports: Diagnostic[] = [];
+  const engine = new DiscordVoiceEngine({
+    opusComplexity: 10,
+    bufferMs: BUFFER_MS,
+    report: diagnostic => void reports.push(diagnostic),
+  });
   const player = await engine.createPlayer(session, { onClosed: () => undefined });
   cleanups.push(() => player.release());
   const { promise: started, resolve } = Promise.withResolvers<void>();
   const ended = player.play(resource, { signal: new AbortController().signal, onStart: resolve });
   void ended.catch(() => undefined);
   await started;
-  return { server, player, ended };
+  return { server, player, ended, reports };
 }
 
 /** The first `count` packets the server heard at or after `since`, waiting for them in real time. */
@@ -300,6 +310,29 @@ describe("built-in playback heard by a local voice server", () => {
     expect(sorted.at(-1)).toBeLessThan(60);
     expect(sorted[Math.floor(0.99 * sorted.length)]).toBeLessThan(40);
     expect((steady.at(-1) as HeardPacket).at - (steady[0] as HeardPacket).at).toBeGreaterThan(149 * 19);
+  });
+
+  it("reads the voice heartbeat round trip as ping and reports a 4006 reconnect once with its close code and silent time", async () => {
+    const { server, player, reports } = await playing({ kind: "file", path: media.steps }, 50);
+    await vi.waitFor(() => expect(player.ping).toEqual(expect.any(Number)), { timeout: 2_000 });
+    expect(reports.filter(diagnostic => diagnostic.stage === "engine.voice.reconnected")).toEqual([]);
+
+    const closedAt = performance.now();
+    server.close(4006);
+    await vi.waitFor(() => expect(server.connections).toBe(2), { timeout: 2_000 });
+    await hear(server, performance.now(), 5);
+    const elapsed = performance.now() - closedAt;
+
+    const reconnects = reports.filter(diagnostic => diagnostic.stage === "engine.voice.reconnected");
+    expect(reconnects).toEqual([
+      expect.objectContaining({
+        severity: "warning",
+        guildId: "guild",
+        data: { closeCode: 4006, durationMs: expect.any(Number) },
+      }),
+    ]);
+    expect(reconnects[0]?.data?.durationMs).toBeGreaterThan(0);
+    expect(reconnects[0]?.data?.durationMs).toBeLessThanOrEqual(elapsed);
   });
 
   it("halves the heard level of a playing track after a volume change to 50", async () => {

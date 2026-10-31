@@ -154,6 +154,7 @@ export function resourceId(resource: PlaybackResource): string {
  */
 export class FakePlayer implements Player {
   position = 0;
+  ping?: number;
   /** Resource ids in play order. */
   readonly played: string[] = [];
   readonly renders: (readonly FilterEntry[])[] = [];
@@ -275,6 +276,7 @@ export class FakeVoiceSession implements VoiceSession {
   readonly clientUserId = "bot";
   bitrate = 64_000;
   channelId: string;
+  gateway?: VoiceGatewayData;
   selfDeaf: boolean;
   selfMute: boolean;
   readonly listeners = new Set<(event: VoiceSessionEvent) => void>();
@@ -334,6 +336,7 @@ export class FakeVoiceSession implements VoiceSession {
 
   connect(gateway: VoiceGatewayData, channelId = this.channelId): void {
     this.channelId = channelId;
+    this.gateway = gateway;
     for (const listener of Array.from(this.listeners)) listener({ type: "connected", channelId, gateway });
   }
 

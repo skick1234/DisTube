@@ -127,6 +127,8 @@ export interface VoiceGatewayServer {
   readonly heard: readonly HeardPacket[];
   /** Whether a new voice socket is answered up to Ready; a silent one never gets past Identify. */
   answers: boolean;
+  /** The heartbeat interval Hello asks a new voice socket for. */
+  heartbeatMs: number;
   /** Closes every open voice socket with `code`, as Discord does when it ends a voice session. */
   close(code: number): void;
   /** Stops listening and drops every socket, so the library's next dial is refused. */
@@ -176,6 +178,7 @@ export async function serveVoiceGateway(): Promise<VoiceGatewayServer> {
       return connections;
     },
     answers: true,
+    heartbeatMs: 60_000,
     heard,
     close: code => {
       for (const socket of sockets) socket.end(Buffer.from([0x88, 2, code >> 8, code & 0xff]));
@@ -200,7 +203,7 @@ export async function serveVoiceGateway(): Promise<VoiceGatewayServer> {
     );
     if (!gateway.answers) return;
     const send = (packet: unknown): void => void socket.write(textFrame(JSON.stringify(packet)));
-    send({ op: 8, d: { heartbeat_interval: 60_000 } });
+    send({ op: 8, d: { heartbeat_interval: gateway.heartbeatMs } });
     readTextFrames(socket, text => {
       const packet = JSON.parse(text) as { op: number; d: { t?: number; data?: { mode?: string } } };
       if (packet.op === 0) {
