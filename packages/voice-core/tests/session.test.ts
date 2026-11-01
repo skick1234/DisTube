@@ -353,32 +353,124 @@ describe("gateway session", () => {
 });
 
 describe("voice close recovery", () => {
-  it.each([
-    ["inside", 59_999, true],
-    ["after", 60_000, false],
-  ])(
-    "after three rejoins, a fourth close %s the 60 s window disconnects only inside it",
-    async (_when, elapsedMs, disconnects) => {
-      vi.useFakeTimers({ toFake: ["Date"] });
-      const gateway = gatewayAdapter();
-      const { session, events } = await subscribed(gateway);
+  it("leaves and joins once per connected cycle, so a later close after reconnecting recovers again", async () => {
+    const gateway = gatewayAdapter();
+    const { session, events } = await subscribed(gateway);
 
-      for (const code of [4006, 4009, 4015]) {
-        session.voiceClosed(code);
-        await settle();
-      }
-      expect(events).toEqual(Array.from({ length: 3 }, () => ({ type: "connected", gateway: GATEWAY })));
-      vi.advanceTimersByTime(elapsedMs);
-      session.voiceClosed(4009);
+    for (const code of [4006, 4009, 4015]) {
+      session.voiceClosed(code);
       await settle();
+    }
 
-      expect(events.slice(3).filter(event => event.type === "disconnected")).toEqual(
-        disconnects ? [{ type: "disconnected", reason: "failed", error: expect.any(Error) }] : [],
-      );
-      expect(joins(gateway)).toHaveLength(disconnects ? 4 : 5);
-      await session.release();
-    },
-  );
+    expect(events).toEqual(Array.from({ length: 3 }, () => ({ type: "connected", gateway: GATEWAY })));
+    expect(gateway.sendPayload.mock.calls.slice(1).map(([payload]) => payload.d.channel_id)).toEqual([
+      null,
+      CHANNEL,
+      null,
+      CHANNEL,
+      null,
+      CHANNEL,
+    ]);
+    await session.release();
+  });
+
+  it("sends one leave and one join for a close storm inside one connected cycle", async () => {
+    const gateway = gatewayAdapter();
+    const { session, events } = await subscribed(gateway);
+    const before = gateway.sendPayload.mock.calls.length;
+
+    session.voiceClosed(4006);
+    session.voiceClosed(4009);
+    session.voiceClosed(4015);
+    session.voiceClosed(4006);
+    await settle();
+
+    expect(gateway.sendPayload.mock.calls.slice(before).map(([payload]) => payload.d.channel_id)).toEqual([
+      null,
+      CHANNEL,
+    ]);
+    expect(events).toEqual([{ type: "connected", gateway: GATEWAY }]);
+    await session.release();
+  });
+
+  it("ends a recovery the platform never answers at the join timeout counted from the close", async () => {
+    useFakeTimers();
+    const gateway = gatewayAdapter();
+    const { session, events } = await subscribed(gateway, JOIN_TIMEOUT_MS);
+    gateway.sendPayload.mockReturnValueOnce(false).mockImplementation(() => true);
+
+    session.voiceClosed(4006);
+    await vi.advanceTimersByTimeAsync(JOIN_TIMEOUT_MS - 1);
+    expect(events).toEqual([]);
+    await vi.advanceTimersByTimeAsync(1);
+
+    expect(events).toEqual([{ type: "disconnected", reason: "failed", error: expect.any(Error) }]);
+  });
+
+  it("keeps the voice when a server update lands between the recovery's leave and its echo", async () => {
+    const gateway = gatewayAdapter();
+    const { session, events } = await subscribed(gateway);
+    gateway.sendPayload
+      .mockImplementationOnce(() => {
+        queueMicrotask(() => {
+          gateway.server("reallocated");
+          gateway.state(null);
+        });
+        return true;
+      })
+      .mockImplementationOnce(() => {
+        queueMicrotask(() => {
+          gateway.state(CHANNEL);
+          gateway.server("rejoined");
+        });
+        return true;
+      });
+
+    session.voiceClosed(4015);
+    await vi.waitFor(() => expect(session.gateway?.token).toBe("rejoined"));
+    await settle();
+
+    expect(events.map(event => event.type)).toEqual(["connected", "connected"]);
+    expect(leaves(gateway)).toHaveLength(1);
+    await session.release();
+  });
+
+  it("drops a recovery queued behind a move once the move connects", async () => {
+    const gateway = gatewayAdapter();
+    const { session, events } = await subscribed(gateway);
+    const answer = Promise.withResolvers<void>();
+    gateway.sendPayload.mockImplementationOnce(() => {
+      void answer.promise.then(() => {
+        gateway.state("other");
+        gateway.server("moved");
+      });
+      return true;
+    });
+
+    const moving = session.join("other");
+    session.voiceClosed(4006);
+    answer.resolve();
+    await moving;
+    await settle();
+
+    expect(gateway.sendPayload.mock.calls.map(([payload]) => payload.d.channel_id)).toEqual([CHANNEL, "other"]);
+    expect(events).toEqual([{ type: "connected", gateway: expect.objectContaining({ channelId: "other" }) }]);
+    await session.release();
+  });
+
+  it("re-sends a join the gateway refuses until it goes out", async () => {
+    useFakeTimers();
+    const gateway = gatewayAdapter();
+    gateway.sendPayload.mockReturnValueOnce(false);
+
+    const connecting = DiscordGatewaySession.connect({ ...options(gateway.creator), timeoutMs: JOIN_TIMEOUT_MS });
+    await vi.advanceTimersByTimeAsync(1_000);
+    const session = await connecting;
+
+    expect(joins(gateway)).toHaveLength(2);
+    expect(session.gateway).toEqual(GATEWAY);
+    await session.release();
+  });
 
   it.each([4004, 4011, 4016, 4017, 4021])(
     "publishes one disconnect naming %i without a join, then ignores later closes",
@@ -504,7 +596,7 @@ describe("voice close recovery", () => {
     expect(message).not.toContain("@discordjs/voice");
   });
 
-  it("leaves and rejoins the held channel, resolving after connected carries the new token", async () => {
+  it("republishes the credentials the platform sends for a recovery", async () => {
     const gateway = gatewayAdapter();
     const { session, events } = await subscribed(gateway);
     gateway.sendPayload
@@ -519,24 +611,23 @@ describe("voice close recovery", () => {
         });
         return true;
       });
-    let eventsAtResolve: number | undefined;
 
-    await session.rejoin().then(() => {
-      eventsAtResolve = events.length;
-    });
+    session.voiceClosed(4006);
+    await vi.waitFor(() => expect(events).toHaveLength(1));
 
     expect(gateway.sendPayload.mock.calls.slice(-2).map(([payload]) => payload.d.channel_id)).toEqual([null, CHANNEL]);
     expect(events).toEqual([{ type: "connected", gateway: { ...GATEWAY, token: "rotated" } }]);
-    expect(eventsAtResolve).toBe(1);
+    expect(session.gateway?.token).toBe("rotated");
     await session.release();
   });
 
-  it("rejects a rejoin the platform never answers and publishes one disconnect", async () => {
+  it("publishes one disconnect when the platform never answers a recovery", async () => {
     const gateway = gatewayAdapter();
     const { session, events } = await subscribed(gateway);
     gateway.sendPayload.mockImplementationOnce(() => true).mockImplementationOnce(() => true);
 
-    await expect(session.rejoin()).rejects.toThrow("timed out");
+    session.voiceClosed(4015);
+    await vi.waitFor(() => expect(events).toHaveLength(1), { timeout: 500 });
 
     expect(events).toEqual([{ type: "disconnected", reason: "failed", error: expect.any(Error) }]);
     await expect(session.join(CHANNEL)).rejects.toThrow("released");

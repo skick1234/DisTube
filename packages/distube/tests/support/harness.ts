@@ -275,7 +275,6 @@ export class FakeVoiceSession implements VoiceSession {
     this.states.push({ selfDeaf: this.selfDeaf, selfMute: this.selfMute });
   });
   readonly voiceClosed = vi.fn((_code: number): void => undefined);
-  readonly rejoin = vi.fn(async (): Promise<void> => undefined);
   readonly release = vi.fn(async (): Promise<void> => {
     const gate = this.#releaseGates.shift();
     if (gate) await gate.promise;

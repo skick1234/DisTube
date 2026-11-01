@@ -56,7 +56,6 @@ describe("real @discordjs/voice", () => {
       join: async () => undefined,
       setSelfState: async () => undefined,
       voiceClosed: () => undefined,
-      rejoin: async () => undefined,
       release: async () => undefined,
       subscribe: () => () => undefined,
     };

@@ -64,26 +64,26 @@ A `VoiceSession` is one guild's voice connection. It exposes:
 - `setSelfState({ selfDeaf?, selfMute? })`, which writes only the flags, in the channel the session holds when the
   write runs, and resolves after the acknowledgement. It rebuilds nothing and publishes no `connected`. Core routes
   `voice.setSelfDeaf` and `voice.setSelfMute` through it and never through `join`.
-- `voiceClosed(code)`, which an engine with its own voice socket calls with the Discord close code. The session
-  applies its own policy, and ignores the call once `release` started.
-- `rejoin()`, which leaves and rejoins the current channel and resolves after `connected` with fresh credentials.
-- `release()`. Overlapping callers share one teardown, and a later `join`, `setSelfState` or `rejoin` rejects.
+- `voiceClosed(code)`, which an engine with its own voice socket calls with every Discord close code, and the
+  session recovers. A session that holds its own voice socket ignores it, as it does once `release` started.
+- `release()`. Overlapping callers share one teardown, and a later `join` or `setSelfState` rejects.
 - `subscribe(listener)`, which returns an unsubscribe function.
 
-`join`, `setSelfState`, `rejoin` and `release` run one at a time, in call order.
+`join`, `setSelfState` and `release` run one at a time, in call order.
 
 ### Recovery
 
-Recovery is bounded, so a broken connection cannot rejoin forever:
+Recovery has one move, and the join timeout bounds it:
 
-- Close codes 4006, 4009 and 4015 leave and then rejoin the current channel, at most 3 times in any 60-second window
-  per guild. Discord answers a join for the channel the bot already holds with no new voice server update, so a
-  rejoin without the leave never gets fresh credentials.
-- Codes 4004, 4011, 4016, 4017 and 4021 end the voice at once, without spending that budget.
+- Close codes 4006, 4009 and 4015 leave and then join the current channel, once until the next `connected`. Discord
+  answers a join for the channel the bot already holds with no new voice server update, so a join without the leave
+  never gets fresh credentials. If no `connected` follows within the join timeout, the voice ends.
+- Codes 4004, 4011, 4016, 4017 and 4021 end the voice at once.
 - Codes 4014 and 4022 end only that voice socket. A voice state with no channel means the bot was removed; a move
   sends new credentials instead. If neither arrives within the join timeout, the voice ends.
 
-Publish `{ type: "disconnected", reason: "failed", error }` once, when that policy is spent. Publish
+Publish `{ type: "disconnected", reason: "failed", error }` once, when a recovery misses its deadline or a terminal
+code arrives. Publish
 `{ type: "disconnected", reason: "removed" }` when the platform removes the bot from voice outside a `release`.
 Republish `{ type: "connected", gateway }` whenever the credentials change.
 

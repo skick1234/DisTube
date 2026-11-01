@@ -97,7 +97,6 @@ const session: VoiceSession = {
   async join(_channelId: string, _options?: JoinOptions): Promise<void> {},
   async setSelfState(_state: JoinOptions): Promise<void> {},
   voiceClosed(_code: number): void {},
-  async rejoin(): Promise<void> {},
   async release(): Promise<void> {},
   subscribe(_listener: (event: VoiceSessionEvent) => void): () => void {
     return () => undefined;

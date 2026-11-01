@@ -219,7 +219,7 @@ export type VoiceSessionEvent =
   | Readonly<{ type: "connected"; gateway: VoiceGatewayData }>
   /**
    * The session ended, published at most once and never for `release`. `removed`: the platform removed the bot from
-   * voice, such as a member disconnecting it. `failed`: the Adapter exhausted its recovery policy.
+   * voice, such as a member disconnecting it. `failed`: a terminal close, or a recovery that missed its deadline.
    */
   | Readonly<{ type: "disconnected"; reason: "removed" }>
   | Readonly<{ type: "disconnected"; reason: "failed"; error: Error }>;
@@ -239,8 +239,8 @@ export interface VoiceSessionOptions {
 }
 
 /**
- * One guild's voice presence, owned by the Adapter, which also owns bounded recovery. Only a terminal disconnect
- * reaches core. `join`, `setSelfState`, `rejoin` and `release` run one at a time in call order.
+ * One guild's voice presence, which also owns bounded recovery. Only a terminal disconnect reaches core. `join`,
+ * `setSelfState` and `release` run one at a time in call order.
  */
 export interface VoiceSession {
   readonly guildId: string;
@@ -261,13 +261,11 @@ export interface VoiceSession {
    */
   setSelfState(state: JoinOptions): Promise<void>;
   /**
-   * Reports a Discord voice close code from a voice socket outside the Adapter, such as a remote engine's. The
-   * session applies its own recovery policy. Does nothing after `release` started.
+   * Reports a Discord voice close code from a voice socket outside the session, such as a remote engine's, and the
+   * session recovers. A session that holds its own voice socket ignores it. Does nothing after `release` started.
    */
   voiceClosed(code: number): void;
-  /** Leaves and rejoins the current channel; resolves after the `connected` event with the fresh credentials. */
-  rejoin(): Promise<void>;
-  /** Leaves the channel once; every caller shares that completion. Later `join`, `setSelfState` and `rejoin` reject. */
+  /** Leaves the channel once; every caller shares that completion. Later `join` and `setSelfState` reject. */
   release(): Promise<void>;
   subscribe(listener: (event: VoiceSessionEvent) => void): () => void;
 }
@@ -315,8 +313,9 @@ export interface FilterEntry {
 export interface Engine {
   readonly filters: ReadonlyMap<string, FilterDefinitionInfo>;
   /**
-   * Opens the voice through the engine's own connection, which then sends the join and receives the platform's
-   * credentials as they arrive. When present, core calls it instead of `Adapter.createVoiceSession`.
+   * For an engine that owns its voice connection: opens the voice through it, so the connection sends the join and
+   * receives the platform's credentials as they arrive. When present, core calls it instead of
+   * `Adapter.createVoiceSession`.
    */
   createVoiceSession?(target: VoiceTarget, options: VoiceSessionOptions): Promise<VoiceSession>;
   createPlayer(session: VoiceSession, options: PlayerOptions): Promise<Player>;
@@ -352,6 +351,10 @@ export interface VoiceTarget {
 export interface Adapter<Target = VoiceChannelTarget> {
   /** Pure synchronous conversion. A throw rejects the caller with `INVALID_ARGUMENT`. */
   normalizeTarget(target: Target): VoiceTarget;
+  /**
+   * A gateway-only session for an engine plugin that holds its own voice socket: it sends the bot's voice state and
+   * pairs the platform's credentials into `gateway`. Core calls it only when the engine has no `createVoiceSession`.
+   */
   createVoiceSession(target: VoiceTarget, options: VoiceSessionOptions): Promise<VoiceSession>;
   /** The built-in engine, used unless a plugin carries one. */
   createEngine(settings: EngineSettings): Engine;

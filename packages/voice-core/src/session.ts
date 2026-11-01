@@ -24,14 +24,22 @@ export interface DiscordPlatform {
 
 export interface DiscordVoiceSessionOptions extends VoiceTarget, VoiceSessionOptions, DiscordPlatform {}
 
+type CloseKind = "rejoin" | "terminal" | "platform";
+
 /** https://docs.discord.com/developers/topics/opcodes-and-status-codes#voice-voice-close-event-codes */
-const REJOIN_CLOSE_CODES: ReadonlySet<number> = new Set([4006, 4009, 4015]);
-const TERMINAL_CLOSE_CODES: ReadonlySet<number> = new Set([4004, 4011, 4016, 4017, 4021]);
-const PLATFORM_CLOSE_CODES: ReadonlySet<number> = new Set([4014, 4022]);
+const CLOSE_KINDS: ReadonlyMap<number, CloseKind> = new Map([
+  [4006, "rejoin"],
+  [4009, "rejoin"],
+  [4015, "rejoin"],
+  [4004, "terminal"],
+  [4011, "terminal"],
+  [4016, "terminal"],
+  [4017, "terminal"],
+  [4021, "terminal"],
+  [4014, "platform"],
+  [4022, "platform"],
+]);
 const DAVE_REQUIRED_CLOSE_CODE = 4017;
-const REJOIN_LIMIT = 3;
-const REJOIN_WINDOW_MS = 60_000;
-/** The gateway adapter contract has no ready signal, so a refused payload is retried until it goes out. */
 const RESEND_INTERVAL_MS = 1_000;
 
 interface VoiceStateUpdate {
@@ -141,16 +149,6 @@ export class DiscordVoiceSession implements VoiceSession {
     return this.#enqueue(() => this.#join(this.channelId, state));
   }
   voiceClosed(): void {}
-  rejoin(): Promise<void> {
-    return this.#enqueue(async () => {
-      await this.#untilReady();
-      const channelId = this.channelId;
-      const networking = this.#published;
-      if (!this.#connection.disconnect()) throw gatewayUnavailable();
-      this.#connection.rejoin({ channelId, selfDeaf: this.selfDeaf, selfMute: this.selfMute });
-      await this.#until(() => this.#published !== networking, "Discord voice did not rejoin");
-    });
-  }
   subscribe(listener: (event: VoiceSessionEvent) => void): () => void {
     if (this.#released) return () => undefined;
     this.#listeners.add(listener);
@@ -260,11 +258,12 @@ export class DiscordVoiceSession implements VoiceSession {
     this.#settle();
   }
 
-  /** Discord sends no voice server update for a join to the held channel, so a recoverable close leaves before the library rejoins. */
+  /** @discordjs/voice rejoins the held channel without a leave, which Discord answers with no new credentials. */
   #socketClosed(code: number): void {
     if (this.#released) return;
-    if (TERMINAL_CLOSE_CODES.has(code)) this.#fail(new Error(terminalCloseMessage(code, true)));
-    else if (PLATFORM_CLOSE_CODES.has(code) || this.#voiceState?.channel_id === null) {
+    const kind = closeKind(code);
+    if (kind === "terminal") this.#fail(new Error(terminalCloseMessage(code, true)));
+    else if (kind === "platform" || this.#voiceState?.channel_id === null) {
       this.#platformClosed = true;
       this.#settle();
     } else if (!this.#leftSinceReady) this.#leftSinceReady = this.#sendLeave();
@@ -276,14 +275,13 @@ export class DiscordVoiceSession implements VoiceSession {
   }
 
   #sendLeave(): boolean {
-    return this.#sendState({ channel_id: null, self_deaf: this.selfDeaf, self_mute: this.selfMute });
+    return this.#sendState(leaveState(this.selfDeaf, this.selfMute));
   }
 
   #sendState(update: VoiceStateUpdate): boolean {
     const { state } = this.#connection;
     if (state.status === VoiceConnectionStatus.Destroyed) return false;
-    const payload: VoiceStatePayload = { op: 4, d: { guild_id: this.guildId, ...update } };
-    return state.adapter.sendPayload(payload);
+    return state.adapter.sendPayload(voiceStatePayload(this.guildId, update));
   }
 
   #stopRecovery(): void {
@@ -357,7 +355,7 @@ export class DiscordGatewaySession implements VoiceSession {
   #selfDeaf: boolean;
   #selfMute: boolean;
   #leaving = false;
-  #rejoins: number[] = [];
+  #recovering = false;
   #platformDeadline?: ReturnType<typeof setTimeout>;
   #released = false;
   #releasePromise?: Promise<void>;
@@ -443,16 +441,22 @@ export class DiscordGatewaySession implements VoiceSession {
     return this.#enqueue(() => this.#join(this.#channelId, state));
   }
   voiceClosed(code: number): void {
-    if (this.#released || this.#endedBy(code)) return;
-    if (PLATFORM_CLOSE_CODES.has(code)) this.#awaitPlatform(code);
-    else if (REJOIN_CLOSE_CODES.has(code) && this.#spendRejoin(code))
-      this.#enqueue(() => this.#rejoin()).catch((error: unknown) => this.#terminate(asError(error)));
-  }
-  rejoin(): Promise<void> {
-    return this.#enqueue(() => this.#rejoin()).catch((error: unknown) => {
-      this.#terminate(asError(error));
-      throw error;
-    });
+    if (this.#released) return;
+    const kind = closeKind(code);
+    if (kind === "terminal") this.#terminate(new Error(terminalCloseMessage(code, false)));
+    else if (kind === "platform")
+      this.#platformDeadline ??= setTimeout(
+        () =>
+          this.#terminate(
+            new Error(`Discord voice closed with code ${code} and did not move within ${this.#options.timeoutMs} ms`),
+          ),
+        this.#options.timeoutMs,
+      );
+    else if (kind === "rejoin" && !this.#recovering) {
+      this.#recovering = true;
+      const deadline = Date.now() + this.#options.timeoutMs;
+      this.#enqueue(() => this.#rejoin(deadline)).catch((error: unknown) => this.#terminate(asError(error)));
+    }
   }
   subscribe(listener: (event: VoiceSessionEvent) => void): () => void {
     if (this.#released) return () => undefined;
@@ -469,7 +473,7 @@ export class DiscordGatewaySession implements VoiceSession {
     this.#releasePromise = this.#enqueue(async () => {
       const failures: unknown[] = [];
       for (const action of [
-        () => this.#sendUpdate({ channel_id: null, self_deaf: this.selfDeaf, self_mute: this.selfMute }),
+        () => this.#sendUpdate(leaveState(this.selfDeaf, this.selfMute)),
         () => this.#gatewayAdapter.destroy(),
       ]) {
         try {
@@ -503,23 +507,33 @@ export class DiscordGatewaySession implements VoiceSession {
     }
   }
 
-  /** Discord sends no voice server update for a join to the held channel, so the leave goes first. */
-  async #rejoin(): Promise<void> {
+  /** Discord sends no voice server update for a join to the held channel, so recovery leaves first. */
+  async #rejoin(deadline: number): Promise<void> {
     if (this.#released) throw sessionReleased();
+    if (!this.#recovering) return;
     const channelId = this.#channelId;
-    const flags = { self_deaf: this.#selfDeaf, self_mute: this.#selfMute };
+    this.#state = undefined;
     this.#server = undefined;
     this.#gateway = undefined;
     this.#leaving = true;
     try {
-      await this.#request({ channel_id: null, ...flags }, () => true, true);
-      await this.#request({ channel_id: channelId, ...flags }, () => this.#gateway?.channelId === channelId, true);
+      await this.#request(leaveState(this.#selfDeaf, this.#selfMute), () => true, deadline);
+      await this.#request(
+        { channel_id: channelId, self_deaf: this.#selfDeaf, self_mute: this.#selfMute },
+        () => this.#gateway?.channelId === channelId,
+        deadline,
+      );
     } finally {
       this.#leaving = false;
     }
   }
 
-  #request(update: VoiceStateUpdate, acknowledged: () => boolean, resend = false): Promise<void> {
+  /** The gateway adapter contract has no ready signal, so a refused payload is re-sent until it goes out. */
+  #request(
+    update: VoiceStateUpdate,
+    acknowledged: () => boolean,
+    deadline = Date.now() + this.#options.timeoutMs,
+  ): Promise<void> {
     const { promise, resolve, reject } = Promise.withResolvers<void>();
     let resending: ReturnType<typeof setInterval> | undefined;
     let sent = false;
@@ -539,7 +553,10 @@ export class DiscordGatewaySession implements VoiceSession {
         resolve();
       }
     };
-    const timer = setTimeout(() => fail(new Error("Discord gateway membership timed out")), this.#options.timeoutMs);
+    const timer = setTimeout(
+      () => fail(sent ? new Error("Discord gateway membership timed out") : gatewayUnavailable()),
+      Math.max(0, deadline - Date.now()),
+    );
     this.#waiters.add(check);
     const send = (): boolean => {
       if (!this.#sendUpdate(update)) return false;
@@ -548,9 +565,7 @@ export class DiscordGatewaySession implements VoiceSession {
       return true;
     };
     try {
-      if (send()) return promise;
-      if (!resend) fail(gatewayUnavailable());
-      else
+      if (!send())
         resending = setInterval(() => {
           try {
             if (this.#released || send()) clearInterval(resending);
@@ -567,36 +582,7 @@ export class DiscordGatewaySession implements VoiceSession {
   /** Discord never answers a join it refuses, so a refused target would otherwise wait out the join deadline. */
   #sendUpdate(update: VoiceStateUpdate): boolean {
     if (update.channel_id !== null && update.channel_id !== this.#channelId) this.#options.preflight(update.channel_id);
-    const payload: VoiceStatePayload = { op: 4, d: { guild_id: this.guildId, ...update } };
-    return this.#gatewayAdapter.sendPayload(payload);
-  }
-
-  #awaitPlatform(code: number): void {
-    clearTimeout(this.#platformDeadline);
-    this.#platformDeadline = setTimeout(
-      () =>
-        this.#terminate(
-          new Error(`Discord voice closed with code ${code} and did not move within ${this.#options.timeoutMs} ms`),
-        ),
-      this.#options.timeoutMs,
-    );
-  }
-
-  #endedBy(code: number): boolean {
-    if (!TERMINAL_CLOSE_CODES.has(code)) return false;
-    this.#terminate(new Error(terminalCloseMessage(code, false)));
-    return true;
-  }
-
-  #spendRejoin(code: number): boolean {
-    const now = Date.now();
-    this.#rejoins = this.#rejoins.filter(at => now - at < REJOIN_WINDOW_MS);
-    if (this.#rejoins.length >= REJOIN_LIMIT) {
-      this.#terminate(new Error(`Discord voice closed with code ${code} after ${REJOIN_LIMIT} rejoins within 60 s`));
-      return false;
-    }
-    this.#rejoins.push(now);
-    return true;
+    return this.#gatewayAdapter.sendPayload(voiceStatePayload(this.guildId, update));
   }
 
   #terminate(error: Error): void {
@@ -639,12 +625,25 @@ export class DiscordGatewaySession implements VoiceSession {
       return;
     clearTimeout(this.#platformDeadline);
     this.#platformDeadline = undefined;
+    this.#recovering = false;
     for (const listener of this.#listeners) {
       try {
         listener({ type: "connected", gateway });
       } catch {}
     }
   }
+}
+
+function closeKind(code: number): CloseKind | undefined {
+  return CLOSE_KINDS.get(code);
+}
+
+function leaveState(selfDeaf: boolean, selfMute: boolean): VoiceStateUpdate {
+  return { channel_id: null, self_deaf: selfDeaf, self_mute: selfMute };
+}
+
+function voiceStatePayload(guildId: string, update: VoiceStateUpdate): VoiceStatePayload {
+  return { op: 4, d: { guild_id: guildId, ...update } };
 }
 
 function networkingOf(state: VoiceConnectionState): Networking | undefined {
