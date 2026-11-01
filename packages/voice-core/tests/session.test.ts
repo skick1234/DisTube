@@ -364,7 +364,7 @@ describe("voice close recovery", () => {
       const gateway = gatewayAdapter();
       const { session, events } = await subscribed(gateway);
 
-      for (const code of [4006, 4009, 4006]) {
+      for (const code of [4006, 4009, 4015]) {
         session.voiceClosed(code);
         await settle();
       }

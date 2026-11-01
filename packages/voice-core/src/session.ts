@@ -25,7 +25,7 @@ export interface DiscordPlatform {
 export interface DiscordVoiceSessionOptions extends VoiceTarget, VoiceSessionOptions, DiscordPlatform {}
 
 /** https://docs.discord.com/developers/topics/opcodes-and-status-codes#voice-voice-close-event-codes */
-const REJOIN_CLOSE_CODES: ReadonlySet<number> = new Set([4006, 4009]);
+const REJOIN_CLOSE_CODES: ReadonlySet<number> = new Set([4006, 4009, 4015]);
 const TERMINAL_CLOSE_CODES: ReadonlySet<number> = new Set([4004, 4011, 4016, 4017, 4021]);
 const PLATFORM_CLOSE_CODES: ReadonlySet<number> = new Set([4014, 4022]);
 const DAVE_REQUIRED_CLOSE_CODE = 4017;

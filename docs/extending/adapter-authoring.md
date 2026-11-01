@@ -75,9 +75,9 @@ A `VoiceSession` is one guild's voice connection. It exposes:
 
 Recovery is bounded, so a broken connection cannot rejoin forever:
 
-- Close codes 4006 and 4009 leave and then rejoin the current channel, at most 3 times in any 60-second window per
-  guild. Discord answers a join for the channel the bot already holds with no new voice server update, so a rejoin
-  without the leave never gets fresh credentials.
+- Close codes 4006, 4009 and 4015 leave and then rejoin the current channel, at most 3 times in any 60-second window
+  per guild. Discord answers a join for the channel the bot already holds with no new voice server update, so a
+  rejoin without the leave never gets fresh credentials.
 - Codes 4004, 4011, 4016, 4017 and 4021 end the voice at once, without spending that budget.
 - Codes 4014 and 4022 end only that voice socket. A voice state with no channel means the bot was removed; a move
   sends new credentials instead. If neither arrives within the join timeout, the voice ends.
