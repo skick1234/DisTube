@@ -154,7 +154,7 @@ export class DisTube<Metadata = undefined, Target = VoiceChannelTarget> {
       const guild = this.#guilds.ensure(guildId);
       const queue = guild.queue ?? guild.createQueue();
       return queue
-        .admit(input, options, () => this.voices.join(target))
+        .admit(input, options, () => this.voices.join(target, { signal: options.signal }))
         .then(items =>
           Object.freeze({
             queue: queue as DisTubeQueue<Metadata, Target>,

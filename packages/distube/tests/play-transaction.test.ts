@@ -121,7 +121,7 @@ describe("transactional play", () => {
     expect(events).toEqual(["queue.created", "queue.deleted"]);
   });
 
-  it("keeps a late session connected after the first play caller aborts", async () => {
+  it("cancels its pending join when the play caller aborts, before the session arrives", async () => {
     const harness = playableSetup();
     const creation = deferred<FakeVoiceSession>();
     const entered = deferred<void>();
@@ -135,24 +135,17 @@ describe("transactional play", () => {
     await entered.promise;
     controller.abort(reason);
 
-    const session = new FakeVoiceSession(GUILD, VOICE_CHANNEL);
-    creation.resolve(session);
     const failure = await result;
     expect(failure).toMatchObject({ code: "ABORTED", cause: reason });
     expect(failure).not.toBe(reason);
+    expect(required(harness.adapter.createVoiceSession.mock.calls[0])[1].signal?.aborted).toBe(true);
     expect(harness.distube.getQueue(GUILD)).toBeUndefined();
-    expect(harness.distube.voices.get(GUILD)).toMatchObject({
-      channelId: VOICE_CHANNEL,
-      volume: 100,
-      selfDeaf: true,
-      selfMute: false,
-    });
-    expect(harness.distube.voices.get(GUILD)?.filters.names).toEqual([]);
-    expect(session.release).not.toHaveBeenCalled();
-    await harness.distube.voices.leave(GUILD);
+
+    const session = new FakeVoiceSession(GUILD, VOICE_CHANNEL);
+    creation.resolve(session);
+    await settle();
     expect(session.release).toHaveBeenCalledTimes(1);
-    await harness.distube.dispose();
-    expect(session.release).toHaveBeenCalledTimes(1);
+    expect(harness.distube.voices.has(GUILD)).toBe(false);
   });
 
   it("observes caller cancellation after movement before inserting", async () => {
