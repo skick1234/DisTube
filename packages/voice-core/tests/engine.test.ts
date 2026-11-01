@@ -2,7 +2,7 @@ import type { VoiceSession } from "distube/integrations";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { DiscordVoiceEngine, DiscordVoiceSession } from "../src";
 import { FilterRegistry } from "../src/engine";
-import { CHANNEL, gatewayAdapter, latest, native, resetNative } from "./support/native";
+import { CHANNEL, gatewayAdapter, latest, native, resetNative, noPlatform } from "./support/native";
 
 vi.mock("@discordjs/voice", async () => (await import("./support/native")).voiceModule());
 
@@ -24,7 +24,7 @@ beforeEach(resetNative);
 
 describe("engine", () => {
   it("creates a Player over its own session's connection", async () => {
-    const engine = new DiscordVoiceEngine(SETTINGS);
+    const engine = new DiscordVoiceEngine(SETTINGS, noPlatform);
     const session = await DiscordVoiceSession.connect(OPTIONS);
 
     const player = await engine.createPlayer(session, PLAYER_OPTIONS);
@@ -35,8 +35,28 @@ describe("engine", () => {
     await session.release();
   });
 
+  it("opens the voice as the bot's own connection from the platform the adapter supplies", async () => {
+    const { guildId, channelId, selfDeaf, selfMute, timeoutMs, ...platform } = OPTIONS;
+    const lookup = vi.fn(() => platform);
+    const engine = new DiscordVoiceEngine(SETTINGS, lookup);
+
+    const session = await engine.createVoiceSession({ guildId, channelId }, { selfDeaf, selfMute, timeoutMs });
+
+    expect(lookup).toHaveBeenCalledExactlyOnceWith({ guildId, channelId });
+    expect(native.joinVoiceChannel).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ guildId, channelId, group: "bot", selfDeaf: true, selfMute: false }),
+    );
+    expect(session.gateway).toMatchObject({ channelId });
+    const player = await engine.createPlayer(session, PLAYER_OPTIONS);
+    expect(latest.connection.subscribe).toHaveBeenCalledWith(latest.player);
+    expect(native.joinVoiceChannel).toHaveBeenCalledTimes(1);
+    await player.release();
+    await session.release();
+    expect(latest.connection.destroy).toHaveBeenCalledOnce();
+  });
+
   it("names node-av and its host requirement when the binding cannot load", async () => {
-    const engine = new DiscordVoiceEngine(SETTINGS);
+    const engine = new DiscordVoiceEngine(SETTINGS, noPlatform);
     const session = await DiscordVoiceSession.connect(OPTIONS);
     const failure = new Error("libavcodec.so: cannot open shared object file");
     vi.doMock("node-av", () => {
@@ -47,7 +67,7 @@ describe("engine", () => {
         code: "VOICE_FAILED",
         message: expect.stringContaining("node-av native binding, which runs on glibc 2.28 or newer"),
       });
-      expect(native.joinVoiceChannel).not.toHaveBeenCalled();
+      expect(native.createAudioPlayer).not.toHaveBeenCalled();
     } finally {
       vi.doUnmock("node-av");
       await session.release();
@@ -55,7 +75,7 @@ describe("engine", () => {
   });
 
   it("refuses a session it does not own", async () => {
-    const engine = new DiscordVoiceEngine(SETTINGS);
+    const engine = new DiscordVoiceEngine(SETTINGS, noPlatform);
     const foreign = { guildId: "guild", channelId: CHANNEL } as unknown as VoiceSession;
 
     await expect(engine.createPlayer(foreign, PLAYER_OPTIONS)).rejects.toThrow(
@@ -64,10 +84,13 @@ describe("engine", () => {
   });
 
   it("exposes its merged preset metadata", () => {
-    const engine = new DiscordVoiceEngine({
-      ...SETTINGS,
-      filters: { house: { render: () => "volume=2", label: "House" } },
-    });
+    const engine = new DiscordVoiceEngine(
+      {
+        ...SETTINGS,
+        filters: { house: { render: () => "volume=2", label: "House" } },
+      },
+      noPlatform,
+    );
 
     expect(engine.filters.get("bassboost")).toMatchObject({ default: 10, min: 0, max: 20, acceptsValue: true });
     expect(engine.filters.get("house")?.label).toBe("House");
@@ -86,14 +109,17 @@ describe("engine", () => {
     [[{ name: "bassboost", value: 15 }], 1],
     [[], 1],
   ])("plays the selection %j at the product of its presets' tempos, %d", (entries, rate) => {
-    expect(new DiscordVoiceEngine(SETTINGS).playbackRate(entries)).toBe(rate);
+    expect(new DiscordVoiceEngine(SETTINGS, noPlatform).playbackRate(entries)).toBe(rate);
   });
 
   it("rejects a selection whose tempo function returns 0 with INVALID_ARGUMENT", () => {
-    const engine = new DiscordVoiceEngine({
-      ...SETTINGS,
-      filters: { stall: { render: () => "volume=1", default: 1, min: 0, max: 2, tempo: value => value ?? 1 } },
-    });
+    const engine = new DiscordVoiceEngine(
+      {
+        ...SETTINGS,
+        filters: { stall: { render: () => "volume=1", default: 1, min: 0, max: 2, tempo: value => value ?? 1 } },
+      },
+      noPlatform,
+    );
 
     expect(() => engine.playbackRate([{ name: "stall", value: 0 }])).toThrowError(
       expect.objectContaining({ code: "INVALID_ARGUMENT", message: expect.stringContaining("stall") }),

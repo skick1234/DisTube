@@ -5,7 +5,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vites
 import { DiscordVoiceEngine } from "../src/engine";
 import { DiscordVoiceSession } from "../src/session";
 import { createMedia, type MediaFixtures } from "./support/media";
-import { gatewayAdapter, latest, native, resetNative, settle } from "./support/native";
+import { gatewayAdapter, latest, native, resetNative, settle, noPlatform } from "./support/native";
 
 vi.mock("@discordjs/voice", async () => (await import("./support/native")).voiceModule());
 
@@ -38,11 +38,14 @@ async function playing(): Promise<{
     channelBitrate: () => 64_000,
     preflight: () => undefined,
   });
-  const player = await new DiscordVoiceEngine({
-    opusComplexity: 10,
-    bufferMs: 500,
-    report: () => undefined,
-  }).createPlayer(session, {
+  const player = await new DiscordVoiceEngine(
+    {
+      opusComplexity: 10,
+      bufferMs: 500,
+      report: () => undefined,
+    },
+    noPlatform,
+  ).createPlayer(session, {
     onClosed: () => undefined,
   });
   const input = new PassThrough();
@@ -75,20 +78,17 @@ describe("DiscordVoiceSession playback lifecycle", () => {
     await session.release();
   });
 
-  it("closes every input before it destroys the voice connection on release", async () => {
+  it("closes the track's input on Player release and keeps the voice connection until the session leaves", async () => {
     const { session, player, input, ended } = await playing();
     const connection = latest.connection;
-    let inputClosedAtDestroy: boolean | undefined;
-    connection.destroy.mockImplementationOnce(() => {
-      inputClosedAtDestroy = input.destroyed;
-      connection.transition({ status: "destroyed" });
-    });
 
     await player.release();
 
-    expect(inputClosedAtDestroy).toBe(true);
-    expect(connection.destroy).toHaveBeenCalledOnce();
+    expect(input.destroyed).toBe(true);
     await expect(ended).resolves.toEqual({ reason: "stopped" });
+    expect(connection.destroy).not.toHaveBeenCalled();
+    expect(connection.state.status).toBe("ready");
     await session.release();
+    expect(connection.destroy).toHaveBeenCalledOnce();
   });
 });

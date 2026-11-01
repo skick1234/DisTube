@@ -9,7 +9,16 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { DiscordVoiceEngine } from "../src/engine";
 import { DiscordVoiceSession } from "../src/session";
 import { bitrate, createMedia, fileReader, type MediaFixtures, peak, sourcePackets, take } from "./support/media";
-import { audioPlayerError, CHANNEL, gatewayAdapter, latest, native, resetNative, settle } from "./support/native";
+import {
+  audioPlayerError,
+  CHANNEL,
+  gatewayAdapter,
+  latest,
+  native,
+  resetNative,
+  settle,
+  noPlatform,
+} from "./support/native";
 
 vi.mock("@discordjs/voice", async () => (await import("./support/native")).voiceModule());
 
@@ -77,12 +86,15 @@ async function createPlayer(
     channelBitrate,
     preflight: () => undefined,
   });
-  const engine = new DiscordVoiceEngine({
-    opusComplexity: 10,
-    bufferMs: 500,
-    ...settings,
-    report: diagnostic => void reports.push(diagnostic),
-  });
+  const engine = new DiscordVoiceEngine(
+    {
+      opusComplexity: 10,
+      bufferMs: 500,
+      ...settings,
+      report: diagnostic => void reports.push(diagnostic),
+    },
+    noPlatform,
+  );
   const player = await engine.createPlayer(session, { onClosed: () => undefined });
   cleanups.push(
     () => player.release(),

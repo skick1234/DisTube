@@ -7,6 +7,11 @@ import type {
 } from "@discordjs/voice";
 import { type Mock, vi } from "vitest";
 
+/** For a test that opens its session directly, so the engine never looks its platform up. */
+export function noPlatform(): never {
+  throw new Error("This test opens its voice session directly");
+}
+
 /** Credentials a Ready connection exposes, which the session republishes as its gateway data. */
 export const GATEWAY = { channelId: "channel", sessionId: "session", token: "token", endpoint: "voice.example" };
 
@@ -15,8 +20,8 @@ export const CHANNEL = "channel";
 /**
  * The platform gateway half, shared by remote-only and late local-transport tests.
  *
- * Like Discord, it answers a write that changes only the self flags with a voice state update alone, and
- * any other join with both packets.
+ * Like Discord, it answers a join for the channel it already holds with a voice state update alone, even after
+ * its voice socket closed, and a join after a leave or to another channel with both packets. A leave is echoed.
  */
 export function gatewayAdapter(
   userId = "bot",
@@ -46,16 +51,18 @@ export function gatewayAdapter(
   const sendPayload = vi.fn(
     (payload: { d?: { channel_id?: string | null; self_deaf?: boolean; self_mute?: boolean } }) => {
       const channelId = payload.d?.channel_id;
+      const selfDeaf = payload.d?.self_deaf;
+      const selfMute = payload.d?.self_mute;
       if (channelId) {
-        const selfDeaf = payload.d?.self_deaf;
-        const selfMute = payload.d?.self_mute;
-        const flagsOnly =
-          joined?.channelId === channelId && (joined.selfDeaf !== selfDeaf || joined.selfMute !== selfMute);
+        const held = joined?.channelId === channelId;
         joined = { channelId, selfDeaf, selfMute };
         queueMicrotask(() => {
           state(channelId, GATEWAY.sessionId, selfDeaf, selfMute);
-          if (!flagsOnly) server();
+          if (!held) server();
         });
+      } else if (channelId === null && joined) {
+        joined = undefined;
+        queueMicrotask(() => state(null, GATEWAY.sessionId, selfDeaf, selfMute));
       }
       return true;
     },
@@ -76,17 +83,33 @@ export function readyState(gateway: Partial<typeof GATEWAY> = {}, channelId = CH
   return { status: "ready", networking };
 }
 
-/** A native voice connection: state transitions are driven by the test, never by a real gateway. */
+/** A native voice connection: the test or the fake gateway's voice server updates drive its transitions. */
 export class FakeConnection extends EventEmitter {
   state: Record<string, unknown> = readyState();
-  joinConfig: { channelId: string | null } = { channelId: CHANNEL };
+  joinConfig: { channelId: string | null; selfDeaf: boolean; selfMute: boolean } = {
+    channelId: CHANNEL,
+    selfDeaf: true,
+    selfMute: false,
+  };
   readonly subscription: { readonly unsubscribe: Mock<() => void> } = { unsubscribe: vi.fn() };
   readonly subscribe: Mock<(_player: unknown) => { readonly unsubscribe: Mock<() => void> }> = vi.fn(
     (_player: unknown) => this.subscription,
   );
-  readonly rejoin = vi.fn((config: { channelId: string }) => {
-    this.joinConfig = { channelId: config.channelId };
-    return true;
+  /** Sends the join through the connection's gateway adapter, as the library does while Ready. */
+  readonly rejoin = vi.fn((config: { channelId: string; selfDeaf?: boolean; selfMute?: boolean }) => {
+    Object.assign(this.joinConfig, config);
+    const { adapter } = this.state as { adapter?: { sendPayload(payload: unknown): boolean } };
+    return (
+      adapter?.sendPayload({
+        op: 4,
+        d: {
+          guild_id: "guild",
+          channel_id: this.joinConfig.channelId,
+          self_deaf: this.joinConfig.selfDeaf,
+          self_mute: this.joinConfig.selfMute,
+        },
+      }) ?? true
+    );
   });
   readonly destroy = vi.fn(() => this.transition({ status: "destroyed" }));
 
@@ -148,23 +171,44 @@ export const native = {
   }[],
 
   entersState: vi.fn(async (_target: unknown, _status: string, _timeout: number) => undefined),
-  joinVoiceChannel: vi.fn((options: { channelId: string; adapterCreator?: DiscordGatewayAdapterCreator }) => {
-    if (options.adapterCreator) {
-      const state = vi.fn();
-      const server = vi.fn();
-      const bridge = options.adapterCreator({
-        onVoiceStateUpdate: state,
-        onVoiceServerUpdate: server,
-        destroy: vi.fn(),
-      });
-      native.transports.push({ state, server, sendPayload: bridge.sendPayload });
-    }
-    const connection = new FakeConnection();
-    connection.joinConfig = { channelId: options.channelId };
-    connection.state = readyState({}, options.channelId);
-    native.connections.push(connection);
-    return connection;
-  }),
+  joinVoiceChannel: vi.fn(
+    (options: {
+      channelId: string;
+      selfDeaf?: boolean;
+      selfMute?: boolean;
+      adapterCreator?: DiscordGatewayAdapterCreator;
+    }) => {
+      const connection = new FakeConnection();
+      let adapter: ReturnType<DiscordGatewayAdapterCreator> | undefined;
+      if (options.adapterCreator) {
+        const state = vi.fn((packet: { channel_id: string | null; self_deaf: boolean; self_mute: boolean }) => {
+          if (packet.channel_id) connection.joinConfig.channelId = packet.channel_id;
+          connection.joinConfig.selfDeaf = packet.self_deaf;
+          connection.joinConfig.selfMute = packet.self_mute;
+        });
+        const server = vi.fn((packet: { token: string }) =>
+          connection.transition({
+            ...readyState({ token: packet.token }, connection.joinConfig.channelId ?? CHANNEL),
+            adapter,
+          }),
+        );
+        adapter = options.adapterCreator({
+          onVoiceStateUpdate: state,
+          onVoiceServerUpdate: server,
+          destroy: vi.fn(),
+        });
+        native.transports.push({ state, server, sendPayload: adapter.sendPayload });
+      }
+      connection.joinConfig = {
+        channelId: options.channelId,
+        selfDeaf: options.selfDeaf ?? true,
+        selfMute: options.selfMute ?? false,
+      };
+      connection.state = { ...readyState({}, options.channelId), adapter };
+      native.connections.push(connection);
+      return connection;
+    },
+  ),
   createAudioPlayer: vi.fn(() => {
     const player = new FakeAudioPlayer();
     native.players.push(player);

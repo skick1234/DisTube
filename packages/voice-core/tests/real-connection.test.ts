@@ -6,7 +6,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest
 import { DiscordVoiceEngine } from "../src/engine";
 import { DiscordVoiceSession } from "../src/session";
 import { createMedia, type MediaFixtures, peaks, pitches, stepHz } from "./support/media";
-import { CHANNEL, gatewayAdapter, settle } from "./support/native";
+import { CHANNEL, gatewayAdapter, settle, noPlatform } from "./support/native";
 import { type HeardPacket, serveAudio, serveVoiceGateway, type VoiceGatewayServer } from "./support/real";
 
 type Gateway = ReturnType<typeof gatewayAdapter>;
@@ -18,15 +18,20 @@ afterEach(async () => {
   for (const cleanup of cleanups.splice(0).toReversed()) await cleanup();
 });
 
-/** A session joined through a fake gateway whose voice server updates name a local voice server. */
-async function joined(clientUserId = "bot"): Promise<{
+/** A built-in session joined through a fake gateway whose voice server updates name a local voice server. */
+async function joined(
+  clientUserId = "bot",
+  heartbeatMs?: number,
+): Promise<{
   server: VoiceGatewayServer;
   gateway: Gateway;
   session: DiscordVoiceSession;
+  connection: VoiceConnection;
   events: VoiceSessionEvent[];
 }> {
   const server = await serveVoiceGateway();
   cleanups.push(() => server.stop().catch(() => undefined));
+  if (heartbeatMs !== undefined) server.heartbeatMs = heartbeatMs;
   const gateway = gatewayAdapter(clientUserId, server.endpoint);
   const session = await DiscordVoiceSession.connect({
     guildId: "guild",
@@ -42,55 +47,63 @@ async function joined(clientUserId = "bot"): Promise<{
   cleanups.push(() => session.release().catch(() => undefined));
   const events: VoiceSessionEvent[] = [];
   session.subscribe(event => events.push(event));
-  return { server, gateway, session, events };
+  const connection = getVoiceConnection("guild", clientUserId);
+  if (!connection) throw new Error("Expected the join to open a voice connection");
+  return { server, gateway, session, connection, events };
 }
 
-/** A joined session whose real `@discordjs/voice` connection has reached Ready. */
-async function connected(
-  clientUserId = "bot",
-): Promise<Awaited<ReturnType<typeof joined>> & { connection: VoiceConnection }> {
-  const joinedSession = await joined(clientUserId);
-  const connection = await DiscordVoiceSession.connectionOf(joinedSession.session);
-  if (!connection) throw new Error("Expected the session to attach a voice connection");
-  return { ...joinedSession, connection };
+function channels(gateway: Gateway): (string | null)[] {
+  return gateway.sendPayload.mock.calls.map(([payload]) => payload.d.channel_id);
 }
 
 function joins(gateway: Gateway): unknown[] {
-  return gateway.sendPayload.mock.calls.filter(([payload]) => payload.d.channel_id !== null);
+  return channels(gateway).filter(channelId => channelId !== null);
 }
 
 function leaves(gateway: Gateway): unknown[] {
-  return gateway.sendPayload.mock.calls.filter(([payload]) => payload.d.channel_id === null);
+  return channels(gateway).filter(channelId => channelId === null);
 }
 
 function networkingOf(connection: VoiceConnection): unknown {
   return "networking" in connection.state ? connection.state.networking : undefined;
 }
 
+function failed(): VoiceSessionEvent {
+  return { type: "disconnected", reason: "failed", error: expect.any(Error) };
+}
+
 describe("DiscordVoiceSession over the real voice library", () => {
-  it("survives a refused voice reconnect without an uncaught error and disconnects once after three rejoins", async () => {
-    const uncaught = vi.fn();
-    process.on("uncaughtException", uncaught);
-    cleanups.push(async () => process.off("uncaughtException", uncaught));
-    const { server, gateway, events } = await connected();
+  it("resolves the join on a Ready connection the library opened from one join, then plays on it with no second join", async () => {
+    const { server, gateway, session, connection, events } = await joined();
+    const networking = networkingOf(connection);
+    expect(connection.state.status).toBe("ready");
+    expect(session.gateway).toEqual({
+      channelId: CHANNEL,
+      sessionId: "session",
+      token: "token",
+      endpoint: server.endpoint,
+    });
 
-    await server.stop();
-    await vi.waitFor(
-      () => {
-        expect(uncaught).not.toHaveBeenCalled();
-        expect(events).toHaveLength(1);
-      },
-      { timeout: 2_000 },
-    );
-    await settle();
+    const origin = await serveAudio();
+    cleanups.push(() => origin.stop());
+    const engine = new DiscordVoiceEngine({ opusComplexity: 10, bufferMs: 500, report: () => undefined }, noPlatform);
+    for (let round = 0; round < 2; round += 1) {
+      const player = await engine.createPlayer(session, { onClosed: () => undefined });
+      const { promise: started, resolve } = Promise.withResolvers<void>();
+      void player.play({ kind: "url", url: origin.url }, { signal: new AbortController().signal, onStart: resolve });
+      await started;
+      await player.release();
+    }
 
-    expect(events).toEqual([{ type: "disconnected", reason: "failed", error: expect.any(Error) }]);
-    expect(joins(gateway)).toHaveLength(4);
-    expect(leaves(gateway)).toHaveLength(1);
+    expect(channels(gateway)).toEqual([CHANNEL]);
+    expect(networkingOf(connection) === networking, "the voice networking was replaced").toBe(true);
+    expect(connection.state.status).toBe("ready");
+    expect(server.connections).toBe(1);
+    expect(events).toEqual([]);
   });
 
-  it("rejoins through the gateway after a 4006 close and reaches Ready on a new voice socket", async () => {
-    const { server, gateway, events, connection } = await connected();
+  it("leaves before the library's rejoin after a 4006 close, so the platform's fresh credentials reach Ready", async () => {
+    const { server, gateway, events, connection } = await joined();
     const networking = networkingOf(connection);
 
     server.close(4006);
@@ -98,25 +111,140 @@ describe("DiscordVoiceSession over the real voice library", () => {
     await vi.waitFor(() => expect(connection.state.status).toBe("ready"), { timeout: 2_000 });
 
     expect(networkingOf(connection) === networking, "the voice networking was kept").toBe(false);
-    expect(joins(gateway)).toHaveLength(2);
-    expect(events.filter(event => event.type === "disconnected")).toEqual([]);
+    expect(channels(gateway)).toEqual([CHANNEL, null, CHANNEL]);
+    expect(events).toEqual([{ type: "connected", channelId: CHANNEL, gateway: expect.any(Object) }]);
   });
 
-  it("disconnects once when a 4006 rejoin does not reach Ready within the join timeout", async () => {
-    const { server, gateway, events } = await connected();
+  it("disconnects once when a 4006 recovery does not reach Ready within the join timeout", async () => {
+    const { server, gateway, events } = await joined();
     server.answers = false;
 
     server.close(4006);
     await vi.waitFor(() => expect(events).toHaveLength(1), { timeout: 3 * TIMEOUT_MS });
+    await settle();
 
-    expect(events).toEqual([{ type: "disconnected", reason: "failed", error: expect.any(Error) }]);
+    expect(events).toEqual([failed()]);
     expect(joins(gateway)).toHaveLength(2);
-    expect(leaves(gateway)).toHaveLength(1);
+    expect(leaves(gateway)).toHaveLength(2);
+  });
+
+  it("sends one leave per outage and disconnects once at the deadline when the voice server is gone", async () => {
+    const uncaught = vi.fn();
+    process.on("uncaughtException", uncaught);
+    cleanups.push(async () => process.off("uncaughtException", uncaught));
+    const { server, gateway, events } = await joined();
+
+    await server.stop();
+    await vi.waitFor(() => expect(events).toHaveLength(1), { timeout: 3 * TIMEOUT_MS });
+    await settle();
+
+    expect(uncaught).not.toHaveBeenCalled();
+    expect(events).toEqual([failed()]);
+    expect(leaves(gateway)).toHaveLength(2);
+  });
+
+  it.each([4014, 4022, 4006])(
+    "publishes removed at once when the platform empties the bot's voice state and closes the socket with %i",
+    async code => {
+      const { server, gateway, events } = await joined();
+
+      gateway.state(null);
+      server.close(code);
+      await vi.waitFor(() => expect(events).toHaveLength(1), { timeout: TIMEOUT_MS / 2 });
+      await settle();
+
+      expect(events).toEqual([{ type: "disconnected", reason: "removed" }]);
+      expect(joins(gateway)).toHaveLength(1);
+    },
+  );
+
+  it("moves to another channel on a new voice socket and publishes the moved credentials", async () => {
+    const { server, gateway, session, events } = await joined();
+
+    await session.join("other");
+
+    expect(session.channelId).toBe("other");
+    expect(channels(gateway)).toEqual([CHANNEL, "other"]);
+    expect(server.connections).toBe(2);
+    expect(events).toEqual([
+      { type: "connected", channelId: "other", gateway: expect.objectContaining({ channelId: "other" }) },
+    ]);
+  });
+
+  it("keeps the voice through a move whose old socket the platform closes with 4022 before the new server update", async () => {
+    const { server, gateway, session, events } = await joined();
+    gateway.sendPayload.mockImplementationOnce(() => {
+      queueMicrotask(() => {
+        gateway.state("other");
+        server.close(4022);
+        setTimeout(() => gateway.server("moved"), 50);
+      });
+      return true;
+    });
+    gateway.sendPayload.mockImplementationOnce(() => {
+      queueMicrotask(() => gateway.state("other"));
+      return true;
+    });
+
+    await session.join("other");
+    await settle();
+
+    expect(session.channelId).toBe("other");
+    expect(channels(gateway)).toEqual([CHANNEL, "other", "other"]);
+    expect(events).toEqual([
+      {
+        type: "connected",
+        channelId: "other",
+        gateway: expect.objectContaining({ channelId: "other", token: "moved" }),
+      },
+    ]);
+  });
+
+  it("moves when the platform's new server update reaches Ready before the voice state names the channel", async () => {
+    const { gateway, session, events, connection } = await joined();
+    const networking = networkingOf(connection);
+    gateway.sendPayload.mockImplementationOnce(() => {
+      queueMicrotask(() => gateway.server("moved"));
+      return true;
+    });
+
+    const moving = session.join("other");
+    await vi.waitFor(() => {
+      expect(networkingOf(connection) === networking, "the voice networking was kept").toBe(false);
+      expect(connection.state.status).toBe("ready");
+    });
+    expect(events).toEqual([]);
+    gateway.state("other");
+    await moving;
+
+    expect(session.channelId).toBe("other");
+    expect(events).toEqual([
+      {
+        type: "connected",
+        channelId: "other",
+        gateway: expect.objectContaining({ channelId: "other", token: "moved" }),
+      },
+    ]);
+  });
+
+  it("rejects a self flag change the gateway refuses and keeps the Ready voice socket", async () => {
+    const { server, gateway, session, events, connection } = await joined();
+    const networking = networkingOf(connection);
+    gateway.sendPayload.mockReturnValueOnce(false);
+
+    await expect(session.setSelfState({ selfMute: true })).rejects.toThrow("Discord gateway is unavailable");
+    await settle();
+
+    expect(session.selfMute).toBe(false);
+    expect(networkingOf(connection) === networking, "the voice networking was replaced").toBe(true);
+    expect(connection.state.status).toBe("ready");
+    expect(server.connections).toBe(1);
+    expect(events).toEqual([]);
   });
 
   it("gives each client user in one guild its own connection and keeps one when the other releases", async () => {
-    const first = await connected("bot");
-    const second = await connected("other-bot");
+    const first = await joined("bot");
+    const second = await joined("other-bot");
 
     await first.session.release();
     await settle();
@@ -128,8 +256,8 @@ describe("DiscordVoiceSession over the real voice library", () => {
     expect(second.events).toEqual([]);
   });
 
-  it.each([4004, 4011, 4016, 4017, 4021, 4022])("disconnects once naming close %i without a rejoin", async code => {
-    const { server, gateway, events } = await connected();
+  it.each([4004, 4011, 4016, 4017, 4021])("disconnects once naming close %i without a rejoin", async code => {
+    const { server, gateway, events } = await joined();
 
     server.close(code);
     await vi.waitFor(() => expect(events).toHaveLength(1), { timeout: 2_000 });
@@ -151,7 +279,7 @@ describe("DiscordVoiceSession over the real voice library", () => {
     ["join", (session: DiscordVoiceSession) => session.join(CHANNEL, { selfMute: true })],
     ["setSelfState", (session: DiscordVoiceSession) => session.setSelfState({ selfMute: true })],
   ])("keeps the voice networking and publishes nothing when %s changes only a self flag", async (_name, write) => {
-    const { server, session, events, connection } = await connected();
+    const { server, session, events, connection } = await joined();
     const networking = networkingOf(connection);
 
     await write(session);
@@ -164,42 +292,33 @@ describe("DiscordVoiceSession over the real voice library", () => {
     expect(events).toEqual([]);
   });
 
-  it("reports a connection user code destroyed through onClosed once and plays on a new Player, never closing on release", async () => {
-    const { session } = await joined();
+  it("ends the voice once when user code destroys the connection, calling onClosed once and never on release", async () => {
+    const { session, events } = await joined();
     const origin = await serveAudio();
     cleanups.push(() => origin.stop());
-    const engine = new DiscordVoiceEngine({ opusComplexity: 10, bufferMs: 500, report: () => undefined });
-    const play = (player: Awaited<ReturnType<typeof engine.createPlayer>>) => {
-      const { promise: started, resolve } = Promise.withResolvers<void>();
-      const ended = player.play(
-        { kind: "url", url: origin.url },
-        { signal: new AbortController().signal, onStart: resolve },
-      );
-      void ended.catch(() => undefined);
-      return { started, ended };
-    };
+    const engine = new DiscordVoiceEngine({ opusComplexity: 10, bufferMs: 500, report: () => undefined }, noPlatform);
     const onClosed = vi.fn();
-    const first = await engine.createPlayer(session, { onClosed });
-    const track = play(first);
-    await track.started;
+    const player = await engine.createPlayer(session, { onClosed });
+    const { promise: started, resolve } = Promise.withResolvers<void>();
+    const ended = player.play(
+      { kind: "url", url: origin.url },
+      { signal: new AbortController().signal, onStart: resolve },
+    );
+    void ended.catch(() => undefined);
+    await started;
 
     getVoiceConnection("guild", "bot")?.destroy();
 
-    const failure: unknown = await track.ended.then(
+    const failure: unknown = await ended.then(
       () => undefined,
       (error: unknown) => error,
     );
-    expect(onClosed).toHaveBeenCalledExactlyOnceWith(failure);
     expect(failure).toMatchObject({ code: "VOICE_FAILED" });
-    await expect(first.setVolume(50)).rejects.toThrow();
-    await first.release();
+    expect(onClosed).toHaveBeenCalledExactlyOnceWith(failure);
+    expect(events).toEqual([failed()]);
+    await player.release();
     expect(onClosed).toHaveBeenCalledTimes(1);
-
-    const replacementClosed = vi.fn();
-    const replacement = await engine.createPlayer(session, { onClosed: replacementClosed });
-    await play(replacement).started;
-    await replacement.release();
-    expect(replacementClosed).not.toHaveBeenCalled();
+    await expect(engine.createPlayer(session, { onClosed })).rejects.toMatchObject({ code: "INVALID_STATE" });
   });
 });
 
@@ -222,14 +341,16 @@ async function playing(
   ended: Promise<TrackEnd>;
   reports: Diagnostic[];
 }> {
-  const { server, session } = await joined();
-  if (heartbeatMs !== undefined) server.heartbeatMs = heartbeatMs;
+  const { server, session } = await joined("bot", heartbeatMs);
   const reports: Diagnostic[] = [];
-  const engine = new DiscordVoiceEngine({
-    opusComplexity: 10,
-    bufferMs: BUFFER_MS,
-    report: diagnostic => void reports.push(diagnostic),
-  });
+  const engine = new DiscordVoiceEngine(
+    {
+      opusComplexity: 10,
+      bufferMs: BUFFER_MS,
+      report: diagnostic => void reports.push(diagnostic),
+    },
+    noPlatform,
+  );
   const player = await engine.createPlayer(session, { onClosed: () => undefined });
   cleanups.push(() => player.release());
   const { promise: started, resolve } = Promise.withResolvers<void>();

@@ -1,5 +1,5 @@
 import type { DiscordGatewayAdapterCreator } from "@discordjs/voice";
-import { DiscordVoiceEngine, DiscordVoiceSession } from "@distube/voice-core";
+import { type DiscordPlatform, DiscordGatewaySession, DiscordVoiceEngine } from "@distube/voice-core";
 import { ChannelType, type Client, type Guild, PermissionFlagsBits, type VoiceBasedChannel } from "discord.js";
 import type {
   Adapter,
@@ -26,14 +26,21 @@ export class DiscordJSAdapter implements Adapter<VoiceBasedChannel> {
     return { guildId: channel.guildId, channelId: channel.id };
   }
 
+  /** Engine plugins play elsewhere, so this session sends the joins and opens no voice socket. */
   async createVoiceSession(target: VoiceTarget, options: VoiceSessionOptions): Promise<VoiceSession> {
+    return await DiscordGatewaySession.connect({ ...target, ...options, ...this.#platform(target) });
+  }
+
+  createEngine(settings: EngineSettings): Engine {
+    return new DiscordVoiceEngine(settings, target => this.#platform(target));
+  }
+
+  #platform(target: VoiceTarget): DiscordPlatform {
     const guild = this.#client.guilds.cache.get(target.guildId);
     if (!guild) throw new Error(`Discord guild is unavailable: ${target.guildId}`);
     const clientUserId = this.#client.user?.id;
     if (!clientUserId) throw new Error("Discord client user is unavailable");
-    return await DiscordVoiceSession.connect({
-      ...target,
-      ...options,
+    return {
       clientUserId,
       adapterCreator: guild.voiceAdapterCreator as DiscordGatewayAdapterCreator,
       channelBitrate: channelId => {
@@ -41,11 +48,7 @@ export class DiscordJSAdapter implements Adapter<VoiceBasedChannel> {
         return current?.isVoiceBased() ? current.bitrate : DISCORD_DEFAULT_BITRATE;
       },
       preflight: channelId => preflight(guild, channelId, clientUserId),
-    });
-  }
-
-  createEngine(settings: EngineSettings): Engine {
-    return new DiscordVoiceEngine(settings);
+    };
   }
 }
 

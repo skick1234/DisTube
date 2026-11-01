@@ -40,7 +40,6 @@ describe("real @discordjs/voice", () => {
     try {
       expect(connection.joinConfig.channelId).toBe(REAL_CHANNEL);
 
-      // Someone drags the bot. This is the exact fact DiscordVoiceSession#settle reads to republish `connected`.
       connection.gateway.methods().onVoiceStateUpdate(voiceState("dragged"));
 
       expect(connection.joinConfig.channelId).toBe("dragged");
@@ -72,7 +71,6 @@ describe("real @discordjs/voice", () => {
       filters: new FilterRegistry(),
       opusComplexity: 10,
       readAhead: 25,
-      releaseTransport: () => undefined,
       report: () => undefined,
       onClosed: () => undefined,
     });

@@ -163,6 +163,14 @@ describe("OceanicAdapter", () => {
     });
   });
 
+  it("opens the built-in engine's voice through the same preflight, before any gateway payload", async () => {
+    const { adapter, gateway } = fixture([voiceChannel(CHANNEL, { allowed: permission("SPEAK") })]);
+    const engine = adapter.createEngine({ opusComplexity: 10, bufferMs: 500, report: () => undefined });
+
+    await expect(engine.createVoiceSession?.(TARGET, JOIN)).rejects.toThrow("denies the bot Connect");
+    expect(gateway.sendPayload).not.toHaveBeenCalled();
+  });
+
   it("passes engine settings to the engine it creates", () => {
     const { adapter } = fixture();
     const engine = adapter.createEngine({

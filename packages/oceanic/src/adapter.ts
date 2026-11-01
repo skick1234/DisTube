@@ -1,5 +1,5 @@
 import type { DiscordGatewayAdapterCreator } from "@discordjs/voice";
-import { DiscordVoiceEngine, DiscordVoiceSession } from "@distube/voice-core";
+import { type DiscordPlatform, DiscordGatewaySession, DiscordVoiceEngine } from "@distube/voice-core";
 import type {
   Adapter,
   Engine,
@@ -40,14 +40,21 @@ export class OceanicAdapter implements Adapter<VoiceChannel | StageChannel> {
     return { guildId: channel.guildID, channelId: channel.id };
   }
 
+  /** Engine plugins play elsewhere, so this session sends the joins and opens no voice socket. */
   async createVoiceSession(target: VoiceTarget, options: VoiceSessionOptions): Promise<VoiceSession> {
+    return await DiscordGatewaySession.connect({ ...target, ...options, ...this.#platform(target) });
+  }
+
+  createEngine(settings: EngineSettings): Engine {
+    return new DiscordVoiceEngine(settings, target => this.#platform(target));
+  }
+
+  #platform(target: VoiceTarget): DiscordPlatform {
     const guild = this.#client.guilds.get(target.guildId);
     if (!guild) throw new Error(`Oceanic guild is unavailable: ${target.guildId}`);
     const clientUserId = this.#client.user?.id;
     if (!clientUserId) throw new Error("Oceanic client user is unavailable");
-    return await DiscordVoiceSession.connect({
-      ...target,
-      ...options,
+    return {
       clientUserId,
       adapterCreator: guild.voiceAdapterCreator as DiscordGatewayAdapterCreator,
       channelBitrate: channelId => {
@@ -55,11 +62,7 @@ export class OceanicAdapter implements Adapter<VoiceChannel | StageChannel> {
         return isVoiceBased(current) ? current.bitrate : DISCORD_DEFAULT_BITRATE;
       },
       preflight: channelId => preflight(guild, channelId, clientUserId),
-    });
-  }
-
-  createEngine(settings: EngineSettings): Engine {
-    return new DiscordVoiceEngine(settings);
+    };
   }
 }
 

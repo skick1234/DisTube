@@ -75,8 +75,12 @@ A `VoiceSession` is one guild's voice connection. It exposes:
 
 Recovery is bounded, so a broken connection cannot rejoin forever:
 
-- Close codes 4006 and 4009 rejoin the current channel, at most 3 times in any 60-second window per guild.
-- Codes 4004, 4011, 4016, 4017, 4021 and 4022 end the voice at once, without spending that budget.
+- Close codes 4006 and 4009 leave and then rejoin the current channel, at most 3 times in any 60-second window per
+  guild. Discord answers a join for the channel the bot already holds with no new voice server update, so a rejoin
+  without the leave never gets fresh credentials.
+- Codes 4004, 4011, 4016, 4017 and 4021 end the voice at once, without spending that budget.
+- Codes 4014 and 4022 end only that voice socket. A voice state with no channel means the bot was removed; a move
+  sends new credentials instead. If neither arrives within the join timeout, the voice ends.
 
 Publish `{ type: "disconnected", reason: "failed", error }` once, when that policy is spent. Publish
 `{ type: "disconnected", reason: "removed" }` when the platform removes the bot from voice outside a `release`.
@@ -92,8 +96,12 @@ Songs, resolves providers, changes queue state or sends bot messages.
 
 ## Engine and Player
 
-An `Engine` has `filters`, `createPlayer(session, { onClosed })`, an optional `playbackRate(entries)` and an optional
-`prepare(song, { signal })`.
+An `Engine` has `filters`, `createPlayer(session, { onClosed })`, an optional `createVoiceSession(target, options)`,
+an optional `playbackRate(entries)` and an optional `prepare(song, { signal })`.
+
+- `createVoiceSession` is for an engine whose audio needs its own platform connection. When it exists, core opens
+  every voice through it and never calls the Adapter's. The built-in engine opens its `@discordjs/voice` connection
+  there, so that connection sends the join and receives the credentials as they arrive.
 
 - `filters` is a `ReadonlyMap<string, FilterDefinitionInfo>` describing every preset the engine renders. Entries carry
   `default`, `min`, `max`, `acceptsValue` and `label`, a string that never contains the value. Core validates names and

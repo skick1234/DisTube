@@ -42,7 +42,6 @@ export interface DiscordVoicePlayerOptions {
   readonly filters: FilterRegistry;
   readonly opusComplexity: number;
   readonly readAhead: number;
-  readonly releaseTransport: () => void;
   readonly report: (diagnostic: Diagnostic) => void;
   readonly onClosed: (error: Error) => void;
 }
@@ -89,7 +88,7 @@ class Playback {
 }
 
 /**
- * The playback backend for one attached voice connection.
+ * The playback backend subscribed to one voice's connection, which the session owns.
  *
  * It outlives tracks until release or connection loss. Volume and filters live here and apply to the running
  * Track in place; the encoder follows the session's channel bitrate.
@@ -100,7 +99,6 @@ export class DiscordVoicePlayer implements Player {
   readonly #filters: FilterRegistry;
   readonly #opusComplexity: number;
   readonly #readAhead: number;
-  readonly #releaseTransport: () => void;
   readonly #reporter: TrackReporter;
   readonly #onClosed: (error: Error) => void;
   readonly #player: AudioPlayer;
@@ -122,7 +120,6 @@ export class DiscordVoicePlayer implements Player {
     this.#filters = options.filters;
     this.#opusComplexity = options.opusComplexity;
     this.#readAhead = options.readAhead;
-    this.#releaseTransport = options.releaseTransport;
     this.#reporter = { guildId: options.session.guildId, report: options.report };
     this.#onClosed = options.onClosed;
     this.#player = createAudioPlayer({
@@ -395,7 +392,6 @@ export class DiscordVoicePlayer implements Player {
       () => this.#unsubscribeSession(),
       () => this.#subscription?.unsubscribe(),
       () => this.#player.stop(true),
-      () => this.#releaseTransport(),
     ]) {
       try {
         step();

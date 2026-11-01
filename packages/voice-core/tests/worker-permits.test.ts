@@ -2,7 +2,7 @@ import type * as Os from "node:os";
 import type { Diagnostic, Player, TrackEnd } from "distube/integrations";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { FromWorker, PermitMessage, ToWorker } from "../src/protocol";
-import { CHANNEL, gatewayAdapter, resetNative } from "./support/native";
+import { CHANNEL, gatewayAdapter, resetNative, noPlatform } from "./support/native";
 
 vi.mock("@discordjs/voice", async () => (await import("./support/native")).voiceModule());
 
@@ -77,11 +77,14 @@ async function createPlayer(): Promise<Player> {
     channelBitrate: () => 64_000,
     preflight: () => undefined,
   });
-  const player = await new DiscordVoiceEngine({
-    opusComplexity: 10,
-    bufferMs: 500,
-    report: diagnostic => void reports.push(diagnostic),
-  }).createPlayer(session, {
+  const player = await new DiscordVoiceEngine(
+    {
+      opusComplexity: 10,
+      bufferMs: 500,
+      report: diagnostic => void reports.push(diagnostic),
+    },
+    noPlatform,
+  ).createPlayer(session, {
     onClosed: () => undefined,
   });
   cleanups.push(

@@ -1,10 +1,7 @@
-import { EventEmitter } from "node:events";
-import { VoiceConnectionDisconnectReason, VoiceConnectionStatus } from "@discordjs/voice";
 import type { VoiceSessionEvent } from "distube/integrations";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { DiscordVoiceEngine } from "../src/engine";
-import { DiscordVoiceSession } from "../src/session";
-import { CHANNEL, GATEWAY, gatewayAdapter, latest, native, resetNative, settle } from "./support/native";
+import { DiscordGatewaySession } from "../src/session";
+import { CHANNEL, GATEWAY, gatewayAdapter, native, resetNative, settle } from "./support/native";
 
 vi.mock("@discordjs/voice", async () => (await import("./support/native")).voiceModule());
 
@@ -42,10 +39,10 @@ async function subscribed(
   gateway: ReturnType<typeof gatewayAdapter>,
   timeoutMs = 50,
 ): Promise<{
-  session: DiscordVoiceSession;
+  session: DiscordGatewaySession;
   events: VoiceSessionEvent[];
 }> {
-  const session = await DiscordVoiceSession.connect({ ...options(gateway.creator), timeoutMs });
+  const session = await DiscordGatewaySession.connect({ ...options(gateway.creator), timeoutMs });
   const events: VoiceSessionEvent[] = [];
   session.subscribe(event => events.push(event));
   return { session, events };
@@ -57,61 +54,10 @@ function useFakeTimers(): void {
   vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval", "Date"] });
 }
 
-/**
- * A session whose built-in connection reached Ready. The fake connection answers voice server updates
- * and voice socket closes as `@discordjs/voice` 0.19 does; reaching Ready again stays with the test.
- */
-async function attached(gateway: ReturnType<typeof gatewayAdapter>) {
-  const { session, events } = await subscribed(gateway, JOIN_TIMEOUT_MS);
-  await DiscordVoiceSession.connectionOf(session);
-  const connection = latest.connection;
-  const transport = native.transports[0];
-  if (!transport) throw new Error("Expected the connection to create its gateway transport");
-  let networking = new EventEmitter();
-  const configure = (): void => {
-    networking = new EventEmitter();
-    connection.transition({ ...connection.state, status: "connecting", networking });
-  };
-  const ready = (): void => connection.transition({ ...connection.state, status: "ready" });
-  transport.server.mockImplementation((packet: { endpoint: string | null }) => {
-    if (packet.endpoint) configure();
-    else
-      connection.transition({
-        ...connection.state,
-        status: "disconnected",
-        reason: VoiceConnectionDisconnectReason.EndpointRemoved,
-      });
-  });
-  configure();
-  ready();
-  const close = (code: number): void => {
-    networking.emit("close", code);
-    if (connection.state.status === "destroyed") return;
-    if (code === 4014) {
-      connection.transition({
-        ...connection.state,
-        status: "disconnected",
-        reason: VoiceConnectionDisconnectReason.WebSocketClose,
-        closeCode: code,
-      });
-      return;
-    }
-    connection.transition({ ...connection.state, status: "signalling" });
-    const rejoin = { op: 4, d: { guild_id: "guild", channel_id: CHANNEL, self_deaf: true, self_mute: false } };
-    if (!transport.sendPayload(rejoin))
-      connection.transition({
-        ...connection.state,
-        status: "disconnected",
-        reason: VoiceConnectionDisconnectReason.AdapterUnavailable,
-      });
-  };
-  return { session, events, close, ready };
-}
-
 describe("gateway session", () => {
   it("joins without constructing audio and publishes a complete copied snapshot", async () => {
     const gateway = gatewayAdapter();
-    const session = await DiscordVoiceSession.connect(options(gateway.creator));
+    const session = await DiscordGatewaySession.connect(options(gateway.creator));
 
     expect(native.joinVoiceChannel).not.toHaveBeenCalled();
     expect(gateway.sendPayload).toHaveBeenCalledWith({
@@ -125,46 +71,9 @@ describe("gateway session", () => {
     await session.release();
   });
 
-  it("replays the current snapshot to a late local transport without a second membership request", async () => {
-    const gateway = gatewayAdapter();
-    const session = await DiscordVoiceSession.connect(options(gateway.creator));
-    const sent = gateway.sendPayload.mock.calls.length;
-
-    expect(await DiscordVoiceSession.connectionOf(session)).toBe(latest.connection);
-    await settle();
-
-    expect(native.transports).toHaveLength(1);
-    expect(native.transports[0]?.state).toHaveBeenCalledWith(expect.objectContaining({ channel_id: CHANNEL }));
-    expect(native.transports[0]?.server).toHaveBeenCalledWith(expect.objectContaining({ token: GATEWAY.token }));
-    expect(gateway.sendPayload).toHaveBeenCalledTimes(sent);
-    expect(native.entersState).toHaveBeenCalledWith(latest.connection, VoiceConnectionStatus.Ready, 50);
-    await session.release();
-  });
-
-  it("replaces a released local Player without leaving the gateway session", async () => {
-    const gateway = gatewayAdapter();
-    const session = await DiscordVoiceSession.connect(options(gateway.creator));
-    const engine = new DiscordVoiceEngine({ opusComplexity: 10, bufferMs: 500, report: () => undefined });
-    const first = await engine.createPlayer(session, { onClosed: () => undefined });
-    const firstConnection = latest.connection;
-    const sent = gateway.sendPayload.mock.calls.length;
-
-    await first.release();
-    expect(firstConnection.destroy).toHaveBeenCalledTimes(1);
-    expect(session.gateway).toEqual(GATEWAY);
-    expect(gateway.sendPayload).toHaveBeenCalledTimes(sent);
-
-    const second = await engine.createPlayer(session, { onClosed: () => undefined });
-    expect(latest.connection).not.toBe(firstConnection);
-    expect(native.joinVoiceChannel).toHaveBeenCalledTimes(2);
-    await second.release();
-    await session.release();
-    expect(gateway.sendPayload.mock.calls.filter(([payload]) => payload.d.channel_id === null)).toHaveLength(1);
-  });
-
   it("waits for both halves after a move and republishes refreshed credentials", async () => {
     const gateway = gatewayAdapter();
-    const session = await DiscordVoiceSession.connect(options(gateway.creator));
+    const session = await DiscordGatewaySession.connect(options(gateway.creator));
     const events = vi.fn();
     session.subscribe(events);
 
@@ -188,7 +97,7 @@ describe("gateway session", () => {
 
   it("settles a move whose server update arrives before its state update", async () => {
     const gateway = gatewayAdapter();
-    const session = await DiscordVoiceSession.connect(options(gateway.creator));
+    const session = await DiscordGatewaySession.connect(options(gateway.creator));
     gateway.sendPayload.mockImplementationOnce(() => {
       queueMicrotask(() => {
         gateway.server("rotated", "new.example");
@@ -211,7 +120,7 @@ describe("gateway session", () => {
 
   it("reads the bitrate of the channel it settled in, including after a move", async () => {
     const gateway = gatewayAdapter();
-    const session = await DiscordVoiceSession.connect(options(gateway.creator));
+    const session = await DiscordGatewaySession.connect(options(gateway.creator));
     const before = session.bitrate;
 
     await session.join("other");
@@ -223,7 +132,7 @@ describe("gateway session", () => {
 
   it("acknowledges self flags sent through join and stops delivering updates after unsubscribe", async () => {
     const gateway = gatewayAdapter();
-    const session = await DiscordVoiceSession.connect(options(gateway.creator));
+    const session = await DiscordGatewaySession.connect(options(gateway.creator));
     const events = vi.fn();
     const unsubscribe = session.subscribe(events);
 
@@ -246,7 +155,7 @@ describe("gateway session", () => {
 
   it("cancels pending movement when its session leaves", async () => {
     const gateway = gatewayAdapter();
-    const session = await DiscordVoiceSession.connect(options(gateway.creator));
+    const session = await DiscordGatewaySession.connect(options(gateway.creator));
     gateway.sendPayload.mockImplementationOnce(() => true);
 
     const moving = session.join("other");
@@ -257,23 +166,9 @@ describe("gateway session", () => {
     expect(gateway.sendPayload.mock.calls.filter(([payload]) => payload.d.channel_id === null)).toHaveLength(1);
   });
 
-  it("retires a failed local attachment without losing gateway membership", async () => {
-    const gateway = gatewayAdapter();
-    const session = await DiscordVoiceSession.connect(options(gateway.creator));
-    native.entersState.mockRejectedValueOnce(new Error("native readiness failed"));
-
-    await expect(DiscordVoiceSession.connectionOf(session)).rejects.toThrow("native readiness failed");
-    expect(latest.connection.destroy).toHaveBeenCalledTimes(1);
-    expect(session.gateway).toEqual(GATEWAY);
-
-    const replacement = await DiscordVoiceSession.connectionOf(session);
-    expect(replacement).toBe(latest.connection);
-    await session.release();
-  });
-
   it("tries every owned cleanup step and preserves distinct failures", async () => {
     const gateway = gatewayAdapter();
-    const session = await DiscordVoiceSession.connect(options(gateway.creator));
+    const session = await DiscordGatewaySession.connect(options(gateway.creator));
     const sendFailure = new Error("leave failed");
     const destroyFailure = new Error("adapter destroy failed");
     gateway.sendPayload.mockImplementationOnce(() => {
@@ -294,7 +189,7 @@ describe("gateway session", () => {
     const refused = new Error("denies the bot Connect");
 
     await expect(
-      DiscordVoiceSession.connect(
+      DiscordGatewaySession.connect(
         options(gateway.creator, () => {
           throw refused;
         }),
@@ -308,7 +203,7 @@ describe("gateway session", () => {
     const preflight = vi.fn((channelId: string) => {
       if (channelId === "full") throw new Error("is full");
     });
-    const session = await DiscordVoiceSession.connect(options(gateway.creator, preflight));
+    const session = await DiscordGatewaySession.connect(options(gateway.creator, preflight));
     gateway.sendPayload.mockClear();
 
     await expect(session.join("full")).rejects.toThrow("is full");
@@ -326,7 +221,7 @@ describe("gateway session", () => {
 
   it("keeps the committed snapshot when a move is refused", async () => {
     const gateway = gatewayAdapter();
-    const session = await DiscordVoiceSession.connect(options(gateway.creator));
+    const session = await DiscordGatewaySession.connect(options(gateway.creator));
     gateway.sendPayload.mockReturnValueOnce(false);
 
     await expect(session.join("other")).rejects.toThrow("Discord gateway is unavailable");
@@ -336,13 +231,13 @@ describe("gateway session", () => {
   });
 
   it.each([
-    ["join", (session: DiscordVoiceSession) => session.join(CHANNEL, { selfMute: true })],
-    ["setSelfState", (session: DiscordVoiceSession) => session.setSelfState({ selfMute: true })],
+    ["join", (session: DiscordGatewaySession) => session.join(CHANNEL, { selfMute: true })],
+    ["setSelfState", (session: DiscordGatewaySession) => session.setSelfState({ selfMute: true })],
   ])(
     "sends a %s flag write behind an unanswered move only after the move times out, in the channel still held",
     async (_name, write) => {
       const gateway = gatewayAdapter();
-      const session = await DiscordVoiceSession.connect(options(gateway.creator));
+      const session = await DiscordGatewaySession.connect(options(gateway.creator));
       gateway.sendPayload.mockImplementationOnce(() => true);
 
       const moving = session.join("other");
@@ -367,25 +262,9 @@ describe("gateway session", () => {
     },
   );
 
-  it("suppresses local transport leave and sends one session-owned leave", async () => {
-    const gateway = gatewayAdapter();
-    const session = await DiscordVoiceSession.connect(options(gateway.creator));
-    await DiscordVoiceSession.connectionOf(session);
-    const nativeBridge = native.transports[0];
-    expect(nativeBridge).toBeDefined();
-
-    nativeBridge?.sendPayload({ op: 4, d: { guild_id: "guild", channel_id: null } });
-    expect(gateway.sendPayload.mock.calls.filter(([payload]) => payload.d.channel_id === null)).toHaveLength(0);
-
-    await Promise.all([session.release(), session.release()]);
-    expect(gateway.sendPayload.mock.calls.filter(([payload]) => payload.d.channel_id === null)).toHaveLength(1);
-    expect(latest.connection.destroy).toHaveBeenCalledTimes(1);
-    expect(gateway.destroy).toHaveBeenCalledTimes(1);
-  });
-
   it("reports a removal while not leaving as a removed disconnect and isolates listener failures", async () => {
     const gateway = gatewayAdapter();
-    const session = await DiscordVoiceSession.connect(options(gateway.creator));
+    const session = await DiscordGatewaySession.connect(options(gateway.creator));
     session.subscribe(() => {
       throw new Error("listener failed");
     });
@@ -401,7 +280,7 @@ describe("gateway session", () => {
 
   it("connects a replacement session that receives the leave echo of the session it replaces", async () => {
     const gateway = gatewayAdapter();
-    const previous = await DiscordVoiceSession.connect(options(gateway.creator));
+    const previous = await DiscordGatewaySession.connect(options(gateway.creator));
     await previous.release();
     gateway.sendPayload.mockImplementationOnce(() => {
       queueMicrotask(() => {
@@ -412,7 +291,7 @@ describe("gateway session", () => {
       return true;
     });
 
-    const session = await DiscordVoiceSession.connect(options(gateway.creator));
+    const session = await DiscordGatewaySession.connect(options(gateway.creator));
 
     expect(session.gateway).toEqual(GATEWAY);
     expect(leaves(gateway)).toHaveLength(1);
@@ -424,7 +303,7 @@ describe("gateway session", () => {
     gateway.sendPayload.mockImplementationOnce(() => true);
     const controller = new AbortController();
     let failure: unknown;
-    const connecting = DiscordVoiceSession.connect({
+    const connecting = DiscordGatewaySession.connect({
       ...options(gateway.creator),
       timeoutMs: 60_000,
       signal: controller.signal,
@@ -454,7 +333,7 @@ describe("gateway session", () => {
     });
 
     await expect(
-      DiscordVoiceSession.connect({ ...options(gateway.creator), timeoutMs: 60_000, signal: controller.signal }),
+      DiscordGatewaySession.connect({ ...options(gateway.creator), timeoutMs: 60_000, signal: controller.signal }),
     ).rejects.toMatchObject({ code: "ABORTED", cause: reason });
     expect(leaves(gateway)).toHaveLength(1);
     expect(gateway.destroy).toHaveBeenCalledTimes(1);
@@ -467,7 +346,7 @@ describe("gateway session", () => {
     controller.abort(reason);
 
     await expect(
-      DiscordVoiceSession.connect({ ...options(gateway.creator), signal: controller.signal }),
+      DiscordGatewaySession.connect({ ...options(gateway.creator), signal: controller.signal }),
     ).rejects.toMatchObject({ code: "ABORTED", cause: reason });
     expect(gateway.sendPayload).not.toHaveBeenCalled();
     expect(gateway.destroy).not.toHaveBeenCalled();
@@ -504,7 +383,7 @@ describe("voice close recovery", () => {
     },
   );
 
-  it.each([4004, 4011, 4016, 4017, 4021, 4022])(
+  it.each([4004, 4011, 4016, 4017, 4021])(
     "publishes one disconnect naming %i without a join, then ignores later closes",
     async code => {
       const gateway = gatewayAdapter();
@@ -526,44 +405,32 @@ describe("voice close recovery", () => {
     },
   );
 
-  it.each([
-    ["built-in connection", 4006],
-    ["voiceClosed", 4009],
-  ])("re-sends a rejoin the gateway refuses on the %s path once it accepts", async (path, code) => {
+  it("leaves before it rejoins on 4006, re-sending each payload the gateway refuses until it accepts", async () => {
     useFakeTimers();
     const gateway = gatewayAdapter();
-    const builtIn = path === "built-in connection" ? await attached(gateway) : undefined;
-    const { session, events } = builtIn ?? (await subscribed(gateway, JOIN_TIMEOUT_MS));
-    const before = joins(gateway).length;
+    const { session, events } = await subscribed(gateway, JOIN_TIMEOUT_MS);
+    const before = gateway.sendPayload.mock.calls.length;
     gateway.sendPayload.mockReturnValueOnce(false);
 
-    if (builtIn) builtIn.close(code);
-    else session.voiceClosed(code);
-    await vi.advanceTimersByTimeAsync(JOIN_TIMEOUT_MS - 1);
-    builtIn?.ready();
-    await vi.advanceTimersByTimeAsync(JOIN_TIMEOUT_MS);
+    session.voiceClosed(4006);
+    await vi.advanceTimersByTimeAsync(2 * JOIN_TIMEOUT_MS);
 
-    expect(joins(gateway).slice(before)).toEqual([
-      [{ op: 4, d: { guild_id: "guild", channel_id: CHANNEL, self_deaf: true, self_mute: false } }],
-      [{ op: 4, d: { guild_id: "guild", channel_id: CHANNEL, self_deaf: true, self_mute: false } }],
+    expect(gateway.sendPayload.mock.calls.slice(before).map(([payload]) => payload.d.channel_id)).toEqual([
+      null,
+      null,
+      CHANNEL,
     ]);
-    expect(events.filter(event => event.type === "disconnected")).toEqual([]);
-    expect(session.gateway).toEqual(GATEWAY);
+    expect(events).toEqual([{ type: "connected", channelId: CHANNEL, gateway: GATEWAY }]);
     await session.release();
   });
 
-  it.each([
-    ["built-in connection", 4006],
-    ["voiceClosed", 4009],
-  ])("publishes one disconnect at the join timeout when the gateway refuses every %s rejoin", async (path, code) => {
+  it("publishes one disconnect at the join timeout when the gateway refuses every voiceClosed rejoin", async () => {
     useFakeTimers();
     const gateway = gatewayAdapter();
-    const builtIn = path === "built-in connection" ? await attached(gateway) : undefined;
-    const { session, events } = builtIn ?? (await subscribed(gateway, JOIN_TIMEOUT_MS));
+    const { session, events } = await subscribed(gateway, JOIN_TIMEOUT_MS);
     gateway.sendPayload.mockReturnValue(false);
 
-    if (builtIn) builtIn.close(code);
-    else session.voiceClosed(code);
+    session.voiceClosed(4009);
     await vi.advanceTimersByTimeAsync(JOIN_TIMEOUT_MS - 1);
     expect(events).toEqual([]);
     await vi.advanceTimersByTimeAsync(1);
@@ -575,94 +442,63 @@ describe("voice close recovery", () => {
     expect(session.gateway).toBeUndefined();
   });
 
-  it.each([
-    ["a 4014 close", (close: (code: number) => void) => close(4014)],
-    [
-      "a removed endpoint",
-      (_close: unknown, gateway: ReturnType<typeof gatewayAdapter>) => gateway.server("token", null),
-    ],
-  ])(
-    "publishes one disconnect at the join timeout after %s with nothing after it, without a rejoin",
-    async (_cause, drop) => {
-      useFakeTimers();
+  it("sends nothing and publishes nothing on voiceClosed(4014) or voiceClosed(4022), leaving the outcome to the voice state", async () => {
+    const gateway = gatewayAdapter();
+    const { session, events } = await subscribed(gateway);
+    const sent = gateway.sendPayload.mock.calls.length;
+
+    session.voiceClosed(4014);
+    session.voiceClosed(4022);
+    await settle();
+
+    expect(gateway.sendPayload).toHaveBeenCalledTimes(sent);
+    expect(events).toEqual([]);
+    gateway.state(null);
+    expect(events).toEqual([{ type: "disconnected", reason: "removed" }]);
+  });
+
+  it.each([4014, 4022])(
+    "keeps the voice past the join timeout when the platform moves the bot after voiceClosed(%i)",
+    async code => {
       const gateway = gatewayAdapter();
-      const { session, events, close } = await attached(gateway);
-      const sent = joins(gateway).length;
+      const { session, events } = await subscribed(gateway);
+      const sent = gateway.sendPayload.mock.calls.length;
 
-      drop(close, gateway);
-      await vi.advanceTimersByTimeAsync(JOIN_TIMEOUT_MS - 1);
-      expect(events).toEqual([]);
-      await vi.advanceTimersByTimeAsync(1);
+      session.voiceClosed(code);
+      gateway.state("other");
+      gateway.server("moved");
+      await new Promise(resolve => setTimeout(resolve, 100));
 
-      expect(events).toEqual([{ type: "disconnected", reason: "failed", error: expect.any(Error) }]);
-      expect(joins(gateway)).toHaveLength(sent);
-      expect(session.gateway).toBeUndefined();
+      expect(gateway.sendPayload).toHaveBeenCalledTimes(sent);
+      expect(events).toEqual([
+        { type: "connected", channelId: "other", gateway: expect.objectContaining({ token: "moved" }) },
+      ]);
     },
   );
 
-  it("names only the close behind the latest disconnect when an endpoint removal times out after a 4014 recovery", async () => {
-    useFakeTimers();
+  it.each([4014, 4022])("disconnects once at the join timeout when nothing follows voiceClosed(%i)", async code => {
     const gateway = gatewayAdapter();
-    const { events, close, ready } = await attached(gateway);
-    close(4014);
-    gateway.state("moved", "moved-session");
-    gateway.server("rotated");
-    ready();
-    await vi.advanceTimersByTimeAsync(2 * JOIN_TIMEOUT_MS);
-    events.length = 0;
+    const { session, events } = await subscribed(gateway);
 
-    gateway.server("rotated", null);
-    await vi.advanceTimersByTimeAsync(JOIN_TIMEOUT_MS);
+    session.voiceClosed(code);
+    await vi.waitFor(() => expect(events).toHaveLength(1), { timeout: 500 });
+    await settle();
 
-    const [event] = events;
-    expect(events).toHaveLength(1);
-    const message = event?.type === "disconnected" && event.reason === "failed" ? event.error.message : "";
-    expect(message).toContain("Discord voice disconnected");
-    expect(message).not.toContain("4014");
+    expect(events).toEqual([
+      {
+        type: "disconnected",
+        reason: "failed",
+        error: expect.objectContaining({ message: expect.stringContaining(String(code)) }),
+      },
+    ]);
+    expect(joins(gateway)).toHaveLength(1);
   });
 
-  it.each([
-    [
-      "a move after a 4014 close",
-      (close: (code: number) => void, gateway: ReturnType<typeof gatewayAdapter>) => {
-        close(4014);
-        gateway.state("moved", "moved-session");
-        gateway.server("rotated");
-      },
-      { channelId: "moved", sessionId: "moved-session", token: "rotated", endpoint: GATEWAY.endpoint },
-    ],
-    [
-      "an endpoint restored after its removal",
-      (_close: unknown, gateway: ReturnType<typeof gatewayAdapter>) => {
-        gateway.server("token", null);
-        gateway.server("rotated");
-      },
-      { ...GATEWAY, token: "rotated" },
-    ],
-  ])("keeps the voice after %s before the join timeout", async (_cause, recover, expected) => {
-    useFakeTimers();
+  it("names DAVE without the voice library in the disconnect after voiceClosed(4017)", async () => {
     const gateway = gatewayAdapter();
-    const { session, events, close, ready } = await attached(gateway);
+    const { session, events } = await subscribed(gateway);
 
-    recover(close, gateway);
-    ready();
-    await vi.advanceTimersByTimeAsync(2 * JOIN_TIMEOUT_MS);
-
-    expect(events).toEqual([{ type: "connected", channelId: expected.channelId, gateway: expected }]);
-    expect(session.gateway).toEqual(expected);
-    await session.release();
-  });
-
-  it.each([
-    ["voiceClosed", false],
-    ["built-in connection", true],
-  ])("names DAVE in the disconnect after a 4017 close on the %s path", async (_path, builtIn) => {
-    const gateway = gatewayAdapter();
-    const local = builtIn ? await attached(gateway) : undefined;
-    const { session, events } = local ?? (await subscribed(gateway));
-
-    if (local) local.close(4017);
-    else session.voiceClosed(4017);
+    session.voiceClosed(4017);
     await settle();
 
     const [event] = events;
@@ -670,8 +506,7 @@ describe("voice close recovery", () => {
     const message = event?.type === "disconnected" && event.reason === "failed" ? event.error.message : "";
     expect(message).toContain("4017");
     expect(message).toContain("DAVE end-to-end encryption");
-    if (builtIn) expect(message).toContain("@discordjs/voice 0.19.1 or newer");
-    else expect(message).not.toContain("@discordjs/voice");
+    expect(message).not.toContain("@discordjs/voice");
   });
 
   it("leaves and rejoins the held channel, resolving after connected carries the new token", async () => {

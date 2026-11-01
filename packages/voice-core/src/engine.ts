@@ -9,24 +9,33 @@ import type {
   Player,
   PlayerOptions,
   VoiceSession,
+  VoiceSessionOptions,
+  VoiceTarget,
 } from "distube/integrations";
 import { DiscordVoicePlayer } from "./player";
-import { DiscordVoiceSession } from "./session";
+import { type DiscordPlatform, DiscordVoiceSession } from "./session";
 
 /**
  * The built-in voice engine: in-process decoding and filtering over the session's own voice connection.
  *
- * It plays URL, file, stream, reader and timed resources and creates one Player per attached transport.
+ * It opens each voice as its own `@discordjs/voice` connection and plays URL, file, stream, reader and timed
+ * resources on Players subscribed to it.
  */
 export class DiscordVoiceEngine implements Engine {
   readonly filters: ReadonlyMap<string, FilterDefinitionInfo>;
   readonly #registry: FilterRegistry;
   readonly #settings: EngineSettings;
+  readonly #platform: (target: VoiceTarget) => DiscordPlatform;
 
-  constructor(settings: EngineSettings) {
+  constructor(settings: EngineSettings, platform: (target: VoiceTarget) => DiscordPlatform) {
     this.#registry = new FilterRegistry(settings.filters);
     this.filters = this.#registry.definitions;
     this.#settings = settings;
+    this.#platform = platform;
+  }
+
+  async createVoiceSession(target: VoiceTarget, options: VoiceSessionOptions): Promise<VoiceSession> {
+    return await DiscordVoiceSession.connect({ ...target, ...options, ...this.#platform(target) });
   }
 
   playbackRate(entries: readonly FilterEntry[]): number {
@@ -38,15 +47,14 @@ export class DiscordVoiceEngine implements Engine {
       throw new TypeError("This engine only plays through its own package's VoiceSession");
     }
     await loadDecoder();
-    const connection = await DiscordVoiceSession.connectionOf(session);
-    if (!connection) throw new TypeError("This engine only plays through its own package's VoiceSession");
+    const connection = DiscordVoiceSession.connectionOf(session);
+    if (!connection) throw new DisTubeError("INVALID_STATE", "The voice session was released");
     return new DiscordVoicePlayer({
       connection,
       session,
       filters: this.#registry,
       opusComplexity: this.#settings.opusComplexity,
       readAhead: this.#settings.bufferMs / 20,
-      releaseTransport: () => DiscordVoiceSession.detachConnection(session, connection),
       report: this.#settings.report,
       onClosed,
     });
