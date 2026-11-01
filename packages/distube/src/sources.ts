@@ -243,6 +243,7 @@ export async function prepareSong(
   engine: Engine,
   song: Song,
   signal: AbortSignal,
+  allowAgeRestricted: boolean,
 ): Promise<PreparedSong> {
   const owner = ownerOf(plugins, song);
   if (!owner) throw new DisTubeError(ErrorCode.SOURCE_FAILED, `No plugin named ${song.source} is configured`);
@@ -258,8 +259,10 @@ export async function prepareSong(
     const search = plugin.search?.bind(plugin);
     const prepareCandidate = plugin.stream?.bind(plugin);
     if (!search || !prepareCandidate) return undefined;
-    const [found] = await call(plugin, signal, () => search(query, { signal, limit: 1, offset: 0 }));
-    if (!found) return undefined;
+    const [found] = await call(plugin, signal, () =>
+      search(query, { signal, limit: 1, offset: 0, allowAgeRestricted }),
+    );
+    if (!found || (!allowAgeRestricted && !allowed(found))) return undefined;
     const fallback = owned(plugin, found);
     return { resource: await call(plugin, signal, () => prepareCandidate(fallback, { signal })), fallback };
   });

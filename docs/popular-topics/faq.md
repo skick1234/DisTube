@@ -33,8 +33,8 @@ await distube.play(channel, "a song query", { allowAgeRestricted: true });
 
 Without the option, a Playlist keeps its other Songs and drops the age-restricted ones. The provider can still refuse a
 video when the bot has no age-verified account, and that also rejects `AGE_RESTRICTED`. v5's `nsfw` option is gone,
-because the answer now belongs to each call rather than the whole client. Autoplay has no call, so it follows
-`queue.setAllowAgeRestricted(enabled)`, which is off on a new queue.
+because the answer now belongs to each call rather than the whole client. Autoplay and the search fallback have no
+call, so they follow `queue.setAllowAgeRestricted(enabled)`, which is off on a new queue.
 
 ### How do I play a direct audio link or an uploaded file?
 

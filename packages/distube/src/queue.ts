@@ -453,7 +453,7 @@ export class DisTubeQueue<Metadata = undefined, Target = VoiceChannelTarget> {
     try {
       let prepared;
       try {
-        prepared = await prepareSong(plugins, engine, item.song, signal);
+        prepared = await prepareSong(plugins, engine, item.song, signal, this.#allowAgeRestricted);
       } catch (error: unknown) {
         if (signal.aborted) return;
         this.#autoplayFailed ||= item.id === this.#autoplayItem;

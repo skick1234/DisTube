@@ -20,7 +20,7 @@ explains how a queue relates to the voice and when `play` creates one.
 | `status`             | `idle`, `preparing`, `playing` or `paused`. See [Status](#status).                                                             |
 | `repeat`             | `off`, `song` or `queue`                                                                                                       |
 | `autoplay`           | `true` when autoplay is on                                                                                                     |
-| `allowAgeRestricted` | `true` when autoplay may add age-restricted Songs                                                                              |
+| `allowAgeRestricted` | `true` when autoplay and the search fallback may use age-restricted Songs                                                      |
 | `paused`             | `true` while the current item is paused                                                                                        |
 | `position`           | Seconds played of the current item, `0` before it starts                                                                       |
 | `playbackRate`       | Source seconds that play per second of wall time. `1` without a voice or without filters that change speed.                    |
@@ -108,7 +108,7 @@ Both take the same options:
 | `move(itemId, beforeItemId?)`    | Move a waiting item before another one, or to the end when you give no second ID.                      | `void`                            |
 | `setRepeat(mode)`                | Set repeat to `"off"`, `"song"` or `"queue"`.                                                          | `void`                            |
 | `setAutoplay(enabled)`           | Turn autoplay on or off. See [Repeat and autoplay](#repeat-and-autoplay).                              | `void`                            |
-| `setAllowAgeRestricted(enabled)` | Let autoplay add age-restricted Songs, or refuse them. Off on a new queue.                             | `void`                            |
+| `setAllowAgeRestricted(enabled)` | Let autoplay and the search fallback use age-restricted Songs, or refuse them. Off on a new queue.     | `void`                            |
 
 The methods that do not return a promise finish their change before they return.
 

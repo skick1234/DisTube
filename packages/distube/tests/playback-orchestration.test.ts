@@ -240,6 +240,38 @@ describe("search fallback for a plugin without stream", () => {
     await harness.distube.dispose();
   });
 
+  it.each([
+    [false, "sc-clean"],
+    [true, "yt-restricted"],
+  ])("follows the queue's allowAgeRestricted %s for fallback candidates, playing %s", async (allow, candidate) => {
+    const youtube = new FakeSource("youtube");
+    const soundcloud = new FakeSource("soundcloud");
+    const restricted = new Song({
+      source: "youtube",
+      id: "yt-restricted",
+      name: "Song A",
+      url: "https://youtube.example/media/yt-restricted",
+      ageRestricted: true,
+    });
+    youtube.search.mockResolvedValue([restricted]);
+    soundcloud.search.mockResolvedValue([media("soundcloud", "sc-clean")]);
+    const harness = setup([spotify, youtube, soundcloud]);
+    const { queue } = await harness.distube.play(TARGET, media("soundcloud", "first"));
+    await settle();
+
+    queue.setAllowAgeRestricted(allow);
+    await queue.add(spotifySong("Artist B"));
+    await queue.skip();
+    await settle();
+
+    expect(youtube.search).toHaveBeenCalledWith(
+      "Song A Artist B",
+      expect.objectContaining({ allowAgeRestricted: allow }),
+    );
+    expect(harness.engine.player.played).toEqual(["first", candidate]);
+    await harness.distube.dispose();
+  });
+
   it("fails the item NO_RESULT when no plugin finds a candidate and advances the queue", async () => {
     const youtube = new FakeSource("youtube");
     const soundcloud = new FakeSource("soundcloud");
