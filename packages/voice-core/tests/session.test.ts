@@ -89,7 +89,6 @@ describe("gateway session", () => {
     });
     expect(events).toHaveBeenCalledExactlyOnceWith({
       type: "connected",
-      channelId: "dragged",
       gateway: session.gateway,
     });
     await session.release();
@@ -368,9 +367,7 @@ describe("voice close recovery", () => {
         session.voiceClosed(code);
         await settle();
       }
-      expect(events).toEqual(
-        Array.from({ length: 3 }, () => ({ type: "connected", channelId: CHANNEL, gateway: GATEWAY })),
-      );
+      expect(events).toEqual(Array.from({ length: 3 }, () => ({ type: "connected", gateway: GATEWAY })));
       vi.advanceTimersByTime(elapsedMs);
       session.voiceClosed(4009);
       await settle();
@@ -420,7 +417,7 @@ describe("voice close recovery", () => {
       null,
       CHANNEL,
     ]);
-    expect(events).toEqual([{ type: "connected", channelId: CHANNEL, gateway: GATEWAY }]);
+    expect(events).toEqual([{ type: "connected", gateway: GATEWAY }]);
     await session.release();
   });
 
@@ -470,9 +467,7 @@ describe("voice close recovery", () => {
       await new Promise(resolve => setTimeout(resolve, 100));
 
       expect(gateway.sendPayload).toHaveBeenCalledTimes(sent);
-      expect(events).toEqual([
-        { type: "connected", channelId: "other", gateway: expect.objectContaining({ token: "moved" }) },
-      ]);
+      expect(events).toEqual([{ type: "connected", gateway: expect.objectContaining({ token: "moved" }) }]);
     },
   );
 
@@ -531,7 +526,7 @@ describe("voice close recovery", () => {
     });
 
     expect(gateway.sendPayload.mock.calls.slice(-2).map(([payload]) => payload.d.channel_id)).toEqual([null, CHANNEL]);
-    expect(events).toEqual([{ type: "connected", channelId: CHANNEL, gateway: { ...GATEWAY, token: "rotated" } }]);
+    expect(events).toEqual([{ type: "connected", gateway: { ...GATEWAY, token: "rotated" } }]);
     expect(eventsAtResolve).toBe(1);
     await session.release();
   });

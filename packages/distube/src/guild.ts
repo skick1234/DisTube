@@ -30,7 +30,6 @@ export interface GuildConfig<Target> {
 
 export interface Connection {
   readonly session: VoiceSession;
-  channelId: string;
   volume: number;
   entries: readonly FilterEntry[];
   rate: number;
@@ -316,10 +315,9 @@ export class Guild<Target> {
   async move(connection: Connection, channelId: string): Promise<void> {
     assertOpen(connection);
     await this.#onChannel(connection, async () => {
-      if (channelId === connection.channelId) return;
+      if (channelId === connection.session.channelId) return;
       assertOpen(connection);
       await call("Adapter failed to update the voice session", () => connection.session.join(channelId));
-      connection.channelId = channelId;
     });
   }
 
@@ -359,7 +357,6 @@ export class Guild<Target> {
     this.#join = undefined;
     const connection: Connection = {
       session,
-      channelId: session.channelId,
       volume: DEFAULT_VOLUME,
       entries: NO_FILTERS,
       rate: 1,
@@ -392,7 +389,7 @@ export class Guild<Target> {
     if (live?.connection !== connection) return this.#close(connection);
     this.#live = undefined;
     this.guilds.voices.delete(this.id);
-    const { channelId } = connection;
+    const { channelId } = connection.session;
     const ending: Promise<void> = this.#close(connection).finally(() => {
       this.#left(ending);
       this.config.events.emit("voice.disconnected", {
@@ -458,7 +455,6 @@ export class Guild<Target> {
       this.#disconnected(connection, event.reason === "failed" ? event.error : undefined);
       return;
     }
-    connection.channelId = event.channelId;
     const previous = connection.endpoint;
     connection.endpoint = event.gateway.endpoint;
     if (previous !== connection.endpoint) {

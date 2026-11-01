@@ -52,7 +52,8 @@ The second type argument of `DisTube` is your `Target`, so `distube.play` accept
 
 A `VoiceSession` is one guild's voice connection. It exposes:
 
-- `guildId`, `clientUserId` and the occupied `channelId`.
+- `guildId`, `clientUserId` and `channelId`, the channel the bot's latest voice state names. Core reads the channel
+  only from here.
 - `bitrate`, the channel bitrate in bits per second. The built-in engine encodes at the lower of the source bitrate
   and this value.
 - `gateway`, the current credentials `{ channelId, sessionId, token, endpoint }`, or `undefined` until the first
@@ -84,7 +85,7 @@ Recovery is bounded, so a broken connection cannot rejoin forever:
 
 Publish `{ type: "disconnected", reason: "failed", error }` once, when that policy is spent. Publish
 `{ type: "disconnected", reason: "removed" }` when the platform removes the bot from voice outside a `release`.
-Republish `{ type: "connected", channelId, gateway }` whenever the credentials change.
+Republish `{ type: "connected", gateway }` whenever the credentials change.
 
 Only the terminal disconnect reaches core. Core deletes the queue with reason `voice-loss` and publishes
 `voice.disconnected`, with reason `removed`, or `platform` with a `VOICE_DISCONNECTED` error whose `cause` is yours. A

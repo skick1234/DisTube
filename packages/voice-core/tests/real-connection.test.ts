@@ -111,7 +111,7 @@ describe("DiscordVoiceSession over the real voice library", () => {
 
     expect(networkingOf(connection) === networking, "the voice networking was kept").toBe(false);
     expect(channels(gateway)).toEqual([CHANNEL, null, CHANNEL]);
-    expect(events).toEqual([{ type: "connected", channelId: CHANNEL, gateway: expect.any(Object) }]);
+    expect(events).toEqual([{ type: "connected", gateway: expect.any(Object) }]);
   });
 
   it("disconnects once when a 4006 recovery does not reach Ready within the join timeout", async () => {
@@ -165,9 +165,7 @@ describe("DiscordVoiceSession over the real voice library", () => {
     expect(session.channelId).toBe("other");
     expect(channels(gateway)).toEqual([CHANNEL, "other"]);
     expect(server.connections).toBe(2);
-    expect(events).toEqual([
-      { type: "connected", channelId: "other", gateway: expect.objectContaining({ channelId: "other" }) },
-    ]);
+    expect(events).toEqual([{ type: "connected", gateway: expect.objectContaining({ channelId: "other" }) }]);
   });
 
   it("keeps the voice through a move whose old socket the platform closes with 4022 before the new server update", async () => {
@@ -193,7 +191,6 @@ describe("DiscordVoiceSession over the real voice library", () => {
     expect(events).toEqual([
       {
         type: "connected",
-        channelId: "other",
         gateway: expect.objectContaining({ channelId: "other", token: "moved" }),
       },
     ]);
@@ -220,7 +217,6 @@ describe("DiscordVoiceSession over the real voice library", () => {
     expect(events).toEqual([
       {
         type: "connected",
-        channelId: "other",
         gateway: expect.objectContaining({ channelId: "other", token: "moved" }),
       },
     ]);

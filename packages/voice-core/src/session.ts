@@ -58,6 +58,7 @@ export class DiscordVoiceSession implements VoiceSession {
   #gateway?: VoiceGatewayData;
   #published?: Networking;
   #voiceState?: VoiceStateUpdate;
+  #channelId: string;
   #moveTarget?: string;
   #deadline?: ReturnType<typeof setTimeout>;
   #resend?: ReturnType<typeof setInterval>;
@@ -94,6 +95,7 @@ export class DiscordVoiceSession implements VoiceSession {
     this.#options = options;
     this.guildId = options.guildId;
     this.clientUserId = options.clientUserId;
+    this.#channelId = options.channelId;
     this.#connection = joinVoiceChannel({
       guildId: options.guildId,
       group: options.clientUserId,
@@ -106,6 +108,7 @@ export class DiscordVoiceSession implements VoiceSession {
           onVoiceStateUpdate: state => {
             methods.onVoiceStateUpdate(state);
             this.#voiceState = state;
+            if (state.channel_id) this.#channelId = state.channel_id;
             this.#settle();
           },
         }),
@@ -116,7 +119,7 @@ export class DiscordVoiceSession implements VoiceSession {
   }
 
   get channelId(): string {
-    return this.#voiceState?.channel_id ?? this.#gateway?.channelId ?? this.#options.channelId;
+    return this.#channelId;
   }
   get bitrate(): number {
     return this.#options.channelBitrate(this.channelId);
@@ -313,7 +316,7 @@ export class DiscordVoiceSession implements VoiceSession {
       this.#gateway = gateway;
       for (const listener of this.#listeners) {
         try {
-          listener({ type: "connected", channelId: gateway.channelId, gateway });
+          listener({ type: "connected", gateway });
         } catch {}
       }
     }
@@ -638,7 +641,7 @@ export class DiscordGatewaySession implements VoiceSession {
     this.#platformDeadline = undefined;
     for (const listener of this.#listeners) {
       try {
-        listener({ type: "connected", channelId: this.channelId, gateway });
+        listener({ type: "connected", gateway });
       } catch {}
     }
   }

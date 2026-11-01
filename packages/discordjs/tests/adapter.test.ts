@@ -1,6 +1,7 @@
 import { ChannelType, type Client, PermissionFlagsBits, PermissionsBitField, type VoiceBasedChannel } from "discord.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { gatewayAdapter, resetNative } from "../../voice-core/tests/support/native";
+import { DisTube } from "distube";
+import { gatewayAdapter, native, resetNative, settle } from "../../voice-core/tests/support/native";
 import { DiscordJSAdapter } from "../src";
 
 vi.mock("@discordjs/voice", async () => (await import("../../voice-core/tests/support/native")).voiceModule());
@@ -149,6 +150,26 @@ describe("DiscordJSAdapter", () => {
       });
       await session.release();
     });
+  });
+
+  it("reads a moderator move whose new voice socket reaches Ready before the voice state names the channel", async () => {
+    const { adapter, gateway } = fixture([voiceChannel(CHANNEL), voiceChannel("other")]);
+    const distube = new DisTube({
+      adapter,
+      plugins: [
+        { name: "none", search: async () => [], stream: async () => ({ kind: "url", url: "https://none.example" }) },
+      ],
+    });
+    const voice = await distube.voices.join(voiceChannel(CHANNEL) as VoiceBasedChannel);
+
+    gateway.server("moved");
+    await vi.waitFor(() => expect(native.connections.at(-1)?.state).toMatchObject({ status: "ready" }));
+    gateway.state("other");
+    await settle();
+
+    expect(voice.channelId).toBe("other");
+    expect(gateway.sendPayload).not.toHaveBeenCalled();
+    await distube.dispose();
   });
 
   it("opens the built-in engine's voice through the same preflight, before any gateway payload", async () => {

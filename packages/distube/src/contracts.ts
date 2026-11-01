@@ -216,7 +216,7 @@ export interface VoiceGatewayData {
 
 export type VoiceSessionEvent =
   /** The session settled on a channel. Republished whenever the gateway credentials change. */
-  | Readonly<{ type: "connected"; channelId: string; gateway: VoiceGatewayData }>
+  | Readonly<{ type: "connected"; gateway: VoiceGatewayData }>
   /**
    * The session ended, published at most once and never for `release`. `removed`: the platform removed the bot from
    * voice, such as a member disconnecting it. `failed`: the Adapter exhausted its recovery policy.
@@ -245,6 +245,7 @@ export interface VoiceSessionOptions {
 export interface VoiceSession {
   readonly guildId: string;
   readonly clientUserId: string;
+  /** The channel the bot's latest voice state names; the one owner of the voice's channel. */
   readonly channelId: string;
   /** The channel bitrate in bits per second. */
   readonly bitrate: number;

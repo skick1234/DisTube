@@ -533,21 +533,6 @@ describe("deferred DisTubeVoice lifetime", () => {
     expect(voice.filters.names).toEqual([]);
   });
 
-  it("keeps the last committed DisTubeVoice channel when Adapter movement rejects", async () => {
-    const harness = playableSetup();
-    const voice = await harness.distube.voices.join(TARGET);
-    const session = harness.adapter.sessions[0] as FakeVoiceSession;
-    session.join.mockImplementationOnce(async channelId => {
-      session.channelId = channelId;
-      throw new Error("gateway move rejected");
-    });
-
-    await expect(voice.move({ guildId: GUILD, id: "other" })).rejects.toMatchObject({ code: "VOICE_FAILED" });
-
-    expect(voice.channelId).toBe(VOICE_CHANNEL);
-    expect(harness.distube.voices.get(GUILD)?.channelId).toBe(VOICE_CHANNEL);
-  });
-
   it("keeps a replacement queue's track playing after the old queue's stop", async () => {
     const harness = playableSetup();
     const { queue: first } = await harness.distube.play(TARGET, "first");

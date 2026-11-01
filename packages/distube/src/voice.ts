@@ -54,7 +54,7 @@ export class DisTubeVoice<Target = VoiceChannelTarget> {
 
   /** The last channel the platform acknowledged. */
   get channelId(): string {
-    return this.#connection.channelId;
+    return this.#connection.session.channelId;
   }
 
   get volume(): number {

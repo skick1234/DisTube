@@ -312,7 +312,7 @@ export class FakeVoiceSession implements VoiceSession {
   connect(gateway: VoiceGatewayData, channelId = this.channelId): void {
     this.channelId = channelId;
     this.gateway = gateway;
-    for (const listener of Array.from(this.listeners)) listener({ type: "connected", channelId, gateway });
+    for (const listener of Array.from(this.listeners)) listener({ type: "connected", gateway });
   }
 
   disconnect(error?: Error): void {
