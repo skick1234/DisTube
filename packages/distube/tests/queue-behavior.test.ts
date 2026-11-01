@@ -161,6 +161,33 @@ describe("autoplay", () => {
     expect(waiting(queue)).toEqual([]);
   });
 
+  it("cancels a related lookup when an add starts, so the added item plays before any related Song", async () => {
+    const { harness, queue, player } = await playing(["a"]);
+    const lookup = deferred<Song | undefined>();
+    const resolving = deferred<readonly Song[]>();
+    let lookupSignal: AbortSignal | undefined;
+    harness.source.related.mockImplementationOnce((_song, { signal }) => {
+      lookupSignal = signal;
+      return lookup.promise;
+    });
+    harness.source.search.mockImplementationOnce(() => resolving.promise);
+    queue.setAutoplay(true);
+    player.finish();
+    await settle();
+
+    const adding = queue.add("b");
+    await settle();
+    lookup.resolve(media("source", "related"));
+    await settle();
+    resolving.resolve([media("source", "b")]);
+    await adding;
+    await settle();
+
+    expect(lookupSignal?.aborted).toBe(true);
+    expect(queue.current?.song.id).toBe("b");
+    expect(waiting(queue)).toEqual([]);
+  });
+
   it("plays a previous replay without waiting for a pending related lookup", async () => {
     const { harness, queue, player } = await playing(["a"]);
     harness.source.related.mockReturnValueOnce(new Promise<never>(() => undefined));

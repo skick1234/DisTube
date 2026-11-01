@@ -360,6 +360,7 @@ export class DisTubeQueue<Metadata = undefined, Target = VoiceChannelTarget> {
     join?: () => Promise<unknown>,
   ): Promise<readonly QueueItem[]> {
     this.#pending += 1;
+    this.#lookup?.abort();
     const { plugins, maxPlaylistSongs } = this.#guild.config;
     const signal = options.signal ? AbortSignal.any([this.#lifetime.signal, options.signal]) : this.#lifetime.signal;
     const step = this.#tail.then(async () => {
@@ -413,7 +414,6 @@ export class DisTubeQueue<Metadata = undefined, Target = VoiceChannelTarget> {
         ? [["queue.playlist.added", { playlist, items }]]
         : items.map(item => ["queue.item.added", { item }] as const),
     );
-    this.#lookup?.abort();
     this.#kick();
     return items;
   }
