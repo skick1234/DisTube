@@ -113,7 +113,6 @@ describe("search and suggestions", () => {
       code: "SOURCE_FAILED",
       cause: boom,
     });
-    // A source that already speaks DisTubeError keeps its identity, including a plugin-owned code.
     const owned = new DisTubeError("RATE_LIMITED", "slow down");
     first.search.mockRejectedValueOnce(owned);
     await expect(harness.distube.search("x")).rejects.toBe(owned);

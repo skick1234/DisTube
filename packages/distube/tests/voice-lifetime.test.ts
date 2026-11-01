@@ -574,7 +574,6 @@ describe("deferred DisTubeVoice lifetime", () => {
     const player = harness.engine.players[0] as FakePlayer;
     const outcomes = record(harness.distube, ["queue.item.finished", "queue.item.failed", "queue.deleted"]);
 
-    // The Adapter republishes `connected` for a channel nobody asked us to join.
     (harness.adapter.sessions[0] as FakeVoiceSession).connect(
       { channelId: "dragged", sessionId: "session", token: "token", endpoint: "endpoint" },
       "dragged",

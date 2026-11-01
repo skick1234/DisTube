@@ -4,7 +4,6 @@ import { type FakePlayer, FakeSource, GUILD, media, record, settle, setup, VOICE
 
 const TARGET = { guildId: GUILD, id: VOICE_CHANNEL };
 
-/** A playing queue holding `ids` in order, with the configured history ceiling. */
 async function playing(ids: readonly string[], historySize?: number) {
   const source = new FakeSource("source");
   source.search.mockImplementation(async query => [media("source", query)]);

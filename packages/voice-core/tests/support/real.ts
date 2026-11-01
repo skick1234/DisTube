@@ -13,16 +13,9 @@ import type { DiscordGatewayAdapterCreator, DiscordGatewayAdapterLibraryMethods 
 export const REAL_GUILD = "real-guild";
 export const REAL_CHANNEL = "real-channel";
 
-/**
- * A gateway adapter that answers the real library without a Discord connection.
- *
- * `@discordjs/voice` drives its whole state machine through this seam, so a suite that owns it can
- * deliver genuine `VOICE_STATE_UPDATE` and `VOICE_SERVER_UPDATE` payloads to real library code.
- */
 export interface CapturedGateway {
   readonly creator: DiscordGatewayAdapterCreator;
   readonly payloads: unknown[];
-  /** The library's own callbacks, available once it has created the adapter. */
   methods(): DiscordGatewayAdapterLibraryMethods;
 }
 
@@ -48,7 +41,6 @@ export function captureGateway(): CapturedGateway {
   };
 }
 
-/** The voice-state payload Discord sends when it puts the bot in `channelId`; `null` is a removal. */
 export function voiceState(
   channelId: string | null,
   sessionId = "real-session",
@@ -61,7 +53,6 @@ export function voiceState(
   } as unknown as Parameters<DiscordGatewayAdapterLibraryMethods["onVoiceStateUpdate"]>[0];
 }
 
-/** A minimal 16-bit mono WAV of silence, which libav decodes without any network fixture. */
 export function silentWav(seconds = 1, sampleRate = 8000): Uint8Array {
   const samples = seconds * sampleRate;
   const dataBytes = samples * 2;
@@ -90,7 +81,6 @@ export interface AudioOrigin {
   stop(): Promise<void>;
 }
 
-/** Serves the silent WAV over real HTTP, so the engine fetches an absolute URL exactly as it would in production. */
 export async function serveAudio(): Promise<AudioOrigin> {
   const body = Buffer.from(silentWav());
   const server = createServer((_request, response) => {
@@ -110,28 +100,18 @@ export async function serveAudio(): Promise<AudioOrigin> {
   };
 }
 
-/** One audio packet as the voice server received it. */
 export interface HeardPacket {
-  /** `performance.now()` when the datagram arrived. */
   readonly at: number;
-  /** The decrypted Opus payload. */
   readonly opus: Buffer;
 }
 
 export interface VoiceGatewayServer {
-  /** The `host:port` a voice server update names, as Discord sends it. */
   readonly endpoint: string;
-  /** Voice WebSocket connections the library has opened so far. */
   readonly connections: number;
-  /** Every audio packet received over UDP so far, in arrival order. */
   readonly heard: readonly HeardPacket[];
-  /** Whether a new voice socket is answered up to Ready; a silent one never gets past Identify. */
   answers: boolean;
-  /** The heartbeat interval Hello asks a new voice socket for. */
   heartbeatMs: number;
-  /** Closes every open voice socket with `code`, as Discord does when it ends a voice session. */
   close(code: number): void;
-  /** Stops listening and drops every socket, so the library's next dial is refused. */
   stop(): Promise<void>;
 }
 
@@ -145,11 +125,6 @@ const NONCE_SUFFIX_BYTES = 4;
 
 let certificate: { readonly key: Buffer; readonly cert: Buffer } | undefined;
 
-/**
- * A local Discord voice server over TLS and UDP. It completes the voice handshake far enough for the real
- * library to reach Ready: Hello, Ready, IP discovery and a session description without DAVE. It decrypts
- * and records every audio packet; it does not cover DAVE or Discord's real network.
- */
 export async function serveVoiceGateway(): Promise<VoiceGatewayServer> {
   const { key, cert } = trustedCertificate();
   const udp = createSocket("udp4");

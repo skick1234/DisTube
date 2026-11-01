@@ -1,5 +1,3 @@
-// Maintained guide examples use only the published entry points. Build core before checking this file.
-
 import type { Readable } from "node:stream";
 import { DisTube, Song } from "distube";
 import type {

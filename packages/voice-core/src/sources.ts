@@ -18,10 +18,8 @@ const HLS_CONTENT_TYPES = new Set([
   "audio/x-mpegurl",
 ]);
 
-/** One answer to a worker read: a chunk, the end of the range or stream, or a failure. */
 export type ByteReply = Readonly<{ request: number; chunk?: ArrayBuffer; done?: boolean; failed?: boolean }>;
 
-/** Serves one input's bytes to the worker on request; its `failure` is the safe cause behind a failed read. */
 export interface ByteServer {
   readonly source: InputSource;
   readonly failure: Error | undefined;
@@ -30,10 +28,6 @@ export interface ByteServer {
   close(): void;
 }
 
-/**
- * Opens `resource` at `seconds` on the main thread, where plugin callbacks, Readables and HTTP live. `retried` hears
- * the byte offset of each range request reopened after its answer ended early.
- */
 export async function serveInput(
   resource: LocalPlaybackResource,
   seconds: number,
@@ -67,7 +61,6 @@ export async function serveInput(
   }
 }
 
-/** An input the worker's libav opens by path or URL, so no bytes pass through this server. */
 class DirectServer implements ByteServer {
   readonly source: InputSource;
   readonly failure = undefined;
@@ -315,7 +308,6 @@ class RangedServer implements ByteServer {
   }
 }
 
-/** Serves a range-read URL's windows from one open response, opening `bytes=<start>-` where a window leaves it or after the response ended. */
 class UrlRanges {
   readonly #url: string;
   readonly #total: number;
@@ -412,7 +404,6 @@ function toBuffer(chunk: unknown): Buffer {
   throw new TypeError("Playback input must yield bytes");
 }
 
-/** A URL answer: an HLS playlist URL, or a body whose `total` is set when it is the asked range of a file of that size. */
 type UrlAnswer = string | Readonly<{ response: IncomingMessage; total: number | undefined }>;
 
 async function openUrl(

@@ -35,7 +35,6 @@ import {
 import { disposeResource, prepareSong, relatedSong, resolveInput, songsOf, validateInput } from "./sources";
 import type { DisTubeVoice } from "./voice";
 
-/** Caller-owned reference stored on every QueueItem the call creates. Required when `Metadata` excludes `undefined`. */
 type MetadataOption<Metadata> = undefined extends Metadata
   ? { readonly metadata?: Metadata }
   : { readonly metadata: Metadata };
@@ -43,7 +42,6 @@ type MetadataOption<Metadata> = undefined extends Metadata
 /** Options for `distube.play` and `queue.add`. */
 export type AddOptions<Metadata = undefined> = InsertOptions & MetadataOption<Metadata>;
 
-/** The trailing options argument, optional unless `metadata` is required. */
 export type AddArguments<Metadata> = undefined extends Metadata
   ? [options?: AddOptions<Metadata>]
   : [options: AddOptions<Metadata>];
@@ -619,7 +617,6 @@ export class DisTubeQueue<Metadata = undefined, Target = VoiceChannelTarget> {
       throw new DisTubeError(ErrorCode.INVALID_STATE, "Queue has no started QueueItem");
   }
 
-  /** A step that outlived the client or the queue rejects `INVALID_STATE` with `cause`, a failure that was not cancelled. */
   #assertCurrent(signal?: AbortSignal, cause?: unknown): void {
     const ended = this.#guild.config.lifetime.aborted
       ? "DisTube is disposed"

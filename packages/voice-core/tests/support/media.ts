@@ -25,7 +25,6 @@ import type { TrackReporter, TrackSettings } from "../../src/track";
 
 const RATE = 48_000;
 
-/** Track settings that leave the source untouched and never cap its bitrate. */
 export const PLAIN: TrackSettings = {
   volume: 100,
   chain: undefined,
@@ -39,34 +38,20 @@ export function recorder(): TrackReporter & { readonly reports: Diagnostic[] } {
   return { guildId: "guild", report: diagnostic => void reports.push(diagnostic), reports };
 }
 
-/** Media files generated with node-av's own encoders and muxers, deleted by `cleanup`. */
 export interface MediaFixtures {
   readonly dir: string;
-  /** Six seconds of WebM Opus, 48 kHz stereo in 20 ms packets. */
   readonly opus: string;
-  /** Two seconds of WebM Opus in 60 ms packets, which Discord cannot take unchanged. */
   readonly opus60: string;
-  /** Five seconds of MP4 AAC at 160 kbps. */
   readonly aac: string;
-  /** Ten seconds of AAC in MPEG-TS, the segment format of live HLS, longer than libav's 7-second TS analysis. */
   readonly ts: string;
-  /** Five seconds of FLAC in Matroska, whose container reports no bitrate when streamed. */
   readonly flac: string;
-  /** One hour of WebM Opus at 32 kbps, one encoded second repeated. */
   readonly hour: string;
-  /** Five seconds of PCM in Matroska in one-second packets of 192,000 bytes. */
   readonly pcm: string;
-  /** One second of Matroska audio whose codec ID libav does not know, so no decoder exists for it. */
   readonly undecodable: string;
-  /** About 16 seconds of PCM in Matroska in packets of 1 MiB, each larger than the read-ahead. */
   readonly huge: string;
-  /** Two seconds of a loud 440 Hz tone, then eight seconds of silence, in PCM Matroska. */
   readonly toneThenSilence: string;
-  /** Twenty seconds of 128 kbps average-bitrate MP3, so frame sizes vary: a loud 440 Hz tone in even seconds, silence in odd ones. */
   readonly pulses: string;
-  /** The same signal as `pulses` in PCM Matroska, which seeks exactly. */
   readonly pulsesPcm: string;
-  /** Ten seconds of WebM Opus, a 0.5-scale tone of `stepHz(s)` in second `s`, the same in both channels. */
   readonly steps: string;
   cleanup(): Promise<void>;
 }
@@ -126,7 +111,6 @@ export async function createMedia(): Promise<MediaFixtures> {
   };
 }
 
-/** Every audio packet's bytes as the container stores them. */
 export async function sourcePackets(path: string): Promise<Buffer[]> {
   const demuxer = await Demuxer.open(path);
   const packet = new Packet();
@@ -152,7 +136,6 @@ function opusEncoder(bitsPerSecond: number, frameDuration = 20): Encoder {
   });
 }
 
-/** Seeded noise, independent per channel, so encoders spend their bitrate and filters change the bytes. */
 function samples(start: number, count: number): Buffer {
   const buffer = Buffer.alloc(count * 4);
   let seed = start + 1;
@@ -187,7 +170,6 @@ function evenSeconds(start: number, count: number): Buffer {
   return buffer;
 }
 
-/** The tone frequency of second `second` in the `steps` fixture. */
 export function stepHz(second: number): number {
   return 400 + 200 * second;
 }
@@ -251,7 +233,6 @@ async function renameCodec(path: string, from: string, to: string): Promise<void
   await writeFile(path, bytes);
 }
 
-/** Muxes one encoded second over and over, which builds a long file in a fraction of a second. */
 async function repeat(path: string, seconds: number): Promise<void> {
   const encoder = opusEncoder(32_000);
   const muxer = await Muxer.open(path, { format: "webm" });
@@ -278,7 +259,6 @@ async function repeat(path: string, seconds: number): Promise<void> {
   }
 }
 
-/** Reads up to `count` packets without ending the stream, stopping early only when it ends or closes. */
 export async function take(packets: Readable, count: number): Promise<Buffer[]> {
   const taken: Buffer[] = [];
   while (taken.length < count) {
@@ -305,7 +285,6 @@ export async function peak(packets: readonly Buffer[], template: string): Promis
   return Math.max(0, ...(await peaks(packets, template)));
 }
 
-/** The loudest sample of each packet, decoded in order by one decoder as a listener would hear the stream. */
 export async function peaks(packets: readonly Buffer[], template: string): Promise<number[]> {
   return (await decode(packets, template)).map(planes => {
     let level = 0;
@@ -314,10 +293,6 @@ export async function peaks(packets: readonly Buffer[], template: string): Promi
   });
 }
 
-/**
- * The tone frequency of each packet's first channel in Hz, from the spacing of its rising zero crossings,
- * or 0 when the packet holds fewer than two cycles.
- */
 export async function pitches(packets: readonly Buffer[], template: string): Promise<number[]> {
   return (await decode(packets, template)).map(([plane = new Float32Array()]) => {
     const rises: number[] = [];
@@ -332,7 +307,6 @@ export async function pitches(packets: readonly Buffer[], template: string): Pro
   });
 }
 
-/** Each packet's samples per channel, decoded in order by one decoder as a listener would hear the stream. */
 async function decode(packets: readonly Buffer[], template: string): Promise<Float32Array[][]> {
   const demuxer = await Demuxer.open(template);
   const stream = demuxer.audio();
@@ -364,7 +338,6 @@ async function decode(packets: readonly Buffer[], template: string): Promise<Flo
   }
 }
 
-/** Average bits per second of 20 ms Opus packets. */
 export function bitrate(packets: readonly Buffer[]): number {
   return (packets.reduce((total, packet) => total + packet.length, 0) * 8) / (packets.length * 0.02);
 }
@@ -373,11 +346,9 @@ export interface ReaderProbe {
   readonly resource: ReaderPlaybackResource;
   readonly ranges: [number, number][];
   readonly readables: Readable[];
-  /** Bytes handed to the engine so far. */
   delivered: number;
 }
 
-/** A reader over a local file that records every range and counts the bytes it hands out. */
 export async function fileReader(
   path: string,
   read?: (start: number, end: number) => Readable | undefined,

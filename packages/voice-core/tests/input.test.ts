@@ -30,7 +30,6 @@ interface Sent {
 let media: MediaFixtures;
 let body: Buffer;
 let sent: Sent[];
-/** Answers every request from `body`; `false` withholds the response. */
 let answer: (request: Sent) => boolean | undefined;
 
 beforeAll(async () => {
@@ -231,7 +230,6 @@ function bytes(content: Buffer | string): Route {
   return response => response.writeHead(200, { "content-type": "video/mp2t" }).end(content);
 }
 
-/** Answers `bytes=<start>-` with 206 and at most `cap` bytes while `serves(start)` holds, otherwise 200 and the whole body. */
 function ranged(content: Buffer, serves: (start: number) => boolean = () => true, cap = content.length): Route {
   return (response, request) => {
     const start = Number(/^bytes=(\d+)-$/.exec(request.headers.range ?? "")?.[1]);

@@ -13,23 +13,19 @@ declare const distube: DisTube;
 declare const youtube: Plugin<YouTubeData>;
 declare const soundcloud: Plugin<SoundCloudData>;
 
-// `source` narrows every result's pluginData to the plugin's declaration without a cast.
 const typed: Promise<readonly Song<YouTubeData>[]> = distube.search("lofi", { source: youtube });
 const views: Promise<number | undefined> = typed.then(songs => songs[0]?.pluginData.views);
 const typedData: PluginDataOf<typeof youtube> = { views: 1 };
 
-// Without `source`, results are plain Songs whose pluginData is unknown.
 const untyped: Promise<readonly Song[]> = distube.search("lofi");
 // @ts-expect-error unknown pluginData needs narrowing before a property read
 untyped.then(songs => songs[0]?.pluginData.views);
 // @ts-expect-error a YouTube song is not a SoundCloud song
 const wrong: Promise<readonly Song<SoundCloudData>[]> = distube.search("lofi", { source: youtube });
 
-// A union of plugin instances still compiles; the result is the plain Song list or the inferred union.
 declare const either: typeof youtube | typeof soundcloud;
 const union: Promise<readonly Song[]> = distube.search("lofi", { source: either });
 
-// Suggestions are strings and accept an optional source and signal.
 const suggestions: Promise<readonly string[]> = distube.suggest("lo", { source: youtube });
 const fallback: Promise<readonly string[]> = distube.suggest("lo");
 const signalled: Promise<readonly string[]> = distube.suggest("lo", { signal: new AbortController().signal });
@@ -38,7 +34,6 @@ distube.suggest("lo", youtube);
 // @ts-expect-error suggestions are not Songs
 const notSongs: Promise<readonly Song[]> = distube.suggest("lo");
 
-// A plugin declares its data once and its Songs carry it.
 const plugin: Plugin<YouTubeData> = {
   name: "youtube",
   async search(): Promise<readonly Song<YouTubeData>[]> {

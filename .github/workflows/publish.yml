@@ -1,7 +1,4 @@
 name: Publish
-# Tag the release commit `chore(Release): <package>@<version>` with `<package>@<version>` (for example
-# `distube@6.0.0` or `@distube/discordjs@6.0.0`). CI checks that commit, verifies, packs that package,
-# publishes it with provenance and creates the GitHub release.
 on:
   push:
     tags: ["distube@*", "@distube/*@*"]

@@ -22,7 +22,6 @@ import {
 
 const TARGET = { guildId: GUILD, id: VOICE_CHANNEL };
 
-/** Installs the next Player the engine hands out, so a test controls it before the first activation. */
 function armPlayer(engine: FakeEngine, arm: (player: FakePlayer) => void): FakePlayer {
   const player = new FakePlayer();
   arm(player);
@@ -33,7 +32,6 @@ function armPlayer(engine: FakeEngine, arm: (player: FakePlayer) => void): FakeP
   return player;
 }
 
-/** A `url` resource with a spy disposer, for tests that assert cleanup exactly once. */
 function prepared(url: string): { resource: PlaybackResource; dispose: ReturnType<typeof vi.fn> } {
   const dispose = vi.fn();
   return { resource: { kind: "url", url, dispose }, dispose };
@@ -480,7 +478,6 @@ describe("terminal authority", () => {
     expect(harness.engine.player.playing).toBeUndefined();
 
     const { queue: second } = await harness.distube.play(TARGET, "b");
-    // Queues have no public ID; a fresh queue is a different facade object.
     expect(second).not.toBe(queue);
   });
 

@@ -94,7 +94,6 @@ interface RedirectServer {
   readonly redirectSockets: Socket[];
 }
 
-/** `/hops/N` redirects N times to a media URL whose signature works once; `/ftp` redirects off HTTP. */
 async function serveRedirects(path: string): Promise<RedirectServer> {
   const body = await readFile(path);
   const signatures = new Set<string>();
@@ -488,7 +487,6 @@ function isSilent(level: number): boolean {
   return level < 0.02;
 }
 
-/** Packets after a seek to `target` in the pulses signal until audio switches at the next whole second; `heard` holds every packet so far. */
 async function packetsToNextSecond(track: Track, heard: Buffer[], target: number): Promise<number> {
   await track.seek(target);
   const start = heard.length + track.packets.readableLength;

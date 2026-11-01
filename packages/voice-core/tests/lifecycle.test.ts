@@ -20,7 +20,6 @@ beforeAll(async () => {
 afterAll(() => media.cleanup());
 beforeEach(resetNative);
 
-/** A track whose stream input stays open until the Player closes it. */
 async function playing(): Promise<{
   session: DiscordVoiceSession;
   player: Player;

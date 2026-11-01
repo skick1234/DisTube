@@ -80,7 +80,6 @@ export type DisTubeEventListener<Name extends DisTubeEventName, Metadata = undef
 
 type Listener = (event: never) => unknown;
 
-/** Delivers each event in a later microtask, in emit order; a listener failure reaches only `onDiagnostic`. */
 export class DisTubeEvents<Target = VoiceChannelTarget> {
   readonly #listeners = new Map<DisTubeEventName, Set<Listener>>();
   readonly #diagnostic: (diagnostic: Diagnostic) => unknown;

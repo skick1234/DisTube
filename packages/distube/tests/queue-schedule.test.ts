@@ -16,7 +16,6 @@ import {
 
 const TARGET = { guildId: GUILD, id: VOICE_CHANNEL };
 
-/** A playing queue holding `ids` in order: the first is current, the rest are waiting. */
 async function playing(ids: readonly string[], metadata?: unknown) {
   const harness = playableSetup<unknown>();
   const { queue } = await harness.distube.play(TARGET, ids[0] as string, { metadata });
@@ -76,7 +75,6 @@ describe("insertion position", () => {
       code: "INVALID_ARGUMENT",
     });
     expect(waiting(queue)).toEqual([]);
-    // The only search is the initial play of "current"; no rejected call reached resolution.
     expect(harness.source.search).toHaveBeenCalledTimes(1);
     await harness.distube.dispose();
   });
@@ -85,7 +83,6 @@ describe("insertion position", () => {
     const { harness, queue } = await playing(["current", "b"]);
     const slow = deferred<readonly ReturnType<typeof media>[]>();
     harness.source.search.mockReturnValueOnce(slow.promise);
-    // The first add is stuck in resolution; the second targets the same position and is queued behind it.
     const first = queue.add("slow", { at: 0 });
     const second = queue.add("fast", { at: 0 });
     slow.resolve([media("source", "slow")]);
@@ -253,7 +250,6 @@ describe("shuffle, clear and remove", () => {
     const ids = ["current", ...Array.from({ length: 10 }, (_, index) => `w${index}`)];
     const { harness, queue } = await playing(ids);
 
-    // Math.random() === 0 always picks index 0, which rotates the waiting list by one.
     const random = vi.spyOn(Math, "random").mockReturnValue(0);
     try {
       queue.shuffle();

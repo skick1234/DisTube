@@ -72,7 +72,6 @@ export interface SearchRequest<Source extends Plugin = Plugin> {
   readonly allowAgeRestricted?: boolean;
 }
 
-/** Options for `distube.suggest`. */
 export interface SuggestRequest {
   /** Ask only this plugin. */
   readonly source?: Plugin;
@@ -210,6 +209,7 @@ export class DisTube<Metadata = undefined, Target = VoiceChannelTarget> {
     );
   }
 
+  /** Calls `listener` in a later microtask, in emit order; a listener throw or rejection reaches only `onDiagnostic`. */
   on<Name extends DisTubeEventName>(name: Name, listener: DisTubeEventListener<Name, Metadata, Target>): () => void {
     return this.#events.on(name, listener as DisTubeEventListener<Name, unknown, Target>);
   }

@@ -50,17 +50,14 @@ export function deferred<Value>(): Deferred<Value> {
   return { promise, resolve, reject };
 }
 
-/** Advances Promise jobs without yielding to timers. */
 export async function flushMicrotasks(rounds = 8): Promise<void> {
   for (let round = 0; round < rounds; round += 1) await Promise.resolve();
 }
 
-/** Lets detached loop work and event delivery run to quiescence. */
 export async function settle(rounds = 6): Promise<void> {
   for (let round = 0; round < rounds; round += 1) await new Promise(resolve => setTimeout(resolve, 0));
 }
 
-/** Takes a promise's outcome immediately, so a rejection the test asserts later is never unhandled. */
 export function capture<Value>(promise: Promise<Value>): Promise<Value | Error> {
   return promise.then(
     value => value,
@@ -68,21 +65,18 @@ export function capture<Value>(promise: Promise<Value>): Promise<Value | Error> 
   );
 }
 
-/** Records the reason of every `queue.deleted`, in publication order. */
 export function deletions<Metadata>(distube: DisTube<Metadata>): string[] {
   const reasons: string[] = [];
   distube.on("queue.deleted", event => void reasons.push(event.reason));
   return reasons;
 }
 
-/** Records the order in which the named events are published. */
 export function record<Metadata>(distube: DisTube<Metadata>, names: readonly DisTubeEventName[]): string[] {
   const log: string[] = [];
   for (const name of names) distube.on(name, () => log.push(name));
   return log;
 }
 
-/** Records every `queue.updated` payload, in publication order. */
 export function updates<Metadata>(distube: DisTube<Metadata>): DisTubeEventMap<Metadata>["queue.updated"][] {
   const published: DisTubeEventMap<Metadata>["queue.updated"][] = [];
   distube.on("queue.updated", event => void published.push(event));
@@ -93,9 +87,7 @@ export function media(source: string, id = `${source}-song`): Song {
   return new Song({ id, name: `Title ${id}`, url: `https://${source}.example/media/${id}`, duration: 60, source });
 }
 
-/** A Plugin whose every operation is a spy; tests override only what they exercise. */
 export class FakeSource implements Plugin {
-  /** IDs of the Songs whose prepared resource was disposed, in disposal order. */
   readonly disposed: string[] = [];
   readonly dispose = vi.fn(() => undefined);
   readonly search = vi.fn(async (_query: string, _options: SearchOptions): Promise<readonly Song[]> => []);
@@ -109,7 +101,6 @@ export class FakeSource implements Plugin {
 
   constructor(readonly name: string) {}
 
-  /** A seekable `file` resource that records its own disposal, so tests can assert cleanup exactly once. */
   resource(id: string): PlaybackResource {
     return {
       kind: "file",
@@ -132,7 +123,6 @@ export type FakePlayerOperation =
   | "filters"
   | "release";
 
-/** A deferred backend acknowledgement that reports when the effect reached the fake Player. */
 export interface FakePlayerGate extends Deferred<void> {
   readonly entered: Promise<void>;
 }
@@ -142,20 +132,14 @@ interface ActiveTrack {
   readonly end: Deferred<TrackEnd>;
 }
 
-/** The id a fake resource names: the last segment of its URL or path. */
 export function resourceId(resource: PlaybackResource): string {
   const location = resource.kind === "url" ? resource.url : resource.kind === "file" ? resource.path : undefined;
   return location === undefined ? resource.kind : (location.split("/").pop() as string);
 }
 
-/**
- * A Player that follows the contract: a second play settles the first `replaced`, an aborted signal,
- * `stopTrack` or `release` settles it `stopped`. Tests end tracks with `finish` or `fail`.
- */
 export class FakePlayer implements Player {
   position = 0;
   ping?: number;
-  /** Resource ids in play order. */
   readonly played: string[] = [];
   readonly renders: (readonly FilterEntry[])[] = [];
   readonly volumes: number[] = [];
@@ -212,7 +196,6 @@ export class FakePlayer implements Player {
   readonly updateVoiceGateway = vi.fn(async (_gateway: VoiceGatewayData): Promise<void> => undefined);
   onClosed?: PlayerOptions["onClosed"];
 
-  /** Holds the next named backend operation until the returned gate settles. */
   gate(operation: FakePlayerOperation): FakePlayerGate {
     const completion = deferred<void>();
     let markEntered!: () => void;
@@ -226,24 +209,20 @@ export class FakePlayer implements Player {
     return gate;
   }
 
-  /** The id of the resource currently playing. */
   get playing(): string | undefined {
     return this.#track?.id;
   }
 
-  /** Ends the active track the way a backend does when it runs out of media. */
   finish(): void {
     this.#end({ reason: "finished" });
   }
 
-  /** Closes the Player on its own, as a destroyed native connection does: reports it, then rejects the track. */
   close(error: Error): void {
     this.#released = true;
     this.onClosed?.(error);
     this.fail(error);
   }
 
-  /** Fails the active track. */
   fail(error: unknown): void {
     const track = this.#track;
     this.#track = undefined;
@@ -271,7 +250,6 @@ export class FakePlayer implements Player {
   }
 }
 
-/** One guild's voice presence: it survives queue deletion and ends only when released or dropped. */
 export class FakeVoiceSession implements VoiceSession {
   readonly clientUserId = "bot";
   bitrate = 64_000;
@@ -280,7 +258,6 @@ export class FakeVoiceSession implements VoiceSession {
   selfDeaf: boolean;
   selfMute: boolean;
   readonly listeners = new Set<(event: VoiceSessionEvent) => void>();
-  /** Every voice state the session sent: the creation state plus each join and flag write. */
   readonly states: Required<JoinOptions>[] = [];
   readonly #releaseGates: Deferred<void>[] = [];
   readonly #joinGates: Deferred<void>[] = [];
@@ -315,14 +292,12 @@ export class FakeVoiceSession implements VoiceSession {
     this.states.push({ selfDeaf: this.selfDeaf, selfMute: this.selfMute });
   }
 
-  /** Holds the acknowledgement of the next join until the returned gate settles. */
   gateJoin(): Deferred<void> {
     const gate = deferred<void>();
     this.#joinGates.push(gate);
     return gate;
   }
 
-  /** Holds the next session release until the returned gate settles. */
   gateRelease(): Deferred<void> {
     const gate = deferred<void>();
     this.#releaseGates.push(gate);
@@ -340,7 +315,6 @@ export class FakeVoiceSession implements VoiceSession {
     for (const listener of Array.from(this.listeners)) listener({ type: "connected", channelId, gateway });
   }
 
-  /** With an error, the Adapter's recovery policy is spent; without one, the platform removed the bot. */
   disconnect(error?: Error): void {
     const event: VoiceSessionEvent = error
       ? { type: "disconnected", reason: "failed", error }
@@ -349,7 +323,6 @@ export class FakeVoiceSession implements VoiceSession {
   }
 }
 
-/** The conventional filter names every official engine ships a default definition for. */
 const FILTER_NAMES = [
   "3d",
   "bassboost",
@@ -367,7 +340,6 @@ const FILTER_NAMES = [
   "vaporwave",
 ] as const;
 
-/** The conventional presets with the ranges the official engines declare; the rest are fixed. */
 export const FAKE_FILTERS: FilterDefinitions<string> = Object.freeze({
   ...Object.fromEntries(
     FILTER_NAMES.map(name => [name, { render: () => name, label: name } satisfies FilterDefinitions<string>[string]]),
@@ -410,7 +382,6 @@ export class FakeEngine implements Engine {
     this.filters = filterInfo(definitions);
   }
 
-  /** Holds the next Player creation until the returned gate settles. */
   gateCreate(): Deferred<Player> {
     const gate = deferred<Player>();
     this.#createGates.push(gate);
@@ -422,7 +393,6 @@ export class FakeEngine implements Engine {
   }
 }
 
-/** An engine that prepares every Song itself, like Lavalink. */
 export class PreparingEngine extends FakeEngine {
   readonly prepare = vi.fn(async (song: Song, _options: { signal: AbortSignal }): Promise<PlaybackResource> => ({
     kind: "encoded",
@@ -454,7 +424,6 @@ export class FakeAdapter implements Adapter {
 
   constructor(readonly engine: Engine = new FakeEngine()) {}
 
-  /** Holds the next session creation until the returned gate settles. */
   gateCreateSession(): Deferred<VoiceSession> {
     const gate = deferred<VoiceSession>();
     this.#createGates.push(gate);
@@ -501,7 +470,6 @@ export function setup<Metadata = undefined>(
   return { adapter, engine, diagnostics, distube };
 }
 
-/** The absolute URL form of a media id, for tests that exercise URL routing rather than query search. */
 export function mediaUrl(id: string, source = "source"): string {
   return `https://${source}.example/media/${id}`;
 }
@@ -510,7 +478,6 @@ function idOf(input: string): string {
   return input.startsWith("https://") ? (input.split("/").pop() as string) : input;
 }
 
-/** A single-source harness whose plugin answers every input: a URL through `resolve`, a query through `search`. */
 export function playableSetup<Metadata = undefined>(
   name = "source",
   options: HarnessOptions = {},
@@ -521,7 +488,6 @@ export function playableSetup<Metadata = undefined>(
   return { ...setup<Metadata>([source], options), source };
 }
 
-/** Starts playback of `ids` in order and waits until the first one is playing. */
 export async function playing(harness: Harness, ...ids: string[]): Promise<FakePlayer> {
   for (const id of ids) await harness.distube.play(CHANNEL, id);
   await settle();
@@ -545,7 +511,6 @@ export function required<Value>(value: Value | undefined): Value {
   return value;
 }
 
-/** The error a synchronous command throws, for assertions on its code and cause. */
 export function thrown(action: () => unknown): unknown {
   try {
     action();

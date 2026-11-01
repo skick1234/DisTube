@@ -28,7 +28,6 @@ const song = new Song({
 const item = (): QueueItem => queueItem(song, undefined);
 const ids = (items: readonly QueueItem[]): string[] => items.map(entry => entry.id);
 
-/** A playing state: the first item is current, the rest wait. */
 function playing(items: readonly QueueItem[]): QueueState {
   return startFirst(insertAt(IDLE_QUEUE_STATE, items))?.state ?? IDLE_QUEUE_STATE;
 }
@@ -121,7 +120,6 @@ describe("edits", () => {
   it("shuffles only the waiting list with the supplied randomness and is identity below two items", () => {
     const [a, b, c, d] = [item(), item(), item(), item()];
     const state = playing([a, b, c, d]);
-    // A random source that always picks index 0 rotates the tail deterministically.
     const shuffled = shuffle(state, () => 0);
     expect(shuffled.current).toBe(a);
     expect(ids(shuffled.upcoming)).toEqual(ids([c, d, b]));

@@ -5,7 +5,6 @@ import { FakeAdapter, FakeSource, GUILD, playableSetup, setup, VOICE_CHANNEL } f
 const channel = { guildId: GUILD, id: VOICE_CHANNEL };
 
 describe("adapter target normalization", () => {
-  // Core validates whatever the Adapter returns; per-adapter identity rules live in each adapter's tests.
   it.each([
     ["malformed", { guildId: "", channelId: VOICE_CHANNEL }],
     ["asynchronous", Promise.resolve({ guildId: GUILD, channelId: VOICE_CHANNEL })],

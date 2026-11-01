@@ -46,7 +46,6 @@ export interface DiscordVoicePlayerOptions {
   readonly onClosed: (error: Error) => void;
 }
 
-/** One `play` call, from opening its Track to its single end. */
 class Playback {
   readonly controller = new AbortController();
   readonly onStart: () => void;
@@ -87,12 +86,6 @@ class Playback {
   }
 }
 
-/**
- * The playback backend subscribed to one voice's connection, which the session owns.
- *
- * It outlives tracks until release or connection loss. Volume and filters live here and apply to the running
- * Track in place; the encoder follows the session's channel bitrate.
- */
 export class DiscordVoicePlayer implements Player {
   readonly #connection: VoiceConnection;
   readonly #session: VoiceSession;

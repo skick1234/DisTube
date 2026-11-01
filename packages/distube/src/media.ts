@@ -26,7 +26,7 @@ export type SongData<PluginData = unknown> = {
 /**
  * Immutable provider-neutral identity and display fields.
  *
- * `PluginData` is declared by the owning SourcePlugin; core stores the reference and never reads,
+ * `PluginData` is declared by the owning Plugin; core stores the reference and never reads,
  * clones, freezes or interprets it.
  */
 export class Song<PluginData = unknown> {
@@ -78,7 +78,6 @@ function pad(value: number): string {
   return String(value).padStart(2, "0");
 }
 
-/** Deterministic, locale-independent clock rendering of whole seconds. */
 function formatDuration(seconds: number): string {
   const total = Math.floor(seconds);
   const hours = Math.floor(total / 3600);

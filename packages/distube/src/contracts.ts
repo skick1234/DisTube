@@ -7,7 +7,6 @@ export type VoiceChannelTarget = { readonly id: string } & (
   | { readonly guild: { readonly id: string } }
 );
 
-/** What core accepts wherever media enters the client. */
 export type ResolvableInput = string | Song | Playlist;
 
 export type DiagnosticSeverity = "debug" | "info" | "warning" | "error";
@@ -344,7 +343,6 @@ export interface EngineSettings {
   readonly report: (diagnostic: Diagnostic) => void;
 }
 
-/** The guild and voice channel a voice occupies, in platform-neutral IDs. */
 export interface VoiceTarget {
   readonly guildId: string;
   readonly channelId: string;

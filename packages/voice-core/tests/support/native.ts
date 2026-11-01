@@ -7,22 +7,14 @@ import type {
 } from "@discordjs/voice";
 import { type Mock, vi } from "vitest";
 
-/** For a test that opens its session directly, so the engine never looks its platform up. */
 export function noPlatform(): never {
   throw new Error("This test opens its voice session directly");
 }
 
-/** Credentials a Ready connection exposes, which the session republishes as its gateway data. */
 export const GATEWAY = { channelId: "channel", sessionId: "session", token: "token", endpoint: "voice.example" };
 
 export const CHANNEL = "channel";
 
-/**
- * The platform gateway half, shared by remote-only and late local-transport tests.
- *
- * Like Discord, it answers a join for the channel it already holds with a voice state update alone, even after
- * its voice socket closed, and a join after a leave or to another channel with both packets. A leave is echoed.
- */
 export function gatewayAdapter(
   userId = "bot",
   endpoint = GATEWAY.endpoint,
@@ -75,7 +67,6 @@ export function gatewayAdapter(
   return { creator, sendPayload, destroy, state, server };
 }
 
-/** A Ready native state whose networking emits like the library's and carries `connectionOptions`, where the session reads credentials. */
 export function readyState(gateway: Partial<typeof GATEWAY> = {}, channelId = CHANNEL): Record<string, unknown> {
   const networking = Object.assign(new EventEmitter(), {
     state: { connectionOptions: { ...GATEWAY, ...gateway, channelId } },
@@ -83,7 +74,6 @@ export function readyState(gateway: Partial<typeof GATEWAY> = {}, channelId = CH
   return { status: "ready", networking };
 }
 
-/** A native voice connection: the test or the fake gateway's voice server updates drive its transitions. */
 export class FakeConnection extends EventEmitter {
   state: Record<string, unknown> = readyState();
   joinConfig: { channelId: string | null; selfDeaf: boolean; selfMute: boolean } = {
@@ -95,7 +85,6 @@ export class FakeConnection extends EventEmitter {
   readonly subscribe: Mock<(_player: unknown) => { readonly unsubscribe: Mock<() => void> }> = vi.fn(
     (_player: unknown) => this.subscription,
   );
-  /** Sends the join through the connection's gateway adapter, as the library does while Ready. */
   readonly rejoin = vi.fn((config: { channelId: string; selfDeaf?: boolean; selfMute?: boolean }) => {
     Object.assign(this.joinConfig, config);
     const { adapter } = this.state as { adapter?: { sendPayload(payload: unknown): boolean } };
@@ -113,7 +102,6 @@ export class FakeConnection extends EventEmitter {
   });
   readonly destroy = vi.fn(() => this.transition({ status: "destroyed" }));
 
-  /** Announces one state transition exactly as `@discordjs/voice` would. */
   transition(next: Record<string, unknown>): void {
     const previous = this.state;
     this.state = next;
@@ -122,13 +110,11 @@ export class FakeConnection extends EventEmitter {
 }
 
 export interface FakeResource {
-  /** The Opus packet stream the Player handed over. */
   readonly input: Readable;
   readonly inputType: unknown;
   playbackDuration: number;
 }
 
-/** Builds an AudioPlayer error that names the resource whose native work failed. */
 export function audioPlayerError(
   resource: FakeResource,
   error = new Error("native audio player failed"),
@@ -136,7 +122,6 @@ export function audioPlayerError(
   return Object.assign(error, { resource }) as unknown as AudioPlayerError;
 }
 
-/** A native audio player whose state transitions carry the resource that just became idle. */
 export class FakeAudioPlayer extends EventEmitter {
   state: { status: string; resource?: unknown } = { status: "idle" };
   readonly play = vi.fn((resource: unknown) => this.transition({ status: "playing", resource }));
@@ -227,7 +212,6 @@ export const native = {
   }),
 };
 
-/** The newest instance of each fake, which is the one a just-finished call produced. */
 export const latest = {
   get connection(): FakeConnection {
     return native.connections.at(-1) as FakeConnection;
@@ -241,7 +225,6 @@ export const latest = {
 };
 
 export function resetNative(): void {
-  // Resetting restores each fake's own implementation, so one test's override never leaks.
   vi.resetAllMocks();
   native.connections.length = 0;
   native.players.length = 0;
@@ -249,12 +232,10 @@ export function resetNative(): void {
   native.transports.length = 0;
 }
 
-/** Lets every pending microtask and detached teardown run before the test asserts. */
 export function settle(): Promise<void> {
   return new Promise(resolve => setImmediate(resolve));
 }
 
-/** `@discordjs/voice` with only its four side-effecting factories replaced. */
 export async function voiceModule(): Promise<unknown> {
   const actual = await vi.importActual<Record<string, unknown>>("@discordjs/voice");
   return {

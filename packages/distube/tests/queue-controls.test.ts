@@ -18,7 +18,6 @@ import {
 
 const TARGET = { guildId: GUILD, id: "voice" };
 
-/** A playing queue holding `ids` in order: the first is current, the rest are waiting. */
 async function playing(ids: readonly string[]) {
   const harness = playableSetup();
   const { queue } = await harness.distube.play(TARGET, ids[0] as string);
@@ -28,7 +27,6 @@ async function playing(ids: readonly string[]) {
   return { harness, queue, voice: voice as NonNullable<typeof voice>, player: harness.engine.players[0] as FakePlayer };
 }
 
-/** A queue whose Player creation is held open until the returned gate resolves it. */
 async function gated(harness: Harness) {
   const gate = deferred<FakePlayer>();
   const player = new FakePlayer();
@@ -38,7 +36,6 @@ async function gated(harness: Harness) {
   return { result, queue, player, release: () => gate.resolve(player) };
 }
 
-/** A queue playing one item from a `url` resource. */
 async function playingUrl() {
   const harness = playableSetup();
   harness.source.stream.mockImplementationOnce(async () => ({ kind: "url", url: "https://cdn.example/a.webm" }));

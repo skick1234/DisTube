@@ -229,7 +229,6 @@ describe("self-deaf and self-mute", () => {
 
     await voice.move({ guildId: GUILD, id: "other" });
 
-    // An omitted flag keeps the session's current state, so a move sends only the channel.
     expect(session.join).toHaveBeenCalledWith("other");
     expect(session.channelId).toBe("other");
     expect([voice.selfDeaf, voice.selfMute]).toEqual([false, false]);

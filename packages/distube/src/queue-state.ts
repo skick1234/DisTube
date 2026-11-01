@@ -47,7 +47,6 @@ function patch(current: QueueState, changes: Partial<QueueState>): QueueState {
   });
 }
 
-/** Inserts committed occurrences at `at` in the waiting list, appending when `at` is absent or past the end. */
 export function insertAt(current: QueueState, items: readonly QueueItem[], at?: number): QueueState {
   if (items.length === 0) return current;
   const index = at === undefined ? current.upcoming.length : Math.min(Math.max(at, 0), current.upcoming.length);
@@ -73,7 +72,6 @@ export function settleStatus(current: QueueState, lookup: boolean): QueueState {
   return status === current.status ? current : patch(current, { status });
 }
 
-/** Drops a waiting occurrence that could not be prepared or started. */
 export function failFirst(current: QueueState, itemId: string): QueueState {
   if (!current.upcoming.some(item => item.id === itemId)) return current;
   return patch(current, { upcoming: current.upcoming.filter(item => item.id !== itemId) });
@@ -83,7 +81,6 @@ export function finishCurrent(current: QueueState): QueueState {
   return patch(current, { current: undefined, status: "idle" });
 }
 
-/** Removes one upcoming occurrence by its stable ID. */
 export function removeItem(current: QueueState, itemId: string): Removal {
   if (!itemId) throw new DisTubeError("INVALID_ARGUMENT", "Occurrence ID must be a non-empty string");
   const index = current.upcoming.findIndex(item => item.id === itemId);
@@ -91,7 +88,6 @@ export function removeItem(current: QueueState, itemId: string): Removal {
   return removeRange(current, index, index);
 }
 
-/** Removes the zero-based inclusive index range from the waiting list; both ends must be waiting. */
 export function removeRange(current: QueueState, from: number, to: number): Removal {
   if (!Number.isInteger(from) || !Number.isInteger(to) || from < 0 || to < from)
     throw new DisTubeError("INVALID_ARGUMENT", "Range positions must be a non-inverted pair of positive integers");
@@ -102,7 +98,6 @@ export function removeRange(current: QueueState, from: number, to: number): Remo
   });
 }
 
-/** Moves a waiting occurrence before another one, or to the tail when `beforeItemId` is absent. */
 export function moveBefore(current: QueueState, itemId: string, beforeItemId?: string): QueueState {
   if (
     typeof itemId !== "string" ||
@@ -122,12 +117,6 @@ export function moveBefore(current: QueueState, itemId: string, beforeItemId?: s
   return patch(current, { upcoming: rest.toSpliced(index, 0, item) });
 }
 
-/**
- * Ends the current occurrence and brings the waiting occurrence at `index` to the front.
- *
- * The ended current item and the items before the target are returned as `skipped`, in their original
- * order; with `requeue` they are re-appended to the tail, otherwise the caller sends them to history.
- */
 export function jumpTo(
   current: QueueState,
   index: number,
@@ -144,7 +133,6 @@ export function jumpTo(
   });
 }
 
-/** Fisher-Yates over the waiting list; the current item never moves. */
 export function shuffle(current: QueueState, random: () => number = Math.random): QueueState {
   if (current.upcoming.length < 2) return current;
   const upcoming = [...current.upcoming];
@@ -156,13 +144,11 @@ export function shuffle(current: QueueState, random: () => number = Math.random)
   return patch(current, { upcoming });
 }
 
-/** Empties the waiting list without touching the current item. */
 export function clearUpcoming(current: QueueState): Removal {
   if (current.upcoming.length === 0) return Object.freeze({ items: NO_ITEMS, state: current });
   return Object.freeze({ items: current.upcoming, state: patch(current, { upcoming: NO_ITEMS }) });
 }
 
-/** Appends an ended occurrence, evicting the oldest past `size`. A size of 0 keeps history empty. */
 export function pushHistory(current: QueueState, item: QueueItem, size: number): QueueState {
   if (size <= 0) return current;
   const history = [...current.history, item];

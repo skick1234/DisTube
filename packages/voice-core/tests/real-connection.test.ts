@@ -18,7 +18,6 @@ afterEach(async () => {
   for (const cleanup of cleanups.splice(0).toReversed()) await cleanup();
 });
 
-/** A built-in session joined through a fake gateway whose voice server updates name a local voice server. */
 async function joined(
   clientUserId = "bot",
   heartbeatMs?: number,
@@ -331,7 +330,6 @@ beforeAll(async () => {
 }, 30_000);
 afterAll(() => media.cleanup());
 
-/** A built-in Player on a session whose real voice connection sends to a local voice server, with its first track started. */
 async function playing(
   resource: PlaybackResource,
   heartbeatMs?: number,
@@ -360,7 +358,6 @@ async function playing(
   return { server, player, ended, reports };
 }
 
-/** The first `count` packets the server heard at or after `since`, waiting for them in real time. */
 async function hear(server: VoiceGatewayServer, since: number, count: number): Promise<HeardPacket[]> {
   const after = (): HeardPacket[] => server.heard.filter(packet => packet.at >= since);
   await vi.waitFor(() => expect(after().length).toBeGreaterThanOrEqual(count), {
@@ -376,7 +373,6 @@ interface Heard {
   readonly hz: number;
 }
 
-/** Everything the server heard so far, decoded in one pass as a listener would hear it. */
 async function decodeHeard(server: VoiceGatewayServer): Promise<Heard[]> {
   const heard = [...server.heard];
   const opus = heard.map(packet => packet.opus);
@@ -388,7 +384,6 @@ function median(values: readonly number[]): number {
   return values.toSorted((a, b) => a - b)[Math.floor(values.length / 2)] ?? Number.NaN;
 }
 
-/** The median level of the last 10 packets heard before `change` resolved and the levels of 25 heard from 2 × bufferMs after it. */
 async function levelsAround(
   server: VoiceGatewayServer,
   change: () => Promise<void>,
@@ -413,7 +408,6 @@ async function levelsAround(
   };
 }
 
-/** The `steps` second a packet's tone belongs to, or `undefined` when it is quiet or between steps. */
 function stepSecond({ level, hz }: Heard): number | undefined {
   const second = Math.round((hz - stepHz(0)) / (stepHz(1) - stepHz(0)));
   return level > 0.2 && Math.abs(hz - stepHz(second)) < 30 ? second : undefined;

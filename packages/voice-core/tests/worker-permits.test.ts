@@ -94,7 +94,6 @@ async function createPlayer(): Promise<Player> {
   return player;
 }
 
-/** Plays a file on `player` and answers its open from the newest worker, as the real worker would. */
 async function playing(player: Player): Promise<{ worker: FakeWorker; ended: Promise<TrackEnd> }> {
   const { promise: started, resolve } = Promise.withResolvers<void>();
   const ended = player.play(

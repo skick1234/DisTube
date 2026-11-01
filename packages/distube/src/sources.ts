@@ -234,7 +234,6 @@ export async function relatedSong(
 
 export interface PreparedSong {
   readonly resource: PlaybackResource;
-  /** The candidate the search fallback prepared in place of the Song. */
   readonly fallback?: Song;
 }
 

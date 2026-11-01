@@ -35,7 +35,6 @@ export interface Connection {
   entries: readonly FilterEntry[];
   rate: number;
   player?: Promise<Player>;
-  /** The Player `player` resolved to, for synchronous reads. */
   active?: Player;
   endpoint: string | undefined;
   settings: Promise<unknown>;

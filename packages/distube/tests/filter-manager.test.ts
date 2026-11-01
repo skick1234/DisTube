@@ -17,7 +17,6 @@ import {
 
 const channel = { guildId: GUILD, id: VOICE_CHANNEL };
 
-/** A connected voice whose Player already exists, so every mutation renders through the backend. */
 async function playingVoice() {
   const harness = playableSetup();
   await harness.distube.play(channel, "a");

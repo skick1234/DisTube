@@ -1,8 +1,7 @@
 import { joinVoiceChannel, VoiceConnectionStatus } from "@discordjs/voice";
 import type { VoiceSession } from "distube/integrations";
 import { afterAll, describe, expect, it } from "vitest";
-// The Player is package-internal; a real session cannot reach Ready without a Discord socket, so the
-// decode hand-off is exercised directly against a real VoiceConnection instead.
+// A real session cannot reach Ready without a Discord socket, so the Player is driven against a real VoiceConnection.
 import { FilterRegistry } from "../../voice-core/src/engine";
 import { DiscordVoicePlayer } from "../../voice-core/src/player";
 import {
@@ -14,10 +13,6 @@ import {
   voiceState,
 } from "../../voice-core/tests/support/real";
 import { DiscordJSAdapter } from "../src";
-
-// Nothing is mocked here: the real @discordjs/voice, the real node-av decoder, and a real HTTP origin.
-// The mocked suites prove our own logic; this one proves the library still behaves the way that logic assumes.
-// The Oceanic adapter drives the same @discordjs/voice connection and voice-core Player, so these cover it too.
 
 const origin: AudioOrigin = await serveAudio();
 afterAll(() => origin.stop());
@@ -80,7 +75,6 @@ describe("real @discordjs/voice", () => {
       void ended.catch(() => undefined);
       await started;
 
-      // The library accepted the resource: it is holding a track rather than sitting idle.
       expect(player.position).toBeGreaterThanOrEqual(0);
       expect(connection.state.status).not.toBe(VoiceConnectionStatus.Destroyed);
     } finally {
@@ -96,7 +90,6 @@ describe("real @discordjs/voice", () => {
       voiceAdapterCreator: unknown;
     };
 
-    // `DiscordJSAdapter.createVoiceSession` hands this member to @discordjs/voice as the gateway adapter.
     expect(typeof guild.voiceAdapterCreator).toBe("function");
 
     await new DiscordJSAdapter(client)

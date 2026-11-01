@@ -1,5 +1,4 @@
 name: Docs preview
-# Pushes the v6 branch's docs to the site as distube v6 so the PR can be checked on distube.js.org.
 on:
   push:
     branches: [v6]
@@ -25,7 +24,6 @@ jobs:
       - name: Build
         run: bun run build
 
-      # The branch still carries the v5 version; the snapshot directory comes from the major.
       - name: Mark the package as 6.0.0
         working-directory: packages/distube
         run: bun pm pkg set version=6.0.0

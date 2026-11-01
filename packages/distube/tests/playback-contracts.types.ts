@@ -65,7 +65,7 @@ const searching: Plugin = {
     return { kind: "search", query: "title artist" } as const;
   },
 };
-// @ts-expect-error plugins lost initialize
+// @ts-expect-error a Plugin has no initialize
 const initializing: Plugin = { name: "old", initialize(): void {} };
 
 const player: Player = {
@@ -84,7 +84,7 @@ const player: Player = {
 };
 // @ts-expect-error a track ends finished, stopped or replaced; failures reject
 const failedEnd: TrackEnd = { reason: "failed" };
-// @ts-expect-error Players lost the item-ID request and event channel
+// @ts-expect-error a Player takes no item ID and has no event channel
 player.play({ itemId: "item", resource }, { signal: new AbortController().signal, onStart() {} });
 
 const session: VoiceSession = {
@@ -128,7 +128,7 @@ const legacyEngine: Engine = {
   async createPlayer(): Promise<Player> {
     return player;
   },
-  // @ts-expect-error engines no longer declare accepted kinds
+  // @ts-expect-error an engine declares no accepted kinds
   accepts: new Set(["url"]),
 };
 const adapter: Adapter = {
@@ -241,7 +241,7 @@ typed.on("queue.deleted", event => {
   const reason: "stop" | "finished" | "voice-loss" | "leave" | "shutdown" | "failed" = event.reason;
   return reason;
 });
-// @ts-expect-error voice track events were removed
+// @ts-expect-error the voice has no track events
 typed.on("voice.track.finished", () => undefined);
 // @ts-expect-error metadata of the wrong shape fails before it can run
 typed.play({ guildId: "guild", id: "voice" }, "query", { metadata: { requester: "skick" } });

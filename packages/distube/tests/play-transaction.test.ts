@@ -19,7 +19,6 @@ const TARGET = { guildId: GUILD, id: VOICE_CHANNEL };
 const MOVED_TARGET = { guildId: GUILD, id: "moved" };
 const FIRST_PLAY_EVENTS = ["queue.created", "queue.item.added", "queue.item.started", "queue.deleted"] as const;
 
-/** Flushes only queued microtasks. Each test controls all asynchronous boundaries with deferred Promises. */
 async function flush(rounds = 12): Promise<void> {
   for (let round = 0; round < rounds; round += 1) await Promise.resolve();
 }
@@ -176,7 +175,6 @@ describe("transactional play", () => {
     expect(session.join).toHaveBeenCalledWith(VOICE_CHANNEL);
     expect(events).toEqual(["queue.created", "queue.deleted"]);
     expect(harness.distube.getQueue(GUILD)).toBeUndefined();
-    // The connection survives a failed first play; only leave or dispose releases it.
     expect(session.release).not.toHaveBeenCalled();
     expect(harness.distube.voices.get(GUILD)?.channelId).toBe(VOICE_CHANNEL);
     await harness.distube.dispose();

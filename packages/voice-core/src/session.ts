@@ -15,13 +15,10 @@ import type {
   VoiceTarget,
 } from "distube/integrations";
 
-/** What an adapter knows about its platform for one guild. */
 export interface DiscordPlatform {
   readonly clientUserId: string;
   readonly adapterCreator: DiscordGatewayAdapterCreator;
-  /** The platform channel's bitrate in bits per second, read whenever the session needs it. */
   readonly channelBitrate: (channelId: string) => number;
-  /** Throws when the platform would refuse a join to `channelId`; runs before connecting and before each move. */
   readonly preflight: (channelId: string) => void;
 }
 
@@ -30,7 +27,6 @@ export interface DiscordVoiceSessionOptions extends VoiceTarget, VoiceSessionOpt
 /** https://docs.discord.com/developers/topics/opcodes-and-status-codes#voice-voice-close-event-codes */
 const REJOIN_CLOSE_CODES: ReadonlySet<number> = new Set([4006, 4009]);
 const TERMINAL_CLOSE_CODES: ReadonlySet<number> = new Set([4004, 4011, 4016, 4017, 4021]);
-/** The platform ended this voice socket; its voice state and server updates say whether the voice moved or ended. */
 const PLATFORM_CLOSE_CODES: ReadonlySet<number> = new Set([4014, 4022]);
 const DAVE_REQUIRED_CLOSE_CODE = 4017;
 const REJOIN_LIMIT = 3;
@@ -51,13 +47,6 @@ interface VoiceStatePayload {
 
 type Networking = Extract<VoiceConnectionState, { networking: unknown }>["networking"];
 
-/**
- * The built-in engine's voice: one `@discordjs/voice` connection opened at join and kept until leave.
- *
- * The connection sends every join, consumes the voice state and server updates as they arrive and owns the voice
- * socket. The session adds what the library leaves to its caller: removal, terminal closes, a bounded recovery,
- * and a leave before the library's own rejoin.
- */
 export class DiscordVoiceSession implements VoiceSession {
   readonly guildId: string;
   readonly clientUserId: string;
@@ -68,14 +57,11 @@ export class DiscordVoiceSession implements VoiceSession {
   #writes: Promise<void> = Promise.resolve();
   #gateway?: VoiceGatewayData;
   #published?: Networking;
-  /** The bot's latest voice state as the platform reported it, read for removal and flag acknowledgements. */
   #voiceState?: VoiceStateUpdate;
-  /** A pending move publishes no socket until the voice state names its channel; a server update may come first. */
   #moveTarget?: string;
   #deadline?: ReturnType<typeof setTimeout>;
   #resend?: ReturnType<typeof setInterval>;
   #failure?: Error;
-  /** One leave per outage, so a voice socket that keeps failing cannot loop leaves and joins until the deadline. */
   #leftSinceReady = false;
   #platformClosed = false;
   #released = false;
@@ -100,7 +86,6 @@ export class DiscordVoiceSession implements VoiceSession {
     return session;
   }
 
-  /** The connection a local Player subscribes to, or `undefined` for another package's session. */
   static connectionOf(session: VoiceSession): VoiceConnection | undefined {
     return session instanceof DiscordVoiceSession && !session.#released ? session.#connection : undefined;
   }
@@ -152,7 +137,6 @@ export class DiscordVoiceSession implements VoiceSession {
   setSelfState(state: JoinOptions): Promise<void> {
     return this.#enqueue(() => this.#join(this.channelId, state));
   }
-  /** The built-in voice socket is the connection's own, so no close arrives from outside it. */
   voiceClosed(): void {}
   rejoin(): Promise<void> {
     return this.#enqueue(async () => {
@@ -273,10 +257,7 @@ export class DiscordVoiceSession implements VoiceSession {
     this.#settle();
   }
 
-  /**
-   * Discord answers a join for the channel the session already holds with no new voice server update, so any
-   * other close gets a leave before the library's rejoin. A move closes the old socket with 4022.
-   */
+  /** Discord sends no voice server update for a join to the held channel, so a recoverable close leaves before the library rejoins. */
   #socketClosed(code: number): void {
     if (this.#released) return;
     if (TERMINAL_CLOSE_CODES.has(code)) this.#fail(new Error(terminalCloseMessage(code, true)));
@@ -309,7 +290,6 @@ export class DiscordVoiceSession implements VoiceSession {
     this.#resend = undefined;
   }
 
-  /** Publishes each new Ready voice socket and ends the voice when the platform removed the bot. */
   #settle(): void {
     if (this.#released) return;
     const { state } = this.#connection;
@@ -357,10 +337,6 @@ export class DiscordVoiceSession implements VoiceSession {
   }
 }
 
-/**
- * Gateway membership alone, for an engine plugin whose voice socket lives elsewhere: it sends the joins and
- * publishes the credentials the platform sends as they arrive.
- */
 export class DiscordGatewaySession implements VoiceSession {
   readonly guildId: string;
   readonly clientUserId: string;
@@ -524,10 +500,7 @@ export class DiscordGatewaySession implements VoiceSession {
     }
   }
 
-  /**
-   * Leaves and rejoins the held channel and waits for the credentials the platform sends for it, so `connected`
-   * follows. A join for the channel already held gets no new voice server update, so the leave goes first.
-   */
+  /** Discord sends no voice server update for a join to the held channel, so the leave goes first. */
   async #rejoin(): Promise<void> {
     if (this.#released) throw sessionReleased();
     const channelId = this.#channelId;
@@ -595,7 +568,6 @@ export class DiscordGatewaySession implements VoiceSession {
     return this.#gatewayAdapter.sendPayload(payload);
   }
 
-  /** The platform ended the remote socket; a move publishes new credentials and a removal ends the voice. */
   #awaitPlatform(code: number): void {
     clearTimeout(this.#platformDeadline);
     this.#platformDeadline = setTimeout(

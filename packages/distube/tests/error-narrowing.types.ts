@@ -48,7 +48,7 @@ function describe(caught: DisTubeError): string {
 
 const spelled: { readonly [K in keyof typeof ErrorCode]: K } = ErrorCode;
 
-// @ts-expect-error codes are the core set; plugins no longer add their own
+// @ts-expect-error codes are the core set
 const plugin: ErrorCodeType = "YOUTUBE_AGE_RESTRICTED";
 // @ts-expect-error the constructor takes a core code
 new DisTubeError("SPOTIFY_NOT_FOUND", "message");

@@ -29,7 +29,6 @@ const THREADPOOL_SIZE = Number(process.env.UV_THREADPOOL_SIZE) || (process.versi
 const PERMITS = Math.max(1, THREADPOOL_SIZE - 1);
 const ENTRY = new URL(`./worker.${import.meta.url.endsWith(".ts") ? "ts" : "mjs"}`, import.meta.url);
 
-/** How a Track ended: its input reached the end, its owner closed it, or it failed at a pipeline step with a redacted cause. */
 export type TrackOutcome =
   | Readonly<{ type: "ended" }>
   | Readonly<{ type: "closed" }>
@@ -49,15 +48,10 @@ export interface TrackReporter {
 }
 
 export interface TrackSettings {
-  /** Percent, where 100 leaves the source untouched. */
   readonly volume: number;
-  /** A libavfilter chain from the FilterRegistry, or `undefined` for none. */
   readonly chain: string | undefined;
-  /** Bits per second a transcoded track encodes at, capped by its source's bitrate. */
   readonly bitrate: number;
-  /** Opus encoder complexity, 0 to 10. */
   readonly opusComplexity: number;
-  /** Packets of 20 ms queued ahead of the platform. */
   readonly readAhead: number;
 }
 
@@ -66,19 +60,8 @@ type Lost = Extract<FromWorker, { type: "lost" }>;
 
 let nextId = 0;
 
-/**
- * One track's pipeline: Opus packets for Discord from any local playback resource.
- *
- * Demux, decode, filter and encode run in a pooled worker thread; this side moves input bytes in and
- * packets out. Source Opus at 48 kHz stereo in 20 ms packets passes through untouched while volume is 100
- * and no filter is set. Seek opens a second input and switches to it once it holds audio at the target, so
- * the old input plays until then. A seekable input that fails mid-track reopens the same way where its last
- * packet ended, at most `MAX_REOPENS` times in a row without a new packet.
- */
 export class Track {
-  /** Opus packets, one Buffer each, `readAhead` of them queued ahead. */
   readonly packets: Readable;
-  /** Settles once: natural end after the platform played the last packet, close, or a failure. */
   readonly outcome: Promise<TrackOutcome>;
   readonly #id = ++nextId;
   readonly #readAhead: number;
@@ -140,7 +123,6 @@ export class Track {
     this.#lease = attach(this.#id, this.#receive, reporter.report);
   }
 
-  /** Opens `resource` from its start; a resource libav cannot open or decode rejects here, before any audio. */
   static async open(
     resource: LocalPlaybackResource,
     settings: TrackSettings,
@@ -203,7 +185,6 @@ export class Track {
     }
   }
 
-  /** Source seconds of the last packet the platform played, so tempo filters and platform queues do not skew it. */
   get position(): number {
     const played = this.#played();
     this.#forget(played);
@@ -213,7 +194,6 @@ export class Track {
     return played === 0 ? 0 : (this.#pts[played - 1 - this.#ptsStart] ?? 0);
   }
 
-  /** Whether the outcome has settled: ended, closed or failed. */
   get settled(): boolean {
     return this.#settled;
   }
@@ -226,12 +206,10 @@ export class Track {
     if (!this.#closing && !this.#settled) this.#lease.post({ type: "volume", track: this.#id, percent });
   }
 
-  /** Rebuilds the encoder at the next transcoded frame; passthrough keeps the source's own bitrate. */
   setBitrate(bitrate: number): void {
     if (!this.#closing && !this.#settled) this.#lease.post({ type: "bitrate", track: this.#id, bitrate });
   }
 
-  /** Applies from the next decoded frame; a chain libavfilter cannot build rejects `INVALID_ARGUMENT`. */
   async setFilters(chain: string | undefined): Promise<void> {
     if (this.#closing || this.#settled) return;
     const settled = await this.#call(request => ({ type: "filters", track: this.#id, request, chain }));
@@ -239,7 +217,6 @@ export class Track {
     if (settled.error) throw filterRejection(settled.error, this.#redact);
   }
 
-  /** Resolves once playback switched to a new input holding audio at `seconds`; the old input's queued packets are dropped. */
   async seek(seconds: number): Promise<void> {
     if (!this.#seekable) throw new DisTubeError("UNSUPPORTED", "This playback resource is not seekable");
     if (this.#closing || this.#settled) throw new DisTubeError("INVALID_STATE", "Track has no running input");
@@ -305,7 +282,6 @@ export class Track {
     void this.#reopen(lost.position).catch(() => undefined);
   }
 
-  /** Ends the pipeline once and joins every input it opened, including one a pending seek is opening. */
   close(): Promise<void> {
     this.#closing ??= this.#teardown();
     return this.#closing;
@@ -358,7 +334,7 @@ export class Track {
     });
   }
 
-  /** Keeps queued plus requested packets at `readAhead`; Readable reads again only after a push, so a full queue still asks for the one it hands out. */
+  /** Readable reads again only after a push, so a full queue still asks for the one it hands out. */
   #grant(): void {
     if (this.#settled) return;
     const want = Math.max(this.#readAhead - this.#granted - this.packets.readableLength, this.#granted === 0 ? 1 : 0);
@@ -441,7 +417,7 @@ export class Track {
     return decodeFailure(stage, local ?? fromWire(error), this.#redact);
   }
 
-  /** The platform sends one 20 ms silence frame for each read that finds no packet. */
+  /** @discordjs/voice's AudioPlayer sends one 20 ms silence frame for each read that finds no packet. */
   #starve(): void {
     if (this.#emitted === 0 || this.#inputEnded || this.#settled || this.#closing) return;
     this.#silentFrames += 1;

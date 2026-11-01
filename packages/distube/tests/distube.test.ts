@@ -34,7 +34,6 @@ function construct(plugins: readonly Plugin[], options: object = {}): () => DisT
 
 const invalidArgument = expect.objectContaining({ code: "INVALID_ARGUMENT" });
 
-/** What another installed copy of the package throws: same name and code, different class. */
 class SecondCopyError extends Error {
   readonly code = "NOT_FOUND";
 

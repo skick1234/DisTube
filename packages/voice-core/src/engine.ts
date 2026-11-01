@@ -15,12 +15,6 @@ import type {
 import { DiscordVoicePlayer } from "./player";
 import { type DiscordPlatform, DiscordVoiceSession } from "./session";
 
-/**
- * The built-in voice engine: in-process decoding and filtering over the session's own voice connection.
- *
- * It opens each voice as its own `@discordjs/voice` connection and plays URL, file, stream, reader and timed
- * resources on Players subscribed to it.
- */
 export class DiscordVoiceEngine implements Engine {
   readonly filters: ReadonlyMap<string, FilterDefinitionInfo>;
   readonly #registry: FilterRegistry;
@@ -73,18 +67,10 @@ async function loadDecoder(): Promise<void> {
   }
 }
 
-/**
- * One preset for a local engine: `render` returns a plain libavfilter graph fragment. A definition with none of `default`, `min` or `max` is fixed and takes no value.
- */
 export type FfmpegFilterDefinition = FilterDefinition<string>;
 
-/** Construction-time `filters` option: preset name to definition, merged over the built-in defaults. */
 export type FfmpegFilterDefinitions = FilterDefinitions<string>;
 
-/**
- * Speed presets multiply the 48 kHz sample rate, so their tempo is their value. Below 0.5x or above 2x the
- * pitch shift stops sounding like the preset and resampling cost climbs, so the ranges stop there.
- */
 function speed(label: string, fallback: number, min: number, max: number): FfmpegFilterDefinition {
   return {
     render: (value = fallback) => `asetrate=48000*${value},aresample=48000,bass=g=5`,
@@ -96,7 +82,6 @@ function speed(label: string, fallback: number, min: number, max: number): Ffmpe
   };
 }
 
-/** Built-in definition for every conventional filter name. */
 const DEFAULT_FILTERS: FfmpegFilterDefinitions = Object.freeze({
   "3d": fixed("apulsator=hz=0.125"),
   bassboost: { render: (value = 10) => `bass=g=${value}`, default: 10, min: 0, max: 20, label: "Bass boost" },
@@ -118,15 +103,8 @@ function fixed(fragment: string): FfmpegFilterDefinition {
   return { render: () => fragment };
 }
 
-/**
- * The engine's preset registry: built-in defaults with construction-time definitions merged over them.
- *
- * Core keeps filters named and ordered; this side owns what each name means, which values it takes,
- * and how the set folds into one libavfilter chain.
- */
 export class FilterRegistry {
   readonly #definitions = new Map<string, FfmpegFilterDefinition>();
-  /** Range and label metadata per preset, the shape `Engine.filters` exposes. */
   readonly definitions: ReadonlyMap<string, FilterDefinitionInfo>;
 
   constructor(definitions: FfmpegFilterDefinitions = {}) {
@@ -136,7 +114,6 @@ export class FilterRegistry {
     this.definitions = new Map([...this.#definitions].map(([name, definition]) => [name, info(name, definition)]));
   }
 
-  /** Folds the ordered set into one libavfilter chain, or `undefined` when nothing is active. */
   render(entries: readonly FilterEntry[]): string | undefined {
     const fragments = entries.map(entry => this.#fragment(entry)).filter(fragment => fragment.length > 0);
     return fragments.length > 0 ? fragments.join(",") : undefined;
@@ -191,7 +168,6 @@ function positive(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value) && value > 0;
 }
 
-/** Construction-time mistakes are programming errors, so they throw TypeError rather than a DisTubeError. */
 function validated(name: string, definition: FfmpegFilterDefinition): FfmpegFilterDefinition {
   if (typeof definition !== "object" || definition === null || typeof definition.render !== "function") {
     throw new TypeError(`Filter ${name} must define a render function`);

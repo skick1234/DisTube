@@ -20,7 +20,6 @@ import {
 
 const TARGET = { guildId: GUILD, id: VOICE_CHANNEL };
 
-/** A playing queue holding `ids` in order: the first is current, the rest are waiting. */
 async function playing(ids: readonly string[]) {
   const harness = playableSetup();
   const { queue } = await harness.distube.play(TARGET, ids[0] as string);
@@ -47,7 +46,6 @@ describe("repeat modes", () => {
     player.finish();
     await settle();
     expect(queue.current?.song.id).toBe("a");
-    // A new occurrence of the same Song, not the ended one.
     expect(queue.current?.id).not.toBe(first.id);
     expect(queue.current?.song).toBe(first.song);
     expect(waiting(queue)).toEqual(["b"]);
@@ -622,7 +620,6 @@ describe("event lifecycle", () => {
     player.finish();
     await settle();
 
-    // The Playlist's own Songs publish no per-item added events.
     expect(events).toEqual([
       "queue.created",
       "queue.playlist.added",
@@ -643,7 +640,6 @@ describe("event lifecycle", () => {
     await settle();
     player.finish();
     await settle();
-    // Read after both commits: a live view would show the later state in the first capture.
     expect(captures.map(event => event.state.upcoming.map(item => item.song.id))).toEqual([["c"], []]);
     expect(Object.isFrozen(captures[0]?.state)).toBe(true);
     await harness.distube.dispose();
@@ -697,7 +693,6 @@ describe("queue occurrence edits and lifetime", () => {
     expect(queue.stop()).toBe(stopped);
     await stopped;
 
-    // Queue deletion is not a filter reset: the committed set and its rendering stay.
     expect(player.renders.length).toBe(rendered);
     expect(voice.volume).toBe(40);
     expect(voice.filters.entries).toEqual([{ name: "bassboost", value: 15, label: "Bass boost" }]);
