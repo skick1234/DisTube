@@ -164,30 +164,29 @@ export class Guild<Target> {
 
   connect(channelId: string, options: VoiceJoinOptions): Promise<DisTubeVoice<Target>> {
     if (this.#live) return Promise.resolve(this.#live.voice);
-    const pending = this.#join;
-    if (pending) {
-      pending.waiters.push(options.signal);
-      return raceSignal(pending.voice, options.signal);
+    const join = this.#join ?? this.#startJoin(channelId, options);
+    const { signal } = options;
+    join.waiters.push(signal);
+    if (signal) {
+      const abandon = (): void => {
+        if (this.#join === join && join.waiters.every(waiter => waiter?.aborted)) this.#cancelJoin();
+      };
+      signal.addEventListener("abort", abandon, { once: true });
+      void join.voice.catch(() => undefined).finally(() => signal.removeEventListener("abort", abandon));
     }
-    const waiters = [options.signal];
+    return raceSignal(join.voice, signal);
+  }
+
+  #startJoin(channelId: string, options: VoiceJoinOptions): PendingJoin<Target> {
+    const waiters: (AbortSignal | undefined)[] = [];
     const controller = new AbortController();
-    const voice = this.#create(channelId, options, waiters, controller.signal);
-    this.#join = { waiters, controller, voice };
-    return raceSignal(voice, options.signal);
+    const join = { waiters, controller, voice: this.#create(channelId, options, waiters, controller.signal) };
+    this.#join = join;
+    return join;
   }
 
   leave(): Promise<void> {
-    const join = this.#join;
-    this.#join = undefined;
-    join?.controller.abort();
-    if (join) {
-      const leaving = join.voice.then(
-        () => undefined,
-        () => undefined,
-      );
-      this.#leaving = leaving;
-      void leaving.then(() => this.#left(leaving));
-    }
+    this.#cancelJoin();
     void this.queue?.delete("leave");
     return this.#live ? this.#end(this.#live.connection, "left") : (this.#leaving ?? Promise.resolve());
   }
@@ -408,6 +407,19 @@ export class Guild<Target> {
     });
     this.#leaving = ending;
     return ending;
+  }
+
+  #cancelJoin(): void {
+    const join = this.#join;
+    if (!join) return;
+    this.#join = undefined;
+    join.controller.abort();
+    const leaving = join.voice.then(
+      () => undefined,
+      () => undefined,
+    );
+    this.#leaving = leaving;
+    void leaving.then(() => this.#left(leaving));
   }
 
   #left(leaving: Promise<void>): void {

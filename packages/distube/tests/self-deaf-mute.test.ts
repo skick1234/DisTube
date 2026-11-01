@@ -163,6 +163,30 @@ describe("self-deaf and self-mute", () => {
     expect(harness.adapter.createVoiceSession).toHaveBeenCalledTimes(2);
   });
 
+  it("cancels the session creation once every waiter aborts, and a later join waits for that release", async () => {
+    const harness = playableSetup();
+    const creation = harness.adapter.gateCreateSession();
+    const controller = new AbortController();
+    const abandoned = capture(harness.distube.voices.join(channel, { signal: controller.signal }));
+    await flushMicrotasks(32);
+    const creating = required(harness.adapter.createVoiceSession.mock.calls[0])[1].signal;
+
+    controller.abort(new Error("caller gave up"));
+    expect(await abandoned).toMatchObject({ code: "ABORTED" });
+    expect(creating?.aborted).toBe(true);
+    const next = harness.distube.voices.join(channel);
+    await flushMicrotasks(32);
+    expect(harness.adapter.createVoiceSession).toHaveBeenCalledTimes(1);
+
+    const late = new FakeVoiceSession(GUILD, VOICE_CHANNEL);
+    creation.resolve(late);
+    const voice = await next;
+
+    expect(late.release).toHaveBeenCalledTimes(1);
+    expect(harness.distube.voices.get(GUILD)).toBe(voice);
+    expect(harness.adapter.createVoiceSession).toHaveBeenCalledTimes(2);
+  });
+
   it("aborts only its own caller when a concurrent join shares the session creation", async () => {
     const harness = playableSetup();
     const creation = harness.adapter.gateCreateSession();
