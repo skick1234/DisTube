@@ -335,15 +335,17 @@ export class Guild<Target> {
     try {
       await this.#leaving?.catch(() => undefined);
       abort.throwIfAborted();
-      session = await this.config.adapter.createVoiceSession(
-        { guildId: this.id, channelId },
-        {
-          selfDeaf: options.selfDeaf ?? true,
-          selfMute: options.selfMute ?? false,
-          timeoutMs: this.config.connectionTimeoutMs,
-          signal: abort,
-        },
-      );
+      const { adapter, engine } = this.config;
+      const target = { guildId: this.id, channelId };
+      const sessionOptions = {
+        selfDeaf: options.selfDeaf ?? true,
+        selfMute: options.selfMute ?? false,
+        timeoutMs: this.config.connectionTimeoutMs,
+        signal: abort,
+      };
+      session = await (engine.createVoiceSession
+        ? engine.createVoiceSession(target, sessionOptions)
+        : adapter.createVoiceSession(target, sessionOptions));
     } catch (error: unknown) {
       this.#dropJoin(waiters);
       if (abort.aborted) throw new DisTubeError(ErrorCode.INVALID_STATE, "Voice join was superseded");

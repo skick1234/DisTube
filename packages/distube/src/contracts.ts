@@ -314,6 +314,11 @@ export interface FilterEntry {
 /** The active playback backend: the Adapter's built-in engine, or the one engine plugin's. */
 export interface Engine {
   readonly filters: ReadonlyMap<string, FilterDefinitionInfo>;
+  /**
+   * Opens the voice through the engine's own connection, which then sends the join and receives the platform's
+   * credentials as they arrive. When present, core calls it instead of `Adapter.createVoiceSession`.
+   */
+  createVoiceSession?(target: VoiceTarget, options: VoiceSessionOptions): Promise<VoiceSession>;
   createPlayer(session: VoiceSession, options: PlayerOptions): Promise<Player>;
   /**
    * Source seconds the ordered selection plays per wall second, as this engine composes it; finite and above 0.

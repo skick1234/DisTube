@@ -1,10 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { type DisTube, DisTubeError, type DisTubeEventMap } from "../src";
-import type { VoiceGatewayData } from "../src/integrations";
+import type { VoiceGatewayData, VoiceSessionOptions, VoiceTarget } from "../src/integrations";
 import {
   capture,
   deferred,
   deletions,
+  FakeEngine,
   FakePlayer,
   FakeSource,
   FakeVoiceSession,
@@ -60,6 +61,30 @@ describe("voice presence", () => {
     expect(harness.adapter.createVoiceSession).toHaveBeenCalledTimes(1);
     expect(harness.engine.players).toEqual([player]);
     expect(player.playing).toBe("b");
+  });
+
+  it("opens the voice through the engine when it has createVoiceSession and plays on that session", async () => {
+    const engine = Object.assign(new FakeEngine(), {
+      createVoiceSession: vi.fn(
+        async (target: VoiceTarget, options: VoiceSessionOptions) =>
+          new FakeVoiceSession(target.guildId, target.channelId, options),
+      ),
+    });
+    const harness = playableSetup("source", { engine });
+
+    await harness.distube.voices.join(TARGET, { selfMute: true });
+    await harness.distube.play(TARGET, "a");
+    await settle();
+
+    expect(harness.adapter.createVoiceSession).not.toHaveBeenCalled();
+    expect(engine.createVoiceSession).toHaveBeenCalledTimes(1);
+    expect(engine.createVoiceSession).toHaveBeenCalledWith(
+      { guildId: GUILD, channelId: VOICE_CHANNEL },
+      expect.objectContaining({ selfDeaf: true, selfMute: true }),
+    );
+    const session = await required(engine.createVoiceSession.mock.results[0]).value;
+    expect(engine.createPlayer).toHaveBeenCalledWith(session, expect.anything());
+    expect(engine.player.playing).toBe("a");
   });
 
   it("joins and leaves without queue events or a Player", async () => {
