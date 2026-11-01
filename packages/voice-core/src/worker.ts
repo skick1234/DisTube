@@ -568,6 +568,8 @@ class Pipeline {
           packet = this.#packet;
         }
         this.#process(packet, input);
+        // Buffered libav reads settle as microtasks, so without a macrotask turn a close or volume message waits for the whole credit.
+        await new Promise(setImmediate);
       }
     } catch (error: unknown) {
       this.fail("decode", error);
