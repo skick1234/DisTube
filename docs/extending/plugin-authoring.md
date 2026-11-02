@@ -167,10 +167,13 @@ Leave out `stream` when the provider serves metadata only, as Spotify does. Core
 fallback:
 
 1. It builds the query from `song.name`, followed by `song.artist` when present.
-2. It searches every other plugin that has both `search` and `stream`, in the order of `plugins`, with limit 1 and
-   the queue's `allowAgeRestricted`.
-3. It prepares only the first candidate of each plugin through that plugin's `stream`, and stops at the first
-   resource. While the queue refuses age-restricted Songs, a candidate marked `ageRestricted` counts as none.
+2. It searches every other plugin that has both `search` and `stream`, in the order of `plugins`, with limit 5 and
+   the queue's `allowAgeRestricted`. While the queue refuses age-restricted Songs, it drops every candidate marked
+   `ageRestricted`.
+3. It picks one candidate per plugin. When the Song has a duration, that is the candidate nearest it within 5
+   seconds, else one with no duration. A plugin with neither has no candidate. A Song
+   with no duration takes the first candidate.
+4. It prepares the picked candidate through that plugin's `stream`, and stops at the first resource.
 
 If nothing is found, the item fails `NO_RESULT`. If a search or stream failed, the item fails with the code every
 failure shares, or `SOURCE_FAILED` when they differ, with an `AggregateError` of every failure as `cause`. When every

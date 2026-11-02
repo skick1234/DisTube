@@ -179,15 +179,30 @@ describe("stream-only and failing sources", () => {
 
 const spotify: Plugin = { name: "spotify", resolve: async () => undefined };
 
-function spotifySong(artist?: string): Song {
+function spotifySong(artist?: string, duration?: number): Song {
   return new Song({
     source: "spotify",
     id: "track",
     name: "Song A",
     url: "https://open.spotify.com/track/track",
     ...(artist === undefined ? {} : { artist }),
+    ...(duration === undefined ? {} : { duration }),
   });
 }
+
+type Candidate = readonly [id: string, duration?: number, ageRestricted?: boolean];
+
+const songOf =
+  (source: string) =>
+  ([id, duration, ageRestricted]: Candidate): Song =>
+    new Song({
+      source,
+      id,
+      name: "Song A",
+      url: `https://${source}.example/media/${id}`,
+      ...(duration === undefined ? {} : { duration }),
+      ...(ageRestricted === undefined ? {} : { ageRestricted }),
+    });
 
 describe("search fallback for a plugin without stream", () => {
   it("plays the next plugin's first candidate under the original item when the first plugin's candidate fails", async () => {
@@ -225,7 +240,7 @@ describe("search fallback for a plugin without stream", () => {
   it.each([
     ["Artist B Artist C", "Song A Artist B Artist C"],
     [undefined, "Song A"],
-  ])("searches with the name and artist %j as %j and limit 1", async (artist, query) => {
+  ])("searches with the name and artist %j as %j and limit 5", async (artist, query) => {
     const youtube = new FakeSource("youtube");
     youtube.search.mockResolvedValue([media("youtube", "yt-first")]);
     const harness = setup([spotify, youtube]);
@@ -233,10 +248,85 @@ describe("search fallback for a plugin without stream", () => {
     await harness.distube.play(TARGET, spotifySong(artist));
     await settle();
 
-    expect(youtube.search).toHaveBeenCalledWith(query, expect.objectContaining({ limit: 1, offset: 0 }));
+    expect(youtube.search).toHaveBeenCalledWith(query, expect.objectContaining({ limit: 5, offset: 0 }));
     expect(harness.engine.player.played).toEqual(["yt-first"]);
     await harness.distube.dispose();
   });
+
+  it.each([
+    [
+      "the closest in-range candidate",
+      180,
+      [
+        ["long", 1800],
+        ["far", 186],
+        ["near", 184],
+        ["nearest", 177],
+      ],
+      [],
+      "nearest",
+    ],
+    ["an in-range candidate before one of unknown duration", 180, [["unknown"], ["near", 184]], [], "near"],
+    ["a candidate of unknown duration when none is in range", 180, [["long", 1800], ["unknown"]], [], "unknown"],
+    ["the next plugin's candidate when none is in range", 180, [["long", 1800]], [["sc-near", 182]], "sc-near"],
+    [
+      "5 seconds either side as the range",
+      180,
+      [
+        ["over", 185.001],
+        ["under", 174.999],
+        ["edge", 175],
+      ],
+      [],
+      "edge",
+    ],
+    ["5 seconds as the range for a long Song", 1000, [["far", 1006]], [["sc-edge", 1005]], "sc-edge"],
+    [
+      "the first candidate for a Song of unknown duration",
+      undefined,
+      [
+        ["long", 1800],
+        ["near", 180],
+      ],
+      [],
+      "long",
+    ],
+    [
+      "the first candidate for a live Song",
+      0,
+      [
+        ["long", 1800],
+        ["near", 180],
+      ],
+      [],
+      "long",
+    ],
+    [
+      "no restricted candidate however close",
+      180,
+      [
+        ["restricted", 180, true],
+        ["near", 183],
+      ],
+      [],
+      "near",
+    ],
+  ] satisfies readonly [string, number | undefined, Candidate[], Candidate[], string][])(
+    "picks %s",
+    async (_case, duration, youtubeResults, soundcloudResults, played) => {
+      const youtube = new FakeSource("youtube");
+      const soundcloud = new FakeSource("soundcloud");
+      youtube.search.mockResolvedValue(youtubeResults.map(songOf("youtube")));
+      soundcloud.search.mockResolvedValue(soundcloudResults.map(songOf("soundcloud")));
+      const harness = setup([spotify, youtube, soundcloud]);
+
+      await harness.distube.play(TARGET, spotifySong("Artist B", duration));
+      await settle();
+
+      expect(harness.engine.player.played).toEqual([played]);
+      await harness.distube.dispose();
+    },
+  );
 
   it.each([
     [false, "sc-clean"],

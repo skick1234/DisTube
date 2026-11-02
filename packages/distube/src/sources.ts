@@ -3,6 +3,8 @@ import { abortError, DisTubeError, ErrorCode, fromIntegration, requireQuery, thr
 import { Playlist, Song } from "./media";
 
 const SUGGESTION_LIMIT = 25;
+const FALLBACK_CANDIDATES = 5;
+const DURATION_TOLERANCE = 5;
 
 export interface SearchQuery {
   readonly source?: Plugin;
@@ -237,6 +239,15 @@ export interface PreparedSong {
   readonly fallback?: Song;
 }
 
+function closest(song: Song, candidates: readonly Song[]): Song | undefined {
+  const target = song.duration;
+  if (!target) return candidates[0];
+  const gap = (candidate: Song) => (candidate.duration ? Math.abs(candidate.duration - target) : Infinity);
+  return candidates
+    .filter(candidate => !candidate.duration || gap(candidate) <= DURATION_TOLERANCE)
+    .reduce<Song | undefined>((best, candidate) => (best && gap(best) <= gap(candidate) ? best : candidate), undefined);
+}
+
 export async function prepareSong(
   plugins: readonly Plugin[],
   engine: Engine,
@@ -258,11 +269,12 @@ export async function prepareSong(
     const search = plugin.search?.bind(plugin);
     const prepareCandidate = plugin.stream?.bind(plugin);
     if (!search || !prepareCandidate) return undefined;
-    const [found] = await call(plugin, signal, () =>
-      search(query, { signal, limit: 1, offset: 0, allowAgeRestricted }),
+    const found = await call(plugin, signal, () =>
+      search(query, { signal, limit: FALLBACK_CANDIDATES, offset: 0, allowAgeRestricted }),
     );
-    if (!found || (!allowAgeRestricted && !allowed(found))) return undefined;
-    const fallback = owned(plugin, found);
+    const candidate = closest(song, allowAgeRestricted ? found : found.filter(allowed));
+    if (!candidate) return undefined;
+    const fallback = owned(plugin, candidate);
     return { resource: await call(plugin, signal, () => prepareCandidate(fallback, { signal })), fallback };
   });
 }

@@ -105,8 +105,8 @@ The `plugins` array is the list of sources, in priority order.
 - A Song or Playlist whose `source` is not a configured plugin rejects `INVALID_ARGUMENT`.
 
 Some plugins cannot stream. Spotify only knows track details, so a Spotify Song keeps its Spotify URL. When it is
-about to play, DisTube searches the other plugins in order for the track name and artist, and plays the first
-result. The Song in the queue stays the Spotify one. The [events reference](../../reference/events/) covers
+about to play, DisTube searches the other plugins in order for the track name and artist, and plays the result
+nearest the track's length. The Song in the queue stays the Spotify one. The [events reference](../../reference/events/) covers
 `fallback` and the failure codes.
 
 :::note

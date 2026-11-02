@@ -53,7 +53,8 @@ options. Short `spotify.link` links work like the full ones.
 ## Which plugin plays a track
 
 When a Spotify track is about to play, DisTube searches its name and artists on your other plugins in `plugins` order
-and plays the first match. To match against YouTube Music songs instead of videos, list
+and plays the match nearest the track's length. A plugin whose top 5 results all have a known length more than 5 seconds
+away is passed over. To match against YouTube Music songs instead of videos, list
 [`YouTubeMusicPlugin`](../youtube/#search-youtube-music) before `YouTubePlugin`.
 
 The queue item stays a Spotify one. `queue.item.started` carries the match as `fallback`, so a now-playing message can
