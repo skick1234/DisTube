@@ -32,7 +32,15 @@ import {
   shuffle,
   startFirst,
 } from "./queue-state";
-import { disposeResource, prepareSong, relatedSong, resolveInput, songsOf, validateInput } from "./sources";
+import {
+  allowedRelated,
+  disposeResource,
+  prepareSong,
+  relatedSong,
+  resolveInput,
+  songsOf,
+  validateInput,
+} from "./sources";
 import type { DisTubeVoice } from "./voice";
 
 type MetadataOption<Metadata> = undefined extends Metadata
@@ -530,7 +538,7 @@ export class DisTubeQueue<Metadata = undefined, Target = VoiceChannelTarget> {
         signal,
         seed.fallback,
       );
-      song = await untilAborted(related, signal);
+      song = allowedRelated(await untilAborted(related, signal), this.#allowAgeRestricted);
     } catch (error: unknown) {
       failure = error;
     } finally {

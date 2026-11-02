@@ -300,6 +300,31 @@ describe("autoplay", () => {
     expect(allowing.queue.current?.song.id).toBe("adult");
   });
 
+  it("refuses an age-restricted related Song when the queue stops allowing them during the lookup", async () => {
+    const { harness, queue, player } = await playing(["a"]);
+    const { id, name, url, source } = media("source", "adult");
+    const lookup = deferred<Song | undefined>();
+    const started = deferred<void>();
+    harness.source.related.mockImplementationOnce(async () => {
+      started.resolve();
+      return lookup.promise;
+    });
+    const events = record(harness.distube, ["queue.item.added", "queue.autoplay.failed", "queue.deleted"]);
+    const failures: DisTubeError[] = [];
+    harness.distube.on("queue.autoplay.failed", event => failures.push(event.error));
+    queue.setAutoplay(true);
+    queue.setAllowAgeRestricted(true);
+
+    player.finish();
+    await started.promise;
+    queue.setAllowAgeRestricted(false);
+    lookup.resolve(new Song({ id, name, url, source, ageRestricted: true }));
+    await settle();
+
+    expect(events).toEqual(["queue.autoplay.failed", "queue.deleted"]);
+    expect(failures).toMatchObject([{ code: "NO_RESULT", message: "source returned an age-restricted related Song" }]);
+  });
+
   it("rejects a non-boolean allowAgeRestricted on the queue INVALID_ARGUMENT", async () => {
     const { queue } = await playing(["a"]);
     expect(thrown(() => queue.setAllowAgeRestricted("yes" as never))).toMatchObject({ code: "INVALID_ARGUMENT" });

@@ -133,7 +133,7 @@ distube.on("queue.created", ({ queue }) => {
 ```
 
 While it is off, YouTube skips age-restricted related videos and tries the next one. If the plugin still returns an
-age-restricted Song, autoplay treats it as no result and emits `queue.autoplay.failed`. `queue.allowAgeRestricted`
+age-restricted Song, even from a lookup that began while the setting was on, autoplay treats it as no result and emits `queue.autoplay.failed`. `queue.allowAgeRestricted`
 reads the setting. Like repeat and autoplay, it resets with the queue, and it publishes no `queue.updated`.
 
 ## Watch the queue while autoplay looks

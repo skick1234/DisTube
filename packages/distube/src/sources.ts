@@ -228,10 +228,13 @@ export async function relatedSong(
   if (!owner || !related) throw noRelated(seed.source, `${seed.source} has no related lookup`);
   const next = await call(owner, signal, () => related(seed, { signal, exclude, allowAgeRestricted }));
   if (!next) throw noRelated(owner.name, `${owner.name} returned no related Song`);
-  const found = owned(owner, next);
-  if (!allowAgeRestricted && !allowed(found))
-    throw noRelated(owner.name, `${owner.name} returned an age-restricted related Song`);
-  return found;
+  return owned(owner, next);
+}
+
+export function allowedRelated(song: Song, allowAgeRestricted: boolean): Song {
+  if (!allowAgeRestricted && !allowed(song))
+    throw noRelated(song.source, `${song.source} returned an age-restricted related Song`);
+  return song;
 }
 
 export interface PreparedSong {
