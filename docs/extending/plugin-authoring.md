@@ -118,8 +118,8 @@ A concrete `ListData` makes the Playlist's `pluginData` required at construction
 ## Resolving links
 
 `resolve` returns a Song, an ordered Playlist, or `undefined` to decline. Throw for a provider failure. Return `Song`
-and `Playlist` values from `distube`, each with `source` equal to the plugin's `name`. Core rejects any other source
-with `SOURCE_FAILED`.
+and `Playlist` values from `distube`, each with `source` equal to the plugin's `name`, and so is every Song in a
+Playlist. Core rejects any other source with `SOURCE_FAILED`.
 
 Core decides which method a string reaches, as [plugins and their order](../../get-started/how-distube-works/#plugins-and-their-order)
 describes. An application's input reaches `resolve` only when it is an `http` or `https` URL, and anything else is a

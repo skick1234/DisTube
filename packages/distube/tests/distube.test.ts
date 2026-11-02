@@ -364,6 +364,21 @@ describe("public search", () => {
     expect(first.search).not.toHaveBeenCalled();
   });
 
+  it("rejects a resolved Playlist holding another source's Song before any queue exists", async () => {
+    const harness = playableSetup();
+    const songs = [media("source", "own"), media("spotify", "foreign")];
+    harness.source.resolve.mockResolvedValue(
+      new Playlist({ id: "list", name: "List", url: mediaUrl("list"), source: "source", songs }),
+    );
+
+    await expect(harness.distube.resolve(mediaUrl("list"))).rejects.toMatchObject({
+      code: "SOURCE_FAILED",
+      message: "source returned media from spotify",
+    });
+    await expect(harness.distube.play(TARGET, mediaUrl("list"))).rejects.toMatchObject({ code: "SOURCE_FAILED" });
+    expect(harness.distube.getQueue(GUILD)).toBeUndefined();
+  });
+
   it("rejects a result list holding another source's Song", async () => {
     const [first] = sources();
     first.search.mockResolvedValue([media("first"), media("foreign")]);

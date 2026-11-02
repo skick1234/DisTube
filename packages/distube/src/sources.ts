@@ -24,8 +24,8 @@ async function call<Value>(plugin: Plugin, signal: AbortSignal, operation: () =>
 }
 
 function owned<Media extends Song | Playlist>(plugin: Plugin, media: Media): Media {
-  if (media.source !== plugin.name)
-    throw new DisTubeError(ErrorCode.SOURCE_FAILED, `${plugin.name} returned media from ${media.source}`);
+  const foreign = [media, ...songsOf(media)].find(found => found.source !== plugin.name);
+  if (foreign) throw new DisTubeError(ErrorCode.SOURCE_FAILED, `${plugin.name} returned media from ${foreign.source}`);
   return media;
 }
 
