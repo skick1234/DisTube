@@ -252,13 +252,13 @@ export class DisTubeQueue<Metadata = undefined, Target = VoiceChannelTarget> {
   }
 
   /**
-   * Seeks the current item within a known duration. Rejects `UNSUPPORTED` for a `stream` resource or a Player that
+   * Seeks the current item within the known duration of the Song that plays, its `fallback` when it has one. Rejects `UNSUPPORTED` for a `stream` resource or a Player that
    * cannot seek the item, and `INVALID_STATE` when the item ends before the seek lands.
    */
   async seek(seconds: number): Promise<void> {
     if (!Number.isFinite(seconds) || seconds < 0)
       throw new DisTubeError(ErrorCode.INVALID_ARGUMENT, "Seek seconds must be non-negative");
-    const duration = this.#state.current?.song.duration;
+    const duration = (this.#attempt?.fallback ?? this.#state.current?.song)?.duration;
     if (duration && seconds > duration)
       throw new DisTubeError(ErrorCode.INVALID_ARGUMENT, "Seek seconds exceed the track duration");
     this.#assertStarted();

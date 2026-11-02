@@ -6,6 +6,7 @@ import {
   capture,
   deferred,
   FakePlayer,
+  FakeSource,
   GUILD,
   type Harness,
   media,
@@ -13,6 +14,7 @@ import {
   record,
   required,
   settle,
+  setup,
   updates,
 } from "./support/harness";
 
@@ -207,6 +209,44 @@ describe("seek", () => {
     held.resolve([media("source", "a")]);
     await started;
   });
+
+  it.each([
+    [180, 183, true],
+    [180, 184.001, false],
+    [undefined, 184.001, false],
+  ])(
+    "bounds seek by a 184 second fallback under a Song of duration %s: seek(%s) accepted %s",
+    async (duration, seconds, accepted) => {
+      const youtube = new FakeSource("youtube");
+      youtube.search.mockResolvedValue([
+        new Song({
+          source: "youtube",
+          id: "upload",
+          name: "Song A",
+          url: "https://youtube.example/upload",
+          duration: 184,
+        }),
+      ]);
+      const harness = setup([{ name: "spotify", resolve: async () => undefined }, youtube]);
+      const song = new Song({
+        source: "spotify",
+        id: "track",
+        name: "Song A",
+        url: "https://open.spotify.com/track/track",
+        ...(duration === undefined ? {} : { duration }),
+      });
+      const { queue } = await harness.distube.play(TARGET, song);
+      await settle();
+
+      const result = await capture(queue.seek(seconds));
+      if (accepted) expect(harness.engine.player.seek).toHaveBeenCalledWith(seconds);
+      else {
+        expect(result).toMatchObject({ code: "INVALID_ARGUMENT" });
+        expect(harness.engine.player.seek).not.toHaveBeenCalled();
+      }
+      await harness.distube.dispose();
+    },
+  );
 
   it.each([
     [0, true],

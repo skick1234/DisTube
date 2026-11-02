@@ -148,8 +148,8 @@ and [Repeat and autoplay](../../guides/repeat-and-autoplay/).
 - `skip` rejects `INVALID_STATE` when nothing is playing or waiting, and while an earlier `skip`, `jump` or `previous`
   is still ending its item.
 - `previous` rejects `INVALID_STATE` when history is empty.
-- `seek` rejects `INVALID_ARGUMENT` for a negative or non-finite value, or one past a known duration. A Song with no
-  duration can still seek. It rejects `UNSUPPORTED` when the item's audio or the engine cannot seek, such as a live
+- `seek` rejects `INVALID_ARGUMENT` for a negative or non-finite value, or one past a known duration: the `fallback`'s
+  when one plays, else the Song's. An item with no known duration can still seek. It rejects `UNSUPPORTED` when the item's audio or the engine cannot seek, such as a live
   stream.
 
 ## Repeat and autoplay
