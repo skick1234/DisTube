@@ -161,7 +161,7 @@ Repeat and autoplay belong to the queue and go away with it.
 - Autoplay adds a related Song when nothing is left. It calls `related` on the plugin that owns the last item that
   finished or was skipped, and passes the history so the plugin avoids repeats.
 - If that plugin has no `related` and the item played through a `fallback`, autoplay asks the fallback's plugin
-  instead. [Spotify](../../plugins/spotify/#autoplay) works this way.
+  instead.
 - A failure publishes `queue.autoplay.failed`.
 
 ## Items and history

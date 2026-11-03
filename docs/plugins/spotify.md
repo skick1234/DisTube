@@ -74,9 +74,8 @@ When no plugin finds the track, the item fails with `NO_RESULT`.
 
 ## Autoplay
 
-Spotify has no related tracks. After a Spotify track, autoplay asks the plugin that played its `fallback`, so with
-YouTube it adds a related YouTube video. With [Lavalink](../lavalink/) there is no `fallback`, so autoplay after a
-Spotify track fails and publishes `queue.autoplay.failed`.
+The Spotify plugin has `related`, so autoplay after a Spotify track adds another Spotify track. That track plays
+through the same search fallback as the first.
 
 :::caution
 The plugin reads Spotify's public web pages without an account. Spotify can rate limit or change them at any time,

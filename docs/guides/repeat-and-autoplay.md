@@ -109,9 +109,9 @@ Repeat and autoplay belong to the queue. When the queue ends, they go with it, s
 When the last item ends and nothing waits in `upcoming`, autoplay asks a plugin for a Song related to the track that
 just played. DisTube passes the queue's history along, so the plugin can avoid tracks that already played.
 
-The plugin it asks is the one that owns the last Song. A Spotify Song is the exception. The Spotify plugin has no
-`related` lookup, and its Songs play through another plugin's search. That other Song is the `fallback` on
-`queue.item.started`, and autoplay asks the plugin that owns it.
+The plugin it asks is the one that owns the last Song. When that plugin has no `related` lookup, autoplay asks the
+plugin that owns the `fallback` on `queue.item.started` instead, which is the Song that played in its place. A Spotify
+Song plays through another plugin's search, but the Spotify plugin has `related`, so autoplay asks Spotify.
 
 An autoplay item has `item.autoplay === true`. It copies the metadata of the track it follows, so it is announced in
 the same channel.
