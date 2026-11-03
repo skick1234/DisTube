@@ -26,6 +26,7 @@ export interface GuildConfig<Target> {
   readonly historySize: number;
   readonly maxPlaylistSongs: number;
   readonly connectionTimeoutMs: number;
+  readonly prefetchAutoplay: boolean;
   readonly lifetime: AbortSignal;
 }
 

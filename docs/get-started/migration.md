@@ -77,7 +77,7 @@ Find the v5 call on the left and replace it with the v6 code on the right.
   [options](../../reference/options/#diagnostics).
 - `maxPlaylistSongs` (default 500) caps a Playlist resolved from a URL, in core and in each official plugin. DisTube
   does not cut a Playlist you pass in directly.
-- New `DisTube` options: `historySize` (default 10), `filters`, `connectionTimeoutMs`, `onDiagnostic` and
+- New `DisTube` options: `historySize` (default 10), `filters`, `prefetchAutoplay` (default `false`), `connectionTimeoutMs`, `onDiagnostic` and
   `engine: { opusComplexity, bufferMs }`. See [options](../../reference/options/). Built-in filter definitions, the
   connection timeout and engine settings are `DisTube` options, not adapter constructor options.
 - There are no `voice.track.*` events. Listen to `queue.item.started` and `queue.item.finished`.
@@ -147,6 +147,8 @@ This table covers every v5 event. The [events reference](../../reference/events/
   `SOURCE_FAILED`. See [errors during playback](../../reference/errors/#errors-during-playback).
 - A live track's `position` is the seconds played since it started, not a broadcast timestamp. A progress bar that
   showed a huge number now shows elapsed time.
+- `queue.related` and `prefetchAutoplay` are new. Turn the option on to show a stable Up next row while autoplay is on.
+  See [autoplay look-ahead](../../reference/queue/#autoplay-look-ahead).
 - `Diagnostic` is a union keyed by `stage`. A report with `plugin === undefined` narrows `data` by `stage`. New stage
   `engine.input.reopened`; `engine.track.failed` gains `kind`, `playedSeconds`, `reopens` and `recovery` in `data`;
   core background stages carry `guildId`.

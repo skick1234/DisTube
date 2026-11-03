@@ -520,6 +520,371 @@ describe("autoplay", () => {
   });
 });
 
+const PREFETCH = { prefetchAutoplay: true } as const;
+const seeds = (source: FakeSource): string[] => source.related.mock.calls.map(([song]) => song.id);
+const related = (queue: Pick<DisTubeQueue, "related">) => [queue.related?.song.id, queue.related?.playsNext];
+
+function pendingLookup(source: FakeSource) {
+  const lookup = deferred<Song | undefined>();
+  const signals: AbortSignal[] = [];
+  source.related.mockImplementationOnce((_song, { signal }) => {
+    signals.push(signal);
+    return lookup.promise;
+  });
+  return { lookup, signals };
+}
+
+describe("autoplay look-ahead", () => {
+  it("looks up a related Song for the current Song at item start while items wait and publishes it once", async () => {
+    const harness = playableSetup("source", PREFETCH);
+    const { lookup } = pendingLookup(harness.source);
+    const { queue } = await harness.distube.play(TARGET, "a");
+    queue.setAutoplay(true);
+    await queue.add("b");
+    await settle();
+    const published = updates(harness.distube);
+
+    lookup.resolve(media("source", "related"));
+    await settle();
+
+    expect(seeds(harness.source)).toEqual(["a"]);
+    expect(harness.source.related.mock.calls[0]?.[1].exclude.map(song => song.id)).toEqual(["a"]);
+    expect(published.map(event => [event.state.related?.song.id, event.state.related?.playsNext])).toEqual([
+      ["related", false],
+    ]);
+    expect(related(queue)).toEqual(["related", false]);
+  });
+
+  it.each([
+    [true, ["a"], "related"],
+    [false, [], undefined],
+  ] as const)(
+    "with prefetchAutoplay %s, turning autoplay on mid-song looks up %j before the item ends",
+    async (prefetchAutoplay, expected, held) => {
+      const harness = playableSetup("source", prefetchAutoplay ? PREFETCH : {});
+      harness.source.related.mockResolvedValue(media("source", "related"));
+      const { queue } = await harness.distube.play(TARGET, "a");
+      await settle();
+
+      queue.setAutoplay(true);
+      const called = seeds(harness.source);
+      await settle();
+
+      expect(called).toEqual(expected);
+      expect(seeds(harness.source)).toEqual(expected);
+      expect(queue.related?.song.id).toBe(held);
+    },
+  );
+
+  it("keeps the related Song through edits and repeat changes and publishes playsNext on each change", async () => {
+    const harness = playableSetup("source", PREFETCH);
+    harness.source.related.mockResolvedValueOnce(media("source", "related"));
+    const { queue } = await harness.distube.play(TARGET, "a");
+    queue.setAutoplay(true);
+    const [b] = await queue.add("b");
+    await settle();
+    const published = updates(harness.distube);
+    const reads = [related(queue)];
+
+    queue.remove(required(b).id);
+    reads.push(related(queue));
+    queue.setRepeat("song");
+    reads.push(related(queue));
+    queue.setRepeat("off");
+    reads.push(related(queue));
+    await settle();
+
+    expect(reads).toEqual([
+      ["related", false],
+      ["related", true],
+      ["related", false],
+      ["related", true],
+    ]);
+    expect(published.map(event => event.state.related?.playsNext)).toEqual([true, false, true]);
+    expect(seeds(harness.source)).toEqual(["a"]);
+  });
+
+  it("cancels the previous item's lookup at the next item start and keeps the held Song until the new one commits", async () => {
+    const harness = playableSetup("source", PREFETCH);
+    harness.source.related.mockResolvedValueOnce(media("source", "r"));
+    const late = pendingLookup(harness.source);
+    const next = pendingLookup(harness.source);
+    const { queue } = await harness.distube.play(TARGET, "a");
+    queue.setAutoplay(true);
+    queue.setRepeat("song");
+    await queue.add("b");
+    await settle();
+    const player = harness.engine.player;
+    player.finish();
+    await settle();
+    queue.setRepeat("off");
+    player.finish();
+    await settle();
+
+    late.lookup.resolve(media("source", "r2"));
+    await settle();
+    const beforeNext = queue.related?.song.id;
+    next.lookup.resolve(media("source", "s"));
+    await settle();
+
+    expect(seeds(harness.source)).toEqual(["a", "a", "b"]);
+    expect(late.signals[0]?.aborted).toBe(true);
+    expect([beforeNext, queue.related?.song.id]).toEqual(["r", "s"]);
+  });
+
+  it.each([
+    ["resolves undefined", (lookup: ReturnType<typeof pendingLookup>["lookup"]) => lookup.resolve(undefined)],
+    ["rejects", (lookup: ReturnType<typeof pendingLookup>["lookup"]) => lookup.reject(new Error("radio down"))],
+  ])(
+    "clears the held Song with one queue.updated and no autoplay failure when the next seed's lookup %s",
+    async (_case, settleLookup) => {
+      const harness = playableSetup("source", PREFETCH);
+      harness.source.related.mockResolvedValueOnce(media("source", "r"));
+      const { lookup } = pendingLookup(harness.source);
+      const { queue } = await harness.distube.play(TARGET, "a");
+      queue.setAutoplay(true);
+      await queue.add("b");
+      await settle();
+      harness.engine.player.finish();
+      await settle();
+      const published = updates(harness.distube);
+      const failures = record(harness.distube, ["queue.autoplay.failed"]);
+
+      settleLookup(lookup);
+      await settle();
+
+      expect(seeds(harness.source)).toEqual(["a", "b"]);
+      expect(published.map(event => event.state.related)).toEqual([undefined]);
+      expect(queue.related).toBeUndefined();
+      expect(failures).toEqual([]);
+    },
+  );
+
+  it.each([
+    ["turning autoplay off", (queue: DisTubeQueue) => queue.setAutoplay(false)],
+    ["deleting the queue", (queue: DisTubeQueue) => void queue.stop()],
+  ])("cancels a pending lookup and drops its result on %s", async (_case, cancel) => {
+    const harness = playableSetup("source", PREFETCH);
+    harness.source.related.mockResolvedValueOnce(media("source", "r"));
+    const { lookup, signals } = pendingLookup(harness.source);
+    const { queue } = await harness.distube.play(TARGET, "a");
+    queue.setAutoplay(true);
+    await queue.add("b");
+    await settle();
+    harness.engine.player.finish();
+    await settle();
+    const published = updates(harness.distube);
+
+    cancel(queue);
+    await settle();
+    const settledUpdates = published.length;
+    lookup.resolve(media("source", "late"));
+    await settle();
+
+    expect(signals[0]?.aborted).toBe(true);
+    expect(published.at(-1)?.state.related).toBeUndefined();
+    expect(published).toHaveLength(settledUpdates);
+    expect(queue.related).toBeUndefined();
+  });
+
+  it("plays the held Song as a current autoplay item with the seed's metadata and never shows it in upcoming", async () => {
+    const harness = playableSetup<unknown>("source", PREFETCH);
+    const requester = { member: "user-1" };
+    harness.source.related.mockResolvedValueOnce(media("source", "related"));
+    const published = updates(harness.distube);
+    const added: DisTubeEventMap<unknown>["queue.item.added"][] = [];
+    harness.distube.on("queue.item.added", event => void added.push(event));
+    const { queue } = await harness.distube.play(TARGET, "a", { metadata: requester });
+    queue.setAutoplay(true);
+    await settle();
+    const before = related(queue);
+
+    harness.engine.player.finish();
+    await settle();
+
+    const handOff = required(added.at(-1));
+    expect(before).toEqual(["related", true]);
+    expect([handOff.item.song.id, handOff.item.autoplay]).toEqual(["related", true]);
+    expect(handOff.item.metadata).toBe(requester);
+    expect(handOff.state.current).toBe(handOff.item);
+    expect([handOff.state.upcoming, handOff.state.related]).toEqual([[], undefined]);
+    expect(published.filter(event => event.state.upcoming.some(item => item.song.id === "related"))).toEqual([]);
+    expect(harness.engine.player.playing).toBe("related");
+    expect(queue.current).toBe(handOff.item);
+    expect(seeds(harness.source)).toEqual(["a", "related"]);
+  });
+
+  it("asks no related Song for an item added while the related item prepares, once that item fails", async () => {
+    const harness = playableSetup("source", PREFETCH);
+    harness.source.related.mockResolvedValueOnce(media("source", "related"));
+    const { queue } = await harness.distube.play(TARGET, "a");
+    queue.setAutoplay(true);
+    await settle();
+    const preparation = deferred<PlaybackResource>();
+    harness.source.stream.mockReturnValueOnce(preparation.promise);
+    harness.engine.player.finish();
+    await settle();
+
+    await queue.add("b");
+    preparation.reject(new Error("broken"));
+    await settle();
+
+    expect(harness.engine.player.playing).toBe("b");
+    expect(seeds(harness.source)).toEqual(["a"]);
+    expect(queue.related).toBeUndefined();
+  });
+
+  it("skips a related item still preparing as current without adding it to history", async () => {
+    const harness = playableSetup("source", PREFETCH);
+    harness.source.related.mockResolvedValueOnce(media("source", "related"));
+    const { queue } = await harness.distube.play(TARGET, "a");
+    queue.setAutoplay(true);
+    await settle();
+    const signals: AbortSignal[] = [];
+    harness.source.stream.mockImplementationOnce(
+      (_song, { signal }) =>
+        new Promise<never>((_, reject) => {
+          signals.push(signal);
+          signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+        }),
+    );
+    harness.engine.player.finish();
+    await settle();
+    await queue.add("b");
+
+    const skipped = await queue.skip();
+    await settle();
+
+    expect(signals[0]?.aborted).toBe(true);
+    expect(skipped?.song.id).toBe("b");
+    expect(harness.engine.player.played).toEqual(["a", "b"]);
+    expect(queue.history.map(entry => entry.song.id)).toEqual(["a"]);
+  });
+
+  it("awaits the ended item's pending lookup and plays its Song without a second lookup for that seed", async () => {
+    const harness = playableSetup("source", PREFETCH);
+    const { lookup } = pendingLookup(harness.source);
+    const { queue } = await harness.distube.play(TARGET, "a");
+    queue.setAutoplay(true);
+    await settle();
+    const published = updates(harness.distube);
+
+    harness.engine.player.finish();
+    await settle();
+    const whilePending = [queue.status, queue.current, queue.upcoming];
+    lookup.resolve(media("source", "related"));
+    await settle();
+
+    expect(whilePending).toEqual(["preparing", undefined, []]);
+    expect(published.filter(event => event.state.upcoming.length > 0)).toEqual([]);
+    expect(harness.engine.player.playing).toBe("related");
+    expect(queue.current?.autoplay).toBe(true);
+    expect(seeds(harness.source)).toEqual(["a", "related"]);
+  });
+
+  it("cancels the lookup an ended item awaits when an add commits, and plays the added item first", async () => {
+    const harness = playableSetup("source", PREFETCH);
+    const { lookup, signals } = pendingLookup(harness.source);
+    const { queue } = await harness.distube.play(TARGET, "a");
+    queue.setAutoplay(true);
+    await settle();
+    harness.engine.player.finish();
+    await settle();
+
+    await queue.add("b");
+    await settle();
+    lookup.resolve(media("source", "related"));
+    await settle();
+
+    expect(signals[0]?.aborted).toBe(true);
+    expect(harness.engine.player.played).toEqual(["a", "b"]);
+    expect(queue.related).toBeUndefined();
+    expect(waiting(queue)).toEqual([]);
+  });
+
+  it("looks up again with the ended Song when the held Song already played", async () => {
+    const harness = playableSetup("source", PREFETCH);
+    harness.source.related
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce(media("source", "related"))
+      .mockResolvedValueOnce(media("source", "fresh"));
+    const { queue } = await harness.distube.play(TARGET, "related");
+    queue.setAutoplay(true);
+    await queue.add("a");
+    await settle();
+    const player = harness.engine.player;
+    player.finish();
+    await settle();
+    const held = related(queue);
+    const published = updates(harness.distube);
+
+    player.finish();
+    await settle();
+
+    expect(held).toEqual(["related", true]);
+    expect(published.filter(event => event.state.upcoming.length > 0)).toEqual([]);
+    expect(seeds(harness.source).slice(0, 3)).toEqual(["related", "a", "a"]);
+    expect(player.played).toEqual(["related", "a", "fresh"]);
+  });
+
+  it("looks up again instead of playing a held age-restricted Song once the queue stops allowing them", async () => {
+    const harness = playableSetup("source", PREFETCH);
+    const { id, name, url, source } = media("source", "adult");
+    harness.source.related
+      .mockResolvedValueOnce(new Song({ id, name, url, source, ageRestricted: true }))
+      .mockResolvedValueOnce(media("source", "clean"));
+    const { queue } = await harness.distube.play(TARGET, "a");
+    queue.setAllowAgeRestricted(true);
+    queue.setAutoplay(true);
+    await settle();
+    const held = related(queue);
+
+    queue.setAllowAgeRestricted(false);
+    harness.engine.player.finish();
+    await settle();
+
+    expect(held).toEqual(["adult", true]);
+    expect(seeds(harness.source)).toEqual(["a", "a", "clean"]);
+    expect(harness.source.related).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ id: "a" }),
+      expect.objectContaining({ allowAgeRestricted: false }),
+    );
+    expect(harness.engine.player.played).toEqual(["a", "clean"]);
+  });
+
+  it("looks up again when the item's lookup found nothing, and reports the autoplay failure if that finds nothing", async () => {
+    const harness = playableSetup("source", PREFETCH);
+    const { queue } = await harness.distube.play(TARGET, "a");
+    queue.setAutoplay(true);
+    await settle();
+    const events = record(harness.distube, ["queue.autoplay.failed", "queue.finished"]);
+
+    harness.engine.player.finish();
+    await settle();
+
+    expect(seeds(harness.source)).toEqual(["a", "a"]);
+    expect(events).toEqual(["queue.autoplay.failed", "queue.finished"]);
+  });
+
+  it("keeps an insertion waiting and holds the lookup's Song as not playing next when the add commits first", async () => {
+    const harness = playableSetup("source", PREFETCH);
+    const { lookup, signals } = pendingLookup(harness.source);
+    const { queue } = await harness.distube.play(TARGET, "a");
+    queue.setAutoplay(true);
+    await settle();
+
+    await queue.add("b");
+    lookup.resolve(media("source", "related"));
+    await settle();
+
+    expect(signals[0]?.aborted).toBe(false);
+    expect(related(queue)).toEqual(["related", false]);
+    expect(waiting(queue)).toEqual(["b"]);
+    expect(harness.engine.player.playing).toBe("a");
+  });
+});
+
 describe("playlist on items", () => {
   it("names the committed Playlist on its items through repeat and previous replays, and none on Song or autoplay items", async () => {
     const harness = playableSetup();

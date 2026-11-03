@@ -5,6 +5,7 @@ import {
   clearUpcoming,
   failFirst,
   finishCurrent,
+  holdRelated,
   IDLE_QUEUE_STATE,
   insertAt,
   jumpTo,
@@ -16,6 +17,9 @@ import {
   removeRange,
   shuffle,
   startFirst,
+  startRelated,
+  withAutoplay,
+  withRepeat,
 } from "../src/queue-state";
 
 const song = new Song({
@@ -135,6 +139,37 @@ describe("edits", () => {
     expect(ids(cleared.items)).toEqual(ids([b, c]));
     expect(cleared.state.current).toBe(a);
     expect(cleared.state).toMatchObject({ upcoming: [], status: "preparing" });
+  });
+});
+
+const plays = (state: QueueState) => [state.related?.song, state.related?.playsNext];
+
+describe("related Song", () => {
+  it("reads playsNext only while autoplay is on, nothing waits and repeat is off", () => {
+    const a = item();
+    const held = holdRelated(withAutoplay(IDLE_QUEUE_STATE, true), song);
+    expect(plays(held)).toEqual([song, true]);
+    expect(plays(insertAt(held, [a]))).toEqual([song, false]);
+    expect(plays(failFirst(insertAt(held, [a]), a.id))).toEqual([song, true]);
+    expect(plays(withRepeat(held, "queue"))).toEqual([song, false]);
+    expect(plays(withRepeat(withRepeat(held, "song"), "off"))).toEqual([song, true]);
+    expect(plays(holdRelated(IDLE_QUEUE_STATE, song))).toEqual([song, false]);
+    expect(holdRelated(IDLE_QUEUE_STATE, undefined)).toBe(IDLE_QUEUE_STATE);
+  });
+
+  it("clears the related Song when autoplay turns off or it starts as the current item", () => {
+    const a = item();
+    const held = holdRelated(withAutoplay(IDLE_QUEUE_STATE, true), song);
+    expect(withAutoplay(held, false).related).toBeUndefined();
+    const started = startRelated(held, a);
+    expect([started.current, started.upcoming, started.related, started.status]).toEqual([
+      a,
+      [],
+      undefined,
+      "preparing",
+    ]);
+    expect(startRelated(started, item())).toBe(started);
+    expect(failFirst(started, a.id)).toMatchObject({ current: undefined, status: "idle" });
   });
 });
 

@@ -1,12 +1,13 @@
 import { DisTubeError } from "./errors";
-import type { QueueItem } from "./media";
+import type { QueueItem, Song } from "./media";
 
 /** How a naturally finished QueueItem is reconsidered before progression. */
 export type RepeatMode = "off" | "song" | "queue";
 
 /**
- * Committed playback status of a DisTubeQueue. `preparing` holds while an item waits or an autoplay lookup runs, and
- * from the hand-off of the current item until it is audible; `playing` starts with `queue.item.started`.
+ * Committed playback status of a DisTubeQueue. `preparing` holds while an item waits or an autoplay lookup runs, while
+ * an item played from `related` is current but still prepared, and from the hand-off of the current item until it is
+ * audible; `playing` starts with `queue.item.started`.
  */
 export type QueueStatus = "idle" | "preparing" | "playing" | "paused";
 
@@ -23,6 +24,11 @@ export interface QueueState<Metadata = unknown> {
   readonly status: QueueStatus;
   readonly repeat: RepeatMode;
   readonly autoplay: boolean;
+  /**
+   * The related Song a `prefetchAutoplay` queue holds for when it runs out. `playsNext` is true exactly when autoplay is
+   * on, `upcoming` is empty and repeat is `off`. Always `undefined` without `prefetchAutoplay`.
+   */
+  readonly related: { readonly song: Song; readonly playsNext: boolean } | undefined;
 }
 
 const NO_ITEMS: readonly QueueItem[] = Object.freeze([]);
@@ -34,14 +40,20 @@ export const IDLE_QUEUE_STATE: QueueState = Object.freeze({
   status: "idle",
   repeat: "off",
   autoplay: false,
+  related: undefined,
 });
 
 type Removal = Readonly<{ items: readonly QueueItem[]; state: QueueState }>;
 
 function patch(current: QueueState, changes: Partial<QueueState>): QueueState {
   const next = { ...current, ...changes };
+  const playsNext = next.autoplay && next.upcoming.length === 0 && next.repeat === "off";
   return Object.freeze({
     ...next,
+    related:
+      next.related === undefined || next.related.playsNext === playsNext
+        ? next.related
+        : Object.freeze({ song: next.related.song, playsNext }),
     upcoming: next.upcoming === current.upcoming ? current.upcoming : Object.freeze([...next.upcoming]),
     history: next.history === current.history ? current.history : Object.freeze([...next.history]),
   });
@@ -72,7 +84,27 @@ export function settleStatus(current: QueueState, lookup: boolean): QueueState {
   return status === current.status ? current : patch(current, { status });
 }
 
+export function startRelated(current: QueueState, item: QueueItem): QueueState {
+  if (current.current) return current;
+  return patch(current, { current: item, related: undefined, status: "preparing" });
+}
+
+export function holdRelated(current: QueueState, song: Song | undefined): QueueState {
+  if (song === undefined && current.related === undefined) return current;
+  return patch(current, { related: song && Object.freeze({ song, playsNext: false }) });
+}
+
+export function withRepeat(current: QueueState, repeat: RepeatMode): QueueState {
+  return current.repeat === repeat ? current : patch(current, { repeat });
+}
+
+export function withAutoplay(current: QueueState, autoplay: boolean): QueueState {
+  if (current.autoplay === autoplay) return current;
+  return patch(current, autoplay ? { autoplay } : { autoplay, related: undefined });
+}
+
 export function failFirst(current: QueueState, itemId: string): QueueState {
+  if (current.current?.id === itemId) return patch(current, { current: undefined, status: "idle" });
   if (!current.upcoming.some(item => item.id === itemId)) return current;
   return patch(current, { upcoming: current.upcoming.filter(item => item.id !== itemId) });
 }

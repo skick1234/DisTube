@@ -109,9 +109,14 @@ Repeat and autoplay belong to the queue. When the queue ends, they go with it, s
 When the last item ends and nothing waits in `upcoming`, autoplay asks a plugin for a Song related to the track that
 just played. DisTube passes the queue's history along, so the plugin can avoid tracks that already played.
 
+By default it looks up that Song when the queue runs out. With the `prefetchAutoplay` client option on, DisTube looks it up when each item starts and holds it in `queue.related` as `{ song, playsNext }`. `playsNext` is `true` when autoplay is on, `upcoming` is empty and repeat is `off`, so a player view can show the Song as Up next only then. When the queue runs out, that Song plays without a second lookup.
+
 The plugin it asks is the one that owns the last Song. When that plugin has no `related` lookup, autoplay asks the
 plugin that owns the `fallback` on `queue.item.started` instead, which is the Song that played in its place. A Spotify
 Song plays through another plugin's search, but the Spotify plugin has `related`, so autoplay asks Spotify.
+
+Turning autoplay on during an item starts the prefetch lookup for it. Turning it off cancels a pending lookup and
+clears `queue.related`.
 
 An autoplay item has `item.autoplay === true`. It copies the metadata of the track it follows, so it is announced in
 the same channel.

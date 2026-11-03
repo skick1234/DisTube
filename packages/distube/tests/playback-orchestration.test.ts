@@ -476,6 +476,31 @@ describe("search fallback for a plugin without stream", () => {
 });
 
 describe("status between items", () => {
+  it("reads preparing with the related item current and nothing upcoming while its stream is pending", async () => {
+    const harness = playableSetup("source", { prefetchAutoplay: true });
+    harness.source.related.mockResolvedValueOnce(media("source", "related"));
+    const { queue } = await harness.distube.play(TARGET, "a");
+    queue.setAutoplay(true);
+    await settle();
+    const preparation = deferred<PlaybackResource>();
+    harness.source.stream.mockImplementationOnce(() => preparation.promise);
+
+    harness.engine.player.finish();
+    await settle();
+    const preparing = [queue.status, queue.current?.song.id, queue.upcoming, queue.position];
+    await queue.add("b");
+    preparation.resolve(harness.source.resource("related"));
+    await settle();
+
+    expect(preparing).toEqual(["preparing", "related", [], 0]);
+    expect([queue.status, queue.current?.song.id, queue.upcoming.map(item => item.song.id)]).toEqual([
+      "playing",
+      "related",
+      ["b"],
+    ]);
+    await harness.distube.dispose();
+  });
+
   it("reads preparing while the next item's stream is pending and from its hand-off until it is audible", async () => {
     const harness = playableSetup();
     await harness.distube.play(TARGET, "a");

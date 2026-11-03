@@ -38,6 +38,11 @@ export interface DisTubeOptions<Target = VoiceChannelTarget> {
   readonly filters?: FilterDefinitions<string>;
   /** Voice join timeout in milliseconds, up to 2147483647. Default 15000. */
   readonly connectionTimeoutMs?: number;
+  /**
+   * While autoplay is on, looks up a related Song at each item start and holds it in `queue.related`, so the queue
+   * plays it next without adding it to `upcoming`. Default `false`: autoplay looks up only when the queue runs out.
+   */
+  readonly prefetchAutoplay?: boolean;
   readonly onDiagnostic?: (diagnostic: Diagnostic) => void;
   /** Built-in engine tuning; an engine plugin ignores it. */
   readonly engine?: {
@@ -95,6 +100,7 @@ export class DisTube<Metadata = undefined, Target = VoiceChannelTarget> {
     const historySize = options.historySize ?? DEFAULTS.historySize;
     const maxPlaylistSongs = options.maxPlaylistSongs ?? DEFAULTS.maxPlaylistSongs;
     const connectionTimeoutMs = options.connectionTimeoutMs ?? DEFAULTS.connectionTimeoutMs;
+    const prefetchAutoplay = options.prefetchAutoplay ?? false;
     const opusComplexity = options.engine?.opusComplexity ?? DEFAULTS.opusComplexity;
     const bufferMs = options.engine?.bufferMs ?? DEFAULTS.bufferMs;
     requireInteger(historySize, "historySize", 0);
@@ -102,6 +108,7 @@ export class DisTube<Metadata = undefined, Target = VoiceChannelTarget> {
     requireInteger(connectionTimeoutMs, "connectionTimeoutMs", 1, MAX_TIMER_MS);
     requireInteger(opusComplexity, "engine.opusComplexity", 0, 10);
     requireInteger(bufferMs, "engine.bufferMs", 20);
+    requireBoolean(prefetchAutoplay, "prefetchAutoplay");
     if (bufferMs % 20 !== 0)
       throw new DisTubeError(ErrorCode.INVALID_ARGUMENT, "engine.bufferMs must be a multiple of 20");
 
@@ -123,6 +130,7 @@ export class DisTube<Metadata = undefined, Target = VoiceChannelTarget> {
       historySize,
       maxPlaylistSongs,
       connectionTimeoutMs,
+      prefetchAutoplay,
       lifetime: this.#lifetime.signal,
     });
     this.voices = new VoiceManager(this.#guilds);

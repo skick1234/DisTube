@@ -11,20 +11,21 @@ explains how a queue relates to the voice and when `play` creates one.
 
 ## State
 
-| Property             | What it holds                                                                                                                  |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `guildId`            | The guild this queue belongs to                                                                                                |
-| `current`            | The `QueueItem` handed to the player, audible once `status` is `playing`. `undefined` when there is none.                      |
-| `upcoming`           | The items waiting to play, in order                                                                                            |
-| `history`            | Items that finished or were skipped, newest last, up to `historySize`                                                          |
-| `status`             | `idle`, `preparing`, `playing` or `paused`. See [Status](#status).                                                             |
-| `repeat`             | `off`, `song` or `queue`                                                                                                       |
-| `autoplay`           | `true` when autoplay is on                                                                                                     |
-| `allowAgeRestricted` | `true` when autoplay and the search fallback may use age-restricted Songs                                                      |
-| `paused`             | `true` while the current item is paused                                                                                        |
-| `position`           | Seconds played of the current item, `0` before it starts                                                                       |
-| `playbackRate`       | Source seconds that play per second of wall time. `1` without a voice or without filters that change speed.                    |
-| `voice`              | The guild's [`DisTubeVoice`](../voice-and-filters/). `undefined` until the first item is added and after the queue is deleted. |
+| Property             | What it holds                                                                                                                               |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `guildId`            | The guild this queue belongs to                                                                                                             |
+| `current`            | The `QueueItem` handed to the player, audible once `status` is `playing`. `undefined` when there is none.                                   |
+| `upcoming`           | The items waiting to play, in order                                                                                                         |
+| `history`            | Items that finished or were skipped, newest last, up to `historySize`                                                                       |
+| `related`            | With `prefetchAutoplay`, the held related Song as `{ song, playsNext }`, else `undefined`. See [Autoplay look-ahead](#autoplay-look-ahead). |
+| `status`             | `idle`, `preparing`, `playing` or `paused`. See [Status](#status).                                                                          |
+| `repeat`             | `off`, `song` or `queue`                                                                                                                    |
+| `autoplay`           | `true` when autoplay is on                                                                                                                  |
+| `allowAgeRestricted` | `true` when autoplay and the search fallback may use age-restricted Songs                                                                   |
+| `paused`             | `true` while the current item is paused                                                                                                     |
+| `position`           | Seconds played of the current item, `0` before it starts                                                                                    |
+| `playbackRate`       | Source seconds that play per second of wall time. `1` without a voice or without filters that change speed.                                 |
+| `voice`              | The guild's [`DisTubeVoice`](../voice-and-filters/). `undefined` until the first item is added and after the queue is deleted.              |
 
 ## Status
 
@@ -163,6 +164,20 @@ Repeat and autoplay belong to the queue and go away with it.
 - If that plugin has no `related` and the item played through a `fallback`, autoplay asks the fallback's plugin
   instead.
 - A failure publishes `queue.autoplay.failed`.
+
+### Autoplay look-ahead
+
+With the [`prefetchAutoplay`](../options/#autoplay-look-ahead) option, autoplay looks up a related Song when each item
+starts, while autoplay is on, and holds it in `queue.related` instead of appending it to `upcoming`.
+
+- `related.song` is the Song that will play when the queue runs out.
+- `related.playsNext` is `true` exactly when autoplay is on, `upcoming` is empty and `repeat` is `off`. Show it as Up
+  next only then. Adding an item, turning repeat on or skipping changes it, with a `queue.updated`.
+- At hand-off, the item becomes `current` with a `queue.item.added` and no `upcoming` row in between. If the lookup is
+  still pending when the last item ends, DisTube waits for it instead of starting a second one.
+- `setAutoplay(false)` clears `related` and cancels a lookup in flight. A Song the history already holds, or an
+  age-restricted Song while the queue refuses them, is dropped.
+- Without `prefetchAutoplay`, `related` is always `undefined` and the lookup happens when the queue runs out.
 
 ## Items and history
 

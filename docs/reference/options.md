@@ -23,17 +23,18 @@ export const distube = new DisTube({
 });
 ```
 
-| Option                  | Default  | What it does                                                                                                                       |
-| ----------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `adapter`               | required | Connects DisTube to your Discord library, such as `new DiscordJSAdapter(client)`.                                                  |
-| `plugins`               | required | Your sources, in the order DisTube asks them. At most one may carry an `engine`, which replaces the built-in one.                  |
-| `maxPlaylistSongs`      | 500      | How many Songs a Playlist from a URL keeps. The rest are dropped, not rejected.                                                    |
-| `historySize`           | 10       | How many ended items each queue remembers. `0` turns history off.                                                                  |
-| `filters`               | built-in | Filter presets to add to the built-in engine, or to replace its presets. See [Filters](#filters).                                  |
-| `connectionTimeoutMs`   | 15000    | How long a voice join may take, in milliseconds.                                                                                   |
-| `onDiagnostic`          | none     | A function that receives listener failures, core background failures and built-in engine reports. See [Diagnostics](#diagnostics). |
-| `engine.opusComplexity` | 10       | Opus encoder complexity, 0 to 10. A lower value uses less CPU.                                                                     |
-| `engine.bufferMs`       | 500      | How far ahead the engine reads, in milliseconds. A positive multiple of 20.                                                        |
+| Option                  | Default  | What it does                                                                                                                                               |
+| ----------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `adapter`               | required | Connects DisTube to your Discord library, such as `new DiscordJSAdapter(client)`.                                                                          |
+| `plugins`               | required | Your sources, in the order DisTube asks them. At most one may carry an `engine`, which replaces the built-in one.                                          |
+| `maxPlaylistSongs`      | 500      | How many Songs a Playlist from a URL keeps. The rest are dropped, not rejected.                                                                            |
+| `historySize`           | 10       | How many ended items each queue remembers. `0` turns history off.                                                                                          |
+| `filters`               | built-in | Filter presets to add to the built-in engine, or to replace its presets. See [Filters](#filters).                                                          |
+| `connectionTimeoutMs`   | 15000    | How long a voice join may take, in milliseconds.                                                                                                           |
+| `prefetchAutoplay`      | `false`  | While autoplay is on, look up the next related Song when each item starts and hold it in `queue.related`. See [Autoplay look-ahead](#autoplay-look-ahead). |
+| `onDiagnostic`          | none     | A function that receives listener failures, core background failures and built-in engine reports. See [Diagnostics](#diagnostics).                         |
+| `engine.opusComplexity` | 10       | Opus encoder complexity, 0 to 10. A lower value uses less CPU.                                                                                             |
+| `engine.bufferMs`       | 500      | How far ahead the engine reads, in milliseconds. A positive multiple of 20.                                                                                |
 
 `new DisTube<Metadata>(...)` also takes a type parameter for [queue item metadata](../queue/#metadata).
 
@@ -44,6 +45,19 @@ engine, such as Lavalink, replaces it, and DisTube then ignores both.
 
 `bufferMs` is added latency. The engine keeps `bufferMs / 20` packets ahead, so a volume or filter change becomes
 audible up to `bufferMs` later.
+
+## Autoplay look-ahead
+
+With `prefetchAutoplay` off, autoplay looks up a related Song only when the queue runs out, then appends it to
+`upcoming`. Nothing changes for an application that leaves it off, and `queue.related` stays `undefined`.
+
+With it on, DisTube makes one `related` request each time an item starts while autoplay is on. The Song it finds sits
+in [`queue.related`](../queue/#autoplay-look-ahead), not in `upcoming`. When the queue runs out, DisTube plays that Song
+without a second lookup and publishes `queue.item.added` for it then. A new item start, `setAutoplay(false)` or the
+queue ending cancels a lookup in flight. The option throws `INVALID_ARGUMENT` unless it is a boolean.
+
+The price is one extra provider request for each item. The gain is an Up next row that stays put instead of appearing
+only at hand-off.
 
 ## Playlist size
 

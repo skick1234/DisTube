@@ -16,6 +16,7 @@ import {
   clearUpcoming,
   failFirst,
   finishCurrent,
+  holdRelated,
   IDLE_QUEUE_STATE,
   insertAt,
   jumpTo,
@@ -31,6 +32,9 @@ import {
   settleStatus,
   shuffle,
   startFirst,
+  startRelated,
+  withAutoplay,
+  withRepeat,
 } from "./queue-state";
 import {
   allowedRelated,
@@ -88,6 +92,12 @@ interface Attempt {
   fallback?: Song;
 }
 
+interface Prefetch {
+  readonly item: QueueItem;
+  readonly controller: AbortController;
+  readonly song: Promise<Song>;
+}
+
 type QueueEventName = Exclude<keyof DisTubeEventMap, "queue.created" | "voice.disconnected">;
 
 type EventDetail<Name extends QueueEventName> = Omit<DisTubeEventMap<unknown>[Name], keyof BaseQueueEvent>;
@@ -117,6 +127,7 @@ export class DisTubeQueue<Metadata = undefined, Target = VoiceChannelTarget> {
   #loop: Promise<void> = Promise.resolve();
   #running = false;
   #lookup?: AbortController;
+  #prefetch?: Prefetch;
   #lastPlayed?: Attempt;
   #autoplayItem?: string;
   #autoplayFailed = false;
@@ -162,6 +173,11 @@ export class DisTubeQueue<Metadata = undefined, Target = VoiceChannelTarget> {
 
   get autoplay(): boolean {
     return this.#state.autoplay;
+  }
+
+  /** The related Song a `prefetchAutoplay` queue holds and whether it plays next; see `QueueState.related`. */
+  get related(): QueueState["related"] {
+    return this.#state.related;
   }
 
   /** Whether autoplay may add age-restricted Songs; `false` on a new queue. */
@@ -230,14 +246,21 @@ export class DisTubeQueue<Metadata = undefined, Target = VoiceChannelTarget> {
     if (!REPEAT_MODES.includes(mode))
       throw new DisTubeError(ErrorCode.INVALID_ARGUMENT, `Unknown repeat mode: ${String(mode)}`);
     this.#assertAlive();
-    if (this.#state.repeat !== mode) this.#commit(Object.freeze({ ...this.#state, repeat: mode }));
+    if (this.#state.repeat !== mode) this.#commit(withRepeat(this.#state, mode));
   }
 
   setAutoplay(enabled: boolean): void {
     requireBoolean(enabled, "autoplay");
     this.#assertAlive();
-    if (this.#state.autoplay !== enabled) this.#commit(Object.freeze({ ...this.#state, autoplay: enabled }));
-    if (!enabled) this.#lookup?.abort();
+    const changed = this.#state.autoplay !== enabled;
+    if (changed) this.#commit(withAutoplay(this.#state, enabled));
+    if (!enabled) {
+      this.#lookup?.abort();
+      this.#cancelPrefetch();
+      return;
+    }
+    const playing = this.#playing();
+    if (changed && playing) this.#lookAhead(playing);
   }
 
   /**
@@ -283,7 +306,7 @@ export class DisTubeQueue<Metadata = undefined, Target = VoiceChannelTarget> {
   async skip(): Promise<QueueItem<Metadata> | undefined> {
     this.#assertAlive();
     const attempt = this.#attempt;
-    const head = this.#state.current ? undefined : this.#state.upcoming[0];
+    const head = this.#state.current ?? this.#state.upcoming[0];
     const playing = this.#playing();
     const interrupted = attempt?.ended === true && attempt.controller.signal.aborted;
     let ending: Attempt | undefined;
@@ -450,7 +473,7 @@ export class DisTubeQueue<Metadata = undefined, Target = VoiceChannelTarget> {
     }
   }
 
-  async #play(item: QueueItem): Promise<void> {
+  async #play(item: QueueItem, fromRelated = false): Promise<void> {
     const { plugins, engine } = this.#guild.config;
     const controller = new AbortController();
     const done = Promise.withResolvers<void>();
@@ -472,7 +495,11 @@ export class DisTubeQueue<Metadata = undefined, Target = VoiceChannelTarget> {
         ]);
         return;
       }
-      const started = startFirst(this.#state);
+      const started = fromRelated
+        ? this.#state.current === item
+          ? { item, state: this.#state }
+          : undefined
+        : startFirst(this.#state);
       if (signal.aborted || started?.item !== item || !this.voice) {
         const voiceLost = !this.voice && !signal.aborted;
         await disposeResource(prepared.resource).catch((error: unknown) =>
@@ -485,6 +512,7 @@ export class DisTubeQueue<Metadata = undefined, Target = VoiceChannelTarget> {
       const { resource, fallback } = prepared;
       attempt.fallback = fallback;
       this.#commit(started.state);
+      this.#lookAhead(attempt);
       let end: TrackEnd;
       try {
         end = await this.#guild.playTrack(resource, signal, () =>
@@ -529,22 +557,33 @@ export class DisTubeQueue<Metadata = undefined, Target = VoiceChannelTarget> {
   async #autoplay(): Promise<boolean> {
     const seed = this.#lastPlayed;
     if (!this.#state.autoplay || !seed || this.#autoplayFailed) return false;
+    const prefetching = this.#guild.config.prefetchAutoplay;
+    const pending = this.#prefetch?.item === seed.item ? this.#prefetch : undefined;
+    if (!pending) this.#cancelPrefetch();
+    this.#prefetch = undefined;
+    const held = this.#state.related;
+    if (
+      prefetching &&
+      !pending &&
+      held?.playsNext &&
+      this.#allows(held.song) &&
+      !played(this.#state.history, held.song)
+    )
+      return this.#playRelated(held.song, seed);
     this.#commit(this.#state);
-    const lookup = new AbortController();
+    const lookup = pending?.controller ?? new AbortController();
     this.#lookup = lookup;
     let song: Song | undefined;
     let failure: unknown;
     try {
       const signal = AbortSignal.any([this.#lifetime.signal, lookup.signal]);
-      const exclude = this.#state.history.map(entry => entry.song);
-      const related = relatedSong(
-        this.#guild.config.plugins,
-        seed.item.song,
-        exclude,
-        this.#allowAgeRestricted,
-        signal,
-        seed.fallback,
-      );
+      const related =
+        pending?.song ??
+        this.#lookUp(
+          seed,
+          this.#state.history.map(entry => entry.song),
+          signal,
+        );
       song = allowedRelated(await untilAborted(related, signal), this.#allowAgeRestricted);
     } catch (error: unknown) {
       failure = error;
@@ -559,10 +598,53 @@ export class DisTubeQueue<Metadata = undefined, Target = VoiceChannelTarget> {
       this.#commit(this.#state, [["queue.autoplay.failed", { song: seed.item.song, error }]], false);
       return false;
     }
+    if (prefetching) return this.#playRelated(song, seed);
     const item = queueItem(song, seed.item.metadata, true);
     this.#autoplayItem = item.id;
     this.#commit(insertAt(this.#state, [item]), [["queue.item.added", { item }]]);
     return true;
+  }
+
+  async #playRelated(song: Song, seed: Attempt): Promise<boolean> {
+    const item = queueItem(song, seed.item.metadata, true);
+    this.#autoplayItem = item.id;
+    this.#commit(startRelated(this.#state, item), [["queue.item.added", { item }]]);
+    await this.#play(item, true);
+    return true;
+  }
+
+  #lookUp(seed: Attempt, exclude: readonly Song[], signal: AbortSignal): Promise<Song> {
+    const { plugins } = this.#guild.config;
+    return relatedSong(plugins, seed.item.song, exclude, this.#allowAgeRestricted, signal, seed.fallback);
+  }
+
+  #lookAhead(attempt: Attempt): void {
+    if (!this.#guild.config.prefetchAutoplay || !this.#state.autoplay || this.#autoplayFailed) return;
+    this.#cancelPrefetch();
+    const controller = new AbortController();
+    const signal = AbortSignal.any([this.#lifetime.signal, controller.signal]);
+    const exclude = [...this.#state.history.map(entry => entry.song), attempt.item.song];
+    const prefetch: Prefetch = { item: attempt.item, controller, song: this.#lookUp(attempt, exclude, signal) };
+    this.#prefetch = prefetch;
+    prefetch.song.then(
+      song => this.#settlePrefetch(prefetch, song),
+      () => this.#settlePrefetch(prefetch, undefined),
+    );
+  }
+
+  #settlePrefetch(prefetch: Prefetch, found: Song | undefined): void {
+    if (this.#prefetch !== prefetch) return;
+    this.#prefetch = undefined;
+    this.#commit(holdRelated(this.#state, found && this.#allows(found) ? found : undefined));
+  }
+
+  #allows(song: Song): boolean {
+    return this.#allowAgeRestricted || song.ageRestricted !== true;
+  }
+
+  #cancelPrefetch(): void {
+    this.#prefetch?.controller.abort();
+    this.#prefetch = undefined;
   }
 
   readonly #itemReport = (plugin: string, diagnostic: PluginReport): void => {
@@ -601,7 +683,8 @@ export class DisTubeQueue<Metadata = undefined, Target = VoiceChannelTarget> {
     if (settled === this.#state && events.length === 0) return;
     this.#state = settled;
     const attempt = this.#attempt;
-    if (attempt && !attempt.playing && settled.upcoming[0] !== attempt.item) attempt.controller.abort();
+    if (attempt && !attempt.playing && settled.upcoming[0] !== attempt.item && settled.current !== attempt.item)
+      attempt.controller.abort();
     this.#publish(events);
   }
 
@@ -672,6 +755,10 @@ export class DisTubeQueue<Metadata = undefined, Target = VoiceChannelTarget> {
       error,
     });
   }
+}
+
+function played(history: readonly QueueItem[], song: Song): boolean {
+  return history.some(entry => entry.song.source === song.source && entry.song.id === song.id);
 }
 
 function withSource(error: DisTubeError, source: string): DisTubeError {

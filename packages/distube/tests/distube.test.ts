@@ -59,6 +59,10 @@ describe("client construction", () => {
     expect(construct([new FakeSource("source")], options)).toThrowError(invalidArgument);
   });
 
+  it("rejects a non-boolean prefetchAutoplay with INVALID_ARGUMENT", () => {
+    expect(construct([new FakeSource("source")], { prefetchAutoplay: "yes" })).toThrowError(invalidArgument);
+  });
+
   it("accepts connectionTimeoutMs at the timer ceiling 2147483647", () => {
     expect(construct([new FakeSource("source")], { connectionTimeoutMs: 2 ** 31 - 1 })).not.toThrow();
   });
