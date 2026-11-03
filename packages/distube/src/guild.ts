@@ -1,5 +1,6 @@
 import type {
   Adapter,
+  CoreBackgroundStage,
   Engine,
   FilterEntry,
   JoinOptions,
@@ -561,8 +562,14 @@ export class Guild<Target> {
     if (!this.queue && !this.#live && !this.#join && !this.#leaving) this.guilds.forget(this);
   }
 
-  #report(stage: string, error: unknown): void {
-    this.config.events.report({ severity: "error", stage, message: `Guild ${this.id}: ${stage}`, error });
+  #report(stage: CoreBackgroundStage, error: unknown): void {
+    this.config.events.report({
+      severity: "error",
+      stage,
+      message: `Guild ${this.id}: ${stage}`,
+      guildId: this.id,
+      error,
+    });
   }
 }
 
@@ -595,7 +602,7 @@ function sameFilters(current: readonly FilterEntry[], next: readonly FilterEntry
 
 function seekable(resource: PlaybackResource): boolean {
   if (resource.kind === "encoded") return resource.seekable === true;
-  return resource.kind !== "stream";
+  return resource.kind !== "stream" && resource.kind !== "live";
 }
 
 function assertOpen(connection: Connection): void {

@@ -20,9 +20,15 @@ import type {
 } from "distube/integrations";
 import type { FilterRegistry } from "./engine";
 import type { LocalPlaybackResource } from "./sources";
-import { openFailureStep, probeFilters, Track, type TrackReporter, type TrackSettings } from "./track";
-
-const MAX_MISSED_FRAMES = 15_000 / 20;
+import {
+  openFailureStep,
+  probeFilters,
+  type Recovery,
+  Track,
+  type TrackReporter,
+  type TrackSettings,
+  type TrackStep,
+} from "./track";
 
 type Networking = Extract<VoiceConnection["state"], { networking: unknown }>["networking"];
 
@@ -48,6 +54,7 @@ export interface DiscordVoicePlayerOptions {
 
 class Playback {
   readonly controller = new AbortController();
+  readonly kind: PlaybackResource["kind"];
   readonly onStart: () => void;
   readonly ended: Promise<TrackEnd>;
   closed!: Promise<void>;
@@ -59,7 +66,8 @@ class Playback {
   #settled = false;
   readonly #settle: PromiseWithResolvers<TrackEnd>;
 
-  constructor(onStart: () => void) {
+  constructor(kind: PlaybackResource["kind"], onStart: () => void) {
+    this.kind = kind;
     this.onStart = onStart;
     this.#settle = Promise.withResolvers();
     this.ended = this.#settle.promise;
@@ -116,7 +124,7 @@ export class DiscordVoicePlayer implements Player {
     this.#reporter = { guildId: options.session.guildId, report: options.report };
     this.#onClosed = options.onClosed;
     this.#player = createAudioPlayer({
-      behaviors: { noSubscriber: NoSubscriberBehavior.Pause, maxMissedFrames: MAX_MISSED_FRAMES },
+      behaviors: { noSubscriber: NoSubscriberBehavior.Pause, maxMissedFrames: Number.POSITIVE_INFINITY },
     });
     this.#subscription = this.#connection.subscribe(this.#player) ?? undefined;
     this.#unsubscribeSession = this.#session.subscribe(this.#onSessionEvent);
@@ -145,7 +153,7 @@ export class DiscordVoicePlayer implements Player {
     }
     this.#paused = false;
     const previous = this.#current;
-    const playback = new Playback(onStart);
+    const playback = new Playback(resource.kind, onStart);
     this.#current = playback;
     previous?.end(REPLACED);
     const run = this.#run(playback, resource, signal, previous);
@@ -162,13 +170,15 @@ export class DiscordVoicePlayer implements Player {
   async pause(): Promise<void> {
     this.#assertOpen();
     this.#paused = true;
+    this.#current?.track?.pause();
     this.#player.pause(true);
   }
 
   async resume(): Promise<void> {
     this.#assertOpen();
     this.#paused = false;
-    this.#player.unpause();
+    await this.#current?.track?.resume();
+    if (!this.#paused) this.#player.unpause();
   }
 
   async stopTrack(): Promise<void> {
@@ -227,7 +237,7 @@ export class DiscordVoicePlayer implements Player {
       );
       if (track) {
         void track.outcome.then(outcome => {
-          if (outcome.type === "failed") this.#fail(playback, outcome.step, outcome.error);
+          if (outcome.type === "failed") this.#fail(playback, outcome.step, outcome.error, outcome.recovery);
           else if (outcome.type === "ended") {
             playback.inputEnded = true;
             this.#reconcile(playback);
@@ -235,6 +245,7 @@ export class DiscordVoicePlayer implements Player {
         });
         await previous?.closed;
         playback.track = track;
+        if (this.#paused) track.pause();
         await this.#catchUp(track, settings);
         if (!playback.settled) this.#handOff(playback, track);
       }
@@ -251,15 +262,22 @@ export class DiscordVoicePlayer implements Player {
     }
   }
 
-  #fail(playback: Playback, step: string, error: unknown): void {
+  #fail(playback: Playback, step: TrackStep, error: unknown, recovery: Recovery = "none"): void {
     if (playback.settled) return;
+    const { track } = playback;
     this.#reporter.report({
       severity: "error",
       stage: "engine.track.failed",
       message: `Track failed during ${step}`,
       guildId: this.#reporter.guildId,
-      position: playback.track?.position ?? 0,
-      data: { step },
+      position: track?.position ?? 0,
+      data: {
+        step,
+        kind: playback.kind,
+        playedSeconds: track?.playedSeconds ?? 0,
+        reopens: track?.reopens ?? 0,
+        recovery,
+      },
       error,
     });
     playback.fail(error);

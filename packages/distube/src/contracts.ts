@@ -11,18 +11,81 @@ export type ResolvableInput = string | Song | Playlist;
 
 export type DiagnosticSeverity = "debug" | "info" | "warning" | "error";
 
-export interface Diagnostic {
+/** Flat facts the stage defines. Never holds resources, playable URLs, headers, paths or tokens. */
+type DiagnosticData = Readonly<Record<string, string | number | boolean>>;
+
+interface DiagnosticFields {
   readonly severity: DiagnosticSeverity;
-  readonly stage: string;
   readonly message: string;
-  readonly plugin?: string;
   readonly guildId?: string;
   /** Source seconds of that guild's current track. */
   readonly position?: number;
-  /** Flat facts the stage defines. Never holds resources, playable URLs, headers, paths or tokens. */
-  readonly data?: Readonly<Record<string, string | number | boolean>>;
   readonly error?: unknown;
 }
+
+type BuiltInFields<Stage extends string, Severity extends DiagnosticSeverity> = DiagnosticFields & {
+  readonly severity: Severity;
+  readonly stage: Stage;
+  readonly plugin?: undefined;
+};
+
+type BuiltInDiagnostic<Stage extends string, Severity extends DiagnosticSeverity, Data> = BuiltInFields<
+  Stage,
+  Severity
+> & { readonly data: Readonly<Data> & DiagnosticData };
+
+/** A report a plugin sends, named by its plugin, with a stage and flat `data` that plugin defines. */
+interface PluginDiagnostic extends DiagnosticFields {
+  readonly plugin: string;
+  readonly stage: string;
+  readonly data?: DiagnosticData;
+}
+
+type TrackFailedData = {
+  step: "open" | "read" | "decode" | "seek" | "worker" | "starved";
+  kind: PlaybackResourceKind;
+  playedSeconds: number;
+  reopens: number;
+  recovery: "exhausted" | "unreopenable" | "none";
+};
+
+type InputReopenedData = {
+  kind: PlaybackResourceKind;
+  attempt: number;
+  reason: "failed" | "stalled" | "ended" | "resumed" | "behind";
+  outcome: "opened" | "failed" | "ended";
+};
+
+export type CoreBackgroundStage =
+  | "event.listener"
+  | "queue.loop"
+  | "queue.resource.dispose"
+  | "voice.resource.dispose"
+  | "voice.session.release"
+  | "voice.gateway"
+  | "voice.disconnect"
+  | "voice.player.release";
+
+/**
+ * A report. Without `plugin`, it is a core or built-in engine stage whose severity and `data` are typed by `stage`, so
+ * `diagnostic.plugin === undefined && diagnostic.stage === "engine.track.failed"` narrows `data`. With `plugin`, the
+ * named plugin chose the stage and its flat `data`.
+ */
+export type Diagnostic =
+  | BuiltInDiagnostic<"engine.track.failed", "error", TrackFailedData>
+  | BuiltInDiagnostic<"engine.input.reopened", "info" | "warning", InputReopenedData>
+  | BuiltInDiagnostic<"engine.input.retried", "warning", { offset: number; attempt: number }>
+  | BuiltInDiagnostic<"engine.track.starved", "warning", { durationMs: number }>
+  | BuiltInDiagnostic<"engine.track.gaps", "info", { gaps: number; silentMs: number }>
+  | BuiltInDiagnostic<"engine.voice.reconnected", "warning", { durationMs: number; closeCode?: number }>
+  | BuiltInDiagnostic<
+      "engine.worker.load",
+      "debug" | "warning",
+      { threadId: number; tracks: number; utilization: number }
+    >
+  | BuiltInDiagnostic<"voice.endpoint.changed", "info", { endpoint: string; previous?: string }>
+  | (BuiltInFields<CoreBackgroundStage, "error"> & { readonly data?: undefined })
+  | PluginDiagnostic;
 
 /** A public HTTP(S) URL fetched without headers; seekable when the engine reads it by byte range. Authenticated media is a `reader` or `timed` resource. */
 export interface UrlPlaybackResource {
@@ -63,6 +126,19 @@ export interface TimedPlaybackResource {
   dispose?(): void | Promise<void>;
 }
 
+/**
+ * Media without an end, such as a livestream; never seekable. Each `open` resolves media from the live edge, which
+ * must be destroyed when `signal` aborts, or `undefined` once the broadcast ended. A rejection means that open failed
+ * while the broadcast may still be live. Only the engine decides when to open again.
+ */
+export interface LivePlaybackResource {
+  readonly kind: "live";
+  /** Forces this container; when absent, the engine identifies the format from the bytes. */
+  readonly container?: "webm" | "mp4";
+  open(signal: AbortSignal): Promise<Readable | undefined>;
+  dispose?(): void | Promise<void>;
+}
+
 /** A backend-native track, such as a Lavalink encoded track. Only the engine that produced it can play it. */
 export interface EncodedPlaybackResource {
   readonly kind: "encoded";
@@ -81,6 +157,7 @@ export type PlaybackResource =
   | StreamPlaybackResource
   | ReaderPlaybackResource
   | TimedPlaybackResource
+  | LivePlaybackResource
   | EncodedPlaybackResource;
 
 export type PlaybackResourceKind = PlaybackResource["kind"];
@@ -120,6 +197,16 @@ export interface RelatedOptions {
   readonly allowAgeRestricted?: boolean;
 }
 
+export interface StreamOptions {
+  readonly signal: AbortSignal;
+  /**
+   * Delivers a diagnostic to `onDiagnostic` in a later microtask with the item's `guildId` and this plugin's name.
+   * Usable while the returned resource is in use; never throws, and drops calls after the resource was disposed or
+   * after `stream` rejected.
+   */
+  readonly report: (diagnostic: Omit<PluginDiagnostic, "guildId" | "plugin">) => void;
+}
+
 export interface ResolveOptions {
   readonly signal: AbortSignal;
   /** Return at most this many Songs in a Playlist and stop requesting provider pages once reached. */
@@ -147,7 +234,7 @@ export interface Plugin<Data = unknown, ListData = unknown> {
    * A fresh resource for an owned Song. Without it, and without an engine `prepare`, core searches every other plugin
    * that has `search` and `stream` for the Song's name and artist and plays the first candidate that prepares.
    */
-  stream?(song: Song<Data>, options: { readonly signal: AbortSignal }): Promise<PlaybackResource>;
+  stream?(song: Song<Data>, options: StreamOptions): Promise<PlaybackResource>;
   /**
    * Autoplay continuation, or `undefined` to decline. Rejecting with a `NO_RESULT` DisTubeError also declines and says
    * why; it reaches `queue.autoplay.failed` unchanged.
@@ -170,7 +257,8 @@ export type PluginDataOf<Source> = Source extends Plugin<infer Data> ? Data : un
 export interface Player {
   /**
    * Source time, in seconds, of the audio the platform last played, or `0` without a track. A tempo preset changes how
-   * fast it advances, not what it measures.
+   * fast it advances, not what it measures. For a `live` resource, the source seconds played since the track started,
+   * across every input opened for it.
    */
   readonly position: number;
   /** Milliseconds of the latest voice WebSocket heartbeat round trip, or `undefined` before the first or while reconnecting. */

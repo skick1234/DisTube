@@ -18,22 +18,22 @@ Every plugin uses the same codes, so one check works for every provider.
 
 ## Codes
 
-| Code                 | Meaning                                                                                                                     |
-| -------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `INVALID_ARGUMENT`   | The input or the configuration is malformed                                                                                 |
-| `INVALID_STATE`      | The call is valid but not allowed now: a deleted queue, a released voice, stale work or a disposed client                   |
-| `ABORTED`            | The caller cancelled before the work committed                                                                              |
-| `NO_RESULT`          | Every plugin DisTube asked declined                                                                                         |
-| `NOT_FOUND`          | The provider says the media does not exist                                                                                  |
-| `UNAVAILABLE`        | The media exists but cannot be played, for example a private or region-locked video                                         |
-| `RATE_LIMITED`       | The provider throttled the request                                                                                          |
-| `BOT_CHECK`          | The provider wants proof that the client is not a bot, such as a sign-in confirmation or a captcha                          |
-| `NOT_STARTED`        | Scheduled media that has not started, such as a premiere or a scheduled live                                                |
-| `SOURCE_FAILED`      | A plugin failed in any other way, or returned something malformed                                                           |
-| `VOICE_FAILED`       | The voice connection, the player or native cleanup failed                                                                   |
-| `VOICE_DISCONNECTED` | A voice connection dropped and the adapter could not recover it. Arrives on `voice.disconnected` with reason `platform`.    |
-| `UNSUPPORTED`        | The engine or plugin cannot do this: an unknown filter preset, a seek on a `stream` resource, search on a plugin without it |
-| `AGE_RESTRICTED`     | The call did not allow age-restricted media, or the provider refused it without an age-verified account                     |
+| Code                 | Meaning                                                                                                                                               |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `INVALID_ARGUMENT`   | The input or the configuration is malformed                                                                                                           |
+| `INVALID_STATE`      | The call is valid but not allowed now: a deleted queue, a released voice, stale work or a disposed client                                             |
+| `ABORTED`            | The caller cancelled before the work committed                                                                                                        |
+| `NO_RESULT`          | Every plugin DisTube asked declined                                                                                                                   |
+| `NOT_FOUND`          | The provider says the media does not exist                                                                                                            |
+| `UNAVAILABLE`        | The media exists but cannot be played, for example a private or region-locked video                                                                   |
+| `RATE_LIMITED`       | The provider throttled the request                                                                                                                    |
+| `BOT_CHECK`          | The provider wants proof that the client is not a bot, such as a sign-in confirmation or a captcha                                                    |
+| `NOT_STARTED`        | Scheduled media that has not started, such as a premiere or a scheduled live                                                                          |
+| `SOURCE_FAILED`      | A plugin failed in any other way, returned something malformed, or its input stopped while the track played                                           |
+| `VOICE_FAILED`       | The voice connection, the player or native cleanup failed                                                                                             |
+| `VOICE_DISCONNECTED` | A voice connection dropped and the adapter could not recover it. Arrives on `voice.disconnected` with reason `platform`.                              |
+| `UNSUPPORTED`        | The engine or plugin cannot do this: an unknown filter preset, a seek on a `stream`, `live` or one-shot `url` resource, search on a plugin without it |
+| `AGE_RESTRICTED`     | The call did not allow age-restricted media, or the provider refused it without an age-verified account                                               |
 
 Use `INVALID_ARGUMENT` to ask the member to fix their input. Use `INVALID_STATE` to explain why a valid command cannot
 run right now.
@@ -95,7 +95,15 @@ Log `cause` to find out what went wrong, but do not show it to members. It can c
 A track that fails after `play` resolved does not reject `play`. Its error arrives on `queue.item.failed`, described
 in [events](../events/).
 
-A player failure there is `VOICE_FAILED`, with the player's error as `cause`. The exception is a player that threw a
+An input that stops mid-track is `SOURCE_FAILED`, not `VOICE_FAILED`. The built-in engine reopens a broken, stalled or
+ended-early input first, for every kind but `stream` and a `url` without range support, and a `live` resource reopens at the live edge. Reopens start at
+once, then wait 1, 2, 4 and every 8 seconds, and none starts more than 30 seconds after the first failure. When that
+budget ends, or the resource cannot reopen, the item fails `SOURCE_FAILED` with the input's first error at the end of
+the `cause` chain. `source` is the plugin that prepared the item. The matching `engine.track.failed` diagnostic has
+`data.recovery` `exhausted` or `unreopenable`. Text keyed on `VOICE_FAILED` for "playback stopped" moves to
+`SOURCE_FAILED`.
+
+Any other player failure there is `VOICE_FAILED`, with the player's error as `cause`. The exception is a player that threw a
 `DisTubeError` with another code, such as `UNSUPPORTED`, which arrives as it is. `INVALID_ARGUMENT`, `INVALID_STATE`
 and `ABORTED` never arrive on that event.
 

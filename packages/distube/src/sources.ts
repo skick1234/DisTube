@@ -1,4 +1,4 @@
-import type { Engine, PlaybackResource, Plugin, ResolvableInput } from "./contracts";
+import type { Engine, PlaybackResource, Plugin, ResolvableInput, StreamOptions } from "./contracts";
 import { abortError, DisTubeError, ErrorCode, fromIntegration, requireQuery, throwIfAborted } from "./errors";
 import { Playlist, Song } from "./media";
 
@@ -239,7 +239,37 @@ export function allowedRelated(song: Song, allowAgeRestricted: boolean): Song {
 
 export interface PreparedSong {
   readonly resource: PlaybackResource;
+  readonly source: string;
   readonly fallback?: Song;
+}
+
+export type PluginReport = Parameters<StreamOptions["report"]>[0];
+
+export type ItemReporter = (plugin: string, diagnostic: PluginReport) => void;
+
+const closeReports = new WeakMap<PlaybackResource, () => void>();
+
+async function streamed(
+  plugin: Plugin,
+  song: Song,
+  signal: AbortSignal,
+  report: ItemReporter,
+  stream: NonNullable<Plugin["stream"]>,
+): Promise<PlaybackResource> {
+  let open = true;
+  const bound = (diagnostic: PluginReport): void => {
+    if (open) report(plugin.name, diagnostic);
+  };
+  try {
+    const resource = await call(plugin, signal, () => stream(song, { signal, report: bound }));
+    closeReports.set(resource, () => {
+      open = false;
+    });
+    return resource;
+  } catch (error: unknown) {
+    open = false;
+    throw error;
+  }
 }
 
 function closest(song: Song, candidates: readonly Song[]): Song | undefined {
@@ -257,16 +287,17 @@ export async function prepareSong(
   song: Song,
   signal: AbortSignal,
   allowAgeRestricted: boolean,
+  report: ItemReporter,
 ): Promise<PreparedSong> {
   const owner = ownerOf(plugins, song);
   if (!owner) throw new DisTubeError(ErrorCode.SOURCE_FAILED, `No plugin named ${song.source} is configured`);
   const prepare = engine.prepare?.bind(engine);
   if (prepare) {
     const preparer = plugins.find(plugin => plugin.engine === engine) ?? owner;
-    return { resource: await call(preparer, signal, () => prepare(song, { signal })) };
+    return { resource: await call(preparer, signal, () => prepare(song, { signal })), source: preparer.name };
   }
   const stream = owner.stream?.bind(owner);
-  if (stream) return { resource: await call(owner, signal, () => stream(song, { signal })) };
+  if (stream) return { resource: await streamed(owner, song, signal, report, stream), source: owner.name };
   const query = song.artist === undefined ? song.name : `${song.name} ${song.artist}`;
   return firstFound(plugins, signal, `No plugin could play ${song.name}`, query, async plugin => {
     const search = plugin.search?.bind(plugin);
@@ -278,11 +309,16 @@ export async function prepareSong(
     const candidate = closest(song, allowAgeRestricted ? found : found.filter(allowed));
     if (!candidate) return undefined;
     const fallback = owned(plugin, candidate);
-    return { resource: await call(plugin, signal, () => prepareCandidate(fallback, { signal })), fallback };
+    return {
+      resource: await streamed(plugin, fallback, signal, report, prepareCandidate),
+      source: plugin.name,
+      fallback,
+    };
   });
 }
 
 export async function disposeResource(resource: PlaybackResource): Promise<void> {
+  closeReports.get(resource)?.();
   if (resource.kind === "stream") resource.stream.destroy();
   await resource.dispose?.();
 }

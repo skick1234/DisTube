@@ -2,7 +2,8 @@ import { type ClientRequest, request as httpRequest, type IncomingMessage } from
 import { request as httpsRequest } from "node:https";
 import { Readable } from "node:stream";
 import { setTimeout as delay } from "node:timers/promises";
-import type { EncodedPlaybackResource, PlaybackResource } from "distube/integrations";
+import { DisTubeError } from "distube";
+import type { EncodedPlaybackResource, LivePlaybackResource, PlaybackResource } from "distube/integrations";
 import { type Container, type InputSource, URL_READY_TIMEOUT_MS, WINDOW_BYTES, type WireError } from "./protocol";
 
 export type LocalPlaybackResource = Exclude<PlaybackResource, EncodedPlaybackResource>;
@@ -10,6 +11,7 @@ export type LocalPlaybackResource = Exclude<PlaybackResource, EncodedPlaybackRes
 const MAX_REDIRECTS = 5;
 const MAX_MISSES = 3;
 const RESUME_DELAY_MS = 500;
+const LIVE_OPEN_TIMEOUT_MS = 30_000;
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 const HLS_CONTENT_TYPES = new Set([
   "application/vnd.apple.mpegurl",
@@ -35,7 +37,7 @@ export async function serveInput(
   redact: (value: string) => string,
   reply: (message: ByteReply) => void,
   retried: (offset: number) => void,
-): Promise<ByteServer> {
+): Promise<ByteServer | undefined> {
   const lifetime = new AbortController();
   try {
     switch (resource.kind) {
@@ -47,6 +49,10 @@ export async function serveInput(
         return new OneShotServer(resource.open(seconds, lifetime.signal), resource.container, lifetime, redact, reply);
       case "reader":
         return new RangedServer(resource.size, resource.container, resource.read, lifetime, redact, reply, retried);
+      case "live": {
+        const readable = await openLive(resource, signal, lifetime);
+        return readable && new OneShotServer(readable, resource.container, lifetime, redact, reply);
+      }
       case "url": {
         const opened = await openUrl(resource.url, 0, signal, redact);
         if (typeof opened === "string") return new DirectServer({ kind: "hls", url: opened }, lifetime);
@@ -59,6 +65,44 @@ export async function serveInput(
     lifetime.abort();
     throw error;
   }
+}
+
+async function openLive(
+  resource: LivePlaybackResource,
+  signal: AbortSignal,
+  lifetime: AbortController,
+): Promise<Readable | undefined> {
+  const detach = listenForAbort(signal, () => lifetime.abort(abortError()));
+  const timeout = setTimeout(
+    () => lifetime.abort(new Error(`Live input did not open within ${LIVE_OPEN_TIMEOUT_MS / 1000} seconds`)),
+    LIVE_OPEN_TIMEOUT_MS,
+  );
+  const abandoned = new Promise<never>((_, reject) => {
+    if (lifetime.signal.aborted) return reject(lifetime.signal.reason);
+    lifetime.signal.addEventListener("abort", () => reject(lifetime.signal.reason), { once: true });
+  });
+  void abandoned.catch(() => undefined);
+  let opening: Promise<Readable | undefined> | undefined;
+  let readable: Readable | undefined;
+  try {
+    opening = resource.open(lifetime.signal);
+    readable = await Promise.race([opening, abandoned]);
+  } catch (error: unknown) {
+    void opening?.then(
+      late => late?.destroy(),
+      () => undefined,
+    );
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+    detach();
+  }
+  if (signal.aborted) {
+    readable?.destroy();
+    throw abortError();
+  }
+  if (!readable) lifetime.abort();
+  return readable;
 }
 
 class DirectServer implements ByteServer {
@@ -115,7 +159,7 @@ class OneShotServer implements ByteServer {
   read(request: number, { want = WINDOW_BYTES }: Readonly<{ want?: number }>): void {
     this.#pending = { request, want };
     this.#serve();
-    if (this.#pending) this.#stalled ??= setTimeout(() => this.#settle(stalledError()), URL_READY_TIMEOUT_MS);
+    if (this.#pending) this.#stalled ??= setTimeout(() => this.#settle(new StalledInput()), URL_READY_TIMEOUT_MS);
   }
 
   cancel(): void {}
@@ -164,7 +208,7 @@ class OneShotServer implements ByteServer {
         size += bytes.length;
       }
     } catch (error: unknown) {
-      this.#settle(safeInputError("Playback input failed", error, this.#redact));
+      this.#settle(safeError(error, this.#redact));
       return;
     }
     if (size > 0) this.#answer({ request: pending.request, chunk: transferable(Buffer.concat(parts, size)) });
@@ -177,7 +221,7 @@ class OneShotServer implements ByteServer {
   };
 
   readonly #onError = (error: Error): void => {
-    this.#settle(safeInputError("Playback input failed", error, this.#redact));
+    this.#settle(safeError(error, this.#redact));
   };
 
   readonly #onClose = (): void => {
@@ -244,7 +288,7 @@ class RangedServer implements ByteServer {
     let stalled: NodeJS.Timeout | undefined;
     const arm = (): void => {
       clearTimeout(stalled);
-      stalled = setTimeout(() => stall.abort(stalledError()), URL_READY_TIMEOUT_MS);
+      stalled = setTimeout(() => stall.abort(new StalledInput()), URL_READY_TIMEOUT_MS);
     };
     const length = end - start + 1;
     let received = 0;
@@ -290,11 +334,8 @@ class RangedServer implements ByteServer {
       this.#reply({ request, done: true });
     } catch (error: unknown) {
       if (signal.aborted) return;
-      this.failure ??= safeInputError(
-        "Playback input failed",
-        stall.signal.aborted ? stall.signal.reason : error,
-        this.#redact,
-      );
+      const reason: unknown = stall.signal.reason;
+      this.failure ??= reason instanceof StalledInput ? reason : safeError(error, this.#redact);
       this.#reply({ request, failed: true });
     } finally {
       clearTimeout(stalled);
@@ -389,8 +430,10 @@ class UrlRanges {
   }
 }
 
-function stalledError(): Error {
-  return new Error("Playback input stopped sending bytes");
+export class StalledInput extends Error {
+  constructor() {
+    super("Playback input stopped sending bytes");
+  }
 }
 
 function transferable(bytes: Buffer): ArrayBuffer {
@@ -461,7 +504,7 @@ async function openUrl(
             return;
           }
           if (status < 200 || status >= 300) {
-            finish(new Refusal("Playback URL returned a non-success status"), response);
+            finish(new Refusal(`Playback URL returned a non-success status ${status}`), response);
             return;
           }
           const contentType = response.headers["content-type"]?.split(";", 1)[0]?.trim().toLowerCase();
@@ -526,6 +569,10 @@ export function redactor(resource: LocalPlaybackResource): (value: string) => st
 export function decodeFailure(stage: string, error: unknown, redact: (value: string) => string): Error {
   const cause = safeError(error, redact);
   return new Error(redact(`Decode failed during ${stage}: ${cause.message}`), { cause });
+}
+
+export function inputFailure(cause: Error): DisTubeError {
+  return new DisTubeError("SOURCE_FAILED", `Playback input failed: ${cause.message}`, { cause });
 }
 
 export function fromWire(wire: WireError): Error {

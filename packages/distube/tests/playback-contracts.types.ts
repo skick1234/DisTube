@@ -12,6 +12,7 @@ import type {
 import { Song } from "../src";
 import type {
   Adapter,
+  Diagnostic,
   EncodedPlaybackResource,
   Engine,
   EngineSettings,
@@ -19,7 +20,9 @@ import type {
   FilterDefinitions,
   FilterEntry,
   JoinOptions,
+  LivePlaybackResource,
   PlaybackResource,
+  PlaybackResourceKind,
   Player,
   PlayerOptions,
   Plugin,
@@ -143,7 +146,13 @@ const adapter: Adapter = {
   createEngine(settings: EngineSettings): Engine {
     const tuning: [number, number] = [settings.opusComplexity, settings.bufferMs];
     void tuning;
-    settings.report({ severity: "warning", stage: "engine.test", message: "m", guildId: "g", data: { attempt: 1 } });
+    settings.report({
+      severity: "warning",
+      stage: "remote.test",
+      plugin: "remote",
+      message: "m",
+      data: { attempt: 1 },
+    });
     return engine;
   },
 };
@@ -204,10 +213,52 @@ const reader: ReaderPlaybackResource = { kind: "reader", size: 1000, container: 
 const timed: TimedPlaybackResource = { kind: "timed", container: "mp4", open: () => audio };
 // @ts-expect-error reader containers are limited to webm and mp4
 const oggReader: ReaderPlaybackResource = { kind: "reader", size: 1, container: "ogg", read: () => audio };
+const live: LivePlaybackResource = {
+  kind: "live",
+  container: "webm",
+  open: async signal => (signal.aborted ? undefined : audio),
+};
+const seekingLive: LivePlaybackResource = {
+  kind: "live",
+  // @ts-expect-error a live resource always opens at the live edge, never at a time
+  open: async (_seconds: number, _signal: AbortSignal) => audio,
+};
+const liveKind: PlaybackResourceKind = live.kind;
 const probed: PlaybackResource[] = [
   { kind: "reader", size: 1000, read: () => audio },
   { kind: "timed", open: () => audio },
+  { kind: "live", open: async () => undefined },
 ];
+
+const reporting: Plugin = {
+  name: "reporting",
+  async stream(_song, { report }): Promise<LivePlaybackResource> {
+    report({ severity: "warning", stage: "reporting.test", message: "m", data: { attempt: 1 } });
+    // @ts-expect-error core fills the item's guildId and the plugin name
+    report({ severity: "warning", stage: "reporting.test", message: "m", guildId: "g" });
+    return live;
+  },
+};
+const narrowed = (diagnostic: Diagnostic): void => {
+  if (diagnostic.plugin === undefined && diagnostic.stage === "engine.track.failed")
+    expectTypeOf(diagnostic.data.playedSeconds).toEqualTypeOf<number>();
+};
+// @ts-expect-error a built-in stage types its data
+const wrongData: Diagnostic = {
+  severity: "error",
+  stage: "engine.track.failed",
+  message: "m",
+  data: { step: "read", kind: "live", playedSeconds: "12", reopens: 0, recovery: "none" },
+};
+// @ts-expect-error a stage core does not define needs the plugin that defines it
+const unnamedStage: Diagnostic = { severity: "info", stage: "acme.cache.miss", message: "m" };
+const pluginStage: Diagnostic = {
+  severity: "info",
+  plugin: "acme",
+  stage: "acme.cache.miss",
+  message: "m",
+  data: { key: "k" },
+};
 // @ts-expect-error Song cannot carry a playback resource
 new Song({ id: "leak", name: "Leak", url: "https://provider.example/leak", source: "source", resource });
 
@@ -298,5 +349,12 @@ void [
   timed,
   oggReader,
   probed,
+  seekingLive,
+  liveKind,
+  reporting,
+  narrowed,
+  wrongData,
+  unnamedStage,
+  pluginStage,
   typedFromQueue,
 ];

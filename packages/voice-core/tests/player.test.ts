@@ -1,9 +1,10 @@
+import { createReadStream } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { join } from "node:path";
 import { PassThrough, Readable } from "node:stream";
-import { AudioPlayerStatus, StreamType } from "@discordjs/voice";
+import { AudioPlayerStatus, type CreateAudioPlayerOptions, StreamType } from "@discordjs/voice";
 import type { Diagnostic, EngineSettings, PlaybackResource, Player, TrackEnd } from "distube/integrations";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { DiscordVoiceEngine } from "../src/engine";
@@ -49,6 +50,46 @@ function failuresAtRejection(ended: Promise<TrackEnd>): Promise<number | undefin
     () => undefined,
     () => failures().length,
   );
+}
+
+function reopenReports(): Diagnostic[] {
+  return reports.filter(diagnostic => diagnostic.stage === "engine.input.reopened");
+}
+
+function settledFlag(ended: Promise<TrackEnd>): () => boolean {
+  let settled = false;
+  const done = (): void => {
+    settled = true;
+  };
+  void ended.then(done, done);
+  return () => settled;
+}
+
+/** @discordjs/voice's AudioPlayer reads one packet per 20 ms while Playing and stops after maxMissedFrames empty reads in a row. */
+function discordClock(): (ms: number) => Promise<number> {
+  const [options] = (native.createAudioPlayer.mock.lastCall ?? []) as unknown as [CreateAudioPlayerOptions?];
+  const limit = options?.behaviors?.maxMissedFrames ?? 5;
+  let missed = 0;
+  return async ms => {
+    let played = 0;
+    for (let elapsed = 0; elapsed < ms; elapsed += 20) {
+      if (latest.player.state.status === AudioPlayerStatus.Playing) {
+        if (latest.resource.input.read() === null) missed += 1;
+        else {
+          missed = 0;
+          played += 1;
+        }
+        if (missed >= limit) latest.player.transition({ status: AudioPlayerStatus.Idle });
+      }
+      await vi.advanceTimersByTimeAsync(20);
+      await new Promise(resolve => setImmediate(resolve));
+    }
+    return played;
+  };
+}
+
+function lookupFails(): Readable {
+  throw new Error("lookup failed");
 }
 
 function file(path = media.opus): PlaybackResource {
@@ -292,7 +333,11 @@ describe("local Player", () => {
     await expect(first.ended).rejects.toThrow("stopped before the track ended");
     expect(await reported).toBe(1);
     expect(failures()).toEqual([
-      expect.objectContaining({ severity: "error", guildId: "guild", data: { step: "starved" } }),
+      expect.objectContaining({
+        severity: "error",
+        guildId: "guild",
+        data: expect.objectContaining({ step: "starved", kind: "file", reopens: 0, recovery: "none" }),
+      }),
     ]);
     const second = play(player, file());
     await second.started;
@@ -394,14 +439,20 @@ describe("local Player", () => {
     );
     const chain: unknown[] = [];
     for (let error: unknown = failure; error instanceof Error; error = error.cause) chain.push(error);
-    expect(failure?.message).toContain("Decode failed during read");
+    expect(failure).toMatchObject({ code: "SOURCE_FAILED", message: expect.stringContaining("Playback input failed") });
     expect(chain).not.toContain(reset);
     expect(chain.at(-1)).toMatchObject({ message: "socket reset", code: "ECONNRESET" });
     expect(await reported).toBe(1);
     expect(failures()).toEqual([
-      expect.objectContaining({ severity: "error", guildId: "guild", data: { step: "read" }, error: failure }),
+      expect.objectContaining({
+        severity: "error",
+        guildId: "guild",
+        data: expect.objectContaining({ step: "read", kind: "stream", reopens: 0, recovery: "unreopenable" }),
+        error: failure,
+      }),
     ]);
     expect(failures()[0]?.position).toBeGreaterThan(0);
+    expect(failures()[0]?.data?.playedSeconds).toBeGreaterThan(0);
   });
 
   it("rejects play on a file that stops being valid MP3 12 seconds in, reported once with step decode near second 12", async () => {
@@ -419,10 +470,257 @@ describe("local Player", () => {
     await expect(track.ended).rejects.toThrow("Invalid data");
     expect(await reported).toBe(1);
     expect(failures()).toEqual([
-      expect.objectContaining({ severity: "error", guildId: "guild", data: { step: "decode" } }),
+      expect.objectContaining({
+        severity: "error",
+        guildId: "guild",
+        data: expect.objectContaining({ step: "decode", kind: "file", reopens: 0, recovery: "none" }),
+      }),
     ]);
     expect(failures()[0]?.position).toBeGreaterThan(11);
+    expect(failures()[0]?.data?.playedSeconds).toBeGreaterThan(11);
     expect(failures()[0]?.position).toBeLessThanOrEqual(12);
+  });
+
+  it("finishes a live track whose next open finds the broadcast ended, after its queued audio, without a failure report", async () => {
+    const { player } = await createPlayer();
+    const inputs = [() => createReadStream(media.opus), () => undefined];
+    const track = play(player, { kind: "live", container: "webm", open: async () => inputs.shift()?.() });
+    await track.started;
+
+    const sent = await take(latest.resource.input, Number.POSITIVE_INFINITY);
+    latest.player.transition({ status: AudioPlayerStatus.Idle });
+
+    await expect(track.ended).resolves.toEqual({ reason: "finished" });
+    expect(sent).toEqual(await sourcePackets(media.opus));
+    expect(failures()).toEqual([]);
+    expect(reports.filter(report => report.stage === "engine.input.reopened")).toEqual([
+      expect.objectContaining({ data: { kind: "live", attempt: 1, reason: "ended", outcome: "ended" } }),
+    ]);
+  });
+
+  it("drops the audio a paused live track queued and opens it again at the edge before resume resolves", async () => {
+    const { player } = await createPlayer();
+    const inputs = [() => createReadStream(media.steps), () => createReadStream(media.opus)];
+    let opens = 0;
+    const track = play(player, {
+      kind: "live",
+      container: "webm",
+      open: async () => {
+        opens += 1;
+        return inputs.shift()?.();
+      },
+    });
+    await track.started;
+    await take(latest.resource.input, 5);
+    await player.pause();
+    await vi.waitFor(() => expect(latest.resource.input.readableLength).toBeGreaterThan(5));
+
+    await player.resume();
+    const opensAtResume = opens;
+    const [next] = await take(latest.resource.input, 1);
+
+    expect(opensAtResume).toBe(2);
+    expect(next).toEqual((await sourcePackets(media.opus))[0]);
+    expect(latest.player.state.status).toBe(AudioPlayerStatus.Playing);
+    expect(reports.filter(report => report.stage === "engine.input.reopened")).toEqual([
+      expect.objectContaining({
+        severity: "info",
+        data: { kind: "live", attempt: 1, reason: "resumed", outcome: "opened" },
+      }),
+    ]);
+  });
+
+  it("reopens a timed input that keeps failing 6 times over about 23 seconds while Discord reads silence, then rejects SOURCE_FAILED with every cause", async () => {
+    const { player } = await createPlayer();
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance"] });
+    try {
+      const first = new PassThrough();
+      first.write((await readFile(media.opus)).subarray(0, 100_000));
+      const opens: number[] = [];
+      const track = play(player, {
+        kind: "timed",
+        container: "webm",
+        open: () => {
+          opens.push(performance.now());
+          return opens.length > 1
+            ? new Readable({
+                read() {
+                  this.destroy(new Error("range read failed"));
+                },
+              })
+            : first;
+        },
+      });
+      const settled = settledFlag(track.ended);
+      await track.started;
+      await take(latest.resource.input, 10);
+      const discord = discordClock();
+      first.destroy(new Error("socket reset"));
+
+      for (const [attempt, wait] of [1_000, 2_000, 4_000, 8_000, 8_000].entries()) {
+        await vi.waitFor(
+          () => {
+            while (latest.resource.input.read() !== null);
+            expect(settled() || reopenReports().length > attempt).toBe(true);
+          },
+          { timeout: 5_000 },
+        );
+        if (settled()) break;
+        await discord(wait);
+      }
+      await vi.waitFor(() => expect(settled()).toBe(true), { timeout: 5_000 });
+
+      const error = await track.ended.then(
+        () => undefined,
+        (failure: unknown) => failure as Error,
+      );
+      const messages: string[] = [];
+      for (let cause = error?.cause; cause instanceof Error; cause = cause.cause) messages.push(cause.message);
+      expect(error).toMatchObject({ code: "SOURCE_FAILED", message: expect.stringContaining("Playback input") });
+      expect(opens).toHaveLength(7);
+      expect((opens[6] ?? 0) - (opens[1] ?? 0)).toBeGreaterThanOrEqual(23_000);
+      expect((opens[6] ?? 0) - (opens[1] ?? 0)).toBeLessThan(25_000);
+      expect(messages.at(-1)).toBe("socket reset");
+      expect(messages.filter(message => message.includes("range read failed"))).toHaveLength(6);
+      expect(reopenReports().map(report => report.data)).toEqual(
+        [1, 2, 3, 4, 5, 6].map(attempt => ({ kind: "timed", attempt, reason: "failed", outcome: "failed" })),
+      );
+      expect(reopenReports()[0]).toMatchObject({
+        severity: "warning",
+        guildId: "guild",
+        error: expect.objectContaining({ message: expect.stringContaining("range read failed") }),
+      });
+      expect(failures()).toEqual([
+        expect.objectContaining({
+          data: expect.objectContaining({ step: "read", kind: "timed", reopens: 6, recovery: "exhausted" }),
+          error,
+        }),
+      ]);
+    } finally {
+      vi.useRealTimers();
+    }
+  }, 30_000);
+
+  it("keeps a live track playing when its sixth reopen opens after 23 seconds of silence on Discord", async () => {
+    const { player } = await createPlayer();
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance"] });
+    try {
+      const first = new PassThrough();
+      first.write((await readFile(media.opus)).subarray(0, 40_000));
+      const inputs = [() => first, ...Array.from({ length: 5 }, () => lookupFails), () => createReadStream(media.hour)];
+      const track = play(player, { kind: "live", container: "webm", open: async () => inputs.shift()?.() });
+      const settled = settledFlag(track.ended);
+      await track.started;
+      await take(latest.resource.input, 10);
+      const discord = discordClock();
+      first.destroy(new Error("socket reset"));
+      await vi.waitFor(() => {
+        while (latest.resource.input.read() !== null);
+        expect(reopenReports()).not.toHaveLength(0);
+      });
+
+      for (let elapsed = 0; elapsed < 40_000 && !settled() && reopenReports().length < 6; elapsed += 20)
+        await discord(20);
+      const [next] = await take(latest.resource.input, 1);
+
+      expect(failures()).toEqual([]);
+      expect(settled()).toBe(false);
+      expect(reopenReports().map(report => report.data)).toEqual([
+        ...[1, 2, 3, 4, 5].map(attempt => ({ kind: "live", attempt, reason: "failed", outcome: "failed" })),
+        { kind: "live", attempt: 6, reason: "failed", outcome: "opened" },
+      ]);
+      expect(next).toBeInstanceOf(Buffer);
+    } finally {
+      vi.useRealTimers();
+    }
+  }, 30_000);
+
+  it("rejects SOURCE_FAILED and abandons a live reopen whose open never settles, 30 seconds after the input broke", async () => {
+    const { player } = await createPlayer();
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance"] });
+    try {
+      const first = new PassThrough();
+      first.write((await readFile(media.opus)).subarray(0, 40_000));
+      const signals: AbortSignal[] = [];
+      const track = play(player, {
+        kind: "live",
+        container: "webm",
+        open: signal => {
+          signals.push(signal);
+          return signals.length === 1 ? Promise.resolve(first) : new Promise<never>(() => undefined);
+        },
+      });
+      await track.started;
+      await take(latest.resource.input, 10);
+      const discord = discordClock();
+      first.destroy(new Error("socket reset"));
+      await vi.waitFor(() => {
+        while (latest.resource.input.read() !== null);
+        expect(signals).toHaveLength(2);
+      });
+      const brokeAt = performance.now();
+
+      while (performance.now() - brokeAt < 60_000 && failures().length === 0) await discord(20);
+
+      expect(performance.now() - brokeAt).toBeLessThan(31_000);
+      const error = await track.ended.then(
+        () => undefined,
+        (failure: unknown) => failure as Error,
+      );
+      const messages: string[] = [];
+      for (let cause = error?.cause; cause instanceof Error; cause = cause.cause) messages.push(cause.message);
+      expect(error).toMatchObject({ code: "SOURCE_FAILED", message: expect.stringContaining("Playback input") });
+      expect(messages.at(-1)).toBe("socket reset");
+      expect(signals[1]?.aborted).toBe(true);
+      expect(reopenReports().map(report => report.data)).toEqual([
+        { kind: "live", attempt: 1, reason: "failed", outcome: "failed" },
+      ]);
+      expect(failures()).toEqual([
+        expect.objectContaining({
+          data: expect.objectContaining({ step: "read", kind: "live", reopens: 1, recovery: "exhausted" }),
+          error,
+        }),
+      ]);
+    } finally {
+      vi.useRealTimers();
+    }
+  }, 30_000);
+
+  it("resolves resume of a paused live track within 30 seconds when its reopen never settles", async () => {
+    const { player } = await createPlayer();
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance"] });
+    try {
+      let opens = 0;
+      const track = play(player, {
+        kind: "live",
+        container: "webm",
+        open: async () => {
+          opens += 1;
+          return opens === 1 ? createReadStream(media.steps) : new Promise<never>(() => undefined);
+        },
+      });
+      await track.started;
+      await take(latest.resource.input, 5);
+      await player.pause();
+      let resumed = false;
+      void player.resume().then(() => {
+        resumed = true;
+      });
+
+      await vi.advanceTimersByTimeAsync(30_000);
+      await vi.waitFor(() => expect(resumed).toBe(true));
+
+      expect(opens).toBe(2);
+      expect(reopenReports()).toEqual([
+        expect.objectContaining({
+          severity: "info",
+          data: { kind: "live", attempt: 1, reason: "resumed", outcome: "failed" },
+          error: expect.any(Error),
+        }),
+      ]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("keeps pause, volume, filters and the native resource across a seek", async () => {

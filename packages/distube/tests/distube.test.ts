@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { type Diagnostic, DisTube, DisTubeError, ErrorCode, Playlist, Song } from "../src";
-import type { Plugin } from "../src/integrations";
+import type { Plugin, StreamOptions } from "../src/integrations";
 import {
   capture,
   deferred,
@@ -704,6 +704,7 @@ describe("events and diagnostics", () => {
     const diagnostic = {
       severity: "warning",
       stage: "engine.test",
+      plugin: "engine",
       message: "m",
       guildId: "g",
       position: 12,
@@ -716,6 +717,49 @@ describe("events and diagnostics", () => {
 
     expect(calledDuringReport).toBe(0);
     expect(harness.diagnostics.mock.calls).toEqual([[diagnostic]]);
+  });
+
+  it("delivers a stream report later with the item's guild and plugin, and drops reports after disposal or rejection", async () => {
+    const reports: StreamOptions["report"][] = [];
+    const plugin: Plugin = {
+      name: "reporter",
+      stream: async (song, { report }) => {
+        reports.push(report);
+        if (song.id === "broken") throw new Error("no stream");
+        return { kind: "file", path: `/stream/${song.id}` };
+      },
+    };
+    const harness = setup([plugin]);
+    await harness.distube.play(TARGET, media("reporter", "a"));
+    await settle();
+    const playing = required(reports[0]);
+
+    playing({ severity: "warning", stage: "source.test", message: "m", data: { attempt: 1 } });
+    const calledDuringReport = harness.diagnostics.mock.calls.length;
+    await flushMicrotasks();
+    const delivered = harness.diagnostics.mock.calls.map(([diagnostic]) => diagnostic);
+    harness.engine.player.finish();
+    await settle();
+    await harness.distube.play(TARGET, media("reporter", "broken"));
+    await settle();
+    const late = [playing, required(reports[1])].map(report =>
+      report({ severity: "info", stage: "source.late", message: "late" }),
+    );
+    await flushMicrotasks();
+
+    expect(calledDuringReport).toBe(0);
+    expect(delivered).toEqual([
+      {
+        severity: "warning",
+        stage: "source.test",
+        message: "m",
+        data: { attempt: 1 },
+        guildId: GUILD,
+        plugin: "reporter",
+      },
+    ]);
+    expect(late).toEqual([undefined, undefined]);
+    expect(harness.diagnostics.mock.calls.map(([diagnostic]) => diagnostic.stage)).toEqual(["source.test"]);
   });
 
   it("isolates a throwing consumer of an engine report and keeps the track playing", async () => {
@@ -733,6 +777,7 @@ describe("events and diagnostics", () => {
       stage: "engine.track.starved",
       message: "starved",
       guildId: GUILD,
+      data: { durationMs: 200 },
     });
     await settle();
 
@@ -762,6 +807,7 @@ describe("events and diagnostics", () => {
       stage: "engine.track.starved",
       message: "starved",
       guildId: GUILD,
+      data: { durationMs: 200 },
     });
     reporting = false;
     await settle();

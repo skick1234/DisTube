@@ -8,7 +8,7 @@ sidebar:
 This page is for plugin authors writing `stream`. By the end of it you will know which resource to return for your
 provider's media, whether it can seek, and who cleans it up.
 
-`stream(song, { signal })` returns a `PlaybackResource`, a plain object whose `kind` selects its shape. DisTube calls
+`stream(song, { signal, report })` returns a `PlaybackResource`, a plain object whose `kind` selects its shape. DisTube calls
 the plugin named by `song.source`. Import the resource types from `distube/integrations`.
 
 Just want to play a clip or an audio link? [Sound clips](../../popular-topics/soundboard/) and
@@ -23,6 +23,7 @@ Just want to play a clip or an audio link? [Sound clips](../../popular-topics/so
 | `stream`  | Node `Readable` in `stream`                                      | Never; one shot                    |
 | `reader`  | `size`, `read(start, end, signal)`, optional `container`         | Yes                                |
 | `timed`   | `open(seconds, signal)`, optional `container`                    | Yes                                |
+| `live`    | `open(signal)`, optional `container`                             | Never; the engine reopens it       |
 | `encoded` | `format` and `encoded`, playable only by the engine that made it | Only with `seekable: true`         |
 
 The engine fetches a `url` without headers. Media whose requests need headers, such as authenticated HTTP, is a `reader` or
@@ -32,6 +33,27 @@ The engine fetches a `url` without headers. Media whose requests need headers, s
 aborts when the engine no longer needs them. `timed` is for media that can only start at a time. `open(seconds, signal)`
 returns the container header, then media from at or before `seconds`.
 
+`live` is for media without an end, such as a livestream. Each `open(signal)` resolves one fresh input at the live edge,
+and destroys it when `signal` aborts. A rejection means that open failed while the broadcast may still be live.
+`undefined` means the broadcast ended, and it is the only way a `live` track finishes. The engine decides when to call
+`open` again, after a failed read, a stall, a pause or a drift behind the edge, so `open` must not retry by itself.
+`open` that has not settled in 30 seconds counts as failed and its `signal` aborts.
+
+```ts
+import type { Readable } from "node:stream";
+import type { PlaybackResource } from "distube/integrations";
+
+declare function openLiveEdge(id: string, signal: AbortSignal): Promise<Readable | undefined>;
+
+export function liveResource(id: string): PlaybackResource {
+  return { kind: "live", open: signal => openLiveEdge(id, signal) };
+}
+```
+
+A `live` track is never seekable, and its [`position`](../../reference/queue/#status) counts the source seconds played
+since the track started, across every input opened for it. A `stream` resource gets none of this recovery: when its
+readable ends early, the track fails.
+
 `container`, `"webm"` or `"mp4"`, makes the built-in engine open that container without looking at the bytes. Leave it
 out for anything else. The engine then identifies the format from the first bytes, and accepts Matroska or WebM, MP4,
 Ogg, MP3, FLAC, WAV or AAC.
@@ -40,7 +62,7 @@ Ogg, MP3, FLAC, WAV or AAC.
 An MP3 has no seek index. A seek on an MP3 `reader` reads every byte from the start of the file to the target.
 :::
 
-A player rejects a kind it cannot play with `UNSUPPORTED`. Seek errors are on the
+A player rejects a kind it cannot play with `UNSUPPORTED`; an engine that cannot play `live` must do so. Seek errors are on the
 [queue reference](../../reference/queue/).
 
 ## Ownership
@@ -72,7 +94,7 @@ belong.
 
 ## Engines
 
-The built-in engine plays `url`, `file`, `stream`, `reader` and `timed` resources, not `encoded` ones. Its read-ahead
+The built-in engine plays `url`, `file`, `stream`, `reader`, `timed` and `live` resources, not `encoded` ones. Its read-ahead
 and Opus settings come from the [`engine` option](../../reference/options/).
 
 The bytes must be one audio file in Matroska or WebM, MP4, Ogg, MP3, FLAC, WAV or AAC. A `url` whose response has an

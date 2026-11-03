@@ -62,7 +62,7 @@ const messages: Readonly<Record<ErrorCode, string>> = {
   [ErrorCode.RATE_LIMITED]: "The provider is rate limiting the bot. Try again later.",
   [ErrorCode.BOT_CHECK]: "The provider wants the bot to prove it is not a robot. Try again later.",
   [ErrorCode.NOT_STARTED]: "That premiere or live stream has not started yet.",
-  [ErrorCode.SOURCE_FAILED]: "The provider could not load that.",
+  [ErrorCode.SOURCE_FAILED]: "The provider could not load that, or its stream stopped.",
   [ErrorCode.VOICE_FAILED]: "The voice connection failed.",
   [ErrorCode.VOICE_DISCONNECTED]: "Lost the connection to the voice channel.",
   [ErrorCode.UNSUPPORTED]: "That does not work for this track.",

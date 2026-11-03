@@ -1008,9 +1008,36 @@ describe("Track input contract", () => {
       (error: unknown) => error as Error,
     );
 
-    expect(failure?.message).toContain("Decode failed during open");
+    expect(failure).toMatchObject({ code: "SOURCE_FAILED" });
     expect(failure?.message).toContain("ended before its byte range");
     expect(reader.ranges.map(([start]) => start)).toEqual([0, 0, 0]);
+  });
+
+  it("fails a stream that goes quiet after a second of audio SOURCE_FAILED with the stall as cause, without a reopen", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      const stream = new PassThrough();
+      stream.write((await readFile(media.opus)).subarray(0, 40_000));
+      const reporter = recorder();
+      const track = await open({ kind: "stream", stream }, PLAIN, undefined, reporter);
+      const draining = drain(track);
+      await vi.waitFor(() => expect(vi.getTimerCount()).toBeGreaterThan(0));
+
+      await vi.advanceTimersByTimeAsync(11_000);
+      const packets = await draining;
+      const outcome = await track.outcome;
+
+      const error = outcome.type === "failed" ? outcome.error : undefined;
+      expect(packets.length).toBeGreaterThan(40);
+      expect(error).toMatchObject({ code: "SOURCE_FAILED", message: expect.stringContaining("Playback input") });
+      expect(causes(error).map(cause => cause.message)).toContainEqual(
+        expect.stringContaining("stopped sending bytes"),
+      );
+      expect(reporter.reports.filter(report => report.stage === "engine.input.reopened")).toEqual([]);
+      await track.close();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("reopens a timed track whose input fails mid-track at the packet after the last one sent", async () => {
@@ -1035,30 +1062,269 @@ describe("Track input contract", () => {
     expect(opened[1]).toBeGreaterThan(1);
     await track.close();
   });
+});
 
-  it("fails a timed track with its input's safe cause after three reopens in a row that play nothing", async () => {
-    const first = new PassThrough();
-    first.write((await readFile(media.opus)).subarray(0, 100_000));
-    const opened: number[] = [];
-    const track = await open({
-      kind: "timed",
+function liveInputs(inputs: (() => Readable | undefined)[]): { resource: LocalPlaybackResource; opens: number[] } {
+  const opens: number[] = [];
+  return {
+    opens,
+    resource: {
+      kind: "live",
       container: "webm",
-      open: seconds => {
-        opened.push(seconds);
-        return opened.length > 1 ? failingRange() : first;
+      open: async () => {
+        opens.push(performance.now());
+        return inputs[opens.length - 1]?.();
       },
-    });
-    await take(track.packets, 10);
-    first.destroy(new Error("socket reset"));
-    await drain(track);
-    const outcome = await track.outcome;
+    },
+  };
+}
 
-    expect(outcome).toMatchObject({ type: "failed" });
-    expect(causes(outcome.type === "failed" ? outcome.error : undefined).map(error => error.message)).toContainEqual(
-      expect.stringContaining("socket reset"),
-    );
-    expect(opened).toHaveLength(4);
+function reopened(reporter: ReturnType<typeof recorder>): Diagnostic[] {
+  return reporter.reports.filter(report => report.stage === "engine.input.reopened");
+}
+
+describe("Track live input", () => {
+  it("opens a live input again when it goes quiet after a second of audio, and keeps playing from the new input", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      const first = new PassThrough();
+      first.write((await readFile(media.opus)).subarray(0, 40_000));
+      const { resource, opens } = liveInputs([() => first, () => createReadStream(media.opus), () => undefined]);
+      const reporter = recorder();
+      const track = await open(resource, PLAIN, undefined, reporter);
+      const draining = drain(track);
+      await vi.waitFor(() => expect(vi.getTimerCount()).toBeGreaterThan(0));
+
+      await vi.advanceTimersByTimeAsync(11_000);
+      await vi.waitFor(() => expect(reopened(reporter)).toHaveLength(1));
+      expect(track.settled).toBe(false);
+      await vi.waitFor(() => expect(vi.getTimerCount()).toBeGreaterThan(0), { timeout: 5_000 });
+      await vi.advanceTimersByTimeAsync(1_000);
+      const packets = await draining;
+
+      expect(await track.outcome).toEqual({ type: "ended" });
+      expect(opens).toHaveLength(3);
+      expect(packets.length).toBeGreaterThan(opusPackets.length + 40);
+      expect(packets.slice(-opusPackets.length)).toEqual(opusPackets);
+      expect(reopened(reporter)).toEqual([
+        expect.objectContaining({
+          severity: "warning",
+          guildId: "guild",
+          data: { kind: "live", attempt: 1, reason: "stalled", outcome: "opened" },
+        }),
+        expect.objectContaining({
+          severity: "warning",
+          data: { kind: "live", attempt: 2, reason: "ended", outcome: "ended" },
+        }),
+      ]);
+      expect(reporter.reports.filter(report => report.stage === "engine.track.failed")).toEqual([]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("plays a live input that ends and restarts its timestamps on, counting position across both, and ends when open finds no broadcast", async () => {
+    const { resource, opens } = liveInputs([
+      () => createReadStream(media.opus),
+      () => createReadStream(media.opus),
+      () => undefined,
+    ]);
+    const reporter = recorder();
+    const track = await open(resource, PLAIN, undefined, reporter);
+
+    const packets = await drain(track);
+
+    expect(await track.outcome).toEqual({ type: "ended" });
+    expect(opens).toHaveLength(3);
+    expect(packets).toEqual([...opusPackets, ...opusPackets]);
+    expect(track.position).toBeGreaterThan(opusPackets.length * 2 * 0.02 - 0.1);
+    expect(track.position).toBeLessThan(opusPackets.length * 2 * 0.02 + 0.1);
+    expect(reopened(reporter).map(report => report.data)).toEqual([
+      { kind: "live", attempt: 1, reason: "ended", outcome: "opened" },
+      { kind: "live", attempt: 2, reason: "ended", outcome: "ended" },
+    ]);
     await track.close();
+  });
+
+  it("opens a live input again once its played audio falls 5 seconds behind wall time, at severity info", async () => {
+    vi.useFakeTimers({ toFake: ["performance"] });
+    try {
+      const { resource, opens } = liveInputs([() => createReadStream(media.hour), () => createReadStream(media.opus)]);
+      const reporter = recorder();
+      const track = await open(resource, PLAIN, undefined, reporter);
+      await take(track.packets, 10);
+
+      vi.advanceTimersByTime(8_000);
+      await take(track.packets, 30);
+      await vi.waitFor(() => expect(reopened(reporter)).toHaveLength(1));
+      const next = await take(track.packets, 1);
+
+      expect(opens).toHaveLength(2);
+      expect(next).toEqual(opusPackets.slice(0, 1));
+      expect(reopened(reporter)).toEqual([
+        expect.objectContaining({
+          severity: "info",
+          data: { kind: "live", attempt: 1, reason: "behind", outcome: "opened" },
+        }),
+      ]);
+      expect(track.settled).toBe(false);
+      await track.close();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("numbers a catch-up attempt 1 once 30 seconds played since the last reopen", async () => {
+    vi.useFakeTimers({ toFake: ["performance"] });
+    try {
+      const { resource } = liveInputs([
+        () => createReadStream(media.opus),
+        () => createReadStream(media.hour),
+        () => createReadStream(media.opus),
+      ]);
+      const reporter = recorder();
+      const track = await open(resource, PLAIN, undefined, reporter);
+      await take(track.packets, opusPackets.length + 1_600);
+
+      vi.advanceTimersByTime(60_000);
+      await take(track.packets, 1);
+      await vi.waitFor(() => expect(reopened(reporter)).toHaveLength(2));
+
+      expect(reopened(reporter).map(report => report.data)).toEqual([
+        { kind: "live", attempt: 1, reason: "ended", outcome: "opened" },
+        { kind: "live", attempt: 1, reason: "behind", outcome: "opened" },
+      ]);
+      await track.close();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("plays the audio it already queued when a catch-up finds the broadcast ended", async () => {
+    vi.useFakeTimers({ toFake: ["performance"] });
+    try {
+      const { resource } = liveInputs([() => createReadStream(media.hour), () => undefined]);
+      const reporter = recorder();
+      const track = await open(resource, PLAIN, undefined, reporter);
+      await take(track.packets, 10);
+      await vi.waitFor(() => expect(track.packets.readableLength).toBeGreaterThan(20));
+
+      vi.advanceTimersByTime(8_000);
+      await take(track.packets, 1);
+      await vi.waitFor(() => expect(reopened(reporter)).toHaveLength(1));
+      const rest = await drain(track);
+
+      expect(reopened(reporter).map(report => report.data)).toEqual([
+        { kind: "live", attempt: 1, reason: "behind", outcome: "ended" },
+      ]);
+      expect(rest.length).toBeGreaterThan(0);
+      expect(await track.outcome).toEqual({ type: "ended" });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("drops the audio queued before a pause when the resume reopen fails", async () => {
+    const first = createReadStream(media.hour);
+    const { resource, opens } = liveInputs([
+      () => first,
+      () => {
+        throw new Error("offline");
+      },
+      () => undefined,
+    ]);
+    const reporter = recorder();
+    const track = await open(resource, PLAIN, undefined, reporter);
+    await take(track.packets, 10);
+    track.pause();
+    await vi.waitFor(() => expect(track.packets.readableLength).toBeGreaterThan(10));
+
+    await track.resume();
+
+    expect(opens).toHaveLength(2);
+    expect(reopened(reporter).map(report => report.data)).toEqual([
+      { kind: "live", attempt: 1, reason: "resumed", outcome: "failed" },
+    ]);
+    expect(track.packets.readableLength).toBe(0);
+    await track.close();
+  });
+
+  it("does not restart the reopen budget for live inputs that fail after a second of audio, and fails SOURCE_FAILED", async () => {
+    const realTimeout = globalThis.setTimeout;
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance"] });
+    try {
+      const bytes = (await readFile(media.opus)).subarray(0, 40_000);
+      const burst = (): Readable => {
+        let sent = false;
+        let cut = false;
+        return new Readable({
+          read() {
+            if (sent) {
+              if (!cut) realTimeout(() => this.destroy(new Error("connection reset")), 100);
+              cut = true;
+            } else {
+              sent = true;
+              this.push(bytes);
+            }
+          },
+        });
+      };
+      const { resource } = liveInputs(Array.from({ length: 20 }, () => burst));
+      const reporter = recorder();
+      const track = await open(resource, PLAIN, undefined, reporter);
+      const draining = drain(track);
+      const started = performance.now();
+
+      while (!track.settled) {
+        await new Promise(resolve => realTimeout(resolve, 5));
+        await vi.advanceTimersByTimeAsync(50);
+      }
+      await draining;
+      const outcome = await track.outcome;
+
+      const attempts = reopened(reporter).map(report => report.data?.attempt);
+      expect(outcome).toMatchObject({ type: "failed", recovery: "exhausted", error: { code: "SOURCE_FAILED" } });
+      expect(attempts.length).toBeGreaterThan(1);
+      expect(attempts).toEqual(attempts.map((_attempt, index) => index + 1));
+      expect(reopened(reporter).every(report => report.data?.outcome === "opened")).toBe(true);
+      expect(performance.now() - started).toBeLessThan(32_000);
+      await track.close();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("reports a gap once in the hour it happened and nothing for the next gapless hour", async () => {
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+    try {
+      const bytes = await readFile(media.opus);
+      const stream = new PassThrough();
+      stream.write(bytes.subarray(0, 16_000));
+      const reporter = recorder();
+      const track = await open(
+        { kind: "live", container: "webm", open: async () => stream },
+        PLAIN,
+        undefined,
+        reporter,
+      );
+      await take(track.packets, 5);
+      while (track.packets.read() !== null);
+      stream.write(bytes.subarray(16_000, 64_000));
+      await take(track.packets, 5);
+      const gaps = (): Diagnostic[] => reporter.reports.filter(report => report.stage === "engine.track.gaps");
+
+      vi.advanceTimersByTime(3_600_000);
+      const firstHour = gaps().length;
+      vi.advanceTimersByTime(3_600_000);
+      await track.close();
+
+      expect(firstHour).toBe(1);
+      expect(gaps()).toEqual([expect.objectContaining({ severity: "info", guildId: "guild" })]);
+      expect(gaps()[0]?.data?.gaps).toBeGreaterThan(0);
+      expect(gaps()[0]?.data?.silentMs).toBeGreaterThan(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

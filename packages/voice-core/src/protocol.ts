@@ -3,6 +3,8 @@ export type Container = "webm" | "mp4";
 export const WINDOW_BYTES = 256 * 1024;
 export const URL_READY_TIMEOUT_MS = 10_000;
 
+export type FailedStep = "open" | "read" | "decode" | "seek" | "worker";
+
 export type InputSource =
   | Readonly<{ kind: "file"; path: string }>
   | Readonly<{ kind: "ranged"; size: number; container?: Container }>
@@ -62,7 +64,7 @@ export type FromWorker =
       error?: WireError;
     }>
   | Readonly<{ type: "ended"; track: number }>
-  | Readonly<{ type: "failed"; track: number; stage: string; input?: number; error: WireError }>
+  | Readonly<{ type: "failed"; track: number; stage: FailedStep; input?: number; error: WireError }>
   | Readonly<{ type: "lost"; track: number; input: number; position: number; error: WireError }>
   | Readonly<{ type: "closed"; track: number }>
   | Readonly<{

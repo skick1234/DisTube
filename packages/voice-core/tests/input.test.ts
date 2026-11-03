@@ -6,7 +6,7 @@ import { basename } from "node:path";
 import { PassThrough, Readable } from "node:stream";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { URL_READY_TIMEOUT_MS } from "../src/protocol";
-import type { LocalPlaybackResource } from "../src/sources";
+import { type LocalPlaybackResource, serveInput } from "../src/sources";
 import { Track } from "../src/track";
 import { createMedia, type MediaFixtures, PLAIN, recorder, sourcePackets, take } from "./support/media";
 import { silentWav } from "./support/real";
@@ -106,7 +106,7 @@ describe("controlled URL input", () => {
 
     const error = outcome.type === "failed" ? outcome.error : new Error("Expected a failed outcome");
     const text = JSON.stringify(causes(error).map(cause => cause.message));
-    expect(error.message).toContain("Decode failed during read");
+    expect(error).toMatchObject({ code: "SOURCE_FAILED", message: expect.stringContaining("Playback input failed") });
     expect(error.message).toContain("<redacted>");
     expect(text).not.toContain("private-signature");
     await track.close();
@@ -120,7 +120,10 @@ describe("controlled URL input", () => {
 
     const failure = await failureOf(open({ kind: "url", url: "https://example.test" }));
 
-    expect(failure.message).toContain("non-success status");
+    expect(failure).toMatchObject({
+      code: "SOURCE_FAILED",
+      message: expect.stringContaining(`non-success status ${status}`),
+    });
     expect(sent).toHaveLength(1);
     expect(sent[0]?.request.destroy).toHaveBeenCalledOnce();
     expect(sent[0]?.response.destroyed).toBe(true);
@@ -333,6 +336,36 @@ describe("range-read URLs", () => {
     await track.close();
   });
 
+  it("rejects SOURCE_FAILED naming status 403 once reopens of a URL that answers 403 after its first range run out", async () => {
+    const realTimeout = globalThis.setTimeout;
+    const first = ranged(hour, undefined, 600_000);
+    origin = await serve(() => ({
+      "/a.webm?signature=private-signature": (response, request) => {
+        if (origin?.requests.length === 1) first(response, request);
+        else response.writeHead(403).end();
+      },
+    }));
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance"] });
+    const track = await open({ kind: "url", url: `${origin.url}/a.webm?signature=private-signature` });
+    const draining = take(track.packets, Number.POSITIVE_INFINITY);
+
+    while (!track.settled) {
+      await new Promise(resolve => realTimeout(resolve, 5));
+      await vi.advanceTimersByTimeAsync(50);
+    }
+    await draining;
+    const outcome = await track.outcome;
+
+    const error = outcome.type === "failed" ? outcome.error : new Error("Expected a failed outcome");
+    const messages = causes(error).map(cause => cause.message);
+    expect(outcome).toMatchObject({ type: "failed", recovery: "exhausted" });
+    expect(error).toMatchObject({ code: "SOURCE_FAILED", message: expect.stringContaining("Playback input") });
+    expect(messages).toContainEqual(expect.stringContaining("status 403"));
+    expect(JSON.stringify(messages)).not.toContain("private-signature");
+    expect(origin.requests.length).toBeGreaterThan(2);
+    await track.close();
+  });
+
   it("seeks a WebM and asks for a byte range on every request", async () => {
     origin = await serve(() => ({ "/a.webm": ranged(hour) }));
     const track = await open({ kind: "url", url: `${origin.url}/a.webm` });
@@ -533,5 +566,28 @@ describe("local input containers", () => {
 
     expect(await take(track.packets, 10)).toHaveLength(10);
     await track.close();
+  });
+
+  it("rejects a live input at once when the signal is already aborted, destroying the late stream", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    const late = new PassThrough();
+    const controller = new AbortController();
+    controller.abort();
+    let outcome: unknown;
+
+    const pending = serveInput(
+      { kind: "live", container: "webm", open: () => new Promise(resolve => setTimeout(() => resolve(late), 1000)) },
+      0,
+      controller.signal,
+      value => value,
+      () => undefined,
+      () => undefined,
+    );
+    void pending.catch(error => (outcome = error));
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(outcome).toMatchObject({ name: "AbortError" });
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(late.destroyed).toBe(true);
   });
 });

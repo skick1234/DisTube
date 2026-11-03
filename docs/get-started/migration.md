@@ -141,6 +141,15 @@ This table covers every v5 event. The [events reference](../../reference/events/
   an item the player has but is not playing out loud yet. `playing` now means audible. Handle `preparing` in an
   exhaustive `switch`.
 - `jump` takes a positive number or an item ID. `jump(-1)` rejects `INVALID_ARGUMENT`, so call `queue.previous()`.
+- An input that stops during a track is `SOURCE_FAILED`, not `VOICE_FAILED`, after the engine reopened it for up to 30
+  seconds. A livestream no longer needs a bot-side re-add on `VOICE_FAILED`: the track continues or finishes. Error text
+  keyed on `VOICE_FAILED` for "voice failed" now reads correctly; text that must cover input stalls moves to
+  `SOURCE_FAILED`. See [errors during playback](../../reference/errors/#errors-during-playback).
+- A live track's `position` is the seconds played since it started, not a broadcast timestamp. A progress bar that
+  showed a huge number now shows elapsed time.
+- `Diagnostic` is a union keyed by `stage`. A report with `plugin === undefined` narrows `data` by `stage`. New stage
+  `engine.input.reopened`; `engine.track.failed` gains `kind`, `playedSeconds`, `reopens` and `recovery` in `data`;
+  core background stages carry `guildId`.
 - `skip()` on the last item ends the queue and publishes `queue.finished`. v5 threw `NO_UP_NEXT` unless autoplay found
   a related Song.
 - `play` and `add` take typed `metadata`, which replaces `member`, `textChannel` and `message`. Declare its type once
@@ -254,10 +263,19 @@ Songs, such as Lavalink, `new DisTube` throws `INVALID_ARGUMENT` when no other p
 | `getRelatedSongs(song)`                                                                   | `related(song, { signal, exclude })`, returning one Song or `undefined`                                              |
 | a plugin's own error code object                                                          | `DisTubeError` with a core code and `source: this.name`; `BOT_CHECK` and `NOT_STARTED` exist for walls and premieres |
 
+A plugin that serves livestreams returns a `live` resource, whose `open(signal)` starts at the live edge, to get the
+engine's recovery. A `stream` resource keeps today's behaviour. `stream` also receives `report`, which sends a
+diagnostic to `onDiagnostic` with the item's guild and your plugin name. See
+[playback resources](../../extending/playback-resources/) and
+[report from stream](../../extending/plugin-authoring/#report-from-stream).
+
 ## Adapter and engine authors
 
 v5 had no adapter or engine contracts, so there is nothing to port. Start from
 [adapter authoring](../../extending/adapter-authoring/) and [plugin authoring](../../extending/plugin-authoring/).
+
+`PlaybackResource` has a seventh kind, `live`. Handle it or reject `UNSUPPORTED`; a `switch` on `kind` without it fails
+the type check.
 
 The built-in engine joins the native voice connection in a group named after the client user ID. Code that called
 `getVoiceConnection(guildId)` from `@discordjs/voice` on that connection now calls

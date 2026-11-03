@@ -154,12 +154,34 @@ a `DisTubeError` with `RATE_LIMITED` and `source` set, and the other plugins fin
 
 ## Preparing a Song
 
-`stream(song, { signal })` runs when a Song is about to play. Core calls the plugin named by `song.source`, and that
-plugin returns a `PlaybackResource`. It is a fresh, single-use `url`, `file`, `stream`, `reader`, `timed` or `encoded`
-resource. [Playback resources](../playback-resources/) has the shapes and cleanup rules.
+`stream(song, { signal, report })` runs when a Song is about to play. Core calls the plugin named by `song.source`, and
+that plugin returns a `PlaybackResource`. It is a fresh `url`, `file`, `stream`, `reader`, `timed`, `live` or `encoded`
+resource. [Playback resources](../playback-resources/) has the shapes and cleanup rules. Return `live` for a
+livestream, so the engine can reopen it at the live edge when its input breaks. Each `open` after the first should look
+the video up again, because a signed URL expires.
 
 A real provider reacquires its playback URL inside `stream` on every call, because signed URLs expire while a Song
 waits in the queue. A `stream` that throws fails the item with `queue.item.failed`, and core tries no other plugin.
+
+### Report from stream
+
+`report(diagnostic)` sends a diagnostic to the application's `onDiagnostic` with the item's `guildId` and your plugin's
+`name`. You choose the `stage`, such as `myplugin.stream.retried`, and a flat `data` of strings, numbers and booleans.
+
+```ts
+import type { Plugin } from "distube/integrations";
+
+export const plugin: Plugin = {
+  name: "example",
+  async stream(_song, { report }) {
+    report({ severity: "warning", stage: "example.stream.retried", message: "Download resumed", data: { attempt: 1 } });
+    return { kind: "file", path: "/tmp/clip.opus" };
+  },
+};
+```
+
+Use it while the returned resource is in use. It never throws and delivers a microtask later. Core drops calls after it
+disposed the resource or after `stream` rejected. Keep URLs, headers, paths and tokens out of `data` and `message`.
 
 ## A plugin without stream
 

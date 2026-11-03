@@ -97,6 +97,11 @@ Songs, resolves providers, changes queue state or sends bot messages.
 
 ## Engine and Player
 
+A `Player` receives seven resource kinds, `live` among them, and rejects `UNSUPPORTED` for one it cannot play. A
+`switch` on `resource.kind` without a `live` case fails the type check. For a `live` resource, `position` counts the
+source seconds played across every `open`, not packet timestamps, which can start months back or reset. A `live`
+resource is not seekable.
+
 An `Engine` has `filters`, `createPlayer(session, { onClosed })`, an optional `createVoiceSession(target, options)`,
 an optional `playbackRate(entries)` and an optional `prepare(song, { signal })`.
 
@@ -212,7 +217,7 @@ Add `guildId`, `position` in source seconds and a flat `data` record of strings,
 Never put a resource, a playable URL, a header, a path or a token in `data`. Applications log diagnostics.
 :::
 
-The built-in engine reports `engine.track.failed`, `engine.input.retried`, `engine.track.starved`,
+The built-in engine reports `engine.track.failed`, `engine.input.reopened`, `engine.input.retried`, `engine.track.starved`,
 `engine.track.gaps`, `engine.voice.reconnected` and `engine.worker.load`. The [options reference](../../reference/options/#diagnostics) lists their fields.
 
 ## Engine plugins

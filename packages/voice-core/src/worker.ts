@@ -23,7 +23,7 @@ import {
   Packet,
   type Stream,
 } from "node-av";
-import { type InputSource, type ToWorker, URL_READY_TIMEOUT_MS, type WireError } from "./protocol.ts";
+import { type FailedStep, type InputSource, type ToWorker, URL_READY_TIMEOUT_MS, type WireError } from "./protocol.ts";
 import {
   type ByteSource,
   FileSource,
@@ -439,7 +439,7 @@ class Pipeline {
     this.#kick();
   }
 
-  #guard(stage: string, work: () => void): void {
+  #guard(stage: FailedStep, work: () => void): void {
     try {
       work();
     } catch (error: unknown) {
@@ -740,7 +740,7 @@ class Pipeline {
     post({ type: "lost", track: this.id, input: input.id, position: this.#resumeAt, error: wire(error) });
   }
 
-  fail(stage: string, error: unknown, input?: number): void {
+  fail(stage: FailedStep, error: unknown, input?: number): void {
     if (this.#failed || this.#closed) return;
     this.#failed = true;
     this.#flush();

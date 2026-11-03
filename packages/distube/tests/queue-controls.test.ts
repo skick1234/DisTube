@@ -267,6 +267,7 @@ describe("seek", () => {
   it.each<[string, () => PlaybackResource]>([
     ["stream", () => ({ kind: "stream", stream: Readable.from(["audio"]) })],
     ["encoded without seekable", () => ({ kind: "encoded", format: "fake", encoded: "track" })],
+    ["live", () => ({ kind: "live", open: async () => undefined })],
   ])("rejects seek UNSUPPORTED for a %s resource and keeps the item playing", async (_kind, resource) => {
     const harness = playableSetup();
     harness.source.stream.mockImplementationOnce(async () => resource());

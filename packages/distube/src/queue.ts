@@ -1,4 +1,4 @@
-import type { Plugin, ResolvableInput, TrackEnd, VoiceChannelTarget } from "./contracts";
+import type { CoreBackgroundStage, Plugin, ResolvableInput, TrackEnd, VoiceChannelTarget } from "./contracts";
 import {
   abortError,
   DisTubeError,
@@ -35,6 +35,7 @@ import {
 import {
   allowedRelated,
   disposeResource,
+  type PluginReport,
   prepareSong,
   relatedSong,
   resolveInput,
@@ -260,7 +261,7 @@ export class DisTubeQueue<Metadata = undefined, Target = VoiceChannelTarget> {
   }
 
   /**
-   * Seeks the current item within the known duration of the Song that plays, its `fallback` when it has one. Rejects `UNSUPPORTED` for a `stream` resource or a Player that
+   * Seeks the current item within the known duration of the Song that plays, its `fallback` when it has one. Rejects `UNSUPPORTED` for a `stream` or `live` resource or a Player that
    * cannot seek the item, and `INVALID_STATE` when the item ends before the seek lands.
    */
   async seek(seconds: number): Promise<void> {
@@ -459,7 +460,7 @@ export class DisTubeQueue<Metadata = undefined, Target = VoiceChannelTarget> {
     try {
       let prepared;
       try {
-        prepared = await prepareSong(plugins, engine, item.song, signal, this.#allowAgeRestricted);
+        prepared = await prepareSong(plugins, engine, item.song, signal, this.#allowAgeRestricted, this.#itemReport);
       } catch (error: unknown) {
         if (signal.aborted) return;
         this.#autoplayFailed ||= item.id === this.#autoplayItem;
@@ -495,7 +496,13 @@ export class DisTubeQueue<Metadata = undefined, Target = VoiceChannelTarget> {
         this.#commit(finishCurrent(this.#state), [
           [
             "queue.item.failed",
-            { item, error: fromIntegration(ErrorCode.VOICE_FAILED, "Failed to play the QueueItem", error) },
+            {
+              item,
+              error: withSource(
+                fromIntegration(ErrorCode.VOICE_FAILED, "Failed to play the QueueItem", error),
+                prepared.source,
+              ),
+            },
           ],
         ]);
         return;
@@ -557,6 +564,11 @@ export class DisTubeQueue<Metadata = undefined, Target = VoiceChannelTarget> {
     this.#commit(insertAt(this.#state, [item]), [["queue.item.added", { item }]]);
     return true;
   }
+
+  readonly #itemReport = (plugin: string, diagnostic: PluginReport): void => {
+    const { events } = this.#guild.config;
+    queueMicrotask(() => events.report(Object.freeze({ ...diagnostic, guildId: this.guildId, plugin })));
+  };
 
   async #setPaused(paused: boolean): Promise<void> {
     this.#assertStarted();
@@ -651,14 +663,20 @@ export class DisTubeQueue<Metadata = undefined, Target = VoiceChannelTarget> {
     this.#guild.config.events.emit(name, { ...this.#event(), ...detail } as DisTubeEventMap<unknown, Target>[Name]);
   }
 
-  #report(stage: string, error: unknown): void {
+  #report(stage: CoreBackgroundStage, error: unknown): void {
     this.#guild.config.events.report({
       severity: "error",
       stage,
       message: `DisTubeQueue ${this.guildId}: ${stage}`,
+      guildId: this.guildId,
       error,
     });
   }
+}
+
+function withSource(error: DisTubeError, source: string): DisTubeError {
+  if (error.code !== ErrorCode.SOURCE_FAILED || error.source !== undefined) return error;
+  return new DisTubeError(error.code, error.message, { cause: error.cause, source });
 }
 
 function replayOf(item: QueueItem): QueueItem {

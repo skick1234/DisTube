@@ -128,7 +128,32 @@ describe("playback preparation", () => {
     expect(finished).toHaveBeenCalledTimes(1);
     expect(failed).not.toHaveBeenCalled();
     expect(dispose).toHaveBeenCalledTimes(1);
-    expect(harness.diagnostics).toHaveBeenCalledWith(expect.objectContaining({ stage: "voice.resource.dispose" }));
+    expect(harness.diagnostics).toHaveBeenCalledWith(
+      expect.objectContaining({ stage: "voice.resource.dispose", guildId: GUILD }),
+    );
+  });
+
+  it("reports with its guild a failed disposal of a resource prepared for an item that stopped being next", async () => {
+    const harness = playableSetup();
+    const preparation = deferred<PlaybackResource>();
+    harness.source.stream.mockReturnValueOnce(preparation.promise);
+    const { queue } = await harness.distube.play(TARGET, "a");
+    await settle();
+
+    const skipping = queue.skip();
+    preparation.resolve({
+      kind: "url",
+      url: "https://stream.example/abandoned",
+      dispose: () => {
+        throw new Error("dispose failed");
+      },
+    });
+    await skipping;
+    await settle();
+
+    expect(harness.diagnostics).toHaveBeenCalledWith(
+      expect.objectContaining({ stage: "queue.resource.dispose", guildId: GUILD }),
+    );
   });
 });
 
@@ -175,6 +200,24 @@ describe("stream-only and failing sources", () => {
       expect(other.stream).not.toHaveBeenCalled();
     },
   );
+});
+
+describe("input failures", () => {
+  it("names the plugin that prepared the item on a SOURCE_FAILED Player rejection without a source", async () => {
+    const harness = playableSetup("youtube");
+    const cause = new Error("Playback input stopped sending bytes");
+    const failures: DisTubeError[] = [];
+    harness.distube.on("queue.item.failed", event => void failures.push(event.error));
+    armPlayer(harness.engine, player =>
+      player.play.mockRejectedValueOnce(new DisTubeError("SOURCE_FAILED", "input stalled", { cause })),
+    );
+
+    await harness.distube.play(TARGET, "a");
+    await settle();
+
+    expect(failures).toMatchObject([{ code: "SOURCE_FAILED", source: "youtube", message: "input stalled" }]);
+    expect(failures[0]?.cause).toBe(cause);
+  });
 });
 
 const spotify: Plugin = { name: "spotify", resolve: async () => undefined };

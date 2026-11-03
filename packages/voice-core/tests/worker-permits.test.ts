@@ -294,19 +294,22 @@ const steps = (): unknown[] =>
   reports.filter(diagnostic => diagnostic.stage === "engine.track.failed").map(diagnostic => diagnostic.data?.step);
 
 describe("engine.track.failed step", () => {
-  it.each(["open", "worker"])("names %s for a worker failure at that stage before the track opened", async stage => {
-    const player = await createPlayer();
-    const ended = player.play(
-      { kind: "file", path: "/dev/null" },
-      { signal: new AbortController().signal, onStart: vi.fn() },
-    );
-    const open = await vi.waitFor(() => only(posted("open")));
+  it.each(["open", "worker"] as const)(
+    "names %s for a worker failure at that stage before the track opened",
+    async stage => {
+      const player = await createPlayer();
+      const ended = player.play(
+        { kind: "file", path: "/dev/null" },
+        { signal: new AbortController().signal, onStart: vi.fn() },
+      );
+      const open = await vi.waitFor(() => only(posted("open")));
 
-    broadcast({ type: "failed", track: open.track, stage, error: failure });
+      broadcast({ type: "failed", track: open.track, stage, error: failure });
 
-    await expect(ended).rejects.toThrow("pipeline failure");
-    expect(steps()).toEqual([stage]);
-  });
+      await expect(ended).rejects.toThrow("pipeline failure");
+      expect(steps()).toEqual([stage]);
+    },
+  );
 
   it("names worker for a worker that crashes before the track opened", async () => {
     const player = await createPlayer();
@@ -322,7 +325,7 @@ describe("engine.track.failed step", () => {
     expect(steps()).toEqual(["worker"]);
   });
 
-  it.each(["read", "decode", "seek", "worker"])(
+  it.each(["read", "decode", "seek", "worker"] as const)(
     "names %s for a worker failure at that stage while playing",
     async stage => {
       const { worker, ended } = await playing(await createPlayer());
