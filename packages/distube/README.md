@@ -79,6 +79,11 @@ client.on("messageCreate", message => {
 client.login("TOKEN");
 ```
 
+## 💡 Examples
+
+- [distubejs/example](https://github.com/distubejs/example): Reference bots for discord.js and Oceanic
+- [DisTube - Discord Music Bot](https://distube.skick.xyz): Support Interactive Player, Music Channel, YouTube, Spotify,...
+
 ## 🤝 Contributing
 
 Contributions are welcome! Please read our [Contributing Guidelines](https://github.com/skick1234/DisTube/blob/main/.github/CONTRIBUTING.md) before submitting a pull request.
