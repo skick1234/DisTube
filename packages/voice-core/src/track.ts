@@ -821,7 +821,6 @@ const threads: Thread[] = [];
 let queued: { readonly thread: Thread; readonly permit: number }[] = [];
 let available = PERMITS;
 let loadSampler: NodeJS.Timeout | undefined;
-let loadReadable = true;
 
 function attach(track: number, listener: Listener, report?: Report): Lease {
   const thread = pick();
@@ -922,7 +921,8 @@ function lose(thread: Thread, error: Error): void {
 }
 
 function sampleLoadWhileHosting(): void {
-  if (loadReadable && threads.some(thread => thread.tracks.size > 0)) {
+  // Bun 1.4.4 returns zeros from eventLoopUtilization and warns on the first call, so it reports no load.
+  if (!process.versions.bun && threads.some(thread => thread.tracks.size > 0)) {
     loadSampler ??= setInterval(sampleLoad, LOAD_INTERVAL_MS).unref();
     return;
   }
@@ -934,18 +934,10 @@ function sampleLoadWhileHosting(): void {
 
 function sampleLoad(): void {
   for (const thread of threads) {
-    let load: EventLoopUtilization;
-    try {
-      const { performance } = thread.worker;
-      const current = performance.eventLoopUtilization();
-      load = thread.load ? performance.eventLoopUtilization(current, thread.load) : current;
-      thread.load = current;
-    } catch {
-      // Bun does not implement Worker#performance and throws on reading it.
-      loadReadable = false;
-      sampleLoadWhileHosting();
-      return;
-    }
+    const { performance } = thread.worker;
+    const current = performance.eventLoopUtilization();
+    const load = thread.load ? performance.eventLoopUtilization(current, thread.load) : current;
+    thread.load = current;
     const reports = new Set<Report>();
     for (const { report } of thread.tracks.values()) if (report) reports.add(report);
     if (reports.size === 0) continue;

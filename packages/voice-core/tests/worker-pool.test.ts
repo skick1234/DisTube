@@ -11,19 +11,20 @@ import { Track } from "../src/track";
 import { createMedia, type MediaFixtures, PLAIN, recorder, take } from "./support/media";
 import { silentWav } from "./support/real";
 
-const workerLoad = vi.hoisted(() => ({ readable: true }));
+const bunLoad = vi.hoisted(() => ({ stubbed: false, calls: 0 }));
 vi.mock("node:worker_threads", async importOriginal => {
   const actual = await importOriginal<typeof WorkerThreads>();
   class Worker extends actual.Worker {
     constructor(...args: ConstructorParameters<typeof actual.Worker>) {
       super(...args);
       const { performance } = this;
-      Object.defineProperty(this, "performance", {
-        get: () => {
-          if (workerLoad.readable) return performance;
-          throw Object.assign(new Error("worker.performance is not implemented"), { code: "ERR_NOT_IMPLEMENTED" });
+      const stub = {
+        eventLoopUtilization: () => {
+          bunLoad.calls += 1;
+          return { idle: 0, active: 0, utilization: 0 };
         },
-      });
+      };
+      Object.defineProperty(this, "performance", { get: () => (bunLoad.stubbed ? stub : performance) });
     }
   }
   return { ...actual, Worker };
@@ -155,23 +156,26 @@ it("reports no engine.worker.load for a worker whose last track closed", async (
   }
 });
 
-it("reports no engine.worker.load and still finishes the track where reading worker load throws", async () => {
+it("reads no worker load on Bun, whose utilization is a zero stub, and still finishes the track", async () => {
   vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
-  workerLoad.readable = false;
+  Object.defineProperty(process.versions, "bun", { value: "1.4.4", configurable: true });
+  bunLoad.stubbed = true;
   try {
     const reporter = recorder();
     const track = await openFile(reporter);
     await take(track.packets, 5);
 
-    vi.advanceTimersByTime(30_000);
+    vi.advanceTimersByTime(60_000);
     vi.useRealTimers();
     await take(track.packets, Number.POSITIVE_INFINITY);
 
     expect(await track.outcome).toEqual({ type: "ended" });
     expect(loads(reporter.reports)).toEqual([]);
+    expect(bunLoad.calls).toBe(0);
     await track.close();
   } finally {
-    workerLoad.readable = true;
+    bunLoad.stubbed = false;
+    Reflect.deleteProperty(process.versions, "bun");
     vi.useRealTimers();
   }
 });
