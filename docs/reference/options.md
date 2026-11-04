@@ -1,0 +1,203 @@
+---
+title: Options
+description: Every DisTube constructor option, its default and what it does.
+sidebar:
+  order: 1
+---
+
+Everything you can pass to `new DisTube(options)`. Only `adapter` and `plugins` are required.
+
+```ts title="index.ts"
+import { DiscordJSAdapter } from "@distube/discordjs";
+import { YouTubePlugin } from "@distube/youtube";
+import type { Client } from "discord.js";
+import { DisTube } from "distube";
+
+declare const client: Client;
+
+export const distube = new DisTube({
+  adapter: new DiscordJSAdapter(client),
+  plugins: [new YouTubePlugin()],
+  historySize: 20,
+  engine: { bufferMs: 400 },
+});
+```
+
+| Option                  | Default  | What it does                                                                                                                                               |
+| ----------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `adapter`               | required | Connects DisTube to your Discord library, such as `new DiscordJSAdapter(client)`.                                                                          |
+| `plugins`               | required | Your sources, in the order DisTube asks them. At most one may carry an `engine`, which replaces the built-in one.                                          |
+| `maxPlaylistSongs`      | 500      | How many Songs a Playlist from a URL keeps. The rest are dropped, not rejected.                                                                            |
+| `historySize`           | 10       | How many ended items each queue remembers. `0` turns history off.                                                                                          |
+| `filters`               | built-in | Filter presets to add to the built-in engine, or to replace its presets. See [Filters](#filters).                                                          |
+| `connectionTimeoutMs`   | 15000    | How long a voice join may take, in milliseconds.                                                                                                           |
+| `prefetchAutoplay`      | `false`  | While autoplay is on, look up the next related Song when each item starts and hold it in `queue.related`. See [Autoplay look-ahead](#autoplay-look-ahead). |
+| `onDiagnostic`          | none     | A function that receives listener failures, core background failures and built-in engine reports. See [Diagnostics](#diagnostics).                         |
+| `engine.opusComplexity` | 10       | Opus encoder complexity, 0 to 10. A lower value uses less CPU.                                                                                             |
+| `engine.bufferMs`       | 500      | How far ahead the engine reads, in milliseconds. A positive multiple of 20.                                                                                |
+
+`new DisTube<Metadata>(...)` also takes a type parameter for [queue item metadata](../queue/#metadata).
+
+## The built-in engine
+
+The `engine` section and `filters` tune the built-in engine that the adapter brings. A plugin that carries its own
+engine, such as Lavalink, replaces it, and DisTube then ignores both.
+
+`bufferMs` is added latency. The engine keeps `bufferMs / 20` packets ahead, so a volume or filter change becomes
+audible up to `bufferMs` later.
+
+## Autoplay look-ahead
+
+With `prefetchAutoplay` off, autoplay looks up a related Song only when the queue runs out, then appends it to
+`upcoming`. Nothing changes for an application that leaves it off, and `queue.related` stays `undefined`.
+
+With it on, DisTube makes one `related` request each time an item starts while autoplay is on. The Song it finds sits
+in [`queue.related`](../queue/#autoplay-look-ahead), not in `upcoming`. When the queue runs out, DisTube plays that Song
+without a second lookup and publishes `queue.item.added` for it then. A new item start, `setAutoplay(false)` or the
+queue ending cancels a lookup in flight. The option throws `INVALID_ARGUMENT` unless it is a boolean.
+
+The price is one extra provider request for each item. The gain is an Up next row that stays put instead of appearing
+only at hand-off.
+
+## Playlist size
+
+`maxPlaylistSongs` keeps the first Songs in the provider's order. Core applies it to every Playlist resolved from a
+URL, and every official plugin applies it too. It does not cut a Playlist you build yourself and pass to `play` or
+`queue.add`.
+
+## What the constructor checks
+
+The constructor throws `INVALID_ARGUMENT` when:
+
+- `historySize` is not an integer of 0 or more.
+- `maxPlaylistSongs` is not a positive integer.
+- `connectionTimeoutMs` is not an integer from 1 to 2147483647.
+- `engine.opusComplexity` is not an integer from 0 to 10.
+- `engine.bufferMs` is not a positive multiple of 20.
+- Two plugins share a name, a name is empty or has leading or trailing spaces, or more than one plugin carries an
+  `engine`.
+- A plugin has none of `resolve`, `search`, `stream` or `engine`.
+- A plugin has no `stream` and nothing else can play its Songs.
+
+A bad `filters` entry throws `TypeError` instead, as the next section lists.
+
+## Filters
+
+`filters` maps a preset name to its definition. Your definitions merge over the built-in presets, so you can add a
+new one or replace a built-in one:
+
+```ts title="index.ts"
+import { DiscordJSAdapter } from "@distube/discordjs";
+import { YouTubePlugin } from "@distube/youtube";
+import type { Client } from "discord.js";
+import { DisTube } from "distube";
+
+declare const client: Client;
+
+export const distube = new DisTube({
+  adapter: new DiscordJSAdapter(client),
+  plugins: [new YouTubePlugin()],
+  filters: {
+    slowed: {
+      render: (value = 0.85) => `atempo=${value}`,
+      default: 0.85,
+      min: 0.5,
+      max: 1,
+      label: "Slowed",
+      tempo: (value = 0.85) => value,
+    },
+  },
+});
+```
+
+A definition has these fields:
+
+| Field                   | Meaning                                                                                                         |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `render(value?)`        | Returns the libavfilter fragment for the preset, such as `bass=g=10`. Required.                                 |
+| `default`, `min`, `max` | Give any of them and the preset takes a value, clamped to the range. Give none and the preset is fixed.         |
+| `label`                 | The display name without the value, such as `Bass boost`. Defaults to the preset name.                          |
+| `tempo`                 | Source seconds the preset plays per second of wall time. A number, or a function of the value. Defaults to `1`. |
+
+Declare `tempo` on any preset that changes speed. The built-in `nightcore` and `vaporwave` declare `value => value`.
+[Playback rate](../voice-and-filters/#playback-rate) explains how DisTube uses it.
+
+:::caution
+A definition with a built-in name replaces that preset entirely, label and tempo included. An override of `nightcore`
+must declare `tempo` again, or `queue.playbackRate` reads `1` while the audio plays at another speed.
+:::
+
+The constructor throws `TypeError` when `render` is not a function, a bound is not a finite number, `min` is above
+`max`, `default` is outside the range, `label` is not a string, or `tempo` is neither a function nor a finite number
+above `0`.
+
+## Diagnostics
+
+`onDiagnostic(diagnostic)` receives one object per report:
+
+| Field      | Meaning                                                                                                                                 |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `severity` | `debug`, `info`, `warning` or `error`                                                                                                   |
+| `stage`    | What reported, such as `engine.track.failed`. Filter on it together with `severity`.                                                    |
+| `message`  | A readable summary. Do not parse it.                                                                                                    |
+| `plugin`   | The plugin that reported. Set on a report from a plugin's `stream`, and on Lavalink's own reports. Core and engine stages leave it out. |
+| `guildId`  | The guild the report is about, when there is one                                                                                        |
+| `position` | Source seconds of that guild's current track                                                                                            |
+| `data`     | A flat record of strings, numbers and booleans that the stage defines                                                                   |
+| `error`    | The error, when the report is about one                                                                                                 |
+
+`data` never holds a resource, a playable URL, a header, a path or a token, so you can log it as it is.
+
+DisTube delivers each engine report a microtask after the engine makes it, so your function may call `queue.skip()`
+from inside it. A function that throws or rejects changes nothing about playback.
+
+The built-in engine reports through `onDiagnostic` with no option of its own. An engine plugin such as Lavalink sends
+its reports to its own `onDiagnostic` option instead. See [Lavalink options](../../plugins/lavalink/#options).
+
+| Stage                      | Severity                       | When                                                                                                                                   | Fields                                                                                                          |
+| -------------------------- | ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `engine.track.failed`      | `error`                        | Once per failed track, before `queue.item.failed`                                                                                      | `guildId`, `position`, `data.step`, `data.kind`, `data.playedSeconds`, `data.reopens`, `data.recovery`, `error` |
+| `engine.input.reopened`    | `info` or `warning`            | Each time the engine opens a track's input again after it broke, stalled, ended early, resumed from a pause or fell behind a live edge | `guildId`, `position`, `data.kind`, `data.attempt`, `data.reason`, `data.outcome`, `error`                      |
+| `engine.input.retried`     | `warning`                      | Each time a ranged URL read reopens because an answer ended early                                                                      | `guildId`, `position`, `data.offset`, `data.attempt`                                                            |
+| `engine.track.starved`     | `warning`                      | Each recovered stall of at least 100 ms in which no audio was ready to send                                                            | `guildId`, `position`, `data.durationMs`                                                                        |
+| `engine.track.gaps`        | `info`                         | Once when a track that had any stall ends, however short the stalls                                                                    | `guildId`, `position`, `data.gaps`, `data.silentMs`                                                             |
+| `engine.voice.reconnected` | `warning`                      | Each time the voice connection is ready again after a reconnect                                                                        | `guildId`, `position`, `data.durationMs`, `data.closeCode`                                                      |
+| `engine.worker.load`       | `debug`, or `warning` from 0.9 | At most every 30 seconds per decoding worker that hosts a track                                                                        | `data.threadId`, `data.tracks`, `data.utilization`                                                              |
+| `voice.endpoint.changed`   | `info`                         | Discord moved the voice to another voice server                                                                                        | `guildId`, `data.endpoint`, `data.previous`                                                                     |
+| `event.listener`           | `error`                        | An event listener threw or rejected                                                                                                    | `error`                                                                                                         |
+| other `queue.*`, `voice.*` | `error`                        | A core step that runs in the background failed, such as a voice release                                                                | `error`                                                                                                         |
+
+- `data.step` names the step that failed: `open`, `read`, `decode`, `seek` or `worker`, or `starved` when the
+  engine found 15 seconds without audio while no reopen was in progress. Read it instead of the message. A stopped,
+  skipped or released track reports nothing.
+- `data.kind` is the resource kind that played, `data.playedSeconds` the source seconds played, and `data.reopens` how
+  many times the engine opened the input again. `data.recovery` is `exhausted` when the reopen budget ran out,
+  `unreopenable` when the kind cannot reopen, such as a `stream`, and `none` otherwise.
+- `engine.input.reopened` has `data.reason` `failed`, `stalled`, `ended`, `resumed` or `behind`, and `data.outcome`
+  `opened`, `failed` or `ended`. `resumed` and `behind` are `info` and the rest `warning`. `data.attempt` counts the
+  reopens since the budget started. Every kind reopens except `stream` and a `url` without range support; a `live` resource reopens at the live edge, so
+  the stage is how you see a livestream recover. Reopens start at once, then wait 1, 2, 4 and every 8 seconds. None
+  starts more than 30 seconds after the first failure, and an `open` that has not settled in 30 seconds counts as
+  failed. The budget restarts after 30 seconds of played audio.
+- `data.offset` is the byte the read reopened at, and `data.attempt` counts that track's reopens from `1`.
+- A stall that ends in the 15-second failure appears as `engine.track.failed` and in that track's `engine.track.gaps`,
+  never as `engine.track.starved`. Nothing reports per packet.
+- `data.gaps` counts a track's stalls and `data.silentMs` adds up the silence Discord received for them, in 20 ms
+  steps. The built-in engine sends a 20 ms silence frame for each packet that is not ready. Stalls under 100 ms appear
+  only here. A track with no stall reports nothing.
+- `data.durationMs` of `engine.voice.reconnected` is how long the connection was not ready. No audio reaches the
+  channel for that long. `data.closeCode` is the Discord voice close code that started it, when the voice socket
+  closed. A reconnect that never gets ready again ends the voice with `voice.disconnected` instead.
+- `data.endpoint` is the new voice server as `host:port`, and `data.previous` the old one. `data.previous` is absent
+  when the voice had no server before. `voice.endpoint` reads the current one.
+- `data.utilization` is the worker's event-loop utilization over the interval, from `0` to `1`. The severity turns
+  `warning` at `0.9`. The stage has no `guildId`, because one worker hosts tracks of several guilds, and it reaches
+  every client with a track on that worker. Runtimes that cannot read the utilization, such as Bun, report no load.
+- The core background stages are `queue.loop`, `queue.resource.dispose`, `voice.resource.dispose`,
+  `voice.session.release`, `voice.gateway`, `voice.disconnect` and `voice.player.release`. They carry the `guildId`.
+- A stage a plugin reports has its own name and `data`. See
+  [Report from `stream`](../../extending/plugin-authoring/#report-from-stream). YouTube sends `youtube.stream.retried`
+  when a download resumes after a failed read or an expired URL.
+- `Diagnostic` is a union. A report without `plugin` narrows `data` by `stage`, so
+  `diagnostic.plugin === undefined && diagnostic.stage === "engine.track.failed"` types `data.step`. A report with
+  `plugin` keeps `data` flat.
