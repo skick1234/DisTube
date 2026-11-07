@@ -87,3 +87,7 @@ and links or search then fail with `RATE_LIMITED` or `SOURCE_FAILED` until the p
 A failed Spotify lookup reaches your bot as a `DisTubeError` with `error.source` set to `"spotify"` and a code such as
 `NOT_FOUND`, `UNAVAILABLE` or `RATE_LIMITED`. A failure while a track plays comes from the plugin that played it. The
 [error reference](../../reference/errors/) lists every code.
+
+The plugin sends a request up to 3 times when Spotify answers 500, 502, 503, 504 or 408 or the connection breaks, and
+reports each retry as `spotify.request.retried`. A failure that lasts through all 3 has `error.transient` set. A 429 is
+not retried.

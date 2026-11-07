@@ -201,8 +201,10 @@ its reports to its own `onDiagnostic` option instead. See [Lavalink options](../
 - A stage a plugin reports has its own name and `data`. See
   [Report a diagnostic](../../extending/plugin-authoring/#report-a-diagnostic). YouTube sends `youtube.stream.retried`
   when a download resumes after a failed read or an expired URL.
-- A plugin's report from a lookup carries the guild when a queue made the lookup, and none for `distube.resolve`,
-  `search` or `suggest`.
+- Spotify, SoundCloud, YouTube and YouTube Music send `<plugin>.request.retried` at `info` each time they try a
+  provider request again: `data.attempt` is the try that failed, `1` or `2`, with `data.host` and `data.status` or
+  `data.error`. A request is tried at most 3 times. A report from a lookup carries the guild when a queue made it, and
+  none for `distube.resolve`, `search` or `suggest`.
 - `Diagnostic` is a union. A report without `plugin` narrows `data` by `stage`, so
   `diagnostic.plugin === undefined && diagnostic.stage === "engine.track.failed"` types `data.step`. A report with
   `plugin` keeps `data` flat.

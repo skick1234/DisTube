@@ -247,5 +247,10 @@ for the music plugin.
 | `BOT_CHECK`      | YouTube answered "Sign in to confirm you're not a bot"                            | [Sign in with a cookie](#sign-in-with-a-cookie) |
 | `RATE_LIMITED`   | YouTube is throttling your bot                                                    | Wait, or slow down your requests                |
 
+A lookup that fails with a request error, such as a 5xx answer or a lost connection, runs up to 3 times and reports
+each retry as `youtube.request.retried` or `youtube-music.request.retried`. ytdl-core gives no status for a request
+error, so a 4xx other than 429 is retried too. A 429, ytdl-core's own timeout and a verdict such as a private video
+run once. A failure that lasts through all 3 has `error.transient` set. Playback resumes broken downloads itself.
+
 The [play command](../../guides/play-command/) shows where to catch a failed `play`, and the
 [error reference](../../reference/errors/) lists every code.

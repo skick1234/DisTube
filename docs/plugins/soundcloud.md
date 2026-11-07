@@ -95,4 +95,7 @@ A SoundCloud failure reaches your bot as a `DisTubeError` with `error.source` se
 | `RATE_LIMITED`  | SoundCloud is throttling your bot                              | Wait, or set `clientId` and `clientSecret` |
 | `SOURCE_FAILED` | The track offers only MP3, or SoundCloud could not be read     | Pick another track, or try again later     |
 
-The [error reference](../../reference/errors/) lists every code.
+The plugin sends an API request up to 3 times when SoundCloud answers 500, 502, 503, 504 or 408 or the connection
+breaks, and reports each retry as `soundcloud.request.retried`. A failure that lasts through all 3 has
+`error.transient` set. A 429 is not retried, and media segments are left to the engine's reopen. The
+[error reference](../../reference/errors/) lists every code.
