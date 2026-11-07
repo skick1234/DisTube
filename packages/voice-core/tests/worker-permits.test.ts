@@ -74,6 +74,7 @@ async function createPlayer(): Promise<Player> {
     selfDeaf: true,
     selfMute: false,
     timeoutMs: 50,
+    report: () => undefined,
     channelBitrate: () => 64_000,
     preflight: () => undefined,
   });

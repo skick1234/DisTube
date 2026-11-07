@@ -7,6 +7,7 @@ import type {
 import { joinVoiceChannel, VoiceConnectionDisconnectReason, VoiceConnectionStatus } from "@discordjs/voice";
 import { DisTubeError } from "distube";
 import type {
+  EngineSettings,
   JoinOptions,
   VoiceGatewayData,
   VoiceSession,
@@ -23,6 +24,8 @@ export interface DiscordPlatform {
 }
 
 export interface DiscordVoiceSessionOptions extends VoiceTarget, VoiceSessionOptions, DiscordPlatform {}
+
+type BuiltInSessionOptions = DiscordVoiceSessionOptions & Pick<EngineSettings, "report">;
 
 type CloseKind = "rejoin" | "terminal" | "platform";
 
@@ -58,7 +61,7 @@ type Networking = Extract<VoiceConnectionState, { networking: unknown }>["networ
 export class DiscordVoiceSession implements VoiceSession {
   readonly guildId: string;
   readonly clientUserId: string;
-  readonly #options: DiscordVoiceSessionOptions;
+  readonly #options: BuiltInSessionOptions;
   readonly #connection: VoiceConnection;
   readonly #listeners = new Set<(event: VoiceSessionEvent) => void>();
   readonly #waiters = new Set<() => void>();
@@ -71,12 +74,13 @@ export class DiscordVoiceSession implements VoiceSession {
   #deadline?: ReturnType<typeof setTimeout>;
   #resend?: ReturnType<typeof setInterval>;
   #failure?: Error;
+  #readyOnce = false;
   #leftSinceReady = false;
   #platformClosed = false;
   #released = false;
   #releasePromise?: Promise<void>;
 
-  static async connect(options: DiscordVoiceSessionOptions): Promise<DiscordVoiceSession> {
+  static async connect(options: BuiltInSessionOptions): Promise<DiscordVoiceSession> {
     const { signal } = options;
     if (signal?.aborted) throw joinAborted(signal);
     options.preflight(options.channelId);
@@ -84,7 +88,7 @@ export class DiscordVoiceSession implements VoiceSession {
     const release = (): void => void session.release().catch(() => undefined);
     signal?.addEventListener("abort", release, { once: true });
     try {
-      await session.#until(() => session.#gateway !== undefined, "Discord voice did not connect");
+      await session.#firstConnection();
       if (signal?.aborted) throw joinAborted(signal);
     } catch (error) {
       await session.release().catch(() => undefined);
@@ -99,7 +103,7 @@ export class DiscordVoiceSession implements VoiceSession {
     return session instanceof DiscordVoiceSession && !session.#released ? session.#connection : undefined;
   }
 
-  private constructor(options: DiscordVoiceSessionOptions) {
+  private constructor(options: BuiltInSessionOptions) {
     this.#options = options;
     this.guildId = options.guildId;
     this.clientUserId = options.clientUserId;
@@ -196,6 +200,46 @@ export class DiscordVoiceSession implements VoiceSession {
     }
   }
 
+  /** A first join Discord never answered with a voice server stays unanswered until it leaves and joins again. */
+  async #firstConnection(): Promise<void> {
+    const { timeoutMs } = this.#options;
+    const deadline = Date.now() + 2 * timeoutMs;
+    const connected = (): boolean => this.#gateway !== undefined;
+    try {
+      await this.#until(connected, "Discord voice did not connect");
+      return;
+    } catch (error) {
+      if (this.#released) throw error;
+    }
+    this.#options.report({
+      severity: "info",
+      stage: "voice.join.retried",
+      message: `Discord voice did not connect within ${timeoutMs} ms; leaving and joining again`,
+      guildId: this.guildId,
+      data: { channelId: this.channelId },
+    });
+    try {
+      if (this.#voiceState?.channel_id && this.#sendLeave())
+        await this.#until(
+          () => this.#voiceState?.channel_id === null,
+          "Discord did not acknowledge the leave",
+          deadline,
+        );
+      this.#connection.rejoin({ channelId: this.channelId, selfDeaf: this.selfDeaf, selfMute: this.selfMute });
+      await this.#until(connected, "Discord voice did not connect", deadline);
+    } catch (error) {
+      if (this.#released) throw error;
+      throw new DisTubeError(
+        "VOICE_FAILED",
+        `Discord voice did not connect after two joins within ${2 * timeoutMs} ms`,
+        {
+          cause: error,
+          transient: true,
+        },
+      );
+    }
+  }
+
   /** The library only accepts a write while Ready; any other state means its own join is in flight. */
   #untilReady(): Promise<void> {
     return this.#until(
@@ -204,7 +248,7 @@ export class DiscordVoiceSession implements VoiceSession {
     );
   }
 
-  #until(done: () => boolean, failure: string): Promise<void> {
+  #until(done: () => boolean, failure: string, deadline = Date.now() + this.#options.timeoutMs): Promise<void> {
     const { promise, resolve, reject } = Promise.withResolvers<void>();
     const finish = (): void => {
       clearTimeout(timer);
@@ -219,10 +263,11 @@ export class DiscordVoiceSession implements VoiceSession {
         resolve();
       }
     };
+    const waitMs = Math.max(0, deadline - Date.now());
     const timer = setTimeout(() => {
       finish();
-      reject(new Error(`${failure} within ${this.#options.timeoutMs} ms`));
-    }, this.#options.timeoutMs);
+      reject(new Error(`${failure} within ${waitMs} ms`));
+    }, waitMs);
     this.#waiters.add(check);
     check();
     return promise;
@@ -240,9 +285,10 @@ export class DiscordVoiceSession implements VoiceSession {
     }
     if (next.status === VoiceConnectionStatus.Ready) {
       this.#stopRecovery();
+      this.#readyOnce = true;
       this.#leftSinceReady = false;
       this.#platformClosed = false;
-    } else
+    } else if (this.#readyOnce)
       this.#deadline ??= setTimeout(
         () => this.#fail(new Error(`Discord voice did not reach Ready within ${this.#options.timeoutMs} ms`)),
         this.#options.timeoutMs,

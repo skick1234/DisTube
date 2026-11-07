@@ -14,6 +14,7 @@ const OPTIONS = {
   selfDeaf: true,
   selfMute: false,
   timeoutMs: 50,
+  report: () => undefined,
   channelBitrate: () => 64_000,
   preflight: () => undefined,
 };

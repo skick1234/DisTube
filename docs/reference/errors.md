@@ -40,7 +40,8 @@ Use `INVALID_ARGUMENT` to ask the member to fix their input. Use `INVALID_STATE`
 run right now.
 
 No code promises that a retry will work. `transient` comes closest. It is `true` when a provider answered 500, 502,
-503, 504 or 408 or a connection broke before an answer, and the request was already tried 3 times. Offer the member a retry in a moment, and do not retry in a loop. Any other
+503, 504 or 408, a connection broke before an answer, or a built-in voice join missed Ready twice, and the request was
+already tried 3 times, or the join twice. Offer the member a retry in a moment, and do not retry in a loop. Any other
 failure has no `transient`.
 
 Here is what to tell members for the codes that come from providers:

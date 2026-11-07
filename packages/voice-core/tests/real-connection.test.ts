@@ -40,6 +40,7 @@ async function joined(
     selfDeaf: true,
     selfMute: false,
     timeoutMs: TIMEOUT_MS,
+    report: () => undefined,
     channelBitrate: () => 64_000,
     preflight: () => undefined,
   });
@@ -408,6 +409,115 @@ function stepSecond({ level, hz }: Heard): number | undefined {
   const second = Math.round((hz - stepHz(0)) / (stepHz(1) - stepHz(0)));
   return level > 0.2 && Math.abs(hz - stepHz(second)) < 30 ? second : undefined;
 }
+
+async function firstJoin(answer: (gateway: Gateway) => void, signal?: AbortSignal) {
+  const server = await serveVoiceGateway();
+  cleanups.push(() => server.stop().catch(() => undefined));
+  const gateway = gatewayAdapter("bot", server.endpoint);
+  answer(gateway);
+  const report = vi.fn<(diagnostic: Diagnostic) => void>();
+  const started = performance.now();
+  const connecting = DiscordVoiceSession.connect({
+    guildId: "guild",
+    channelId: CHANNEL,
+    clientUserId: "bot",
+    adapterCreator: gateway.creator,
+    selfDeaf: true,
+    selfMute: false,
+    timeoutMs: TIMEOUT_MS,
+    channelBitrate: () => 64_000,
+    preflight: () => undefined,
+    report,
+    ...(signal ? { signal } : {}),
+  });
+  connecting.then(
+    session => cleanups.push(() => session.release()),
+    () => undefined,
+  );
+  return { server, gateway, report, connecting, elapsed: () => performance.now() - started };
+}
+
+function stateWithoutServer(gateway: Gateway): void {
+  gateway.sendPayload.mockImplementationOnce(() => {
+    queueMicrotask(() => gateway.state(CHANNEL));
+    return true;
+  });
+}
+
+describe("built-in first join", () => {
+  it("leaves, waits for the leave's voice state and joins once more when the platform answers no first join with a voice server", async () => {
+    const { server, gateway, report, connecting } = await firstJoin(adapter => {
+      stateWithoutServer(adapter);
+      adapter.sendPayload.mockImplementationOnce(() => true);
+    });
+
+    await vi.waitFor(() => expect(channels(gateway)).toEqual([CHANNEL, null]), { timeout: 2 * TIMEOUT_MS });
+    await settle();
+    const beforeLeaveState = channels(gateway);
+    gateway.state(null);
+    const session = await connecting;
+
+    expect(beforeLeaveState).toEqual([CHANNEL, null]);
+    expect(channels(gateway)).toEqual([CHANNEL, null, CHANNEL]);
+    expect(session.gateway?.endpoint).toBe(server.endpoint);
+    expect(report.mock.calls).toEqual([
+      [
+        {
+          severity: "info",
+          stage: "voice.join.retried",
+          message: expect.any(String),
+          guildId: "guild",
+          data: { channelId: CHANNEL },
+        },
+      ],
+    ]);
+  });
+
+  it("rejects VOICE_FAILED marked transient after two joins the platform never answers, and sends no third join", async () => {
+    const { gateway, connecting, elapsed } = await firstJoin(adapter => {
+      stateWithoutServer(adapter);
+      adapter.sendPayload.mockImplementationOnce(() => {
+        queueMicrotask(() => adapter.state(null));
+        return true;
+      });
+      stateWithoutServer(adapter);
+    });
+
+    const failure = await connecting.then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+    await settle();
+
+    expect(failure).toMatchObject({ name: "DisTubeError", code: "VOICE_FAILED", transient: true });
+    expect(elapsed()).toBeGreaterThanOrEqual(2 * TIMEOUT_MS - 50);
+    expect(joins(gateway)).toHaveLength(2);
+  });
+
+  it("rejects ABORTED and sends no third join when its signal aborts during the second try", async () => {
+    const controller = new AbortController();
+    const { gateway, report, connecting } = await firstJoin(adapter => {
+      stateWithoutServer(adapter);
+      adapter.sendPayload.mockImplementationOnce(() => {
+        queueMicrotask(() => adapter.state(null));
+        return true;
+      });
+      stateWithoutServer(adapter);
+    }, controller.signal);
+
+    await vi.waitFor(() => expect(joins(gateway)).toHaveLength(2), { timeout: 2 * TIMEOUT_MS });
+    controller.abort(new Error("left"));
+    const failure = await connecting.then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+    await settle();
+
+    expect(failure).toMatchObject({ name: "DisTubeError", code: "ABORTED" });
+    expect(report).toHaveBeenCalledTimes(1);
+    expect(joins(gateway)).toHaveLength(2);
+  });
+});
 
 describe("built-in playback heard by a local voice server", () => {
   it("sends steady AAC-to-Opus playback every 20 ms with no silence frame, no gap over 60 ms and p99 spacing under 40 ms", async () => {

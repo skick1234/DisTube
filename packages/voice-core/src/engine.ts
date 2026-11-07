@@ -29,7 +29,12 @@ export class DiscordVoiceEngine implements Engine {
   }
 
   async createVoiceSession(target: VoiceTarget, options: VoiceSessionOptions): Promise<VoiceSession> {
-    return await DiscordVoiceSession.connect({ ...target, ...options, ...this.#platform(target) });
+    return await DiscordVoiceSession.connect({
+      ...target,
+      ...options,
+      ...this.#platform(target),
+      report: this.#settings.report,
+    });
   }
 
   playbackRate(entries: readonly FilterEntry[]): number {

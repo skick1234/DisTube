@@ -30,7 +30,7 @@ export const distube = new DisTube({
 | `maxPlaylistSongs`      | 500      | How many Songs a Playlist from a URL keeps. The rest are dropped, not rejected.                                                                            |
 | `historySize`           | 10       | How many ended items each queue remembers. `0` turns history off.                                                                                          |
 | `filters`               | built-in | Filter presets to add to the built-in engine, or to replace its presets. See [Filters](#filters).                                                          |
-| `connectionTimeoutMs`   | 15000    | How long a voice join may take, in milliseconds.                                                                                                           |
+| `connectionTimeoutMs`   | 15000    | How long one voice join may take, in milliseconds. The built-in engine joins once more after a first miss, so its join can take twice this long.           |
 | `prefetchAutoplay`      | `false`  | While autoplay is on, look up the next related Song when each item starts and hold it in `queue.related`. See [Autoplay look-ahead](#autoplay-look-ahead). |
 | `onDiagnostic`          | none     | A function that receives listener failures, core background failures and built-in engine reports. See [Diagnostics](#diagnostics).                         |
 | `engine.opusComplexity` | 10       | Opus encoder complexity, 0 to 10. A lower value uses less CPU.                                                                                             |
@@ -164,6 +164,7 @@ its reports to its own `onDiagnostic` option instead. See [Lavalink options](../
 | `engine.voice.reconnected` | `warning`                      | Each time the voice connection is ready again after a reconnect                                                                        | `guildId`, `position`, `data.durationMs`, `data.closeCode`                                                      |
 | `engine.worker.load`       | `debug`, or `warning` from 0.9 | At most every 30 seconds per decoding worker that hosts a track                                                                        | `data.threadId`, `data.tracks`, `data.utilization`                                                              |
 | `voice.endpoint.changed`   | `info`                         | Discord moved the voice to another voice server                                                                                        | `guildId`, `data.endpoint`, `data.previous`                                                                     |
+| `voice.join.retried`       | `info`                         | The built-in engine's first join missed Ready within `connectionTimeoutMs`, so it leaves and joins once more                           | `guildId`, `data.channelId`                                                                                     |
 | `event.listener`           | `error`                        | An event listener threw or rejected                                                                                                    | `error`                                                                                                         |
 | other `queue.*`, `voice.*` | `error`                        | A core step that runs in the background failed, such as a voice release                                                                | `error`                                                                                                         |
 
@@ -195,6 +196,8 @@ its reports to its own `onDiagnostic` option instead. See [Lavalink options](../
   every client with a track on that worker. Runtimes that cannot read the utilization, such as Bun, report no load.
 - The core background stages are `queue.loop`, `queue.resource.dispose`, `voice.resource.dispose`,
   `voice.session.release`, `voice.gateway`, `voice.disconnect` and `voice.player.release`. They carry the `guildId`.
+- A second join that misses too fails the join `VOICE_FAILED` with `transient`, `2 × connectionTimeoutMs` after it
+  began. A voice that was Ready once recovers as before and reports no `voice.join.retried`.
 - A stage a plugin reports has its own name and `data`. See
   [Report a diagnostic](../../extending/plugin-authoring/#report-a-diagnostic). YouTube sends `youtube.stream.retried`
   when a download resumes after a failed read or an expired URL.
