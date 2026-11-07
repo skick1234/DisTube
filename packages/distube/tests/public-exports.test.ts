@@ -7,10 +7,10 @@ describe("public entry points", () => {
     expect(Object.keys(root).toSorted()).toEqual(["DisTube", "DisTubeError", "ErrorCode", "Playlist", "Song"]);
   });
 
-  it("loads distube/integrations at runtime without exporting values", async () => {
+  it("loads distube/integrations at runtime with only the retry helper as values", async () => {
     const integrations: object = await import("distube/integrations");
 
-    expect(Object.keys(integrations)).toEqual([]);
+    expect(Object.keys(integrations).toSorted()).toEqual(["isTransientFailure", "retryRequest"]);
   });
 
   it("loads the built root through require() with the same runtime values", () => {

@@ -23,6 +23,7 @@ import {
 const TARGET = { guildId: GUILD, id: VOICE_CHANNEL };
 
 const rateLimited = (source: string) => new DisTubeError("RATE_LIMITED", "slow down", { source });
+const outage = (source: string) => new DisTubeError("SOURCE_FAILED", "down", { source, transient: true });
 
 function sources(): readonly [FakeSource, FakeSource, FakeSource] {
   return [new FakeSource("first"), new FakeSource("second"), new FakeSource("third")];
@@ -283,6 +284,20 @@ describe("string routing", () => {
 
     youtube.search.mockRejectedValue(new TypeError("bad response"));
     expect(await outcome()).toEqual(["SOURCE_FAILED", undefined, "zzzz", ["soundcloud", "youtube"]]);
+  });
+
+  it("marks an exhausted query transient only when every failure was transient", async () => {
+    const [first, second] = sources();
+    const harness = setup([first, second]);
+
+    first.search.mockRejectedValue(outage("first"));
+    second.search.mockRejectedValue(outage("second"));
+    const passing = (await capture(harness.distube.resolve("zzzz"))) as DisTubeError;
+    second.search.mockRejectedValue(new DisTubeError("SOURCE_FAILED", "broken", { source: "second" }));
+    const mixed = (await capture(harness.distube.resolve("zzzz"))) as DisTubeError;
+
+    expect([passing.code, passing.transient]).toEqual(["SOURCE_FAILED", true]);
+    expect([mixed.code, mixed.transient]).toEqual(["SOURCE_FAILED", undefined]);
   });
 
   it("rejects media a plugin returns for another source", async () => {
@@ -764,6 +779,41 @@ describe("events and diagnostics", () => {
     ]);
     expect(late).toEqual([undefined, undefined]);
     expect(harness.diagnostics.mock.calls.map(([diagnostic]) => diagnostic.stage)).toEqual(["source.test"]);
+  });
+
+  it("delivers a lookup report later with the plugin and the queue's guild, and drops it once the lookup settled", async () => {
+    const source = new FakeSource("youtube");
+    const reports: StreamOptions["report"][] = [];
+    source.search.mockImplementation(async (query, { report }) => {
+      reports.push(report);
+      report({ severity: "info", stage: "youtube.request.retried", message: query, data: { attempt: 1 } });
+      return [media("youtube", query)];
+    });
+    const harness = setup([source]);
+
+    await harness.distube.search("guild-free");
+    await harness.distube.play(TARGET, "queued");
+    await settle();
+    required(reports[0])({ severity: "info", stage: "youtube.late", message: "late" });
+    await flushMicrotasks();
+
+    expect(harness.diagnostics.mock.calls.map(([diagnostic]) => diagnostic)).toEqual([
+      {
+        severity: "info",
+        stage: "youtube.request.retried",
+        message: "guild-free",
+        data: { attempt: 1 },
+        plugin: "youtube",
+      },
+      {
+        severity: "info",
+        stage: "youtube.request.retried",
+        message: "queued",
+        data: { attempt: 1 },
+        guildId: GUILD,
+        plugin: "youtube",
+      },
+    ]);
   });
 
   it("isolates a throwing consumer of an engine report and keeps the track playing", async () => {

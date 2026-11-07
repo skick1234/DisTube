@@ -36,5 +36,6 @@ declare const plugin: Plugin<{ providerId: string }, { owner: string }>;
 const resolved = await plugin.resolve?.("https://example.test/list", {
   signal: AbortSignal.timeout(1),
   maxPlaylistSongs: 500,
+  report: () => undefined,
 });
 if (resolved instanceof Playlist) expectTypeOf(resolved.pluginData).toEqualTypeOf<{ owner: string }>();

@@ -84,6 +84,7 @@ export type Diagnostic =
       { threadId: number; tracks: number; utilization: number }
     >
   | BuiltInDiagnostic<"voice.endpoint.changed", "info", { endpoint: string; previous?: string }>
+  | BuiltInDiagnostic<"voice.join.retried", "info", { channelId: string }>
   | (BuiltInFields<CoreBackgroundStage, "error"> & { readonly data?: undefined })
   | PluginDiagnostic;
 
@@ -172,8 +173,15 @@ export interface TrackOptions {
   readonly onStart: () => void;
 }
 
+/**
+ * Delivers a plugin's diagnostic to `onDiagnostic` in a later microtask with this plugin's name, and the guild's id when
+ * the call serves one. Never throws, and drops calls after the operation settled.
+ */
+export type PluginReport = (diagnostic: Omit<PluginDiagnostic, "guildId" | "plugin">) => void;
+
 export interface SearchOptions {
   readonly signal: AbortSignal;
+  readonly report: PluginReport;
   /** Positive. A plugin clamps it to its own maximum. */
   readonly limit: number;
   /** Zero-based index of the first result. */
@@ -188,6 +196,7 @@ export interface SearchOptions {
 
 export interface RelatedOptions {
   readonly signal: AbortSignal;
+  readonly report: PluginReport;
   /** Recently played Songs the provider should avoid repeating. */
   readonly exclude: readonly Song[];
   /**
@@ -199,18 +208,20 @@ export interface RelatedOptions {
 
 export interface StreamOptions {
   readonly signal: AbortSignal;
-  /**
-   * Delivers a diagnostic to `onDiagnostic` in a later microtask with the item's `guildId` and this plugin's name.
-   * Usable while the returned resource is in use; never throws, and drops calls after the resource was disposed or
-   * after `stream` rejected.
-   */
-  readonly report: (diagnostic: Omit<PluginDiagnostic, "guildId" | "plugin">) => void;
+  /** Usable while the returned resource is in use; drops calls after the resource was disposed or `stream` rejected. */
+  readonly report: PluginReport;
 }
 
 export interface ResolveOptions {
   readonly signal: AbortSignal;
   /** Return at most this many Songs in a Playlist and stop requesting provider pages once reached. */
   readonly maxPlaylistSongs: number;
+  readonly report: PluginReport;
+}
+
+export interface SuggestOptions {
+  readonly signal: AbortSignal;
+  readonly report: PluginReport;
 }
 
 /**
@@ -241,7 +252,7 @@ export interface Plugin<Data = unknown, ListData = unknown> {
    */
   related?(song: Song<Data>, options: RelatedOptions): Promise<Song<Data> | undefined>;
   /** Completions for a partial query, at most 25 used. */
-  suggest?(query: string, options: { readonly signal: AbortSignal }): Promise<readonly string[]>;
+  suggest?(query: string, options: SuggestOptions): Promise<readonly string[]>;
   dispose?(): void | Promise<void>;
 }
 

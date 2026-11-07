@@ -218,6 +218,24 @@ describe("input failures", () => {
     expect(failures).toMatchObject([{ code: "SOURCE_FAILED", source: "youtube", message: "input stalled" }]);
     expect(failures[0]?.cause).toBe(cause);
   });
+
+  it("keeps media and the transient mark when it names the plugin on a Player rejection", async () => {
+    const harness = playableSetup("youtube");
+    const failures: DisTubeError[] = [];
+    harness.distube.on("queue.item.failed", event => void failures.push(event.error));
+    armPlayer(harness.engine, player =>
+      player.play.mockRejectedValueOnce(
+        new DisTubeError("SOURCE_FAILED", "segment host down", { media: "song", transient: true }),
+      ),
+    );
+
+    await harness.distube.play(TARGET, "a");
+    await settle();
+
+    expect(failures.map(error => [error.code, error.source, error.media, error.transient])).toEqual([
+      ["SOURCE_FAILED", "youtube", "song", true],
+    ]);
+  });
 });
 
 const spotify: Plugin = { name: "spotify", resolve: async () => undefined };

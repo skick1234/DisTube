@@ -36,6 +36,8 @@ export interface DisTubeErrorOptions extends ErrorOptions {
   /** The text that found nothing: a query, a URL no plugin resolved, or the search the fallback ran. */
   readonly query?: string;
   readonly media?: ErrorMedia;
+  /** The failure was transient, such as a provider outage that outlasted its retries; `false` sets nothing. */
+  readonly transient?: boolean;
 }
 
 export class DisTubeError<Code extends ErrorCode = ErrorCode> extends Error {
@@ -45,6 +47,8 @@ export class DisTubeError<Code extends ErrorCode = ErrorCode> extends Error {
   readonly query?: string;
   /** Set by a plugin when the failure came from looking up one Song or one Playlist. */
   readonly media?: ErrorMedia;
+  /** Set when a passing failure outlasted the layer's retries, so trying again later may succeed. */
+  readonly transient?: true;
 
   constructor(code: Code, message: string, options?: DisTubeErrorOptions) {
     super(message, options);
@@ -53,6 +57,7 @@ export class DisTubeError<Code extends ErrorCode = ErrorCode> extends Error {
     if (options?.source !== undefined) this.source = options.source;
     if (options?.query !== undefined) this.query = options.query;
     if (options?.media !== undefined) this.media = options.media;
+    if (options?.transient === true) this.transient = true;
   }
 
   /**

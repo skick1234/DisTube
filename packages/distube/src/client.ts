@@ -13,7 +13,7 @@ import { DisTubeEvents, type DisTubeEventListener, type DisTubeEventName } from 
 import { Guilds } from "./guild";
 import type { Playlist, QueueItem, Song } from "./media";
 import { type AddArguments, type AddOptions, type DisTubeQueue, validateAdd } from "./queue";
-import { resolveInput, searchSongs, suggestQueries, validateInput } from "./sources";
+import { type ItemReporter, resolveInput, searchSongs, suggestQueries, validateInput } from "./sources";
 import { normalizeTarget, VoiceManager } from "./voice";
 
 const DEFAULTS = {
@@ -93,6 +93,8 @@ export class DisTube<Metadata = undefined, Target = VoiceChannelTarget> {
   readonly #events: DisTubeEvents<Target>;
   readonly #guilds: Guilds<Target>;
   readonly #lifetime = new AbortController();
+  readonly #report: ItemReporter = (plugin, diagnostic) =>
+    queueMicrotask(() => this.#events.report(Object.freeze({ ...diagnostic, plugin })));
   #disposal?: Promise<void>;
 
   constructor(options: DisTubeOptions<Target>) {
@@ -179,7 +181,7 @@ export class DisTube<Metadata = undefined, Target = VoiceChannelTarget> {
     return this.#run(
       options.signal,
       () => validateInput(this.#plugins, input),
-      signal => resolveInput(this.#plugins, input, signal, this.#guilds.config.maxPlaylistSongs, true),
+      signal => resolveInput(this.#plugins, input, signal, this.#guilds.config.maxPlaylistSongs, true, this.#report),
     );
   }
 
@@ -201,7 +203,7 @@ export class DisTube<Metadata = undefined, Target = VoiceChannelTarget> {
         requireInteger(offset, "offset", 0);
         if (options.allowAgeRestricted !== undefined) requireBoolean(options.allowAgeRestricted, "allowAgeRestricted");
       },
-      signal => searchSongs(this.#plugins, query, { ...options, limit, offset }, signal),
+      signal => searchSongs(this.#plugins, query, { ...options, limit, offset }, signal, this.#report),
     );
   }
 
@@ -213,7 +215,7 @@ export class DisTube<Metadata = undefined, Target = VoiceChannelTarget> {
         requireQuery(query);
         this.#validateSource(options.source);
       },
-      signal => suggestQueries(this.#plugins, query, options.source, signal),
+      signal => suggestQueries(this.#plugins, query, options.source, signal, this.#report),
     );
   }
 

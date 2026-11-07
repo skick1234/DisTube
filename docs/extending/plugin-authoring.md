@@ -163,10 +163,11 @@ the video up again, because a signed URL expires.
 A real provider reacquires its playback URL inside `stream` on every call, because signed URLs expire while a Song
 waits in the queue. A `stream` that throws fails the item with `queue.item.failed`, and core tries no other plugin.
 
-### Report from stream
+### Report a diagnostic
 
-`report(diagnostic)` sends a diagnostic to the application's `onDiagnostic` with the item's `guildId` and your plugin's
-`name`. You choose the `stage`, such as `myplugin.stream.retried`, and a flat `data` of strings, numbers and booleans.
+Every operation's options carry `report`. `report(diagnostic)` sends a diagnostic to the application's `onDiagnostic`
+with your plugin's `name`, and the guild's `guildId` when a queue made the call. You choose the `stage`, such as
+`myplugin.stream.retried`, and a flat `data` of strings, numbers and booleans.
 
 ```ts
 import type { Plugin } from "distube/integrations";
@@ -180,8 +181,9 @@ export const plugin: Plugin = {
 };
 ```
 
-Use it while the returned resource is in use. It never throws and delivers a microtask later. Core drops calls after it
-disposed the resource or after `stream` rejected. Keep URLs, headers, paths and tokens out of `data` and `message`.
+It never throws and delivers a microtask later. Use `stream`'s while the returned resource is in use; core drops its
+calls after it disposed the resource or after `stream` rejected. Core drops a lookup's calls once `resolve`, `search`,
+`related` or `suggest` settled. Keep URLs, headers, paths and tokens out of `data` and `message`.
 
 ## A plugin without stream
 
@@ -241,6 +243,41 @@ Use the core codes. A plugin defines no codes of its own, so a distinction an ap
 `NOT_STARTED` carries no start time, so keep it in the `cause` you pass. Set `source` to your plugin's name. Set
 `media` to `"song"` or `"playlist"` when the failure came from looking up one of them.
 
+### Retry a provider request
+
+`retryRequest(send, { signal, name, host, report })` from `distube/integrations` calls `send` up to 3 times. It tries
+again after a 500, 502, 503, 504 or 408 answer, or a reset, refused or DNS failure before an answer, waiting up to
+250 ms and then up to 1 s. It never retries another status, including 429, a caller abort or a fired timeout. Each
+retry reports `<name>.request.retried`. It resolves with the last answer or rejects with the last error, so your status
+mapping stays as it is. Give each try its own timeout, and mark the error you throw with `isTransientFailure`:
+
+```ts
+import { DisTubeError, ErrorCode } from "distube";
+import { isTransientFailure, type PluginReport, retryRequest } from "distube/integrations";
+
+async function lookUp(url: URL, signal: AbortSignal, report: PluginReport): Promise<unknown> {
+  const answer = await retryRequest(
+    () => fetch(url, { signal: AbortSignal.any([signal, AbortSignal.timeout(5_000)]) }),
+    {
+      signal,
+      name: "example",
+      host: url.host,
+      report,
+    },
+  );
+  if (!answer.ok)
+    throw new DisTubeError(ErrorCode.SOURCE_FAILED, `example answered HTTP ${answer.status}`, {
+      source: "example",
+      transient: isTransientFailure(answer),
+    });
+  return answer.json();
+}
+```
+
+For a library that throws its own errors, pass `transient: error => ...` to decide which thrown errors to try again;
+an abort or a timeout still ends the tries. Retry only where you send the request, so retries never stack. Core retries
+nothing itself.
+
 A `DisTubeError` you throw reaches the caller unchanged, even one from a second copy of the package, which
 `DisTubeError.is` matches by name and code. Three codes are the exception: `INVALID_ARGUMENT`, `INVALID_STATE` and
 `ABORTED`. They describe the caller's input, the queue and the caller's cancellation, so core re-wraps them as
@@ -287,9 +324,9 @@ They belong in `stream`, with a bounded lifetime.
 
 ## Package boundaries
 
-Keep authentication, URL policy, retries, metadata mapping and test fixtures in your plugin package. Import author
-types with `import type` from `distube/integrations`, and the `Song`, `Playlist`, `DisTubeError` and `ErrorCode`
-values from `distube`.
+Keep authentication, URL policy, metadata mapping and test fixtures in your plugin package. Import author types with
+`import type` from `distube/integrations`, along with its two values `retryRequest` and `isTransientFailure`, and the
+`Song`, `Playlist`, `DisTubeError` and `ErrorCode` values from `distube`.
 
 Plugins are fixed when the client is created, and there is no runtime registry. Plugin names must be unique, or
 `new DisTube` throws `INVALID_ARGUMENT`. Give each client its own plugin instances, because `distube.dispose()`

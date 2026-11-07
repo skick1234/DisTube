@@ -18,12 +18,14 @@ export type {
   PlayerOptions,
   Plugin,
   PluginDataOf,
+  PluginReport,
   ResolveOptions,
   ReaderPlaybackResource,
   RelatedOptions,
   SearchOptions,
   StreamOptions,
   StreamPlaybackResource,
+  SuggestOptions,
   TimedPlaybackResource,
   TrackEnd,
   TrackOptions,
@@ -34,3 +36,4 @@ export type {
   VoiceSessionOptions,
   VoiceTarget,
 } from "./contracts";
+export { isTransientFailure, type RetryOptions, retryRequest } from "./retry";

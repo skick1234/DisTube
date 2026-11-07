@@ -135,16 +135,16 @@ above `0`.
 
 `onDiagnostic(diagnostic)` receives one object per report:
 
-| Field      | Meaning                                                                                                                                 |
-| ---------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `severity` | `debug`, `info`, `warning` or `error`                                                                                                   |
-| `stage`    | What reported, such as `engine.track.failed`. Filter on it together with `severity`.                                                    |
-| `message`  | A readable summary. Do not parse it.                                                                                                    |
-| `plugin`   | The plugin that reported. Set on a report from a plugin's `stream`, and on Lavalink's own reports. Core and engine stages leave it out. |
-| `guildId`  | The guild the report is about, when there is one                                                                                        |
-| `position` | Source seconds of that guild's current track                                                                                            |
-| `data`     | A flat record of strings, numbers and booleans that the stage defines                                                                   |
-| `error`    | The error, when the report is about one                                                                                                 |
+| Field      | Meaning                                                                                                                                |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `severity` | `debug`, `info`, `warning` or `error`                                                                                                  |
+| `stage`    | What reported, such as `engine.track.failed`. Filter on it together with `severity`.                                                   |
+| `message`  | A readable summary. Do not parse it.                                                                                                   |
+| `plugin`   | The plugin that reported. Set on a report from a plugin operation, and on Lavalink's own reports. Core and engine stages leave it out. |
+| `guildId`  | The guild the report is about, when there is one                                                                                       |
+| `position` | Source seconds of that guild's current track                                                                                           |
+| `data`     | A flat record of strings, numbers and booleans that the stage defines                                                                  |
+| `error`    | The error, when the report is about one                                                                                                |
 
 `data` never holds a resource, a playable URL, a header, a path or a token, so you can log it as it is.
 
@@ -196,8 +196,10 @@ its reports to its own `onDiagnostic` option instead. See [Lavalink options](../
 - The core background stages are `queue.loop`, `queue.resource.dispose`, `voice.resource.dispose`,
   `voice.session.release`, `voice.gateway`, `voice.disconnect` and `voice.player.release`. They carry the `guildId`.
 - A stage a plugin reports has its own name and `data`. See
-  [Report from `stream`](../../extending/plugin-authoring/#report-from-stream). YouTube sends `youtube.stream.retried`
+  [Report a diagnostic](../../extending/plugin-authoring/#report-a-diagnostic). YouTube sends `youtube.stream.retried`
   when a download resumes after a failed read or an expired URL.
+- A plugin's report from a lookup carries the guild when a queue made the lookup, and none for `distube.resolve`,
+  `search` or `suggest`.
 - `Diagnostic` is a union. A report without `plugin` narrows `data` by `stage`, so
   `diagnostic.plugin === undefined && diagnostic.stage === "engine.track.failed"` types `data.step`. A report with
   `plugin` keeps `data` flat.

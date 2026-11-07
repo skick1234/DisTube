@@ -1,4 +1,4 @@
-import type { Engine, PlaybackResource, Plugin, ResolvableInput, StreamOptions } from "./contracts";
+import type { Engine, PlaybackResource, Plugin, PluginReport, ResolvableInput } from "./contracts";
 import { abortError, DisTubeError, ErrorCode, fromIntegration, requireQuery, throwIfAborted } from "./errors";
 import { Playlist, Song } from "./media";
 
@@ -21,6 +21,25 @@ async function call<Value>(plugin: Plugin, signal: AbortSignal, operation: () =>
     if (signal.aborted) throw abortError(signal);
     throw fromIntegration(ErrorCode.SOURCE_FAILED, `${plugin.name} failed`, error, plugin.name);
   }
+}
+
+function lookup<Value>(
+  plugin: Plugin,
+  signal: AbortSignal,
+  report: ItemReporter,
+  operation: (report: PluginReport) => Promise<Value>,
+): Promise<Value> {
+  let open = true;
+  const close = (): void => {
+    open = false;
+  };
+  const settled = call(plugin, signal, () =>
+    operation(diagnostic => {
+      if (open) report(plugin.name, diagnostic);
+    }),
+  );
+  settled.then(close, close);
+  return settled;
 }
 
 function owned<Media extends Song | Playlist>(plugin: Plugin, media: Media): Media {
@@ -87,8 +106,9 @@ export async function resolveInput(
   signal: AbortSignal,
   maxPlaylistSongs: number,
   allowAgeRestricted: boolean,
+  report: ItemReporter,
 ): Promise<Song | Playlist> {
-  const media = await mediaOf(plugins, input, signal, maxPlaylistSongs);
+  const media = await mediaOf(plugins, input, signal, maxPlaylistSongs, report);
   if (allowAgeRestricted) return media;
   if (media instanceof Playlist) {
     const songs = media.songs.filter(allowed);
@@ -96,7 +116,7 @@ export async function resolveInput(
     return songs.length === media.songs.length ? media : withSongs(media, songs);
   }
   const fromUrl = typeof input === "string" && isAbsoluteUrl(input);
-  const song = fromUrl ? media : await lookedUp(plugins, media, signal, maxPlaylistSongs);
+  const song = fromUrl ? media : await lookedUp(plugins, media, signal, maxPlaylistSongs, report);
   if (!allowed(song)) throw ageRestricted(song);
   return song;
 }
@@ -106,11 +126,14 @@ async function lookedUp(
   song: Song,
   signal: AbortSignal,
   maxPlaylistSongs: number,
+  report: ItemReporter,
 ): Promise<Song> {
   const owner = ownerOf(plugins, song);
   const resolve = owner?.resolve?.bind(owner);
   if (song.ageRestricted !== undefined || !owner || !resolve) return song;
-  const found = await call(owner, signal, () => resolve(song.url, { signal, maxPlaylistSongs }));
+  const found = await lookup(owner, signal, report, bound =>
+    resolve(song.url, { signal, maxPlaylistSongs, report: bound }),
+  );
   return found instanceof Song ? owned(owner, found) : song;
 }
 
@@ -119,6 +142,7 @@ async function mediaOf(
   input: ResolvableInput,
   signal: AbortSignal,
   maxPlaylistSongs: number,
+  report: ItemReporter,
 ): Promise<Song | Playlist> {
   throwIfAborted(signal);
   if (typeof input !== "string") return input;
@@ -126,7 +150,9 @@ async function mediaOf(
     for (const plugin of plugins) {
       const resolve = plugin.resolve?.bind(plugin);
       if (!resolve) continue;
-      const media = await call(plugin, signal, () => resolve(input, { signal, maxPlaylistSongs }));
+      const media = await lookup(plugin, signal, report, bound =>
+        resolve(input, { signal, maxPlaylistSongs, report: bound }),
+      );
       if (media) return capped(owned(plugin, media), maxPlaylistSongs);
     }
     throw new DisTubeError(ErrorCode.NO_RESULT, "No plugin resolved the URL", { query: input });
@@ -134,7 +160,9 @@ async function mediaOf(
   return firstFound(plugins, signal, "No plugin found a result for the query", input, async plugin => {
     const search = plugin.search?.bind(plugin);
     if (!search) return undefined;
-    const [song] = await call(plugin, signal, () => search(input, { signal, limit: 1, offset: 0 }));
+    const [song] = await lookup(plugin, signal, report, bound =>
+      search(input, { signal, limit: 1, offset: 0, report: bound }),
+    );
     return song && owned(plugin, song);
   });
 }
@@ -158,10 +186,11 @@ async function firstFound<Value>(
   }
   if (failures.length === 0) throw new DisTubeError(ErrorCode.NO_RESULT, message, { query });
   const source = shared(failures.map(failure => (DisTubeError.is(failure) ? failure.source : undefined)));
+  const transient = failures.every(failure => DisTubeError.is(failure) && failure.transient);
   throw new DisTubeError(
     shared(failures.map(failure => (DisTubeError.is(failure) ? failure.code : undefined))) ?? ErrorCode.SOURCE_FAILED,
     message,
-    { cause: new AggregateError(failures, message), query, ...(source === undefined ? {} : { source }) },
+    { cause: new AggregateError(failures, message), query, transient, ...(source === undefined ? {} : { source }) },
   );
 }
 
@@ -175,18 +204,20 @@ export async function searchSongs(
   query: string,
   options: SearchQuery,
   signal: AbortSignal,
+  report: ItemReporter,
 ): Promise<readonly Song[]> {
   if (options.source && !options.source.search)
     throw new DisTubeError(ErrorCode.UNSUPPORTED, `${options.source.name} does not support search`);
   for (const plugin of options.source ? [options.source] : plugins) {
     const search = plugin.search?.bind(plugin);
     if (!search) continue;
-    const songs = await call(plugin, signal, () =>
+    const songs = await lookup(plugin, signal, report, bound =>
       search(query, {
         signal,
         limit: options.limit,
         offset: options.offset,
         allowAgeRestricted: options.allowAgeRestricted ?? false,
+        report: bound,
       }),
     );
     const kept = options.allowAgeRestricted ? songs : songs.filter(allowed);
@@ -200,11 +231,12 @@ export async function suggestQueries(
   query: string,
   source: Plugin | undefined,
   signal: AbortSignal,
+  report: ItemReporter,
 ): Promise<readonly string[]> {
   for (const plugin of source ? [source] : plugins) {
     const suggest = plugin.suggest?.bind(plugin);
     if (!suggest) continue;
-    const suggestions = await call(plugin, signal, () => suggest(query, { signal }));
+    const suggestions = await lookup(plugin, signal, report, bound => suggest(query, { signal, report: bound }));
     if (suggestions.length > 0) return suggestions.slice(0, SUGGESTION_LIMIT);
   }
   return [];
@@ -218,6 +250,7 @@ export async function relatedSong(
   exclude: readonly Song[],
   allowAgeRestricted: boolean,
   signal: AbortSignal,
+  report: ItemReporter,
   fallback?: Song,
 ): Promise<Song> {
   const seedOwner = ownerOf(plugins, song);
@@ -226,7 +259,9 @@ export async function relatedSong(
   const owner = useFallback ? ownerOf(plugins, fallback) : seedOwner;
   const related = owner?.related?.bind(owner);
   if (!owner || !related) throw noRelated(seed.source, `${seed.source} has no related lookup`);
-  const next = await call(owner, signal, () => related(seed, { signal, exclude, allowAgeRestricted }));
+  const next = await lookup(owner, signal, report, bound =>
+    related(seed, { signal, exclude, allowAgeRestricted, report: bound }),
+  );
   if (!next) throw noRelated(owner.name, `${owner.name} returned no related Song`);
   return owned(owner, next);
 }
@@ -243,9 +278,9 @@ export interface PreparedSong {
   readonly fallback?: Song;
 }
 
-export type PluginReport = Parameters<StreamOptions["report"]>[0];
+export type ReportedDiagnostic = Parameters<PluginReport>[0];
 
-export type ItemReporter = (plugin: string, diagnostic: PluginReport) => void;
+export type ItemReporter = (plugin: string, diagnostic: ReportedDiagnostic) => void;
 
 const closeReports = new WeakMap<PlaybackResource, () => void>();
 
@@ -257,7 +292,7 @@ async function streamed(
   stream: NonNullable<Plugin["stream"]>,
 ): Promise<PlaybackResource> {
   let open = true;
-  const bound = (diagnostic: PluginReport): void => {
+  const bound = (diagnostic: ReportedDiagnostic): void => {
     if (open) report(plugin.name, diagnostic);
   };
   try {
@@ -303,8 +338,8 @@ export async function prepareSong(
     const search = plugin.search?.bind(plugin);
     const prepareCandidate = plugin.stream?.bind(plugin);
     if (!search || !prepareCandidate) return undefined;
-    const found = await call(plugin, signal, () =>
-      search(query, { signal, limit: FALLBACK_CANDIDATES, offset: 0, allowAgeRestricted }),
+    const found = await lookup(plugin, signal, report, bound =>
+      search(query, { signal, limit: FALLBACK_CANDIDATES, offset: 0, allowAgeRestricted, report: bound }),
     );
     const candidate = closest(song, allowAgeRestricted ? found : found.filter(allowed));
     if (!candidate) return undefined;

@@ -39,7 +39,7 @@ import {
 import {
   allowedRelated,
   disposeResource,
-  type PluginReport,
+  type ReportedDiagnostic,
   prepareSong,
   relatedSong,
   resolveInput,
@@ -396,7 +396,7 @@ export class DisTubeQueue<Metadata = undefined, Target = VoiceChannelTarget> {
     const step = this.#tail.then(async () => {
       this.#assertCurrent(options.signal);
       const media = await this.#recheck(
-        resolveInput(plugins, input, signal, maxPlaylistSongs, options.allowAgeRestricted ?? false),
+        resolveInput(plugins, input, signal, maxPlaylistSongs, options.allowAgeRestricted ?? false, this.#itemReport),
         options.signal,
         signal,
       );
@@ -615,7 +615,15 @@ export class DisTubeQueue<Metadata = undefined, Target = VoiceChannelTarget> {
 
   #lookUp(seed: Attempt, exclude: readonly Song[], signal: AbortSignal): Promise<Song> {
     const { plugins } = this.#guild.config;
-    return relatedSong(plugins, seed.item.song, exclude, this.#allowAgeRestricted, signal, seed.fallback);
+    return relatedSong(
+      plugins,
+      seed.item.song,
+      exclude,
+      this.#allowAgeRestricted,
+      signal,
+      this.#itemReport,
+      seed.fallback,
+    );
   }
 
   #lookAhead(attempt: Attempt): void {
@@ -647,7 +655,7 @@ export class DisTubeQueue<Metadata = undefined, Target = VoiceChannelTarget> {
     this.#prefetch = undefined;
   }
 
-  readonly #itemReport = (plugin: string, diagnostic: PluginReport): void => {
+  readonly #itemReport = (plugin: string, diagnostic: ReportedDiagnostic): void => {
     const { events } = this.#guild.config;
     queueMicrotask(() => events.report(Object.freeze({ ...diagnostic, guildId: this.guildId, plugin })));
   };
@@ -763,7 +771,13 @@ function played(history: readonly QueueItem[], song: Song): boolean {
 
 function withSource(error: DisTubeError, source: string): DisTubeError {
   if (error.code !== ErrorCode.SOURCE_FAILED || error.source !== undefined) return error;
-  return new DisTubeError(error.code, error.message, { cause: error.cause, source });
+  return new DisTubeError(error.code, error.message, {
+    cause: error.cause,
+    source,
+    ...(error.media === undefined ? {} : { media: error.media }),
+    ...(error.query === undefined ? {} : { query: error.query }),
+    ...(error.transient ? { transient: true } : {}),
+  });
 }
 
 function replayOf(item: QueueItem): QueueItem {

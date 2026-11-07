@@ -8,13 +8,14 @@ sidebar:
 Every public failure in DisTube is a `DisTubeError`. You tell errors apart by their `code`, never by their message.
 Every plugin uses the same codes, so one check works for every provider.
 
-| Field    | What it holds                                                                                                 |
-| -------- | ------------------------------------------------------------------------------------------------------------- |
-| `code`   | A string from the exported `ErrorCode` object, such as `"NOT_FOUND"`                                          |
-| `cause`  | The original error from the provider, the platform or a plugin, when there is one                             |
-| `source` | The name of the plugin the failure came from, such as `"youtube"`                                             |
-| `query`  | The text that found nothing. See [Fields that replace message parsing](#fields-that-replace-message-parsing). |
-| `media`  | `"song"` or `"playlist"`, what a failed provider lookup was for                                               |
+| Field       | What it holds                                                                                                 |
+| ----------- | ------------------------------------------------------------------------------------------------------------- |
+| `code`      | A string from the exported `ErrorCode` object, such as `"NOT_FOUND"`                                          |
+| `cause`     | The original error from the provider, the platform or a plugin, when there is one                             |
+| `source`    | The name of the plugin the failure came from, such as `"youtube"`                                             |
+| `query`     | The text that found nothing. See [Fields that replace message parsing](#fields-that-replace-message-parsing). |
+| `media`     | `"song"` or `"playlist"`, what a failed provider lookup was for                                               |
+| `transient` | `true` when the failure was passing, such as a provider outage, and outlasted the retries already made        |
 
 ## Codes
 
@@ -38,7 +39,11 @@ Every plugin uses the same codes, so one check works for every provider.
 Use `INVALID_ARGUMENT` to ask the member to fix their input. Use `INVALID_STATE` to explain why a valid command cannot
 run right now.
 
-No code promises that a retry will work. Here is what to tell members for the codes that come from providers:
+No code promises that a retry will work. `transient` comes closest. It is `true` when a provider answered 500, 502,
+503, 504 or 408 or a connection broke before an answer, and the request was already tried 3 times. Offer the member a retry in a moment, and do not retry in a loop. Any other
+failure has no `transient`.
+
+Here is what to tell members for the codes that come from providers:
 
 | Code             | Usually from                             | Does retrying help?                                         | Tell the member                                     |
 | ---------------- | ---------------------------------------- | ----------------------------------------------------------- | --------------------------------------------------- |
@@ -70,6 +75,8 @@ try {
   else if (DisTubeError.is(error, ErrorCode.NO_RESULT) && error.media === "playlist")
     await reply("That playlist is empty.");
   else if (DisTubeError.is(error, ErrorCode.NO_RESULT)) await reply(`Nothing found for ${error.query}.`);
+  else if (DisTubeError.is(error) && error.transient)
+    await reply("The music service is having trouble. Try again soon.");
   else throw error;
 }
 ```
@@ -89,6 +96,8 @@ Log `cause` to find out what went wrong, but do not show it to members. It can c
 - `media` is the kind of media a failed provider lookup was for. The official plugins set it from the provider's
   answer. A Spotify album or artist counts as `"playlist"`. Search, autoplay, malformed responses and refused
   credentials (HTTP 401) have none.
+- `transient` survives core. When every plugin failed a query search or a search fallback, the exhaustion error is
+  `transient` only when every failure was.
 
 ## Errors during playback
 

@@ -269,7 +269,7 @@ A plugin that serves livestreams returns a `live` resource, whose `open(signal)`
 engine's recovery. A `stream` resource keeps today's behaviour. `stream` also receives `report`, which sends a
 diagnostic to `onDiagnostic` with the item's guild and your plugin name. See
 [playback resources](../../extending/playback-resources/) and
-[report from stream](../../extending/plugin-authoring/#report-from-stream).
+[report a diagnostic](../../extending/plugin-authoring/#report-a-diagnostic).
 
 ## Adapter and engine authors
 
