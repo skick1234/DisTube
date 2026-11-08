@@ -162,10 +162,11 @@ its reports to its own `onDiagnostic` option instead. See [Lavalink options](../
 | `engine.input.retried`     | `warning`                      | Each time a ranged URL read reopens because an answer ended early                                                                      | `guildId`, `position`, `data.offset`, `data.attempt`                                                            |
 | `engine.track.starved`     | `warning`                      | Each recovered stall of at least 100 ms in which no audio was ready to send                                                            | `guildId`, `position`, `data.durationMs`                                                                        |
 | `engine.track.gaps`        | `info`                         | Once when a track that had any stall ends, however short the stalls                                                                    | `guildId`, `position`, `data.gaps`, `data.silentMs`                                                             |
-| `engine.voice.reconnected` | `warning`                      | Each time the voice connection is ready again after a reconnect                                                                        | `guildId`, `position`, `data.durationMs`, `data.closeCode`                                                      |
 | `engine.worker.load`       | `debug`, or `warning` from 0.9 | At most every 30 seconds per decoding worker that hosts a track                                                                        | `data.threadId`, `data.tracks`, `data.utilization`                                                              |
 | `voice.endpoint.changed`   | `info`                         | Discord moved the voice to another voice server                                                                                        | `guildId`, `data.endpoint`, `data.previous`                                                                     |
 | `voice.join.retried`       | `info`                         | The built-in engine's first join missed Ready within `connectionTimeoutMs`, so it leaves and joins once more                           | `guildId`, `data.channelId`                                                                                     |
+| `voice.recovered`          | `warning`                      | The built-in engine's voice is Ready again after it dropped                                                                            | `guildId`, `data.durationMs`, `data.rounds`, `data.trail`, `data.closeCode`, `data.path`                        |
+| `voice.recovery.failed`    | `error`                        | The built-in engine's dropped voice missed `reconnectTimeoutMs` or closed for good, just before `voice.disconnected`                   | `guildId`, `data.durationMs`, `data.rounds`, `data.trail`, `data.closeCode`, `data.path`, `error`               |
 | `event.listener`           | `error`                        | An event listener threw or rejected                                                                                                    | `error`                                                                                                         |
 | other `queue.*`, `voice.*` | `error`                        | A core step that runs in the background failed, such as a voice release                                                                | `error`                                                                                                         |
 
@@ -187,9 +188,13 @@ its reports to its own `onDiagnostic` option instead. See [Lavalink options](../
 - `data.gaps` counts a track's stalls and `data.silentMs` adds up the silence Discord received for them, in 20 ms
   steps. The built-in engine sends a 20 ms silence frame for each packet that is not ready. Stalls under 100 ms appear
   only here. A track with no stall reports nothing.
-- `data.durationMs` of `engine.voice.reconnected` is how long the connection was not ready. No audio reaches the
-  channel for that long. `data.closeCode` is the Discord voice close code that started it, when the voice socket
-  closed. A reconnect that never gets ready again ends the voice with `voice.disconnected` instead.
+- `data.durationMs` of `voice.recovered` and `voice.recovery.failed` is how long the connection was not Ready. No
+  audio reaches the channel for that long, and the track's position does not move. `data.closeCode` is the last
+  Discord voice close code, when a voice socket closed. `data.trail` lists the last 20 connection states and closes,
+  such as `close:4006>signalling>connecting>ready`. `data.rounds` counts the leave-and-join rounds the engine sent, 5,
+  15 and 35 seconds after the drop. `data.path` says how it came back or what it was trying: `resume` on the same voice
+  socket, `library` after a close, `server` when Discord sent a new voice server, or `rejoin` after a round. A move you
+  start with `voice.join` reports neither stage unless it fails.
 - `data.endpoint` is the new voice server as `host:port`, and `data.previous` the old one. `data.previous` is absent
   when the voice had no server before. `voice.endpoint` reads the current one.
 - `data.utilization` is the worker's event-loop utilization over the interval, from `0` to `1`. The severity turns

@@ -30,8 +30,6 @@ import {
   type TrackStep,
 } from "./track";
 
-type Networking = Extract<VoiceConnection["state"], { networking: unknown }>["networking"];
-
 const FINISHED: TrackEnd = Object.freeze({ reason: "finished" });
 const STOPPED: TrackEnd = Object.freeze({ reason: "stopped" });
 const REPLACED: TrackEnd = Object.freeze({ reason: "replaced" });
@@ -112,8 +110,6 @@ export class DiscordVoicePlayer implements Player {
   #chain?: string;
   #released = false;
   #release?: Promise<void>;
-  #notReadySince?: number;
-  #closeCode?: number;
 
   constructor(options: DiscordVoicePlayerOptions) {
     this.#connection = options.connection;
@@ -129,7 +125,6 @@ export class DiscordVoicePlayer implements Player {
     this.#subscription = this.#connection.subscribe(this.#player) ?? undefined;
     this.#unsubscribeSession = this.#session.subscribe(this.#onSessionEvent);
     this.#connection.on("stateChange", this.#onConnectionStateChange);
-    this.#watchClose(undefined, this.#connection.state);
     this.#player.on("stateChange", this.#onPlayerStateChange);
     this.#player.on("error", this.#onPlayerError);
   }
@@ -349,12 +344,8 @@ export class DiscordVoicePlayer implements Player {
     if (event.type === "connected") this.#current?.track?.setBitrate(this.#session.bitrate);
   };
 
-  readonly #onConnectionStateChange = (previous: VoiceConnection["state"], next: VoiceConnection["state"]): void => {
-    if (this.#released) return;
-    this.#watchClose(previous, next);
-    if (next.status === VoiceConnectionStatus.Ready) this.#reconnected();
-    else this.#notReadySince ??= performance.now();
-    if (next.status !== VoiceConnectionStatus.Destroyed) return;
+  readonly #onConnectionStateChange = (_previous: VoiceConnection["state"], next: VoiceConnection["state"]): void => {
+    if (this.#released || next.status !== VoiceConnectionStatus.Destroyed) return;
     const error = new DisTubeError("VOICE_FAILED", "Discord voice connection was destroyed");
     this.#current?.fail(error);
     void this.release().catch(() => undefined);
@@ -362,34 +353,6 @@ export class DiscordVoicePlayer implements Player {
       this.#onClosed(error);
     } catch {}
   };
-
-  /** @discordjs/voice keeps close codes off the connection state, so read them from each new voice socket. */
-  #watchClose(previous: VoiceConnection["state"] | undefined, next: VoiceConnection["state"]): void {
-    const networking = networkingOf(next);
-    if (networking && networking !== (previous && networkingOf(previous)))
-      networking.prependOnceListener("close", (code: number) => {
-        this.#closeCode = code;
-      });
-  }
-
-  /** Audio stops while the connection is not Ready, since the AudioPlayer sends only to Ready connections. */
-  #reconnected(): void {
-    const since = this.#notReadySince;
-    if (since === undefined) return;
-    const closeCode = this.#closeCode;
-    this.#notReadySince = undefined;
-    this.#closeCode = undefined;
-    const durationMs = Math.round(performance.now() - since);
-    const close = closeCode === undefined ? "" : ` after close ${closeCode}`;
-    this.#reporter.report({
-      severity: "warning",
-      stage: "engine.voice.reconnected",
-      message: `Voice reconnected${close}; audio stopped for ${durationMs} ms`,
-      guildId: this.#reporter.guildId,
-      position: this.position,
-      data: closeCode === undefined ? { durationMs } : { durationMs, closeCode },
-    });
-  }
 
   async #cleanup(): Promise<void> {
     this.#released = true;
@@ -417,10 +380,6 @@ export class DiscordVoicePlayer implements Player {
   #assertOpen(): void {
     if (this.#released) throw new DisTubeError("INVALID_STATE", "Discord Player is released");
   }
-}
-
-function networkingOf(state: VoiceConnection["state"]): Networking | undefined {
-  return "networking" in state ? state.networking : undefined;
 }
 
 function stateResource(state: AudioPlayer["state"]): AudioResource | undefined {

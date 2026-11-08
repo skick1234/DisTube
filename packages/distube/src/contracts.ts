@@ -49,6 +49,14 @@ type TrackFailedData = {
   recovery: "exhausted" | "unreopenable" | "none";
 };
 
+type VoiceRecoveryData = {
+  durationMs: number;
+  rounds: number;
+  trail: string;
+  closeCode?: number;
+  path: "resume" | "library" | "server" | "rejoin";
+};
+
 type InputReopenedData = {
   kind: PlaybackResourceKind;
   attempt: number;
@@ -77,7 +85,6 @@ export type Diagnostic =
   | BuiltInDiagnostic<"engine.input.retried", "warning", { offset: number; attempt: number }>
   | BuiltInDiagnostic<"engine.track.starved", "warning", { durationMs: number }>
   | BuiltInDiagnostic<"engine.track.gaps", "info", { gaps: number; silentMs: number }>
-  | BuiltInDiagnostic<"engine.voice.reconnected", "warning", { durationMs: number; closeCode?: number }>
   | BuiltInDiagnostic<
       "engine.worker.load",
       "debug" | "warning",
@@ -85,6 +92,8 @@ export type Diagnostic =
     >
   | BuiltInDiagnostic<"voice.endpoint.changed", "info", { endpoint: string; previous?: string }>
   | BuiltInDiagnostic<"voice.join.retried", "info", { channelId: string }>
+  | BuiltInDiagnostic<"voice.recovered", "warning", VoiceRecoveryData>
+  | BuiltInDiagnostic<"voice.recovery.failed", "error", VoiceRecoveryData>
   | (BuiltInFields<CoreBackgroundStage, "error"> & { readonly data?: undefined })
   | PluginDiagnostic;
 

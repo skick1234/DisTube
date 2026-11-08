@@ -7,6 +7,7 @@ import type {
 import { joinVoiceChannel, VoiceConnectionDisconnectReason, VoiceConnectionStatus } from "@discordjs/voice";
 import { DisTubeError } from "distube";
 import type {
+  Diagnostic,
   EngineSettings,
   JoinOptions,
   VoiceGatewayData,
@@ -47,6 +48,7 @@ const RESEND_INTERVAL_MS = 1_000;
 /** A gone voice server fails each library rejoin within milliseconds, and Discord's gateway takes 120 payloads a minute. */
 const LEAVE_FLOOR_MS = 1_000;
 const ROUND_DELAYS_MS = [5_000, 15_000, 35_000];
+const TRAIL_STEPS = 20;
 
 interface VoiceStateUpdate {
   readonly channel_id: string | null;
@@ -61,8 +63,16 @@ interface VoiceStatePayload {
 
 type Networking = Extract<VoiceConnectionState, { networking: unknown }>["networking"];
 
+type RecoveryData = Extract<Diagnostic, { stage: "voice.recovered" }>["data"];
+
 interface Outage {
+  readonly since: number;
+  readonly lost?: Networking;
+  readonly moving: boolean;
+  readonly trail: string[];
   readonly timers: readonly ReturnType<typeof setTimeout>[];
+  rounds: number;
+  closeCode?: number;
 }
 
 export class DiscordVoiceSession implements VoiceSession {
@@ -79,6 +89,7 @@ export class DiscordVoiceSession implements VoiceSession {
   #channelId: string;
   #moveTarget?: string;
   #outage?: Outage;
+  #readyNetworking?: Networking;
   #resend?: ReturnType<typeof setInterval>;
   #failure?: Error;
   #readyOnce = false;
@@ -291,11 +302,12 @@ export class DiscordVoiceSession implements VoiceSession {
     if (networking && networking !== (previous && networkingOf(previous)))
       networking.prependOnceListener("close", (code: number) => this.#socketClosed(code));
     if (next.status === VoiceConnectionStatus.Ready) {
-      this.#stopRecovery();
+      this.#recovered();
       this.#readyOnce = true;
+      this.#readyNetworking = networking;
       this.#platformClosed = false;
       this.#leaving = false;
-    } else if (this.#readyOnce) this.#outage ??= this.#beginOutage();
+    } else if (this.#readyOnce) this.#record(stateStep(next));
     if (next.status === VoiceConnectionStatus.Destroyed) {
       this.#fail(new Error("Discord voice connection was destroyed outside DisTube"));
       return;
@@ -314,7 +326,7 @@ export class DiscordVoiceSession implements VoiceSession {
   /** @discordjs/voice rejoins the held channel without a leave, which Discord answers with no new credentials. */
   #socketClosed(code: number): void {
     if (this.#released) return;
-    if (this.#readyOnce) this.#outage ??= this.#beginOutage();
+    if (this.#readyOnce) this.#record(`close:${code}`).closeCode = code;
     const kind = closeKind(code);
     if (kind === "terminal") this.#fail(new Error(terminalCloseMessage(code, true)));
     else if (kind === "platform" || this.#removed()) {
@@ -322,6 +334,13 @@ export class DiscordVoiceSession implements VoiceSession {
       this.#settle();
     } else if (this.#voiceState?.channel_id !== null && performance.now() - this.#leftAt >= LEAVE_FLOOR_MS)
       this.#leave();
+  }
+
+  #record(step: string): Outage {
+    const outage = (this.#outage ??= this.#beginOutage());
+    if (outage.trail.at(-1) !== step) outage.trail.push(step);
+    if (outage.trail.length > TRAIL_STEPS) outage.trail.shift();
+    return outage;
   }
 
   #beginOutage(): Outage {
@@ -333,12 +352,55 @@ export class DiscordVoiceSession implements VoiceSession {
       () => this.#fail(new Error(`Discord voice did not reach Ready within ${reconnectTimeoutMs} ms`)),
       reconnectTimeoutMs,
     );
-    return { timers: [...rounds, deadline] };
+    return {
+      since: performance.now(),
+      lost: this.#readyNetworking,
+      moving: this.#moveTarget !== undefined,
+      trail: [],
+      timers: [...rounds, deadline],
+      rounds: 0,
+    };
   }
 
   #round(): void {
-    if (this.#released || !this.#outage) return;
+    const outage = this.#outage;
+    if (this.#released || !outage) return;
+    outage.rounds += 1;
     this.#leaveAndJoin();
+  }
+
+  #recovered(): void {
+    const outage = this.#outage;
+    if (!outage) return;
+    this.#stopRecovery();
+    if (outage.moving) return;
+    const data = this.#summary(outage, "ready");
+    this.#options.report({
+      severity: "warning",
+      stage: "voice.recovered",
+      message: `Discord voice is Ready again after ${data.durationMs} ms by ${data.path}`,
+      guildId: this.guildId,
+      data,
+    });
+  }
+
+  #summary(outage: Outage, last: string): RecoveryData {
+    const trail = [...outage.trail, last].slice(-TRAIL_STEPS).join(">");
+    const path =
+      outage.rounds > 0
+        ? "rejoin"
+        : outage.closeCode !== undefined
+          ? "library"
+          : networkingOf(this.#connection.state) === outage.lost
+            ? "resume"
+            : "server";
+    return {
+      durationMs: Math.round(performance.now() - outage.since),
+      rounds: outage.rounds,
+      trail,
+      ...(outage.closeCode === undefined ? {} : { closeCode: outage.closeCode }),
+      path,
+    };
   }
 
   #removed(): boolean {
@@ -407,6 +469,16 @@ export class DiscordVoiceSession implements VoiceSession {
   #fail(error: Error): void {
     if (this.#released) return;
     this.#failure = error;
+    const outage = this.#outage;
+    if (outage)
+      this.#options.report({
+        severity: "error",
+        stage: "voice.recovery.failed",
+        message: error.message,
+        guildId: this.guildId,
+        data: this.#summary(outage, "failed"),
+        error,
+      });
     this.#disconnect({ type: "disconnected", reason: "failed", error });
   }
 
@@ -718,6 +790,12 @@ export class DiscordGatewaySession implements VoiceSession {
       } catch {}
     }
   }
+}
+
+function stateStep(state: VoiceConnectionState): string {
+  return state.status === VoiceConnectionStatus.Disconnected
+    ? `disconnected:${VoiceConnectionDisconnectReason[state.reason]}`
+    : state.status;
 }
 
 function closeKind(code: number): CloseKind | undefined {

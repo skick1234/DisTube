@@ -178,11 +178,13 @@ describe("DiscordVoiceSession over the real voice library", () => {
     },
   );
 
-  it("moves to another channel on a new voice socket and publishes the moved credentials", async () => {
-    const { server, gateway, session, events } = await joined();
+  it("moves to another channel on a new voice socket, publishes the moved credentials and reports no recovery", async () => {
+    const { server, gateway, session, events, reports } = await joined();
 
     await session.join("other");
+    await settle();
 
+    expect(reports).toEqual([]);
     expect(session.channelId).toBe("other");
     expect(channels(gateway)).toEqual([CHANNEL, "other"]);
     expect(server.connections).toBe(2);
@@ -273,12 +275,19 @@ describe("DiscordVoiceSession over the real voice library", () => {
   });
 
   it.each([4004, 4011, 4016, 4017, 4021])("disconnects once naming close %i without a rejoin", async code => {
-    const { server, gateway, events } = await joined();
+    const { server, gateway, events, reports, timeline } = await joined();
 
     server.close(code);
     await vi.waitFor(() => expect(events).toHaveLength(1), { timeout: 2_000 });
     await settle();
 
+    expect(timeline).toEqual(["voice.recovery.failed", "disconnected"]);
+    expect(reports[0]).toMatchObject({
+      severity: "error",
+      guildId: "guild",
+      error: expect.any(Error),
+      data: { closeCode: code, rounds: 0 },
+    });
     expect(events).toEqual([
       {
         type: "disconnected",
@@ -554,10 +563,10 @@ describe("built-in playback heard by a local voice server", () => {
     expect((steady.at(-1) as HeardPacket).at - (steady[0] as HeardPacket).at).toBeGreaterThan(149 * 19);
   });
 
-  it("reads the voice heartbeat round trip as ping and reports a 4006 reconnect once with its close code and silent time", async () => {
+  it("reads the voice heartbeat round trip as ping and reports a 4006 recovery once with its close code and silent time", async () => {
     const { server, player, reports } = await playing({ kind: "file", path: media.steps }, { heartbeatMs: 50 });
     await vi.waitFor(() => expect(player.ping).toEqual(expect.any(Number)), { timeout: 2_000 });
-    expect(reports.filter(diagnostic => diagnostic.stage === "engine.voice.reconnected")).toEqual([]);
+    expect(reports.filter(diagnostic => diagnostic.stage === "voice.recovered")).toEqual([]);
 
     const closedAt = performance.now();
     server.close(4006);
@@ -565,12 +574,18 @@ describe("built-in playback heard by a local voice server", () => {
     await hear(server, performance.now(), 5);
     const elapsed = performance.now() - closedAt;
 
-    const reconnects = reports.filter(diagnostic => diagnostic.stage === "engine.voice.reconnected");
+    const reconnects = reports.filter(diagnostic => diagnostic.stage === "voice.recovered");
     expect(reconnects).toEqual([
       expect.objectContaining({
         severity: "warning",
         guildId: "guild",
-        data: { closeCode: 4006, durationMs: expect.any(Number) },
+        data: {
+          closeCode: 4006,
+          durationMs: expect.any(Number),
+          rounds: 0,
+          path: "library",
+          trail: expect.stringMatching(/close:4006>.*ready$/),
+        },
       }),
     ]);
     expect(reconnects[0]?.data?.durationMs).toBeGreaterThan(0);
@@ -645,13 +660,17 @@ function wait(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+function recovered(reports: readonly Diagnostic[]): Diagnostic[] {
+  return reports.filter(diagnostic => diagnostic.stage === "voice.recovered");
+}
+
 describe("built-in recovery after Ready", () => {
   const ROUND_TEST_MS = 15_000;
 
   it(
-    "leaves and joins 5 s after a resume the voice server never answers",
+    "leaves and joins 5 s after a resume the voice server never answers, and reports the round",
     async () => {
-      const { server, gateway, connection, events } = await joined({ reconnectTimeoutMs: 8_000 });
+      const { server, gateway, connection, events, reports } = await joined({ reconnectTimeoutMs: 8_000 });
       const closedAt = performance.now();
 
       server.close(1001);
@@ -663,6 +682,15 @@ describe("built-in recovery after Ready", () => {
       expect(leftAfter).toBeGreaterThanOrEqual(ROUND_MS - 100);
       expect(channels(gateway)).toEqual([CHANNEL, null, CHANNEL]);
       expect(events).toEqual([{ type: "connected", gateway: expect.any(Object) }]);
+      expect(recovered(reports)).toEqual([
+        {
+          severity: "warning",
+          stage: "voice.recovered",
+          message: expect.any(String),
+          guildId: "guild",
+          data: { durationMs: expect.any(Number), rounds: 1, path: "rejoin", trail: expect.stringMatching(/ready$/) },
+        },
+      ]);
     },
     ROUND_TEST_MS,
   );
@@ -715,8 +743,8 @@ describe("built-in recovery after Ready", () => {
     expect(events).toEqual([{ type: "connected", gateway: expect.any(Object) }]);
   });
 
-  it("disconnects once at reconnectTimeoutMs, not the join timeout, when the gateway refuses every payload", async () => {
-    const { server, gateway, timeline } = await joined();
+  it("reports the failed recovery before its one disconnect at reconnectTimeoutMs when the gateway refuses every payload", async () => {
+    const { server, gateway, timeline, reports } = await joined();
     gateway.sendPayload.mockImplementation(() => false);
     const closedAt = performance.now();
 
@@ -726,27 +754,44 @@ describe("built-in recovery after Ready", () => {
     await settle();
 
     expect(elapsed).toBeGreaterThanOrEqual(RECONNECT_MS - 50);
-    expect(timeline).toEqual(["disconnected"]);
+    expect(timeline).toEqual(["voice.recovery.failed", "disconnected"]);
+    expect(reports).toEqual([
+      {
+        severity: "error",
+        stage: "voice.recovery.failed",
+        message: expect.any(String),
+        guildId: "guild",
+        error: expect.any(Error),
+        data: {
+          durationMs: expect.any(Number),
+          rounds: 0,
+          closeCode: 4006,
+          path: "library",
+          trail: expect.stringContaining("close:4006"),
+        },
+      },
+    ]);
   });
 
   it(
-    "fails once after the round when the deadline passes before any round is answered",
+    "fails once with the round counted when the deadline passes before any round is answered",
     async () => {
-      const { server, gateway, timeline } = await joined({ reconnectTimeoutMs: 6_000 });
+      const { server, gateway, timeline, reports } = await joined({ reconnectTimeoutMs: 6_000 });
       server.answers = false;
 
       server.close(1001);
       await vi.waitFor(() => expect(timeline).toContain("disconnected"), { timeout: 8_000 });
       await settle();
 
-      expect(timeline).toEqual(["disconnected"]);
+      expect(timeline).toEqual(["voice.recovery.failed", "disconnected"]);
+      expect(reports[0]?.data).toMatchObject({ rounds: 1, path: "rejoin" });
       expect(joins(gateway)).toHaveLength(2);
     },
     ROUND_TEST_MS,
   );
 
-  it("reconnects on the restored server after the voice server endpoint is removed", async () => {
-    const { gateway, connection, events } = await joined();
+  it("reconnects on the restored server after the voice server endpoint is removed, and reports the server path", async () => {
+    const { gateway, connection, events, reports } = await joined();
 
     gateway.server("token", null);
     await vi.waitFor(() => expect(connection.state.status).toBe("disconnected"));
@@ -755,6 +800,9 @@ describe("built-in recovery after Ready", () => {
     await settle();
 
     expect(events).toEqual([{ type: "connected", gateway: expect.objectContaining({ token: "restored" }) }]);
+    expect(recovered(reports).map(diagnostic => diagnostic.data)).toEqual([
+      { durationMs: expect.any(Number), rounds: 0, path: "server", trail: expect.stringMatching(/ready$/) },
+    ]);
   });
 
   it(

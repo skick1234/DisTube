@@ -220,7 +220,8 @@ Never put a resource, a playable URL, a header, a path or a token in `data`. App
 :::
 
 The built-in engine reports `engine.track.failed`, `engine.input.reopened`, `engine.input.retried`, `engine.track.starved`,
-`engine.track.gaps`, `engine.voice.reconnected` and `engine.worker.load`. The [options reference](../../reference/options/#diagnostics) lists their fields.
+`engine.track.gaps` and `engine.worker.load`, and its voice session reports `voice.join.retried`, `voice.recovered` and
+`voice.recovery.failed`. The [options reference](../../reference/options/#diagnostics) lists their fields.
 
 ## Engine plugins
 
