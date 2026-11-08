@@ -20,7 +20,13 @@ describe("self-deaf and self-mute", () => {
 
     expect(harness.adapter.createVoiceSession).toHaveBeenCalledWith(
       { guildId: GUILD, channelId: VOICE_CHANNEL },
-      { selfDeaf: true, selfMute: false, timeoutMs: 15_000, signal: expect.any(AbortSignal) },
+      {
+        selfDeaf: true,
+        selfMute: false,
+        timeoutMs: 15_000,
+        reconnectTimeoutMs: 60_000,
+        signal: expect.any(AbortSignal),
+      },
     );
     expect(required(harness.adapter.sessions[0]).states).toEqual([{ selfDeaf: true, selfMute: false }]);
     expect([voice.selfDeaf, voice.selfMute]).toEqual([true, false]);
@@ -33,7 +39,13 @@ describe("self-deaf and self-mute", () => {
 
     expect(harness.adapter.createVoiceSession).toHaveBeenCalledWith(
       { guildId: GUILD, channelId: VOICE_CHANNEL },
-      { selfDeaf: false, selfMute: true, timeoutMs: 15_000, signal: expect.any(AbortSignal) },
+      {
+        selfDeaf: false,
+        selfMute: true,
+        timeoutMs: 15_000,
+        reconnectTimeoutMs: 60_000,
+        signal: expect.any(AbortSignal),
+      },
     );
     expect([voice.selfDeaf, voice.selfMute]).toEqual([false, true]);
   });
@@ -47,6 +59,7 @@ describe("self-deaf and self-mute", () => {
       selfDeaf: true,
       selfMute: false,
       timeoutMs: 15_000,
+      reconnectTimeoutMs: 60_000,
       signal: expect.any(AbortSignal),
     });
   });

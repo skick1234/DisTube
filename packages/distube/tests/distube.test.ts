@@ -53,6 +53,9 @@ describe("client construction", () => {
     { connectionTimeoutMs: 0 },
     { connectionTimeoutMs: Number.NaN },
     { connectionTimeoutMs: 2 ** 31 },
+    { reconnectTimeoutMs: 0 },
+    { reconnectTimeoutMs: 1.5 },
+    { reconnectTimeoutMs: 2 ** 31 },
     { engine: { opusComplexity: 11 } },
     { engine: { bufferMs: 30 } },
     { engine: { bufferMs: 0 } },
@@ -64,8 +67,8 @@ describe("client construction", () => {
     expect(construct([new FakeSource("source")], { prefetchAutoplay: "yes" })).toThrowError(invalidArgument);
   });
 
-  it("accepts connectionTimeoutMs at the timer ceiling 2147483647", () => {
-    expect(construct([new FakeSource("source")], { connectionTimeoutMs: 2 ** 31 - 1 })).not.toThrow();
+  it.each(["connectionTimeoutMs", "reconnectTimeoutMs"])("accepts %s at the timer ceiling 2147483647", name => {
+    expect(construct([new FakeSource("source")], { [name]: 2 ** 31 - 1 })).not.toThrow();
   });
 
   it.each(["", " padded", "padded ", 42])("rejects the plugin name %j with INVALID_ARGUMENT", name => {

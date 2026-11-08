@@ -18,8 +18,10 @@ adapter has three members:
   to refuse a target, such as one with conflicting guild IDs. The caller then gets `INVALID_ARGUMENT` with your error
   as `cause`.
 - `createVoiceSession(target, options)` returns the guild's `VoiceSession`, joined to the channel with
-  `options: { selfDeaf, selfMute, timeoutMs, signal? }`. `signal` aborts when `voices.leave` or `dispose` supersedes the
-  join. Reject `ABORTED` promptly and release what you created, even when the abort lands in the acknowledgement tick.
+  `options: { selfDeaf, selfMute, timeoutMs, reconnectTimeoutMs, signal? }`. `signal` aborts when `voices.leave` or
+  `dispose` supersedes the join. Reject `ABORTED` promptly and release what you created, even when the abort lands in
+  the acknowledgement tick. `timeoutMs` bounds the join and `reconnectTimeoutMs` bounds a recovery after the session
+  was connected.
 - `createEngine(settings)` returns the built-in `Engine`. `settings` is `{ filters?, opusComplexity, bufferMs, report }`
   from `DisTubeOptions` and core. Core calls it unless a plugin carries an engine. An adapter that passes the settings
   object to its engine, as both official adapters do, needs nothing more. See [reporting](#reporting).

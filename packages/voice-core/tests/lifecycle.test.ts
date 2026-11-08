@@ -34,6 +34,7 @@ async function playing(): Promise<{
     selfDeaf: true,
     selfMute: false,
     timeoutMs: 15_000,
+    reconnectTimeoutMs: 15_000,
     report: () => undefined,
     channelBitrate: () => 64_000,
     preflight: () => undefined,

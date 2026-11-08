@@ -124,6 +124,7 @@ async function createPlayer(
     selfDeaf: true,
     selfMute: false,
     timeoutMs: 50,
+    reconnectTimeoutMs: 50,
     report: () => undefined,
     channelBitrate,
     preflight: () => undefined,

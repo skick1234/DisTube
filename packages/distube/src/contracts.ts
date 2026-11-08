@@ -333,6 +333,8 @@ export interface VoiceSessionOptions {
   readonly selfDeaf: boolean;
   readonly selfMute: boolean;
   readonly timeoutMs: number;
+  /** How long a voice that was connected may take to connect again before the session publishes `disconnected`. */
+  readonly reconnectTimeoutMs: number;
   /** Aborts when `voices.leave` or `dispose` supersedes the join; reject promptly and release what was created. */
   readonly signal?: AbortSignal;
 }

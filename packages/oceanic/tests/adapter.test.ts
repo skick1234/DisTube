@@ -8,7 +8,7 @@ vi.mock("@discordjs/voice", async () => (await import("../../voice-core/tests/su
 const GUILD = "guild";
 const CHANNEL = "channel";
 const TARGET = { guildId: GUILD, channelId: CHANNEL };
-const JOIN = { selfDeaf: true, selfMute: false, timeoutMs: 50 };
+const JOIN = { selfDeaf: true, selfMute: false, timeoutMs: 50, reconnectTimeoutMs: 50 };
 
 function permission(...names: PermissionName[]): Permission {
   return new Permission(names.reduce((bits, name) => bits | Permissions[name], 0n));
@@ -123,7 +123,7 @@ describe("OceanicAdapter", () => {
   });
 
   describe("with a 15 s join deadline that never elapses", () => {
-    const DEADLINE = { ...JOIN, timeoutMs: 15_000 };
+    const DEADLINE = { ...JOIN, timeoutMs: 15_000, reconnectTimeoutMs: 15_000 };
     beforeEach(() => vi.useFakeTimers());
     afterEach(() => vi.useRealTimers());
 

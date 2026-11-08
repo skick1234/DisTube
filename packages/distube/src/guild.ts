@@ -26,6 +26,7 @@ export interface GuildConfig<Target> {
   readonly historySize: number;
   readonly maxPlaylistSongs: number;
   readonly connectionTimeoutMs: number;
+  readonly reconnectTimeoutMs: number;
   readonly prefetchAutoplay: boolean;
   readonly lifetime: AbortSignal;
 }
@@ -339,6 +340,7 @@ export class Guild<Target> {
         selfDeaf: options.selfDeaf ?? true,
         selfMute: options.selfMute ?? false,
         timeoutMs: this.config.connectionTimeoutMs,
+        reconnectTimeoutMs: this.config.reconnectTimeoutMs,
         signal: abort,
       };
       session = await (engine.createVoiceSession

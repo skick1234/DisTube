@@ -77,7 +77,7 @@ Find the v5 call on the left and replace it with the v6 code on the right.
   [options](../../reference/options/#diagnostics).
 - `maxPlaylistSongs` (default 500) caps a Playlist resolved from a URL, in core and in each official plugin. DisTube
   does not cut a Playlist you pass in directly.
-- New `DisTube` options: `historySize` (default 10), `filters`, `prefetchAutoplay` (default `false`), `connectionTimeoutMs`, `onDiagnostic` and
+- New `DisTube` options: `historySize` (default 10), `filters`, `prefetchAutoplay` (default `false`), `connectionTimeoutMs`, `reconnectTimeoutMs`, `onDiagnostic` and
   `engine: { opusComplexity, bufferMs }`. See [options](../../reference/options/). Built-in filter definitions, the
   connection timeout and engine settings are `DisTube` options, not adapter constructor options.
 - There are no `voice.track.*` events. Listen to `queue.item.started` and `queue.item.finished`.

@@ -94,7 +94,7 @@ describe("real @discordjs/voice", () => {
     await new DiscordJSAdapter(client)
       .createVoiceSession(
         { guildId: "absent", channelId: REAL_CHANNEL },
-        { selfDeaf: true, selfMute: false, timeoutMs: 50 },
+        { selfDeaf: true, selfMute: false, timeoutMs: 50, reconnectTimeoutMs: 50 },
       )
       .then(
         () => expect.unreachable("an unknown guild has no voice presence"),

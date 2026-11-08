@@ -44,6 +44,9 @@ const CLOSE_KINDS: ReadonlyMap<number, CloseKind> = new Map([
 ]);
 const DAVE_REQUIRED_CLOSE_CODE = 4017;
 const RESEND_INTERVAL_MS = 1_000;
+/** A gone voice server fails each library rejoin within milliseconds, and Discord's gateway takes 120 payloads a minute. */
+const LEAVE_FLOOR_MS = 1_000;
+const ROUND_DELAYS_MS = [5_000, 15_000, 35_000];
 
 interface VoiceStateUpdate {
   readonly channel_id: string | null;
@@ -58,6 +61,10 @@ interface VoiceStatePayload {
 
 type Networking = Extract<VoiceConnectionState, { networking: unknown }>["networking"];
 
+interface Outage {
+  readonly timers: readonly ReturnType<typeof setTimeout>[];
+}
+
 export class DiscordVoiceSession implements VoiceSession {
   readonly guildId: string;
   readonly clientUserId: string;
@@ -71,11 +78,12 @@ export class DiscordVoiceSession implements VoiceSession {
   #voiceState?: VoiceStateUpdate;
   #channelId: string;
   #moveTarget?: string;
-  #deadline?: ReturnType<typeof setTimeout>;
+  #outage?: Outage;
   #resend?: ReturnType<typeof setInterval>;
   #failure?: Error;
   #readyOnce = false;
-  #leftSinceReady = false;
+  #leaving = false;
+  #leftAt = Number.NEGATIVE_INFINITY;
   #platformClosed = false;
   #released = false;
   #releasePromise?: Promise<void>;
@@ -120,7 +128,10 @@ export class DiscordVoiceSession implements VoiceSession {
           onVoiceStateUpdate: state => {
             methods.onVoiceStateUpdate(state);
             this.#voiceState = state;
-            if (state.channel_id) this.#channelId = state.channel_id;
+            if (state.channel_id) {
+              this.#channelId = state.channel_id;
+              this.#leaving = false;
+            }
             this.#settle();
           },
         }),
@@ -279,20 +290,16 @@ export class DiscordVoiceSession implements VoiceSession {
     // @discordjs/voice keeps close codes off the connection state, so read them before the library rejoins.
     if (networking && networking !== (previous && networkingOf(previous)))
       networking.prependOnceListener("close", (code: number) => this.#socketClosed(code));
+    if (next.status === VoiceConnectionStatus.Ready) {
+      this.#stopRecovery();
+      this.#readyOnce = true;
+      this.#platformClosed = false;
+      this.#leaving = false;
+    } else if (this.#readyOnce) this.#outage ??= this.#beginOutage();
     if (next.status === VoiceConnectionStatus.Destroyed) {
       this.#fail(new Error("Discord voice connection was destroyed outside DisTube"));
       return;
     }
-    if (next.status === VoiceConnectionStatus.Ready) {
-      this.#stopRecovery();
-      this.#readyOnce = true;
-      this.#leftSinceReady = false;
-      this.#platformClosed = false;
-    } else if (this.#readyOnce)
-      this.#deadline ??= setTimeout(
-        () => this.#fail(new Error(`Discord voice did not reach Ready within ${this.#options.timeoutMs} ms`)),
-        this.#options.timeoutMs,
-      );
     const refused =
       next.status === VoiceConnectionStatus.Disconnected &&
       next.reason === VoiceConnectionDisconnectReason.AdapterUnavailable;
@@ -307,17 +314,47 @@ export class DiscordVoiceSession implements VoiceSession {
   /** @discordjs/voice rejoins the held channel without a leave, which Discord answers with no new credentials. */
   #socketClosed(code: number): void {
     if (this.#released) return;
+    if (this.#readyOnce) this.#outage ??= this.#beginOutage();
     const kind = closeKind(code);
     if (kind === "terminal") this.#fail(new Error(terminalCloseMessage(code, true)));
-    else if (kind === "platform" || this.#voiceState?.channel_id === null) {
+    else if (kind === "platform" || this.#removed()) {
       this.#platformClosed = true;
       this.#settle();
-    } else if (!this.#leftSinceReady) this.#leftSinceReady = this.#sendLeave();
+    } else if (this.#voiceState?.channel_id !== null && performance.now() - this.#leftAt >= LEAVE_FLOOR_MS)
+      this.#leave();
+  }
+
+  #beginOutage(): Outage {
+    const { reconnectTimeoutMs } = this.#options;
+    const rounds = ROUND_DELAYS_MS.filter(delay => delay < reconnectTimeoutMs).map(delay =>
+      setTimeout(() => this.#round(), delay),
+    );
+    const deadline = setTimeout(
+      () => this.#fail(new Error(`Discord voice did not reach Ready within ${reconnectTimeoutMs} ms`)),
+      reconnectTimeoutMs,
+    );
+    return { timers: [...rounds, deadline] };
+  }
+
+  #round(): void {
+    if (this.#released || !this.#outage) return;
+    this.#leaveAndJoin();
+  }
+
+  #removed(): boolean {
+    return this.#voiceState?.channel_id === null && !this.#leaving;
   }
 
   #leaveAndJoin(): void {
-    if (this.#platformClosed || this.#sendLeave())
-      this.#connection.rejoin({ channelId: this.channelId, selfDeaf: this.selfDeaf, selfMute: this.selfMute });
+    if (this.#voiceState?.channel_id && !this.#leave()) return;
+    this.#connection.rejoin({ channelId: this.channelId, selfDeaf: this.selfDeaf, selfMute: this.selfMute });
+  }
+
+  #leave(): boolean {
+    if (!this.#sendLeave()) return false;
+    this.#leaving = true;
+    this.#leftAt = performance.now();
+    return true;
   }
 
   #sendLeave(): boolean {
@@ -331,16 +368,16 @@ export class DiscordVoiceSession implements VoiceSession {
   }
 
   #stopRecovery(): void {
-    clearTimeout(this.#deadline);
+    for (const timer of this.#outage?.timers ?? []) clearTimeout(timer);
     clearInterval(this.#resend);
-    this.#deadline = undefined;
+    this.#outage = undefined;
     this.#resend = undefined;
   }
 
   #settle(): void {
     if (this.#released) return;
     const { state } = this.#connection;
-    if (this.#platformClosed && this.#voiceState?.channel_id === null) {
+    if (this.#platformClosed && this.#removed()) {
       this.#disconnect({ type: "disconnected", reason: "removed" });
       return;
     }
@@ -368,6 +405,7 @@ export class DiscordVoiceSession implements VoiceSession {
   }
 
   #fail(error: Error): void {
+    if (this.#released) return;
     this.#failure = error;
     this.#disconnect({ type: "disconnected", reason: "failed", error });
   }
@@ -494,13 +532,15 @@ export class DiscordGatewaySession implements VoiceSession {
       this.#platformDeadline ??= setTimeout(
         () =>
           this.#terminate(
-            new Error(`Discord voice closed with code ${code} and did not move within ${this.#options.timeoutMs} ms`),
+            new Error(
+              `Discord voice closed with code ${code} and did not move within ${this.#options.reconnectTimeoutMs} ms`,
+            ),
           ),
-        this.#options.timeoutMs,
+        this.#options.reconnectTimeoutMs,
       );
     else if (kind === "rejoin" && !this.#recovering) {
       this.#recovering = true;
-      const deadline = Date.now() + this.#options.timeoutMs;
+      const deadline = Date.now() + this.#options.reconnectTimeoutMs;
       this.#enqueue(() => this.#rejoin(deadline)).catch((error: unknown) => this.#terminate(asError(error)));
     }
   }

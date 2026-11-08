@@ -14,6 +14,7 @@ const OPTIONS = {
   selfDeaf: true,
   selfMute: false,
   timeoutMs: 50,
+  reconnectTimeoutMs: 50,
   report: () => undefined,
   channelBitrate: () => 64_000,
   preflight: () => undefined,
@@ -37,11 +38,19 @@ describe("engine", () => {
   });
 
   it("opens the voice as the bot's own connection from the platform the adapter supplies", async () => {
-    const { guildId, channelId, selfDeaf, selfMute, timeoutMs, ...platform } = OPTIONS;
+    const { guildId, channelId, selfDeaf, selfMute, timeoutMs, reconnectTimeoutMs, ...platform } = OPTIONS;
     const lookup = vi.fn(() => platform);
     const engine = new DiscordVoiceEngine(SETTINGS, lookup);
 
-    const session = await engine.createVoiceSession({ guildId, channelId }, { selfDeaf, selfMute, timeoutMs });
+    const session = await engine.createVoiceSession(
+      { guildId, channelId },
+      {
+        selfDeaf,
+        selfMute,
+        timeoutMs,
+        reconnectTimeoutMs,
+      },
+    );
 
     expect(lookup).toHaveBeenCalledExactlyOnceWith({ guildId, channelId });
     expect(native.joinVoiceChannel).toHaveBeenCalledExactlyOnceWith(

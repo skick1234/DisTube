@@ -12,26 +12,39 @@ import { type HeardPacket, serveAudio, serveVoiceGateway, type VoiceGatewayServe
 type Gateway = ReturnType<typeof gatewayAdapter>;
 
 const TIMEOUT_MS = 1_000;
+const RECONNECT_MS = 2_000;
+const ROUND_MS = 5_000;
 
 const cleanups: (() => Promise<unknown>)[] = [];
 afterEach(async () => {
   for (const cleanup of cleanups.splice(0).toReversed()) await cleanup();
 });
 
-async function joined(
+interface JoinedOptions {
+  readonly clientUserId?: string;
+  readonly heartbeatMs?: number;
+  readonly reconnectTimeoutMs?: number;
+}
+
+async function joined({
   clientUserId = "bot",
-  heartbeatMs?: number,
-): Promise<{
+  heartbeatMs,
+  reconnectTimeoutMs = RECONNECT_MS,
+}: JoinedOptions = {}): Promise<{
   server: VoiceGatewayServer;
   gateway: Gateway;
   session: DiscordVoiceSession;
   connection: VoiceConnection;
   events: VoiceSessionEvent[];
+  reports: Diagnostic[];
+  timeline: string[];
 }> {
   const server = await serveVoiceGateway();
   cleanups.push(() => server.stop().catch(() => undefined));
   if (heartbeatMs !== undefined) server.heartbeatMs = heartbeatMs;
   const gateway = gatewayAdapter(clientUserId, server.endpoint);
+  const reports: Diagnostic[] = [];
+  const timeline: string[] = [];
   const session = await DiscordVoiceSession.connect({
     guildId: "guild",
     channelId: CHANNEL,
@@ -40,16 +53,23 @@ async function joined(
     selfDeaf: true,
     selfMute: false,
     timeoutMs: TIMEOUT_MS,
-    report: () => undefined,
+    reconnectTimeoutMs,
+    report: diagnostic => {
+      reports.push(diagnostic);
+      timeline.push(diagnostic.stage);
+    },
     channelBitrate: () => 64_000,
     preflight: () => undefined,
   });
   cleanups.push(() => session.release().catch(() => undefined));
   const events: VoiceSessionEvent[] = [];
-  session.subscribe(event => events.push(event));
+  session.subscribe(event => {
+    events.push(event);
+    timeline.push(event.type);
+  });
   const connection = getVoiceConnection("guild", clientUserId);
   if (!connection) throw new Error("Expected the join to open a voice connection");
-  return { server, gateway, session, connection, events };
+  return { server, gateway, session, connection, events, reports, timeline };
 }
 
 function channels(gateway: Gateway): (string | null)[] {
@@ -115,7 +135,7 @@ describe("DiscordVoiceSession over the real voice library", () => {
     expect(events).toEqual([{ type: "connected", gateway: expect.any(Object) }]);
   });
 
-  it("disconnects once when a 4006 recovery does not reach Ready within the join timeout", async () => {
+  it("disconnects once when a 4006 recovery does not reach Ready within reconnectTimeoutMs", async () => {
     const { server, gateway, events } = await joined();
     server.answers = false;
 
@@ -128,14 +148,14 @@ describe("DiscordVoiceSession over the real voice library", () => {
     expect(leaves(gateway)).toHaveLength(2);
   });
 
-  it("sends one leave per outage and disconnects once at the deadline when the voice server is gone", async () => {
+  it("sends no second leave within a second of the last while a gone voice server fails each rejoin, then disconnects and leaves once at the deadline", async () => {
     const uncaught = vi.fn();
     process.on("uncaughtException", uncaught);
     cleanups.push(async () => process.off("uncaughtException", uncaught));
     const { server, gateway, events } = await joined();
 
     await server.stop();
-    await vi.waitFor(() => expect(events).toHaveLength(1), { timeout: 3 * TIMEOUT_MS });
+    await vi.waitFor(() => expect(events).toHaveLength(1), { timeout: 2 * RECONNECT_MS });
     await settle();
 
     expect(uncaught).not.toHaveBeenCalled();
@@ -239,8 +259,8 @@ describe("DiscordVoiceSession over the real voice library", () => {
   });
 
   it("gives each client user in one guild its own connection and keeps one when the other releases", async () => {
-    const first = await joined("bot");
-    const second = await joined("other-bot");
+    const first = await joined();
+    const second = await joined({ clientUserId: "other-bot" });
 
     await first.session.release();
     await settle();
@@ -329,15 +349,15 @@ afterAll(() => media.cleanup());
 
 async function playing(
   resource: PlaybackResource,
-  heartbeatMs?: number,
+  options: JoinedOptions = {},
 ): Promise<{
   server: VoiceGatewayServer;
+  connection: VoiceConnection;
   player: Player;
   ended: Promise<TrackEnd>;
   reports: Diagnostic[];
 }> {
-  const { server, session } = await joined("bot", heartbeatMs);
-  const reports: Diagnostic[] = [];
+  const { server, session, connection, reports } = await joined(options);
   const engine = new DiscordVoiceEngine(
     {
       opusComplexity: 10,
@@ -352,7 +372,7 @@ async function playing(
   const ended = player.play(resource, { signal: new AbortController().signal, onStart: resolve });
   void ended.catch(() => undefined);
   await started;
-  return { server, player, ended, reports };
+  return { server, connection, player, ended, reports };
 }
 
 async function hear(server: VoiceGatewayServer, since: number, count: number): Promise<HeardPacket[]> {
@@ -425,6 +445,7 @@ async function firstJoin(answer: (gateway: Gateway) => void, signal?: AbortSigna
     selfDeaf: true,
     selfMute: false,
     timeoutMs: TIMEOUT_MS,
+    reconnectTimeoutMs: RECONNECT_MS,
     channelBitrate: () => 64_000,
     preflight: () => undefined,
     report,
@@ -534,7 +555,7 @@ describe("built-in playback heard by a local voice server", () => {
   });
 
   it("reads the voice heartbeat round trip as ping and reports a 4006 reconnect once with its close code and silent time", async () => {
-    const { server, player, reports } = await playing({ kind: "file", path: media.steps }, 50);
+    const { server, player, reports } = await playing({ kind: "file", path: media.steps }, { heartbeatMs: 50 });
     await vi.waitFor(() => expect(player.ping).toEqual(expect.any(Number)), { timeout: 2_000 });
     expect(reports.filter(diagnostic => diagnostic.stage === "engine.voice.reconnected")).toEqual([]);
 
@@ -618,4 +639,140 @@ describe("built-in playback heard by a local voice server", () => {
     expect(silent()).toBeGreaterThanOrEqual(750);
     expect(silent()).toBeLessThan(800);
   });
+});
+
+function wait(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+describe("built-in recovery after Ready", () => {
+  const ROUND_TEST_MS = 15_000;
+
+  it(
+    "leaves and joins 5 s after a resume the voice server never answers",
+    async () => {
+      const { server, gateway, connection, events } = await joined({ reconnectTimeoutMs: 8_000 });
+      const closedAt = performance.now();
+
+      server.close(1001);
+      await vi.waitFor(() => expect(leaves(gateway)).toHaveLength(1), { timeout: ROUND_MS + 1_000 });
+      const leftAfter = performance.now() - closedAt;
+      await vi.waitFor(() => expect(connection.state.status).toBe("ready"), { timeout: 2_000 });
+      await settle();
+
+      expect(leftAfter).toBeGreaterThanOrEqual(ROUND_MS - 100);
+      expect(channels(gateway)).toEqual([CHANNEL, null, CHANNEL]);
+      expect(events).toEqual([{ type: "connected", gateway: expect.any(Object) }]);
+    },
+    ROUND_TEST_MS,
+  );
+
+  it(
+    "rejoins after a 4014 while the bot's voice state still names the channel, and its own leave reads as no removal",
+    async () => {
+      const { server, gateway, connection, events } = await joined({ reconnectTimeoutMs: 8_000 });
+
+      server.close(4014);
+      await vi.waitFor(() => expect(connection.state.status).not.toBe("ready"));
+      await vi.waitFor(() => expect(connection.state.status).toBe("ready"), { timeout: ROUND_MS + 2_000 });
+      await settle();
+
+      expect(channels(gateway)).toEqual([CHANNEL, null, CHANNEL]);
+      expect(events).toEqual([{ type: "connected", gateway: expect.any(Object) }]);
+    },
+    ROUND_TEST_MS,
+  );
+
+  it("leaves again before the library's join for a second 4006 in one outage", async () => {
+    const { server, gateway, connection, events } = await joined({ reconnectTimeoutMs: 8_000 });
+    server.answers = false;
+
+    server.close(4006);
+    await vi.waitFor(() => expect(server.connections).toBe(2), { timeout: 2_000 });
+    await wait(1_100);
+    server.answers = true;
+    server.close(4006);
+    await vi.waitFor(() => expect(connection.state.status).toBe("ready"), { timeout: 2_000 });
+    await settle();
+
+    expect(channels(gateway)).toEqual([CHANNEL, null, CHANNEL, null, CHANNEL]);
+    expect(events).toEqual([{ type: "connected", gateway: expect.any(Object) }]);
+  });
+
+  it("keeps the voice through a gateway that refuses payloads past the join timeout and then accepts them", async () => {
+    const { server, gateway, connection, events } = await joined({ reconnectTimeoutMs: 8_000 });
+    const answer = gateway.sendPayload.getMockImplementation();
+    if (!answer) throw new Error("Expected the gateway fake to answer payloads");
+    gateway.sendPayload.mockImplementation(() => false);
+
+    server.close(4006);
+    await wait(TIMEOUT_MS + 500);
+    gateway.sendPayload.mockImplementation(answer);
+    await vi.waitFor(() => expect(connection.state.status).toBe("ready"), { timeout: 3_000 });
+    await settle();
+
+    expect(channels(gateway).slice(-2)).toEqual([null, CHANNEL]);
+    expect(events).toEqual([{ type: "connected", gateway: expect.any(Object) }]);
+  });
+
+  it("disconnects once at reconnectTimeoutMs, not the join timeout, when the gateway refuses every payload", async () => {
+    const { server, gateway, timeline } = await joined();
+    gateway.sendPayload.mockImplementation(() => false);
+    const closedAt = performance.now();
+
+    server.close(4006);
+    await vi.waitFor(() => expect(timeline).toContain("disconnected"), { timeout: 2 * RECONNECT_MS });
+    const elapsed = performance.now() - closedAt;
+    await settle();
+
+    expect(elapsed).toBeGreaterThanOrEqual(RECONNECT_MS - 50);
+    expect(timeline).toEqual(["disconnected"]);
+  });
+
+  it(
+    "fails once after the round when the deadline passes before any round is answered",
+    async () => {
+      const { server, gateway, timeline } = await joined({ reconnectTimeoutMs: 6_000 });
+      server.answers = false;
+
+      server.close(1001);
+      await vi.waitFor(() => expect(timeline).toContain("disconnected"), { timeout: 8_000 });
+      await settle();
+
+      expect(timeline).toEqual(["disconnected"]);
+      expect(joins(gateway)).toHaveLength(2);
+    },
+    ROUND_TEST_MS,
+  );
+
+  it("reconnects on the restored server after the voice server endpoint is removed", async () => {
+    const { gateway, connection, events } = await joined();
+
+    gateway.server("token", null);
+    await vi.waitFor(() => expect(connection.state.status).toBe("disconnected"));
+    gateway.server("restored");
+    await vi.waitFor(() => expect(connection.state.status).toBe("ready"), { timeout: 2_000 });
+    await settle();
+
+    expect(events).toEqual([{ type: "connected", gateway: expect.objectContaining({ token: "restored" }) }]);
+  });
+
+  it(
+    "holds the track's position while the connection is not Ready",
+    async () => {
+      const { server, connection, player } = await playing(
+        { kind: "file", path: media.steps },
+        { reconnectTimeoutMs: 8_000 },
+      );
+
+      server.close(1001);
+      await vi.waitFor(() => expect(connection.state.status).not.toBe("ready"));
+      await wait(100);
+      const before = player.position;
+      await wait(2_000);
+
+      expect(player.position - before).toBeLessThanOrEqual(0.02);
+    },
+    ROUND_TEST_MS,
+  );
 });

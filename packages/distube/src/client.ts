@@ -20,6 +20,7 @@ const DEFAULTS = {
   historySize: 10,
   maxPlaylistSongs: 500,
   connectionTimeoutMs: 15_000,
+  reconnectTimeoutMs: 60_000,
   opusComplexity: 10,
   bufferMs: 500,
   searchLimit: 10,
@@ -38,6 +39,8 @@ export interface DisTubeOptions<Target = VoiceChannelTarget> {
   readonly filters?: FilterDefinitions<string>;
   /** Voice join timeout in milliseconds, up to 2147483647. Default 15000. */
   readonly connectionTimeoutMs?: number;
+  /** How long a dropped voice may take to connect again, in milliseconds, up to 2147483647. Default 60000. */
+  readonly reconnectTimeoutMs?: number;
   /**
    * While autoplay is on, looks up a related Song at each item start and holds it in `queue.related`, so the queue
    * plays it next without adding it to `upcoming`. Default `false`: autoplay looks up only when the queue runs out.
@@ -102,12 +105,14 @@ export class DisTube<Metadata = undefined, Target = VoiceChannelTarget> {
     const historySize = options.historySize ?? DEFAULTS.historySize;
     const maxPlaylistSongs = options.maxPlaylistSongs ?? DEFAULTS.maxPlaylistSongs;
     const connectionTimeoutMs = options.connectionTimeoutMs ?? DEFAULTS.connectionTimeoutMs;
+    const reconnectTimeoutMs = options.reconnectTimeoutMs ?? DEFAULTS.reconnectTimeoutMs;
     const prefetchAutoplay = options.prefetchAutoplay ?? false;
     const opusComplexity = options.engine?.opusComplexity ?? DEFAULTS.opusComplexity;
     const bufferMs = options.engine?.bufferMs ?? DEFAULTS.bufferMs;
     requireInteger(historySize, "historySize", 0);
     requireInteger(maxPlaylistSongs, "maxPlaylistSongs", 1);
     requireInteger(connectionTimeoutMs, "connectionTimeoutMs", 1, MAX_TIMER_MS);
+    requireInteger(reconnectTimeoutMs, "reconnectTimeoutMs", 1, MAX_TIMER_MS);
     requireInteger(opusComplexity, "engine.opusComplexity", 0, 10);
     requireInteger(bufferMs, "engine.bufferMs", 20);
     requireBoolean(prefetchAutoplay, "prefetchAutoplay");
@@ -132,6 +137,7 @@ export class DisTube<Metadata = undefined, Target = VoiceChannelTarget> {
       historySize,
       maxPlaylistSongs,
       connectionTimeoutMs,
+      reconnectTimeoutMs,
       prefetchAutoplay,
       lifetime: this.#lifetime.signal,
     });

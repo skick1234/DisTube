@@ -7,7 +7,7 @@ declare const client: Client;
 const adapter = new oceanicExports.OceanicAdapter(client);
 const sessionPromise: Promise<VoiceSession> = adapter.createVoiceSession(
   { guildId: "guild", channelId: "voice" },
-  { selfDeaf: true, selfMute: false, timeoutMs: 15_000 },
+  { selfDeaf: true, selfMute: false, timeoutMs: 15_000, reconnectTimeoutMs: 60_000 },
 );
 declare const session: VoiceSession;
 const clientUserId: string = session.clientUserId;

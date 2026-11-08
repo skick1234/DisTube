@@ -22,6 +22,7 @@ function options(
     selfDeaf: true,
     selfMute: false,
     timeoutMs: 50,
+    reconnectTimeoutMs: 50,
     channelBitrate: (channelId: string) => (channelId === CHANNEL ? 64_000 : 96_000),
     preflight,
   } as const;
@@ -37,12 +38,12 @@ function leaves(gateway: ReturnType<typeof gatewayAdapter>): unknown[] {
 
 async function subscribed(
   gateway: ReturnType<typeof gatewayAdapter>,
-  timeoutMs = 50,
+  reconnectTimeoutMs = 50,
 ): Promise<{
   session: DiscordGatewaySession;
   events: VoiceSessionEvent[];
 }> {
-  const session = await DiscordGatewaySession.connect({ ...options(gateway.creator), timeoutMs });
+  const session = await DiscordGatewaySession.connect({ ...options(gateway.creator), reconnectTimeoutMs });
   const events: VoiceSessionEvent[] = [];
   session.subscribe(event => events.push(event));
   return { session, events };
@@ -393,7 +394,7 @@ describe("voice close recovery", () => {
     await session.release();
   });
 
-  it("ends a recovery the platform never answers at the join timeout counted from the close", async () => {
+  it("ends a recovery the platform never answers at reconnectTimeoutMs counted from the close, not at the join timeout", async () => {
     useFakeTimers();
     const gateway = gatewayAdapter();
     const { session, events } = await subscribed(gateway, JOIN_TIMEOUT_MS);
@@ -513,7 +514,7 @@ describe("voice close recovery", () => {
     await session.release();
   });
 
-  it("publishes one disconnect at the join timeout when the gateway refuses every voiceClosed rejoin", async () => {
+  it("publishes one disconnect at reconnectTimeoutMs when the gateway refuses every voiceClosed rejoin", async () => {
     useFakeTimers();
     const gateway = gatewayAdapter();
     const { session, events } = await subscribed(gateway, JOIN_TIMEOUT_MS);
@@ -547,7 +548,7 @@ describe("voice close recovery", () => {
   });
 
   it.each([4014, 4022])(
-    "keeps the voice past the join timeout when the platform moves the bot after voiceClosed(%i)",
+    "keeps the voice past reconnectTimeoutMs when the platform moves the bot after voiceClosed(%i)",
     async code => {
       const gateway = gatewayAdapter();
       const { session, events } = await subscribed(gateway);
@@ -563,7 +564,7 @@ describe("voice close recovery", () => {
     },
   );
 
-  it.each([4014, 4022])("disconnects once at the join timeout when nothing follows voiceClosed(%i)", async code => {
+  it.each([4014, 4022])("disconnects once at reconnectTimeoutMs when nothing follows voiceClosed(%i)", async code => {
     const gateway = gatewayAdapter();
     const { session, events } = await subscribed(gateway);
 

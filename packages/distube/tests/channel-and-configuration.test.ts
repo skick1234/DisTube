@@ -39,13 +39,37 @@ describe("adapter target normalization", () => {
     await harness.distube.dispose();
   });
 
+  it("opens the voice with the join timeout and the separate reconnect deadline the client was given", async () => {
+    const harness = playableSetup("source", { connectionTimeoutMs: 10_000, reconnectTimeoutMs: 45_000 });
+
+    await harness.distube.voices.join(channel);
+
+    expect(harness.adapter.createVoiceSession).toHaveBeenCalledWith(
+      { guildId: GUILD, channelId: VOICE_CHANNEL },
+      {
+        selfDeaf: true,
+        selfMute: false,
+        timeoutMs: 10_000,
+        reconnectTimeoutMs: 45_000,
+        signal: expect.any(AbortSignal),
+      },
+    );
+    await harness.distube.dispose();
+  });
+
   it("shares one voice between join and play for a native target and refuses a cross-guild move", async () => {
     const harness = playableSetup();
     const native = { id: VOICE_CHANNEL, guild: { id: GUILD } };
     const voice = await harness.distube.voices.join(native);
     expect(harness.adapter.createVoiceSession).toHaveBeenCalledWith(
       { guildId: GUILD, channelId: VOICE_CHANNEL },
-      { selfDeaf: true, selfMute: false, timeoutMs: 15_000, signal: expect.any(AbortSignal) },
+      {
+        selfDeaf: true,
+        selfMute: false,
+        timeoutMs: 15_000,
+        reconnectTimeoutMs: 60_000,
+        signal: expect.any(AbortSignal),
+      },
     );
     const { queue } = await harness.distube.play(native, "a");
     expect(queue.guildId).toBe(GUILD);

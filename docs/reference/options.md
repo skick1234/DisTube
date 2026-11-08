@@ -31,6 +31,7 @@ export const distube = new DisTube({
 | `historySize`           | 10       | How many ended items each queue remembers. `0` turns history off.                                                                                          |
 | `filters`               | built-in | Filter presets to add to the built-in engine, or to replace its presets. See [Filters](#filters).                                                          |
 | `connectionTimeoutMs`   | 15000    | How long one voice join may take, in milliseconds. The built-in engine joins once more after a first miss, so its join can take twice this long.           |
+| `reconnectTimeoutMs`    | 60000    | How long a voice that dropped after joining may take to connect again, in milliseconds, before it ends with `voice.disconnected`.                          |
 | `prefetchAutoplay`      | `false`  | While autoplay is on, look up the next related Song when each item starts and hold it in `queue.related`. See [Autoplay look-ahead](#autoplay-look-ahead). |
 | `onDiagnostic`          | none     | A function that receives listener failures, core background failures and built-in engine reports. See [Diagnostics](#diagnostics).                         |
 | `engine.opusComplexity` | 10       | Opus encoder complexity, 0 to 10. A lower value uses less CPU.                                                                                             |
