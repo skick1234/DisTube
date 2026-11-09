@@ -82,16 +82,16 @@ export function validateInput(plugins: readonly Plugin[], input: ResolvableInput
   }
   if (!(input instanceof Song) && !(input instanceof Playlist))
     throw new DisTubeError(ErrorCode.INVALID_ARGUMENT, "Input must be a Song, a Playlist, a URL or a query");
-  if (songsOf(input).some(song => !ownerOf(plugins, song)))
-    throw new DisTubeError(ErrorCode.INVALID_ARGUMENT, "Song source does not name a configured plugin");
+  if ([input, ...songsOf(input)].some(media => !ownerOf(plugins, media)))
+    throw new DisTubeError(ErrorCode.INVALID_ARGUMENT, "Media source does not name a configured plugin");
 }
 
 export function songsOf(media: Song | Playlist): readonly Song[] {
   return media instanceof Song ? [media] : media.songs;
 }
 
-function ownerOf(plugins: readonly Plugin[], song: Song): Plugin | undefined {
-  return plugins.find(plugin => plugin.name === song.source);
+function ownerOf(plugins: readonly Plugin[], media: Song | Playlist): Plugin | undefined {
+  return plugins.find(plugin => plugin.name === media.source);
 }
 
 /** `URL.canParse` alone accepts `"artist: title"`, so only `http:` and `https:` count as URLs. */

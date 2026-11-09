@@ -341,6 +341,16 @@ describe("string routing", () => {
         songs: [media("source", "a"), media("elsewhere", "b")],
       }),
     ],
+    [
+      "a Playlist naming no configured plugin",
+      new Playlist({
+        id: "foreign",
+        name: "Foreign",
+        url: "https://elsewhere.example/list/foreign",
+        source: "elsewhere",
+        songs: [media("source", "a")],
+      }),
+    ],
     ["an object that is not media", { source: "source", id: "a" }],
   ])("rejects %s INVALID_ARGUMENT before creating a queue", async (_name, input) => {
     const harness = playableSetup();
