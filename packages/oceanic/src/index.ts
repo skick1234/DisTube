@@ -1,0 +1,1 @@
+export { OceanicAdapter } from "./adapter";
