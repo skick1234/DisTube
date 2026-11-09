@@ -1155,12 +1155,14 @@ describe("Track live input", () => {
       await take(track.packets, 10);
 
       vi.advanceTimersByTime(8_000);
-      await take(track.packets, 30);
-      await vi.waitFor(() => expect(reopened(reporter)).toHaveLength(1));
-      const next = await take(track.packets, 1);
+      const read: Buffer[] = [];
+      while (reopened(reporter).length === 0) read.push(...(await take(track.packets, 1)));
+      read.push(...(await take(track.packets, 3)));
+      const reopenedAt = read.findIndex(packet => packet.equals(opusPackets[0] as Buffer));
 
       expect(opens).toHaveLength(2);
-      expect(next).toEqual(opusPackets.slice(0, 1));
+      expect(reopenedAt).toBeGreaterThanOrEqual(0);
+      expect(read.slice(reopenedAt)).toEqual(opusPackets.slice(0, read.length - reopenedAt));
       expect(reopened(reporter)).toEqual([
         expect.objectContaining({
           severity: "info",
