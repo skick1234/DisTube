@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DisTubeError, type DisTubeEventMap, type DisTubeQueue, ErrorCode, Playlist, Song } from "../src";
+import { type DisTube, DisTubeError, type DisTubeEventMap, type DisTubeQueue, ErrorCode, Playlist, Song } from "../src";
 import type { PlaybackResource, Plugin } from "../src/integrations";
 import {
   deferred,
@@ -7,6 +7,7 @@ import {
   type FakePlayer,
   FakeSource,
   GUILD,
+  type HarnessOptions,
   media,
   playableSetup,
   record,
@@ -35,6 +36,40 @@ async function playing(ids: readonly string[]) {
 }
 
 const waiting = (queue: DisTubeQueue): string[] => queue.upcoming.map(item => item.song.id);
+
+async function autoplaying(options: HarnessOptions, lists: Readonly<Record<string, readonly string[]>> = {}) {
+  const harness = playableSetup("source", options);
+  radio(harness.source, lists);
+  const { queue } = await harness.distube.play(TARGET, "a");
+  queue.setAutoplay(true);
+  await settle();
+  return { harness, queue, player: harness.engine.player };
+}
+
+function radio(source: FakeSource, lists: Readonly<Record<string, readonly string[]>>): void {
+  source.related.mockImplementation(async (seed, { exclude }) => {
+    const id = lists[seed.id]?.find(candidate => !exclude.some(song => song.id === candidate));
+    return id === undefined ? undefined : media(source.name, id);
+  });
+}
+
+function failing(source: FakeSource, ids: readonly string[]): void {
+  source.stream.mockImplementation(async song => {
+    if (ids.includes(song.id)) throw new Error("no copy");
+    return source.resource(song.id);
+  });
+}
+
+const lookups = (source: FakeSource) =>
+  source.related.mock.calls.map(([seed, { exclude }]) => [seed.id, exclude.map(song => song.id)] as const);
+
+function autoplayFailures(distube: DisTube) {
+  const failed: DisTubeEventMap["queue.item.failed"][] = [];
+  const stopped: DisTubeEventMap["queue.autoplay.failed"][] = [];
+  distube.on("queue.item.failed", event => void failed.push(event));
+  distube.on("queue.autoplay.failed", event => void stopped.push(event));
+  return { failed, stopped };
+}
 
 describe("repeat modes", () => {
   it("replays a naturally finished occurrence for Song and re-queues it for Queue", async () => {
@@ -376,7 +411,8 @@ describe("autoplay", () => {
           return harness.source.resource(song.id);
         });
       else player.play.mockRejectedValueOnce(new Error("cannot start"));
-      const events = record(harness.distube, ["queue.item.failed", "queue.finished"]);
+      const events = record(harness.distube, ["queue.item.failed", "queue.autoplay.failed", "queue.finished"]);
+      const { failed, stopped } = autoplayFailures(harness.distube);
       const reasons = deletions(harness.distube);
       queue.setAutoplay(true);
 
@@ -384,10 +420,87 @@ describe("autoplay", () => {
       await settle();
 
       expect(harness.source.related).toHaveBeenCalledTimes(1);
-      expect(events).toEqual(["queue.item.failed", "queue.finished"]);
+      expect(events).toEqual(["queue.item.failed", "queue.autoplay.failed", "queue.finished"]);
+      expect(stopped.map(event => [event.song.id, event.item?.id, event.error])).toEqual([
+        ["a", failed[0]?.item.id, failed[0]?.error],
+      ]);
       expect(reasons).toEqual(["finished"]);
     },
   );
+
+  it.each(["prepare", "play"] as const)(
+    "with autoplayAttempts 3, plays the next related Song of the same seed after an autoplay item fails to %s",
+    async stage => {
+      const { harness, player } = await autoplaying({ autoplayAttempts: 3 }, { a: ["r1", "r2"] });
+      if (stage === "prepare") failing(harness.source, ["r1"]);
+      else player.play.mockRejectedValueOnce(new Error("cannot start"));
+      const { stopped } = autoplayFailures(harness.distube);
+
+      player.finish();
+      await settle();
+
+      expect(player.playing).toBe("r2");
+      expect(lookups(harness.source)).toEqual([
+        ["a", ["a"]],
+        ["a", ["a", "r1"]],
+      ]);
+      expect(stopped).toEqual([]);
+    },
+  );
+
+  it("counts failed autoplay items again from zero once an autoplay item starts", async () => {
+    const { harness, player } = await autoplaying({ autoplayAttempts: 2 }, { a: ["r1", "r2"], r2: ["r3", "r4"] });
+    failing(harness.source, ["r1", "r3"]);
+    const { stopped } = autoplayFailures(harness.distube);
+
+    player.finish();
+    await settle();
+    player.finish();
+    await settle();
+
+    expect(player.played).toEqual(["a", "r2", "r4"]);
+    expect(stopped).toEqual([]);
+  });
+
+  it("with autoplayAttempts 3, reports the third failed autoplay item once and then finishes", async () => {
+    const { harness, player } = await autoplaying({ autoplayAttempts: 3 }, { a: ["r1", "r2", "r3", "r4"] });
+    failing(harness.source, ["r1", "r2", "r3"]);
+    const events = record(harness.distube, ["queue.item.failed", "queue.autoplay.failed", "queue.finished"]);
+    const { failed, stopped } = autoplayFailures(harness.distube);
+    const reasons = deletions(harness.distube);
+
+    player.finish();
+    await settle();
+
+    expect(lookups(harness.source).map(([seed]) => seed)).toEqual(["a", "a", "a"]);
+    expect(failed.map(event => event.item.song.id)).toEqual(["r1", "r2", "r3"]);
+    expect(events).toEqual([
+      "queue.item.failed",
+      "queue.item.failed",
+      "queue.item.failed",
+      "queue.autoplay.failed",
+      "queue.finished",
+    ]);
+    expect(stopped.map(event => [event.song.id, event.item?.id, event.error])).toEqual([
+      ["a", failed[2]?.item.id, failed[2]?.error],
+    ]);
+    expect(reasons).toEqual(["finished"]);
+  });
+
+  it("with autoplayAttempts 3, ends autoplay at once when the lookup finds nothing", async () => {
+    const { harness, player } = await autoplaying({ autoplayAttempts: 3 });
+    const events = record(harness.distube, ["queue.autoplay.failed", "queue.finished"]);
+    const { stopped } = autoplayFailures(harness.distube);
+
+    player.finish();
+    await settle();
+
+    expect(harness.source.related).toHaveBeenCalledTimes(1);
+    expect(events).toEqual(["queue.autoplay.failed", "queue.finished"]);
+    expect(stopped.map(event => [event.song.id, event.item, event.error.code])).toEqual([
+      ["a", undefined, ErrorCode.NO_RESULT],
+    ]);
+  });
 
   it.each([
     ["the queue is deleted", (queue: Awaited<ReturnType<typeof playing>>["queue"]) => queue.stop(), "stop", ["a"]],
@@ -732,6 +845,41 @@ describe("autoplay look-ahead", () => {
     expect(harness.engine.player.playing).toBe("b");
     expect(seeds(harness.source)).toEqual(["a"]);
     expect(queue.related).toBeUndefined();
+  });
+
+  it("drops a prefetched autoplay item that failed to prepare and excludes it from later lookups of that seed", async () => {
+    const { harness, player } = await autoplaying({ ...PREFETCH, autoplayAttempts: 2 }, { a: ["r1", "r2"] });
+    failing(harness.source, ["r1"]);
+
+    player.finish();
+    await settle();
+
+    expect(player.played).toEqual(["a", "r2"]);
+    expect(harness.source.stream.mock.calls.filter(([song]) => song.id === "r1")).toHaveLength(1);
+    expect(lookups(harness.source).map(([seed, exclude]) => [seed, exclude.toSorted()])).toEqual([
+      ["a", ["a"]],
+      ["a", ["a", "r1"]],
+      ["r2", ["a", "r1", "r2"]],
+    ]);
+  });
+
+  it("drops the Song a failed autoplay item's own lookup holds and asks the seed again", async () => {
+    const { harness, queue, player } = await autoplaying(
+      { ...PREFETCH, autoplayAttempts: 2 },
+      { a: ["r1", "r2"], r1: ["x"] },
+    );
+    const start = player.gate("play:r1");
+
+    player.finish();
+    await start.entered;
+    await settle();
+    const held = related(queue);
+    player.fail(new Error("cannot start"));
+    await settle();
+
+    expect(held).toEqual(["x", true]);
+    expect(player.played).toEqual(["a", "r1", "r2"]);
+    expect(lookups(harness.source).map(([seed]) => seed)).toEqual(["a", "r1", "a", "r2"]);
   });
 
   it("skips a related item still preparing as current without adding it to history", async () => {

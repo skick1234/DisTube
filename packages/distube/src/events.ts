@@ -38,7 +38,13 @@ export interface DisTubeEventMap<Metadata = undefined, Target = VoiceChannelTarg
   "queue.item.failed": Readonly<BaseQueueEvent<Metadata, Target> & { item: QueueItem<Metadata>; error: DisTubeError }>;
   /** Playback ran out of successors; `queue.deleted` follows. */
   "queue.finished": Readonly<BaseQueueEvent<Metadata, Target>>;
-  "queue.autoplay.failed": Readonly<BaseQueueEvent<Metadata, Target> & { song: Song; error: DisTubeError }>;
+  /**
+   * Autoplay stopped for `song`, its seed, until an insertion commits. `item` is the last autoplay item that failed when
+   * `autoplayAttempts` items failed in a row; without it, the lookup itself found nothing.
+   */
+  "queue.autoplay.failed": Readonly<
+    BaseQueueEvent<Metadata, Target> & { song: Song; error: DisTubeError; item?: QueueItem<Metadata> }
+  >;
   /**
    * Published once per committed change to the queue's state, its pause, its position by seek, or the volume or
    * filters of its voice, after that commit's own event and with the same `state` and `timestamp`. A call that

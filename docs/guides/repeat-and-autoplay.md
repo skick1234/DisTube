@@ -151,13 +151,14 @@ While autoplay waits for a related Song, `queue.status` reads `preparing` and `u
 
 ## Log autoplay failures
 
-A failed lookup emits `queue.autoplay.failed`, and the status reads `idle`. The queue then finishes as it would with
-autoplay off. Nobody ran a command at that moment, so there is no interaction to reply to. Log the failure instead.
-Add this listener to `index.ts`, after you create `distube`:
+When autoplay stops, it emits `queue.autoplay.failed`, and the status reads `idle`. The queue then finishes as it
+would with autoplay off. Nobody ran a command at that moment, so there is no interaction to reply to. Log the failure
+instead. Add this listener to `index.ts`, after you create `distube`:
 
 ```ts title="index.ts"
-distube.on("queue.autoplay.failed", ({ song, error }) => {
-  console.error(`Autoplay found nothing after ${song.name}`, error);
+distube.on("queue.autoplay.failed", ({ song, error, item }) => {
+  if (item) console.error(`Autoplay could not play ${item.song.name} after ${song.name}`, error);
+  else console.error(`Autoplay found nothing after ${song.name}`, error);
 });
 ```
 
@@ -166,8 +167,11 @@ saying why: it returned no Song, it has no related lookup, or the Song it return
 throw its own `NO_RESULT` with a more specific message. A lookup that failed carries the plugin's code, such as
 `RATE_LIMITED`, or `SOURCE_FAILED` with the original error as `cause`.
 
-`song` is the track autoplay tried to follow. If an autoplay item fails to play, `queue.item.failed` reports it.
-Autoplay does not look again after that, so the queue ends unless a member adds something.
+`song` is the track autoplay tried to follow. If an autoplay item fails to prepare or play, `queue.item.failed`
+reports it, and autoplay asks for another Song related to `song`, skipping the ones that failed. The
+`autoplayAttempts` client option, default 1, sets how many items in a row may fail. After the last one,
+`queue.autoplay.failed` carries that `item` and its `error`, and the queue ends unless a member adds something. An
+autoplay item that starts resets the count.
 
 The [queue reference](../../reference/queue/) lists every queue setting, and the
 [events reference](../../reference/events/) lists every event. The example bot has the same

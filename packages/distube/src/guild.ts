@@ -28,6 +28,7 @@ export interface GuildConfig<Target> {
   readonly connectionTimeoutMs: number;
   readonly reconnectTimeoutMs: number;
   readonly prefetchAutoplay: boolean;
+  readonly autoplayAttempts: number;
   readonly lifetime: AbortSignal;
 }
 

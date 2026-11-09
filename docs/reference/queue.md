@@ -163,7 +163,9 @@ Repeat and autoplay belong to the queue and go away with it.
   finished or was skipped, and passes the history so the plugin avoids repeats.
 - If that plugin has no `related` and the item played through a `fallback`, autoplay asks the fallback's plugin
   instead.
-- A failure publishes `queue.autoplay.failed`.
+- An autoplay item that fails to prepare or play is replaced by another Song related to the same track, up to the
+  [`autoplayAttempts`](../options/) client option. The lookup skips the Songs that failed.
+- A lookup that finds nothing, or the last allowed item failing, publishes `queue.autoplay.failed`.
 
 ### Autoplay look-ahead
 

@@ -23,19 +23,20 @@ export const distube = new DisTube({
 });
 ```
 
-| Option                  | Default  | What it does                                                                                                                                               |
-| ----------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `adapter`               | required | Connects DisTube to your Discord library, such as `new DiscordJSAdapter(client)`.                                                                          |
-| `plugins`               | required | Your sources, in the order DisTube asks them. At most one may carry an `engine`, which replaces the built-in one.                                          |
-| `maxPlaylistSongs`      | 500      | How many Songs a Playlist from a URL keeps. The rest are dropped, not rejected.                                                                            |
-| `historySize`           | 10       | How many ended items each queue remembers. `0` turns history off.                                                                                          |
-| `filters`               | built-in | Filter presets to add to the built-in engine, or to replace its presets. See [Filters](#filters).                                                          |
-| `connectionTimeoutMs`   | 15000    | How long one voice join may take, in milliseconds. The built-in engine joins once more after a first miss, so its join can take twice this long.           |
-| `reconnectTimeoutMs`    | 60000    | How long a voice that dropped after joining may take to connect again, in milliseconds, before it ends with `voice.disconnected`.                          |
-| `prefetchAutoplay`      | `false`  | While autoplay is on, look up the next related Song when each item starts and hold it in `queue.related`. See [Autoplay look-ahead](#autoplay-look-ahead). |
-| `onDiagnostic`          | none     | A function that receives listener failures, core background failures and built-in engine reports. See [Diagnostics](#diagnostics).                         |
-| `engine.opusComplexity` | 10       | Opus encoder complexity, 0 to 10. A lower value uses less CPU.                                                                                             |
-| `engine.bufferMs`       | 500      | How far ahead the engine reads, in milliseconds. A positive multiple of 20.                                                                                |
+| Option                  | Default  | What it does                                                                                                                                                             |
+| ----------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `adapter`               | required | Connects DisTube to your Discord library, such as `new DiscordJSAdapter(client)`.                                                                                        |
+| `plugins`               | required | Your sources, in the order DisTube asks them. At most one may carry an `engine`, which replaces the built-in one.                                                        |
+| `maxPlaylistSongs`      | 500      | How many Songs a Playlist from a URL keeps. The rest are dropped, not rejected.                                                                                          |
+| `historySize`           | 10       | How many ended items each queue remembers. `0` turns history off.                                                                                                        |
+| `filters`               | built-in | Filter presets to add to the built-in engine, or to replace its presets. See [Filters](#filters).                                                                        |
+| `connectionTimeoutMs`   | 15000    | How long one voice join may take, in milliseconds. The built-in engine joins once more after a first miss, so its join can take twice this long.                         |
+| `reconnectTimeoutMs`    | 60000    | How long a voice that dropped after joining may take to connect again, in milliseconds, before it ends with `voice.disconnected`.                                        |
+| `prefetchAutoplay`      | `false`  | While autoplay is on, look up the next related Song when each item starts and hold it in `queue.related`. See [Autoplay look-ahead](#autoplay-look-ahead).               |
+| `autoplayAttempts`      | 1        | How many autoplay items in a row may fail to prepare or play before autoplay stops. Each retry asks for a Song related to the same track and skips the ones that failed. |
+| `onDiagnostic`          | none     | A function that receives listener failures, core background failures and built-in engine reports. See [Diagnostics](#diagnostics).                                       |
+| `engine.opusComplexity` | 10       | Opus encoder complexity, 0 to 10. A lower value uses less CPU.                                                                                                           |
+| `engine.bufferMs`       | 500      | How far ahead the engine reads, in milliseconds. A positive multiple of 20.                                                                                              |
 
 `new DisTube<Metadata>(...)` also takes a type parameter for [queue item metadata](../queue/#metadata).
 
@@ -73,6 +74,7 @@ The constructor throws `INVALID_ARGUMENT` when:
 - `historySize` is not an integer of 0 or more.
 - `maxPlaylistSongs` is not a positive integer.
 - `connectionTimeoutMs` is not an integer from 1 to 2147483647.
+- `autoplayAttempts` is not a positive integer.
 - `engine.opusComplexity` is not an integer from 0 to 10.
 - `engine.bufferMs` is not a positive multiple of 20.
 - Two plugins share a name, a name is empty or has leading or trailing spaces, or more than one plugin carries an

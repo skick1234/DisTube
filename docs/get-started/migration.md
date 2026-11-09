@@ -77,7 +77,7 @@ Find the v5 call on the left and replace it with the v6 code on the right.
   [options](../../reference/options/#diagnostics).
 - `maxPlaylistSongs` (default 500) caps a Playlist resolved from a URL, in core and in each official plugin. DisTube
   does not cut a Playlist you pass in directly.
-- New `DisTube` options: `historySize` (default 10), `filters`, `prefetchAutoplay` (default `false`), `connectionTimeoutMs`, `reconnectTimeoutMs`, `onDiagnostic` and
+- New `DisTube` options: `historySize` (default 10), `filters`, `prefetchAutoplay` (default `false`), `autoplayAttempts` (default 1), `connectionTimeoutMs`, `reconnectTimeoutMs`, `onDiagnostic` and
   `engine: { opusComplexity, bufferMs }`. See [options](../../reference/options/). Built-in filter definitions, the
   connection timeout and engine settings are `DisTube` options, not adapter constructor options.
 - There are no `voice.track.*` events. Listen to `queue.item.started` and `queue.item.finished`.
@@ -207,7 +207,7 @@ Every v5 code and where it went:
 | `NO_PREVIOUS`, `NO_SONG_POSITION`, `NO_PLAYING_SONG`                                                                                    | `INVALID_STATE`                                                                                                                                |
 | `NO_UP_NEXT`                                                                                                                            | none; `skip()` ends the queue                                                                                                                  |
 | `NO_EXTRACTOR_PLUGIN`                                                                                                                   | `INVALID_ARGUMENT` from `new DisTube` when no plugin can play                                                                                  |
-| `NO_RELATED`, `CANNOT_PLAY_RELATED`                                                                                                     | `queue.autoplay.failed` with `NO_RESULT`, or the lookup's code when it failed                                                                  |
+| `NO_RELATED`, `CANNOT_PLAY_RELATED`                                                                                                     | `queue.autoplay.failed` with `NO_RESULT`, or the lookup's code when it failed; with `item` when the autoplay item failed                       |
 | `UNAVAILABLE_VIDEO`, `UNPLAYABLE_FORMATS`                                                                                               | `UNAVAILABLE`                                                                                                                                  |
 | `NON_NSFW`                                                                                                                              | `AGE_RESTRICTED`                                                                                                                               |
 | `NOT_SUPPORTED_URL`, `NO_RESULT`, `CANNOT_GET_SEARCH_QUERY`                                                                             | `NO_RESULT`, with `error.query`                                                                                                                |

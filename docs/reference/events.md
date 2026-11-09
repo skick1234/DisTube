@@ -21,19 +21,19 @@ unsubscribe();
 
 ## The events
 
-| Event                   | Fires when                              | Extra fields                                     |
-| ----------------------- | --------------------------------------- | ------------------------------------------------ |
-| `queue.created`         | A guild gets a new, empty queue         | none                                             |
-| `queue.item.added`      | A Song was added                        | `item`                                           |
-| `queue.playlist.added`  | A Playlist was added                    | `playlist`, `items`                              |
-| `queue.item.started`    | An item became audible                  | `item`, optional `fallback`                      |
-| `queue.item.finished`   | An item played to its end               | `item`                                           |
-| `queue.item.failed`     | An item could not be prepared or played | `item`, `error`                                  |
-| `queue.finished`        | Playback ran out of items               | none                                             |
-| `queue.autoplay.failed` | Autoplay could not add a related Song   | `song`, `error`                                  |
-| `queue.updated`         | Anything a status view shows changed    | `position`, `playbackRate`                       |
-| `queue.deleted`         | The queue is gone                       | `reason`                                         |
-| `voice.disconnected`    | The bot's voice in a guild ended        | `voice`, `channelId`, `reason`, optional `error` |
+| Event                   | Fires when                                                                                     | Extra fields                                     |
+| ----------------------- | ---------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| `queue.created`         | A guild gets a new, empty queue                                                                | none                                             |
+| `queue.item.added`      | A Song was added                                                                               | `item`                                           |
+| `queue.playlist.added`  | A Playlist was added                                                                           | `playlist`, `items`                              |
+| `queue.item.started`    | An item became audible                                                                         | `item`, optional `fallback`                      |
+| `queue.item.finished`   | An item played to its end                                                                      | `item`                                           |
+| `queue.item.failed`     | An item could not be prepared or played                                                        | `item`, `error`                                  |
+| `queue.finished`        | Playback ran out of items                                                                      | none                                             |
+| `queue.autoplay.failed` | Autoplay stopped: a lookup found nothing, or `autoplayAttempts` autoplay items failed in a row | `song`, `error`, `item` when an item failed      |
+| `queue.updated`         | Anything a status view shows changed                                                           | `position`, `playbackRate`                       |
+| `queue.deleted`         | The queue is gone                                                                              | `reason`                                         |
+| `voice.disconnected`    | The bot's voice in a guild ended                                                               | `voice`, `channelId`, `reason`, optional `error` |
 
 Every queue event also carries `guildId`, the `queue`, a snapshot `state` and the `timestamp` of the change. `state`
 holds `current`, `upcoming`, `history`, `status`, `repeat`, `autoplay` and `related` as they were at that moment. `state.status`
@@ -82,22 +82,23 @@ throttle it, for example to one edit per second per guild.
 When a change also has an event of its own, `queue.updated` comes right after it, with the same `state` and
 `timestamp`:
 
-| Change                                               | Events, in order                                              |
-| ---------------------------------------------------- | ------------------------------------------------------------- |
-| `play`, `add`                                        | `queue.item.added` or `queue.playlist.added`, `queue.updated` |
-| Autoplay adds a Song                                 | `queue.item.added`, `queue.updated`                           |
-| `prefetchAutoplay` finds, drops or re-times a Song   | `queue.updated`, with a new `state.related`                   |
-| The player takes an item                             | `queue.updated`                                               |
-| An item becomes audible                              | `queue.item.started`, `queue.updated`                         |
-| An item finishes on its own, with repeat and history | `queue.item.finished`, `queue.updated`                        |
-| An item fails to prepare, or the player rejects it   | `queue.item.failed`, `queue.updated`                          |
-| An autoplay lookup fails                             | `queue.autoplay.failed`, `queue.updated`                      |
-| `skip`, `jump`, `previous`                           | `queue.updated`, once per command                             |
-| `remove`, `move`, `shuffle`, `clear`                 | `queue.updated`                                               |
-| `setRepeat`, `setAutoplay`                           | `queue.updated`                                               |
-| `pause`, `resume`, once the player confirms          | `queue.updated`                                               |
-| `seek`, once the player confirms                     | `queue.updated`                                               |
-| `voice.setVolume`, `voice.filters.*`, once confirmed | `queue.updated`                                               |
+| Change                                                 | Events, in order                                              |
+| ------------------------------------------------------ | ------------------------------------------------------------- |
+| `play`, `add`                                          | `queue.item.added` or `queue.playlist.added`, `queue.updated` |
+| Autoplay adds a Song                                   | `queue.item.added`, `queue.updated`                           |
+| `prefetchAutoplay` finds, drops or re-times a Song     | `queue.updated`, with a new `state.related`                   |
+| The player takes an item                               | `queue.updated`                                               |
+| An item becomes audible                                | `queue.item.started`, `queue.updated`                         |
+| An item finishes on its own, with repeat and history   | `queue.item.finished`, `queue.updated`                        |
+| An item fails to prepare, or the player rejects it     | `queue.item.failed`, `queue.updated`                          |
+| An autoplay lookup fails                               | `queue.autoplay.failed`, `queue.updated`                      |
+| The last autoplay item `autoplayAttempts` allows fails | `queue.item.failed`, `queue.autoplay.failed`, `queue.updated` |
+| `skip`, `jump`, `previous`                             | `queue.updated`, once per command                             |
+| `remove`, `move`, `shuffle`, `clear`                   | `queue.updated`                                               |
+| `setRepeat`, `setAutoplay`                             | `queue.updated`                                               |
+| `pause`, `resume`, once the player confirms            | `queue.updated`                                               |
+| `seek`, once the player confirms                       | `queue.updated`                                               |
+| `voice.setVolume`, `voice.filters.*`, once confirmed   | `queue.updated`                                               |
 
 - A command that changes several things publishes one update. A `jump` over three items puts all three in the
   `state.history` of one event.

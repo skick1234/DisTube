@@ -21,6 +21,7 @@ const DEFAULTS = {
   maxPlaylistSongs: 500,
   connectionTimeoutMs: 15_000,
   reconnectTimeoutMs: 60_000,
+  autoplayAttempts: 1,
   opusComplexity: 10,
   bufferMs: 500,
   searchLimit: 10,
@@ -46,6 +47,11 @@ export interface DisTubeOptions<Target = VoiceChannelTarget> {
    * plays it next without adding it to `upcoming`. Default `false`: autoplay looks up only when the queue runs out.
    */
   readonly prefetchAutoplay?: boolean;
+  /**
+   * Autoplay items in a row that may fail to prepare or play for one seed before autoplay stops. Each retry asks for a
+   * Song related to the same seed and skips the failed ones. Positive integer, default 1.
+   */
+  readonly autoplayAttempts?: number;
   readonly onDiagnostic?: (diagnostic: Diagnostic) => void;
   /** Built-in engine tuning; an engine plugin ignores it. */
   readonly engine?: {
@@ -107,12 +113,14 @@ export class DisTube<Metadata = undefined, Target = VoiceChannelTarget> {
     const connectionTimeoutMs = options.connectionTimeoutMs ?? DEFAULTS.connectionTimeoutMs;
     const reconnectTimeoutMs = options.reconnectTimeoutMs ?? DEFAULTS.reconnectTimeoutMs;
     const prefetchAutoplay = options.prefetchAutoplay ?? false;
+    const autoplayAttempts = options.autoplayAttempts ?? DEFAULTS.autoplayAttempts;
     const opusComplexity = options.engine?.opusComplexity ?? DEFAULTS.opusComplexity;
     const bufferMs = options.engine?.bufferMs ?? DEFAULTS.bufferMs;
     requireInteger(historySize, "historySize", 0);
     requireInteger(maxPlaylistSongs, "maxPlaylistSongs", 1);
     requireInteger(connectionTimeoutMs, "connectionTimeoutMs", 1, MAX_TIMER_MS);
     requireInteger(reconnectTimeoutMs, "reconnectTimeoutMs", 1, MAX_TIMER_MS);
+    requireInteger(autoplayAttempts, "autoplayAttempts", 1);
     requireInteger(opusComplexity, "engine.opusComplexity", 0, 10);
     requireInteger(bufferMs, "engine.bufferMs", 20);
     requireBoolean(prefetchAutoplay, "prefetchAutoplay");
@@ -139,6 +147,7 @@ export class DisTube<Metadata = undefined, Target = VoiceChannelTarget> {
       connectionTimeoutMs,
       reconnectTimeoutMs,
       prefetchAutoplay,
+      autoplayAttempts,
       lifetime: this.#lifetime.signal,
     });
     this.voices = new VoiceManager(this.#guilds);

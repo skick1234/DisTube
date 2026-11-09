@@ -56,6 +56,8 @@ describe("client construction", () => {
     { reconnectTimeoutMs: 0 },
     { reconnectTimeoutMs: 1.5 },
     { reconnectTimeoutMs: 2 ** 31 },
+    { autoplayAttempts: 0 },
+    { autoplayAttempts: 1.5 },
     { engine: { opusComplexity: 11 } },
     { engine: { bufferMs: 30 } },
     { engine: { bufferMs: 0 } },
